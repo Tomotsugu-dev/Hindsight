@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { api, type AppGroup, type AppGroupMember } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
 import { useCategories } from "../../state/categories";
@@ -18,7 +18,13 @@ import {
   PRIVATE_CATEGORY_ID,
   purgeFailedReason,
 } from "../../utils/privateCategory";
+import { canMakeOwnGroup, pickPairingDrop, sameDrop, type PairingDrop } from "./pairingDrop";
 import styles from "./Pairing.module.css";
+
+/** Yields each row's group id and its place on screen, measuring a row only when it is reached */
+function* rowBands(rows: Map<string, HTMLDivElement>): Generator<[string, DOMRect]> {
+  for (const [groupId, el] of rows) yield [groupId, el.getBoundingClientRect()];
+}
 
 /** 把 group + 设备列表换算成「每个 device 列有哪些 member」的 lookup。
  *  必须返回数组：同一台设备上的两个进程合进一组时（拖拽允许），用 find 只取
@@ -73,7 +79,7 @@ export function PairingSection({
   const [groupsInternal, setGroupsInternal] = useState<AppGroup[] | null>(null);
   const groups = isControlled ? (groupsProp ?? []) : groupsInternal;
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
+  const [hover, setHover] = useState<PairingDrop>(null);
   const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
   // Escape 取消改名的标记。Escape 的 blur() 是在 keydown 里**同步**触发的，
   // onBlur 闭包看到的还是清除前的 pendingNames（React 状态未 flush）——不加标记
@@ -92,20 +98,16 @@ export function PairingSection({
   const scrollRef = useRef<HTMLElement | null>(null);
   const cursorYRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
-  const hoverRef = useRef<string | null>(null);
+  const hoverRef = useRef<PairingDrop>(null);
+  /** The new-group zone below the last row. Null while it is not shown */
+  const newGroupZoneRef = useRef<HTMLDivElement | null>(null);
 
   const updateHit = useCallback((clientY: number) => {
-    let hit: string | null = null;
-    for (const [gid, el] of rowRefs.current) {
-      const r = el.getBoundingClientRect();
-      if (clientY >= r.top && clientY <= r.bottom) {
-        hit = gid;
-        break;
-      }
-    }
-    if (hoverRef.current !== hit) {
+    const zone = newGroupZoneRef.current?.getBoundingClientRect() ?? null;
+    const hit = pickPairingDrop(clientY, rowBands(rowRefs.current), zone);
+    if (!sameDrop(hoverRef.current, hit)) {
       hoverRef.current = hit;
-      setHoverGroupId(hit);
+      setHover(hit);
     }
   }, []);
 
@@ -170,10 +172,11 @@ export function PairingSection({
       dragRef.current = null;
       hoverRef.current = null;
       setDrag(null);
-      setHoverGroupId(null);
-      if (cur && target && target !== cur.sourceGroupId) {
+      setHover(null);
+      if (!cur || !target) return;
+      if (target.kind === "group" && target.groupId !== cur.sourceGroupId) {
         void api
-          .mergeAppGroup(cur.processName, target)
+          .mergeAppGroup(cur.processName, target.groupId)
           // 合并已经存好，只是隐私数据没删完：照样刷新
           .catch((e) => {
             const reason = purgeFailedReason(e);
@@ -182,6 +185,12 @@ export function PairingSection({
           })
           .then(() => Promise.all([reload(), refreshCategories()]))
           .catch((e) => logError("pairing.merge", e));
+      } else if (target.kind === "newGroup") {
+        // Back to the group named after the app, made again if it is gone
+        void api
+          .unmergeAppGroup(cur.processName)
+          .then(() => Promise.all([reload(), refreshCategories()]))
+          .catch((e) => logError("pairing.newGroup", e));
       }
     };
     document.addEventListener("mousemove", onMove);
@@ -349,7 +358,11 @@ export function PairingSection({
       {visibleGroups.map((group, idx) => {
         const slots = membersByDevice(group, sortedDevices);
         const isPaired = group.members.length > 1;
-        const isHot = drag !== null && hoverGroupId === group.id && drag.sourceGroupId !== group.id;
+        const isHot =
+          drag !== null &&
+          hover?.kind === "group" &&
+          hover.groupId === group.id &&
+          drag.sourceGroupId !== group.id;
         const isSourceRow = drag !== null && drag.sourceGroupId === group.id;
         const nameDraft = pendingNames[group.id] ?? group.displayName;
 
@@ -387,7 +400,7 @@ export function PairingSection({
                     // 组 id 就是这个成员的进程名时，「移出」没有落脚点：它要回的
                     // 单成员组就是当前这个组。后端会拒绝，所以按钮不渲染；
                     // 想把它移走请拖进别的组。
-                    const isGroupNamesake = member.processName === group.id;
+                    const isGroupNamesake = !canMakeOwnGroup(member.processName, group.id);
                     return (
                       // 拖拽天然没有键盘等效（要在 dev 网格里拖到另一格），保留鼠标交互
                       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -476,6 +489,18 @@ export function PairingSection({
           </div>
         );
       })}
+
+      {drag && canMakeOwnGroup(drag.processName, drag.sourceGroupId) && (
+        <div
+          ref={newGroupZoneRef}
+          className={`${styles.newGroupZone} ${
+            hover?.kind === "newGroup" ? styles.newGroupZoneHot : ""
+          }`}
+        >
+          <Plus size={14} strokeWidth={2} aria-hidden />
+          {t("categories.pairing.newGroupZone")}
+        </div>
+      )}
 
       {drag &&
         createPortal(

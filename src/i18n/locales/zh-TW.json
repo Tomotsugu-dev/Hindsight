@@ -959,6 +959,7 @@
       "chip": {
         "unmergeTooltip": "從該組移出"
       },
+      "newGroupZone": "拖到這裡，單獨成為一組",
       "row": {
         "removeTooltip": "從清單移除",
         "removeAria": "從清單移除 {{name}}"

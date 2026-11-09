@@ -961,6 +961,7 @@
       "chip": {
         "unmergeTooltip": "Remover deste grupo"
       },
+      "newGroupZone": "Solte aqui para dar a ele um grupo próprio",
       "row": {
         "removeTooltip": "Remover da lista",
         "removeAria": "Remover {{name}} da lista"
