@@ -1,14 +1,14 @@
 .input {
   width: 100%;
   min-width: 0;
-  height: 34px;
-  padding: 0 10px;
+  height: calc(34px * var(--density));
+  padding: 0 calc(10px * var(--density));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--surface-card);
   color: var(--text-strong);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
 }
 
 .input:focus-visible {
@@ -19,8 +19,8 @@
 .note,
 .error {
   margin: 0;
-  padding: 10px 16px;
-  font-size: 12px;
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -32,17 +32,17 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  padding: 10px 16px;
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
 }
 
 .saveButton {
-  padding: 7px 12px;
+  padding: calc(7px * var(--density)) calc(12px * var(--density));
   border: none;
   border-radius: var(--radius-sm);
   background: var(--accent-fill);
-  color: white;
+  color: var(--text-on-accent);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   cursor: pointer;
 }
 
@@ -59,10 +59,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   margin: 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
 }
 
 .sourceLink a {
