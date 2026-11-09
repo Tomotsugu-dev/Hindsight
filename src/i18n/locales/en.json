@@ -12,6 +12,8 @@
     "close": "Close",
     "empty": "No data yet",
     "open": "Open",
+    "clear": "Clear",
+    "remove": "Remove",
     "errorBoundary": {
       "title": "Something went wrong",
       "message": "This screen ran into an unexpected error. You can reload to continue.",

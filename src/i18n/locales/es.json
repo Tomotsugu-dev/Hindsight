@@ -12,6 +12,8 @@
     "close": "Cerrar",
     "empty": "Aún no hay datos",
     "open": "Abrir",
+    "clear": "Borrar",
+    "remove": "Quitar",
     "errorBoundary": {
       "title": "Algo salió mal",
       "message": "Esta pantalla encontró un error inesperado. Puedes recargar para continuar.",

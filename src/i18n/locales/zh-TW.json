@@ -12,6 +12,8 @@
     "close": "關閉",
     "empty": "暫無資料",
     "open": "開啟",
+    "clear": "清空",
+    "remove": "移除",
     "errorBoundary": {
       "title": "出了點問題",
       "message": "此頁面遇到了意外錯誤，可以重新載入後繼續。",
