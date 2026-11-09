@@ -40,8 +40,8 @@
 /* 小类比圈数多时右下角的「↑ 1–4 / 9 ↓」：圆环外的角落本来是空的 */
 .pager {
   position: absolute;
-  right: calc(-10px * var(--density));
-  bottom: calc(-6px * var(--density));
+  right: -10px;
+  bottom: -6px;
   display: inline-flex;
   align-items: center;
   gap: 2px;

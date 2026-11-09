@@ -35,7 +35,7 @@
 .plotArea {
   position: relative;
   flex: 1;
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .gridLine {
@@ -52,7 +52,7 @@
   inset: 0;
   display: flex;
   align-items: flex-end;
-  gap: calc(6px * var(--density));
+  gap: 6px;
 }
 
 /* column 是个 <button>，重置浏览器默认外观；非交互态退化成纯展示。 */
