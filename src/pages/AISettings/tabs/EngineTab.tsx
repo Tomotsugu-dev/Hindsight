@@ -698,7 +698,7 @@ function formatIdleCountdown(
 
 /**
  * 引擎运行时反馈行：状态徽章 + testResult 输出。
- * 测试连接已合并到上方 engineActions（点了会 start → test → stop）。
+ * 测试连接已合并到上方的按钮行（点了会 start → test → stop）。
  */
 function EngineRuntimeRow({
   status,
