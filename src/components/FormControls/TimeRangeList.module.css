@@ -3,12 +3,12 @@
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 10px;
+  gap: calc(8px * var(--density)) calc(10px * var(--density));
   width: 100%;
 }
 
 .empty {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
   margin-right: auto;
 }
@@ -16,57 +16,14 @@
 .row {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 4px 3px 6px;
+  gap: calc(6px * var(--density));
+  padding: 3px calc(4px * var(--density)) 3px calc(6px * var(--density));
   background: var(--fill-subtle);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
 
 .dash {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
-}
-
-.remove {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  transition:
-    background-color 180ms ease-out,
-    color 180ms ease-out;
-}
-
-.remove:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--status-error);
-}
-
-.add {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-
-.add:hover {
-  background: var(--fill-strong);
-}
-
-.add:active {
-  transform: scale(0.97);
 }

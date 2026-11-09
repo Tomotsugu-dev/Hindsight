@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { BRAND_LOGOS } from "./brandLogos";
@@ -47,6 +47,8 @@ import {
   SimplePicker,
   type SimplePickerOption,
 } from "../../../components/SimplePicker/SimplePicker";
+import { Button } from "../../../components/Button/Button";
+import { TextInput } from "../../../components/TextInput/TextInput";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { useAiSettings } from "./useAiSettings";
 import { logError } from "../../../lib/logger";
@@ -846,6 +848,7 @@ function CustomHfDownload({
   onDownload: () => void;
 }) {
   const { t } = useTranslation();
+  const fieldId = useId();
   const canSubmit = !busy && repo.trim().length > 0 && mainFile.trim().length > 0;
   const activeFile = mainBusy ? mainFile : mmprojBusy ? mmprojFile : "";
   const activeProgress = activeFile ? progress[activeFile] : null;
@@ -879,13 +882,13 @@ function CustomHfDownload({
         <div className={styles.modelTailInner}>
           <div className={styles.modelCustomCard}>
             <div className={styles.modelCustomHint}>{t("aiSettings.models.custom.hint")}</div>
-            <label className={styles.modelCustomField}>
-              <span className={styles.modelCustomLabel}>
+            <div className={styles.modelCustomField}>
+              <label className={styles.modelCustomLabel} htmlFor={`${fieldId}-repo`}>
                 {t("aiSettings.models.custom.repoLabel")}
-              </span>
-              <input
-                type="text"
-                className={styles.externalInput}
+              </label>
+              <TextInput
+                id={`${fieldId}-repo`}
+                className={styles.externalField}
                 placeholder={t("aiSettings.models.custom.repoPlaceholder")}
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}
@@ -894,14 +897,14 @@ function CustomHfDownload({
                 autoCapitalize="off"
                 disabled={busy}
               />
-            </label>
-            <label className={styles.modelCustomField}>
-              <span className={styles.modelCustomLabel}>
+            </div>
+            <div className={styles.modelCustomField}>
+              <label className={styles.modelCustomLabel} htmlFor={`${fieldId}-main`}>
                 {t("aiSettings.models.custom.mainFileLabel")}
-              </span>
-              <input
-                type="text"
-                className={styles.externalInput}
+              </label>
+              <TextInput
+                id={`${fieldId}-main`}
+                className={styles.externalField}
                 placeholder={t("aiSettings.models.custom.mainFilePlaceholder")}
                 value={mainFile}
                 onChange={(e) => setMainFile(e.target.value)}
@@ -910,14 +913,14 @@ function CustomHfDownload({
                 autoCapitalize="off"
                 disabled={busy}
               />
-            </label>
-            <label className={styles.modelCustomField}>
-              <span className={styles.modelCustomLabel}>
+            </div>
+            <div className={styles.modelCustomField}>
+              <label className={styles.modelCustomLabel} htmlFor={`${fieldId}-mmproj`}>
                 {t("aiSettings.models.custom.mmprojFileLabel")}
-              </span>
-              <input
-                type="text"
-                className={styles.externalInput}
+              </label>
+              <TextInput
+                id={`${fieldId}-mmproj`}
+                className={styles.externalField}
                 placeholder={t("aiSettings.models.custom.mmprojFilePlaceholder")}
                 value={mmprojFile}
                 onChange={(e) => setMmprojFile(e.target.value)}
@@ -926,23 +929,21 @@ function CustomHfDownload({
                 autoCapitalize="off"
                 disabled={busy}
               />
-            </label>
+            </div>
             <div className={styles.modelCustomActions}>
-              <button
-                type="button"
-                className={styles.testBtn}
+              <Button
+                variant="solid"
+                tone="accent"
+                size="lg"
+                icon={Download}
                 onClick={onDownload}
+                loading={busy}
                 disabled={!canSubmit}
               >
-                {busy ? (
-                  <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-                ) : (
-                  <Download size={14} strokeWidth={2} />
-                )}
                 {busy
                   ? t("aiSettings.models.card.downloading")
                   : t("aiSettings.models.card.download")}
-              </button>
+              </Button>
             </div>
             {busy && activeProgress ? (
               <div className={styles.engineProgressWrap}>
@@ -1040,15 +1041,16 @@ function LocalModelCard({
               {t("aiSettings.models.card.step2")}
             </button>
           )}
-          <button
-            type="button"
-            className={styles.uninstallOutline}
+          <Button
+            variant="outline"
+            tone="danger"
+            size="lg"
+            icon={Trash2}
             onClick={() => onDelete(main, mmproj)}
             title={t("aiSettings.models.card.uninstallTooltipInstalled")}
           >
-            <Trash2 size={14} strokeWidth={1.85} />
             {t("aiSettings.models.card.uninstall")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -1178,38 +1180,41 @@ function RecommendedCard({
           {!installed ? (
             busy ? (
               // 在跑 → 显示「暂停」按钮
-              <button
-                type="button"
-                className={styles.testBtn}
+              <Button
+                variant="solid"
+                tone="accent"
+                size="lg"
+                icon={Pause}
                 onClick={() => activeFile && onPause(activeFile)}
                 title={t("aiSettings.models.card.pauseTooltip")}
               >
-                <Pause size={14} strokeWidth={2} />
                 {t("aiSettings.models.card.pause")}
-              </button>
+              </Button>
             ) : paused ? (
               // 已暂停（有 partial 但不在 inflight） → 显示「继续」按钮 + 已下进度
-              <button
-                type="button"
-                className={styles.downloadOutline}
+              <Button
+                variant="outline"
+                tone="accent"
+                size="lg"
+                icon={Play}
                 onClick={() => onDownload(rec)}
                 title={t("aiSettings.models.card.resumeTooltip", {
                   size: (pausedBytes / 1024 / 1024).toFixed(1),
                 })}
               >
-                <Play size={14} strokeWidth={2} />
                 {t("aiSettings.models.card.resume")}
-              </button>
+              </Button>
             ) : (
               // 未下载、未暂停 → 标准「下载」按钮（outline 风，发现态而非支付级 CTA）
-              <button
-                type="button"
-                className={styles.downloadOutline}
+              <Button
+                variant="outline"
+                tone="accent"
+                size="lg"
+                icon={Download}
                 onClick={() => onDownload(rec)}
               >
-                <Download size={14} strokeWidth={2} />
                 {t("aiSettings.models.card.download")}
-              </button>
+              </Button>
             )
           ) : (
             /* 已下载状态不再单独显 badge —— Text toggle + 右侧 trash
@@ -1230,9 +1235,11 @@ function RecommendedCard({
               {t("aiSettings.models.card.step2")}
             </button>
           )}
-          <button
-            type="button"
-            className={styles.uninstallOutline}
+          <Button
+            variant="outline"
+            tone="danger"
+            size="lg"
+            icon={Trash2}
             onClick={() => onUninstall(rec)}
             disabled={!installed || busy}
             title={
@@ -1241,9 +1248,8 @@ function RecommendedCard({
                 : t("aiSettings.models.card.uninstallTooltipNotInstalled")
             }
           >
-            <Trash2 size={14} strokeWidth={1.85} />
             {t("aiSettings.models.card.uninstall")}
-          </button>
+          </Button>
         </div>
       </div>
       {busy && activeProgress ? (

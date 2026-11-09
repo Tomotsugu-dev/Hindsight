@@ -25,7 +25,10 @@ import {
   subscribeDailySummary,
   subscribeSegmentDone,
 } from "../../../state/dailySummary";
-import { IconButton, MainButton, NoticeBars, PeriodNav, ReportHeader } from "./ReportControls";
+import { Button } from "../../../components/Button/Button";
+import { IconButton } from "../../../components/Button/IconButton";
+import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
+import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -489,13 +492,14 @@ export default function DailyTab() {
             groupLabel={t("aiSummary.daily.dateNav.groupAria")}
             prevLabel={t("aiSummary.daily.dateNav.prevAria")}
             nextLabel={t("aiSummary.daily.dateNav.nextAria")}
-            resetTitle={t("aiSummary.daily.dateNav.todayBack")}
+            currentTitle={t("aiSummary.daily.dateNav.todayBack")}
             label={navLabel}
-            atCurrent={dayOffset >= 0}
-            locked={generating}
+            isCurrent={dayOffset >= 0}
+            canNext={dayOffset < 0}
+            busy={generating}
             onPrev={() => setDayOffset((v) => v - 1)}
             onNext={() => setDayOffset((v) => v + 1)}
-            onReset={() => setDayOffset(0)}
+            onCurrent={() => setDayOffset(0)}
           />
         }
         actions={
@@ -523,6 +527,8 @@ export default function DailyTab() {
               />
             )}
             <IconButton
+              size="lg"
+              icon={Download}
               label={t("aiSummary.daily.actions.exportMarkdown")}
               onClick={() => void onExportMarkdown()}
               disabled={generating || !hasAnyRow}
@@ -533,12 +539,12 @@ export default function DailyTab() {
                     ? t("aiSummary.daily.actions.exportRunningTooltip")
                     : t("aiSummary.daily.actions.exportTooltip")
               }
-            >
-              <Download size={16} strokeWidth={2} />
-            </IconButton>
+            />
             <IconButton
+              size="lg"
+              tone="danger"
+              icon={Trash2}
               label={t("aiSummary.daily.actions.delete")}
-              danger
               onClick={() => {
                 if (generating) return;
                 setConfirmingDelete(true);
@@ -549,9 +555,7 @@ export default function DailyTab() {
                   ? t("aiSummary.daily.actions.deleteEmptyTooltip")
                   : t("aiSummary.daily.actions.deleteTooltip")
               }
-            >
-              <Trash2 size={16} strokeWidth={2} />
-            </IconButton>
+            />
           </>
         }
       />
@@ -675,19 +679,19 @@ function SegmentRow(props: SegmentRowProps) {
         ) : state.kind === "ok" && !editing ? (
           <span className={styles.rowActions}>
             <IconButton
+              size="sm"
+              icon={Pencil}
               label={t("aiSummary.edit.action")}
-              small
               onClick={onEdit}
               disabled={retryDisabled}
               title={
                 retryDisabled ? t("aiSummary.edit.runningTooltip") : t("aiSummary.edit.tooltip")
               }
-            >
-              <Pencil size={14} strokeWidth={2} />
-            </IconButton>
+            />
             <IconButton
+              size="sm"
+              icon={RotateCcw}
               label={t("aiSummary.daily.actions.retryTooltip")}
-              small
               onClick={onRetry}
               disabled={retryDisabled}
               title={
@@ -695,9 +699,7 @@ function SegmentRow(props: SegmentRowProps) {
                   ? t("aiSummary.daily.actions.retryDisabledTooltip")
                   : t("aiSummary.daily.actions.retryTooltip")
               }
-            >
-              <RotateCcw size={14} strokeWidth={2} />
-            </IconButton>
+            />
           </span>
         ) : null
       }
@@ -759,9 +761,10 @@ function RowBody({
               ? localizeAiError(state.row.error)
               : t("aiSummary.daily.errors.unknown")}
           </span>
-          <button
-            type="button"
-            className={ctl.textBtn}
+          <Button
+            variant="ghost"
+            tone="accent"
+            size="sm"
             onClick={onRetry}
             disabled={retryDisabled}
             title={
@@ -771,7 +774,7 @@ function RowBody({
             }
           >
             {t("aiSummary.daily.actions.retry")}
-          </button>
+          </Button>
         </div>
       );
   }

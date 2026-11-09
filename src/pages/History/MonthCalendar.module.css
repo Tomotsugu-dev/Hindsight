@@ -1,17 +1,17 @@
 .wrap {
-  padding: 14px 16px 16px;
+  padding: calc(14px * var(--density)) calc(16px * var(--density)) calc(16px * var(--density));
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .weekday {
   padding-bottom: 2px;
   text-align: center;
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -20,8 +20,8 @@
   flex-direction: column;
   justify-content: space-between;
   min-width: 0;
-  height: 58px;
-  padding: 6px 8px;
+  height: calc(58px * var(--density));
+  padding: calc(6px * var(--density)) calc(8px * var(--density));
   border: none;
   border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--text-muted) 8%, transparent);
@@ -58,7 +58,7 @@
 }
 
 .date {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   font-variant-numeric: tabular-nums;
 }
@@ -67,7 +67,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-regular);
   font-variant-numeric: tabular-nums;
 }

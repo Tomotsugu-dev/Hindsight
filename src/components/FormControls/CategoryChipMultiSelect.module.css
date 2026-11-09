@@ -1,15 +1,15 @@
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
 }
 
 .loading,
 .empty {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
-  padding: 4px 0;
+  padding: calc(4px * var(--density)) 0;
 }
 
 /* 默认（参与分析）：实色彩色，白字。视觉上"它在工作中" */
@@ -17,17 +17,17 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(28px * var(--density));
+  padding: 0 calc(12px * var(--density));
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
-  color: #fff;
+  color: var(--text-on-color);
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, calc(0.08 * var(--shadow-strength)));
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength)));
   transition:
     transform 120ms ease-out,
     filter 200ms ease-out,
@@ -37,7 +37,7 @@
 
 .chip:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, calc(0.12 * var(--shadow-strength)));
+  box-shadow: 0 3px 8px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
 }
 
 .chip:active {
@@ -48,21 +48,21 @@
    "AI 看不到这个分类"——三个信号叠加但都很轻，不堆装饰 */
 .excluded {
   background: transparent !important;
-  border-color: rgba(0, 0, 0, 0.18) !important;
+  border-color: color-mix(in oklab, var(--text-muted) 30%, transparent) !important;
   color: var(--text-muted);
   box-shadow: none;
 }
 
 .excluded:hover {
   background: var(--fill-subtle) !important;
-  border-color: rgba(0, 0, 0, 0.28) !important;
+  border-color: color-mix(in oklab, var(--text-muted) 50%, transparent) !important;
   color: var(--text-strong);
 }
 
 .excluded .name {
   text-decoration: line-through;
   text-decoration-thickness: 1.2px;
-  text-decoration-color: rgba(0, 0, 0, 0.45);
+  text-decoration-color: var(--text-faint);
 }
 
 .name {

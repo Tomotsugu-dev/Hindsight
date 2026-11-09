@@ -19,7 +19,6 @@ import { ROUTES } from "@app/config/nav";
 import "@app/i18n";
 import "@app/styles/global.css";
 import "@app/styles/tokens.css";
-import "@app/styles/utilities.css";
 
 import styles from "./AppDemo.module.css";
 import { TrafficLights } from "./TrafficLights";

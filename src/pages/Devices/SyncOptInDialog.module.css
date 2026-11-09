@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: var(--z-modal-backdrop);
-  background: rgba(20, 20, 40, 0.32);
+  background: var(--surface-backdrop);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
@@ -18,26 +18,26 @@
   z-index: var(--z-modal);
   min-width: 340px;
   max-width: 460px;
-  padding: 22px 22px 16px;
+  padding: calc(22px * var(--density)) calc(22px * var(--density)) calc(16px * var(--density));
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--status-pending) 45%, transparent);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 12px 36px rgba(20, 20, 40, calc(0.22 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength)));
+    0 1px 0 var(--hairline-hi) inset,
+    0 12px 36px rgba(var(--shadow-rgb), calc(0.22 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--density));
   animation: scaleIn 220ms var(--ease-spring);
 }
 
 .title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  gap: calc(8px * var(--density));
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   margin: 0;
@@ -49,17 +49,17 @@
 }
 
 .body {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-regular);
   line-height: 1.55;
   margin: 0;
 }
 
 .note {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.5;
   margin: 0;
-  padding: 8px 10px;
+  padding: calc(8px * var(--density)) calc(10px * var(--density));
   border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--status-pending) 10%, transparent);
   color: var(--status-pending);
@@ -69,48 +69,8 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  padding: 0 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    transform 100ms ease-out;
-}
-
-.btn:active {
-  transform: scale(0.97);
-}
-
-.btnCancel {
-  background: var(--fill-default);
-  border-color: rgba(0, 0, 0, 0.06);
-  color: var(--text-strong);
-}
-
-.btnCancel:hover {
-  background: var(--fill-strong);
-}
-
-.btnConfirm {
-  background: var(--status-pending);
-  color: #ffffff;
-}
-
-.btnConfirm:hover {
-  filter: brightness(1.06);
+  gap: calc(8px * var(--density));
+  margin-top: calc(6px * var(--density));
 }
 
 @keyframes fadeIn {

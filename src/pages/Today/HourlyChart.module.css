@@ -1,9 +1,9 @@
 .chart {
-  padding: 18px 16px 10px;
+  padding: calc(18px * var(--density)) calc(16px * var(--density)) calc(10px * var(--density));
 }
 
 :global([data-layout="flat"]) .chart {
-  padding: 18px 12px 10px 0;
+  padding: calc(18px * var(--density)) calc(12px * var(--density)) calc(10px * var(--density)) 0;
 }
 
 /* —— 绘图主体（Y 轴 + 绘图区） —— */
@@ -16,14 +16,14 @@
 /* —— Y 轴 —— */
 .yAxis {
   position: relative;
-  width: 32px;
+  width: calc(32px * var(--font-scale));
   flex-shrink: 0;
 }
 
 .yTick {
   position: absolute;
-  right: 6px;
-  font-size: 10px;
+  right: calc(6px * var(--density));
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -38,12 +38,7 @@
   position: relative;
   flex: 1;
   /* 底部基线 */
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* 暗色专属：黑基线在深底看不见，改画淡白基线。亮色声明保持原样不动。 */
-:global([data-mode="dark"]) .plotArea {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-default);
 }
 
 /* 水平参考线 — 极淡，不喧宾夺主 */
@@ -56,7 +51,6 @@
   pointer-events: none;
 }
 
-/* 暗色专属：黑网格线在深底看不见，改画极淡白线。亮色不动。 */
 /* —— 工作时段柔色填充 —— */
 .workBand {
   position: absolute;
@@ -73,7 +67,7 @@
   inset: 0;
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 /* column 是个 <button>，重置浏览器默认外观；交互态 disabled 时退化成 div */
@@ -131,29 +125,23 @@
   flex-shrink: 0;
 }
 
-/* 段间分隔：亮色在每段顶画 1px 白线（Apple 风柔和分隔）；暗色改画 1px 暗缝，
-   否则白线在深色柱子上一道道显脏，尤其顶部细碎段叠白线特别乱。 */
 .segment:not(:last-child) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-
-:global([data-mode="dark"]) .segment:not(:last-child) {
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
+  box-shadow: inset 0 1px 0 var(--segment-seam);
 }
 
 /* —— X 轴 —— */
 .xAxis {
   position: relative;
-  margin-left: 32px;
-  height: 18px;
-  margin-top: 6px;
+  margin-left: calc(32px * var(--font-scale));
+  height: calc(18px * var(--font-scale));
+  margin-top: calc(6px * var(--density));
 }
 
 .xLabel {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;

@@ -8,6 +8,7 @@ import {
   type EngineDownloadProgress,
   type MemoryPendingStats,
 } from "../../api/hindsight";
+import { Button } from "../Button/Button";
 import { ConfirmDialog } from "../ConfirmDialog/ConfirmDialog";
 import { ocrRuntimeReady } from "../../lib/ocrRuntime";
 import { logError } from "../../lib/logger";
@@ -174,28 +175,29 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       </span>
       {/* 停止后的过渡态:就地给"彻底停"的逃生门,而不是让停止看起来会诈尸 */}
       {effective === "idle" && stoppedNotice && (
-        <button
-          type="button"
-          className={styles.bannerBtn}
+        <Button
+          variant="outline"
+          tone="warning"
+          size="sm"
           onClick={() => {
             update({ memoryOcrResident: false });
             setStoppedNotice(false);
           }}
         >
           {t("chat.backfill.disableResident")}
-        </button>
+        </Button>
       )}
       {((effective === "idle" && !stoppedNotice) || effective === "failed") && (
-        <button type="button" className={styles.bannerBtn} onClick={() => void run()}>
+        <Button variant="outline" tone="warning" size="sm" onClick={() => void run()}>
           {t("chat.backfill.action")}
-        </button>
+        </Button>
       )}
       {/* 手动批与后台批(常驻/别处触发)的当前轮都能停;常驻模式下个周期
           仍会继续消化,彻底停走 设置 → 常驻 OCR 开关 */}
       {polling && (
-        <button type="button" className={styles.bannerBtn} onClick={stopRun} disabled={stopping}>
+        <Button variant="outline" tone="warning" size="sm" onClick={stopRun} disabled={stopping}>
           {stopping ? t("chat.backfill.stopping") : t("chat.backfill.stop")}
-        </button>
+        </Button>
       )}
       {(polling || effective === "downloading") && (
         <Loader2 size={13} strokeWidth={2.25} className={styles.bannerSpin} />

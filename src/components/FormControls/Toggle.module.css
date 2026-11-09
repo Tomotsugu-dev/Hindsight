@@ -3,7 +3,7 @@
   width: 36px;
   height: 20px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--toggle-track);
   transition:
     background-color 220ms var(--ease-out),
     box-shadow 220ms var(--ease-out);
@@ -13,7 +13,7 @@
 }
 
 .toggle:hover {
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--toggle-track-hover);
 }
 
 .toggle.on {
@@ -31,11 +31,11 @@
   left: 2px;
   width: 16px;
   height: 16px;
-  background: var(--surface-card);
+  background: var(--toggle-thumb);
   border-radius: 50%;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
-    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
+    0 0 0 0.5px rgba(var(--shadow-rgb), 0.04);
   transition: transform 240ms var(--ease-spring);
 }
 
@@ -46,19 +46,4 @@
 .toggle:disabled {
   cursor: wait;
   opacity: 0.6;
-}
-
-/* 暗色：关闭态 track 是 12% 黑、thumb 是深色 surface-card → 暗底上整个开关看不见。
-   关闭态 track 改淡白（可见）、thumb 改亮白（深/紫 track 上都清晰）；开启态 accent 紫
-   由 :not(.on) 排除、保持原样。亮色不动。 */
-:global([data-mode="dark"]) .toggle:not(.on) {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-:global([data-mode="dark"]) .toggle:not(.on):hover {
-  background: rgba(255, 255, 255, 0.26);
-}
-
-:global([data-mode="dark"]) .thumb {
-  background: #e9e9ec;
 }

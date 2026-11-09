@@ -6,7 +6,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: calc(var(--space-2) * var(--density));
 }
 
 .title {
@@ -26,53 +26,41 @@
 /* ── 搜索框 ── */
 
 .searchBox {
-  /* 吸顶:长结果列表滚动时停在悬浮 tab pill(fixed, top 16 + 高度)下方,
-     随时可改词。pill z-index 6(--z-chrome-floattab),这里压低一档。 */
+  /* Sticks below the floating tab pill (fixed, top 16 plus its height) while a long result
+     list scrolls, so the query can always be changed. Its z-index is below the pill's. */
   position: sticky;
   top: 60px;
   z-index: 5;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  margin-top: var(--space-4);
-  padding: 0 12px;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  border-radius: var(--radius-md);
+  margin-top: calc(var(--space-4) * var(--density));
+  border-radius: var(--radius-sm);
+  /* The input's own fill is see-through, and results scroll under this box */
   background: var(--surface-card);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, calc(0.06 * var(--shadow-strength)));
-  transition:
-    border-color 140ms ease-out,
-    box-shadow 140ms ease-out;
+  box-shadow: 0 2px 10px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
-.searchBox:focus-within {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
-}
-
-.searchIcon {
-  flex-shrink: 0;
-  color: var(--text-soft);
-}
-
-.searchInput {
+.searchField {
   flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13.5px;
-  color: var(--text-strong);
 }
 
-.searchInput::placeholder {
-  color: var(--text-faint);
+/* Keeps a long query from running under the spinner */
+.searchBox .searchField.searching {
+  padding-right: calc(32px * var(--density));
+}
+
+/* Inside the box at the right end, over the input */
+.searchBusy {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(12px * var(--density));
+  margin: auto 0;
+  pointer-events: none;
 }
 
 .searchSpin {
   flex-shrink: 0;
-  color: var(--text-soft);
+  color: var(--text-muted);
   animation: searchSpin 0.9s linear infinite;
 }
 
@@ -86,15 +74,15 @@
 }
 
 .totalLine {
-  font-size: 12px;
-  color: var(--text-soft);
-  margin: 6px 0 0;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+  margin: calc(6px * var(--density)) 0 0;
 }
 
 .errorLine {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--status-error);
-  margin: 8px 0 0;
+  margin: calc(8px * var(--density)) 0 0;
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -105,8 +93,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-top: 72px;
+  gap: calc(8px * var(--density));
+  margin-top: calc(72px * var(--density));
   color: var(--text-faint);
 }
 
@@ -115,13 +103,13 @@
 }
 
 .initialText {
-  font-size: 13.5px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
   margin: 0;
 }
 
 .initialHint {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
   margin: 0;
   max-width: 420px;
@@ -130,10 +118,10 @@
 }
 
 .emptyHint {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
   text-align: center;
-  margin: 4px 0 0;
+  margin: calc(4px * var(--density)) 0 0;
 }
 
 /* ── 命中列表 ── */
@@ -141,17 +129,17 @@
 .hitList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: var(--space-4);
+  gap: calc(8px * var(--density));
+  margin-top: calc(var(--space-4) * var(--density));
 }
 
 /* 整卡可点(打开截图预览):button 语义 + 卡片视觉 */
 .hit {
   display: flex;
   align-items: stretch;
-  gap: 12px;
-  padding: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  gap: calc(12px * var(--density));
+  padding: calc(10px * var(--density));
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   text-align: left;
@@ -196,20 +184,20 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   justify-content: center;
 }
 
 .hitHead {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 .hitApp {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   white-space: nowrap;
@@ -219,13 +207,13 @@
 
 .hitTime {
   flex-shrink: 0;
-  font-size: 11.5px;
-  color: var(--text-soft);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .hitSnippet {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-regular);
   line-height: 1.5;
   margin: 0;
@@ -246,31 +234,8 @@
 /* ── 加载更多 ── */
 
 .loadMoreBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   align-self: center;
-  height: 30px;
-  margin-top: 10px;
-  padding: 0 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: 12.5px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.loadMoreBtn:hover:not(:disabled) {
-  background: var(--surface-2);
-}
-
-.loadMoreBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+  margin-top: calc(10px * var(--density));
 }
 
 /* ── 大图预览(lightbox) ── */
@@ -293,7 +258,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   max-width: min(92vw, 1280px);
   max-height: 92vh;
 }
@@ -325,7 +290,7 @@
   max-width: min(92vw, 1280px);
   max-height: calc(92vh - 48px);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
+  box-shadow: 0 12px 40px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-strength)));
   display: block;
   user-select: none;
   -webkit-user-drag: none;
@@ -348,7 +313,7 @@
 .viewerBar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--density));
   max-width: 90vw;
 }
 
@@ -366,14 +331,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 26px;
-  height: 22px;
-  padding: 0 6px;
+  min-width: calc(26px * var(--font-scale));
+  height: calc(22px * var(--density));
+  padding: 0 calc(6px * var(--density));
   border: none;
   border-radius: 4px;
   background: transparent;
   color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -398,19 +363,19 @@
 .viewerTextNotice {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   margin: 0;
-  padding: 10px 16px;
-  font-size: 12px;
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
 .viewerTextBody {
-  padding: 14px 16px;
+  padding: calc(14px * var(--density)) calc(16px * var(--density));
   overflow-y: auto;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.7;
   color: var(--text-regular);
   white-space: pre-wrap;
@@ -420,7 +385,7 @@
 }
 
 .viewerMeta {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: rgba(255, 255, 255, 0.85);
   margin: 0;
   min-width: 0;

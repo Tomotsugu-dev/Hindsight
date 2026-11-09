@@ -29,7 +29,10 @@ import {
   type WeekPrecheckResp,
 } from "../../../api/hindsight";
 import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
-import { IconButton, MainButton, NoticeBars, PeriodNav, ReportHeader } from "./ReportControls";
+import { Button } from "../../../components/Button/Button";
+import { IconButton } from "../../../components/Button/IconButton";
+import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
+import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -543,13 +546,14 @@ export default function WeeklyTab() {
             groupLabel={t("aiSummary.weekly.weekNav.groupAria")}
             prevLabel={t("aiSummary.weekly.weekNav.prevAria")}
             nextLabel={t("aiSummary.weekly.weekNav.nextAria")}
-            resetTitle={t("aiSummary.weekly.weekNav.thisWeekBack")}
+            currentTitle={t("aiSummary.weekly.weekNav.thisWeekBack")}
             label={navLabel}
-            atCurrent={weekOffset >= 0}
-            locked={generating}
+            isCurrent={weekOffset >= 0}
+            canNext={weekOffset < 0}
+            busy={generating}
             onPrev={() => setWeekOffset((v) => v - 1)}
             onNext={() => setWeekOffset((v) => v + 1)}
-            onReset={() => setWeekOffset(0)}
+            onCurrent={() => setWeekOffset(0)}
           />
         }
         actions={
@@ -572,6 +576,8 @@ export default function WeeklyTab() {
               />
             )}
             <IconButton
+              size="lg"
+              icon={Pencil}
               label={t("aiSummary.edit.action")}
               onClick={() => {
                 setSelected(null);
@@ -579,10 +585,10 @@ export default function WeeklyTab() {
               }}
               disabled={generating || !hasOk || editing}
               title={generating ? t("aiSummary.edit.runningTooltip") : t("aiSummary.edit.tooltip")}
-            >
-              <Pencil size={16} strokeWidth={2} />
-            </IconButton>
+            />
             <IconButton
+              size="lg"
+              icon={Download}
               label={t("aiSummary.weekly.actions.exportMarkdown")}
               onClick={() => void onExportMarkdown()}
               disabled={generating || !hasOk}
@@ -593,12 +599,12 @@ export default function WeeklyTab() {
                     ? t("aiSummary.weekly.actions.exportRunningTooltip")
                     : t("aiSummary.weekly.actions.exportTooltip")
               }
-            >
-              <Download size={16} strokeWidth={2} />
-            </IconButton>
+            />
             <IconButton
+              size="lg"
+              tone="danger"
+              icon={Trash2}
               label={t("aiSummary.weekly.actions.delete")}
-              danger
               onClick={() => {
                 if (generating) return;
                 setConfirmingDelete(true);
@@ -609,9 +615,7 @@ export default function WeeklyTab() {
                   ? t("aiSummary.weekly.actions.deleteEmptyTooltip")
                   : t("aiSummary.weekly.actions.deleteTooltip")
               }
-            >
-              <Trash2 size={16} strokeWidth={2} />
-            </IconButton>
+            />
           </>
         }
       />
@@ -667,22 +671,21 @@ export default function WeeklyTab() {
           {selectedCell ? (
             <div className={styles.panelActions}>
               {dayRows && dayRows.length > 0 ? (
-                <button
-                  type="button"
-                  className={ctl.textBtn}
+                <Button
+                  variant="ghost"
+                  tone="accent"
+                  size="sm"
                   onClick={() => openDaily(selectedCell.date)}
                 >
                   {t("aiSummary.weekly.panel.openDaily")}
-                </button>
+                </Button>
               ) : null}
               <IconButton
-                small
+                size="sm"
+                icon={X}
                 label={t("aiSummary.weekly.panel.back")}
-                title={t("aiSummary.weekly.panel.back")}
                 onClick={() => setSelected(null)}
-              >
-                <X size={15} strokeWidth={2} />
-              </IconButton>
+              />
             </div>
           ) : null}
         </header>

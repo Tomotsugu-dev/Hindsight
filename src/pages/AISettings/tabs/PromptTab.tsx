@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MessageSquareText, RotateCcw, Save, User } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { type PromptLanguage, type PromptOverrides } from "../../../api/hindsight";
@@ -128,26 +129,25 @@ function PromptSection({
                   ? t("aiSettings.prompt.hint.custom")
                   : t("aiSettings.prompt.hint.default")}
             </span>
-            <button
-              type="button"
-              className={styles.promptResetBtn}
+            <Button
+              variant="outline"
+              icon={RotateCcw}
               onClick={handleReset}
               disabled={draft === DEFAULT_SYSTEM_PROMPTS[language]}
               title={t("aiSettings.prompt.actions.resetTooltip")}
             >
-              <RotateCcw size={13} strokeWidth={2} />
               {t("aiSettings.prompt.actions.reset")}
-            </button>
-            <button
-              type="button"
-              className={styles.promptSaveBtn}
+            </Button>
+            <Button
+              variant="solid"
+              tone="accent"
+              icon={Save}
               onClick={handleSave}
               disabled={!isDirty}
               title={t("aiSettings.prompt.actions.saveTooltip")}
             >
-              <Save size={13} strokeWidth={2} />
               {t("aiSettings.prompt.actions.save")}
-            </button>
+            </Button>
           </div>
         </div>
       </Row>
