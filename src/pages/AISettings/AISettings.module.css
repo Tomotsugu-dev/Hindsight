@@ -770,9 +770,7 @@
   color: var(--status-error-strong);
 }
 
-/* 包大小提示：第 1 行右端，跟 llama.cpp 名同行。font 15px 半粗让用户一眼看到，
-   但仍是灰字（不抢主要标题 16px 黑）。margin-left:auto 推到行尾，
-   margin-right 留点缝隙不贴卡片右内边距。 */
+/* Package size: at the end of the first row, on the same line as the engine name. */
 .engineSize {
   margin-left: auto;
   margin-right: calc(16px * var(--density));
