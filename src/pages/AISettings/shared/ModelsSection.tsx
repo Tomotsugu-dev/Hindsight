@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { BRAND_LOGOS } from "./brandLogos";
@@ -848,6 +848,7 @@ function CustomHfDownload({
   onDownload: () => void;
 }) {
   const { t } = useTranslation();
+  const fieldId = useId();
   const canSubmit = !busy && repo.trim().length > 0 && mainFile.trim().length > 0;
   const activeFile = mainBusy ? mainFile : mmprojBusy ? mmprojFile : "";
   const activeProgress = activeFile ? progress[activeFile] : null;
@@ -882,12 +883,12 @@ function CustomHfDownload({
           <div className={styles.modelCustomCard}>
             <div className={styles.modelCustomHint}>{t("aiSettings.models.custom.hint")}</div>
             <div className={styles.modelCustomField}>
-              <span className={styles.modelCustomLabel}>
+              <label className={styles.modelCustomLabel} htmlFor={`${fieldId}-repo`}>
                 {t("aiSettings.models.custom.repoLabel")}
-              </span>
+              </label>
               <TextInput
+                id={`${fieldId}-repo`}
                 className={styles.externalField}
-                aria-label={t("aiSettings.models.custom.repoLabel")}
                 placeholder={t("aiSettings.models.custom.repoPlaceholder")}
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}
@@ -898,12 +899,12 @@ function CustomHfDownload({
               />
             </div>
             <div className={styles.modelCustomField}>
-              <span className={styles.modelCustomLabel}>
+              <label className={styles.modelCustomLabel} htmlFor={`${fieldId}-main`}>
                 {t("aiSettings.models.custom.mainFileLabel")}
-              </span>
+              </label>
               <TextInput
+                id={`${fieldId}-main`}
                 className={styles.externalField}
-                aria-label={t("aiSettings.models.custom.mainFileLabel")}
                 placeholder={t("aiSettings.models.custom.mainFilePlaceholder")}
                 value={mainFile}
                 onChange={(e) => setMainFile(e.target.value)}
@@ -914,12 +915,12 @@ function CustomHfDownload({
               />
             </div>
             <div className={styles.modelCustomField}>
-              <span className={styles.modelCustomLabel}>
+              <label className={styles.modelCustomLabel} htmlFor={`${fieldId}-mmproj`}>
                 {t("aiSettings.models.custom.mmprojFileLabel")}
-              </span>
+              </label>
               <TextInput
+                id={`${fieldId}-mmproj`}
                 className={styles.externalField}
-                aria-label={t("aiSettings.models.custom.mmprojFileLabel")}
                 placeholder={t("aiSettings.models.custom.mmprojFilePlaceholder")}
                 value={mmprojFile}
                 onChange={(e) => setMmprojFile(e.target.value)}
