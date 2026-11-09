@@ -15,30 +15,6 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.backBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--density));
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.backBtn:hover {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
 .sep {
   width: 1px;
   height: 16px;

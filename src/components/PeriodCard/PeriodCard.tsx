@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMouseGlow } from "../../hooks/useMouseGlow";
+import { Button } from "../Button/Button";
+import { IconButton } from "../Button/IconButton";
 import styles from "./PeriodCard.module.css";
 
 interface PeriodCardProps {
@@ -61,10 +62,6 @@ export function PeriodCard({
   footer,
   slides,
 }: PeriodCardProps) {
-  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
-
   const pillClickable = offset !== 0;
 
   return (
@@ -84,40 +81,36 @@ export function PeriodCard({
             {rightExtras}
 
             <div className={styles.dayNav}>
-              <button
-                ref={prevBtnRef}
-                type="button"
-                className={`${styles.navBtn} glow`}
+              <IconButton
+                icon={ChevronLeft}
+                label={prevAriaLabel}
+                variant="soft"
+                size="sm"
+                glow
                 onClick={onPrev}
                 disabled={transitioning}
-                aria-label={prevAriaLabel}
-                title={prevAriaLabel}
-              >
-                <ChevronLeft size={14} strokeWidth={1.75} />
-              </button>
+              />
 
-              <button
-                ref={pillRef}
-                type="button"
-                className={`${styles.dayPill} ${pillClickable ? styles.dayPillClickable : ""} glow`}
+              <Button
+                size="sm"
+                glow
+                className={styles.dayPill}
                 onClick={onJumpToCurrent}
                 disabled={!pillClickable || transitioning}
                 title={pillClickable ? pillTooltip : undefined}
               >
                 {pillLabel}
-              </button>
+              </Button>
 
-              <button
-                ref={nextBtnRef}
-                type="button"
-                className={`${styles.navBtn} glow`}
+              <IconButton
+                icon={ChevronRight}
+                label={nextAriaLabel}
+                variant="soft"
+                size="sm"
+                glow
                 onClick={onNext}
                 disabled={!canGoForward || transitioning}
-                aria-label={nextAriaLabel}
-                title={nextAriaLabel}
-              >
-                <ChevronRight size={14} strokeWidth={1.75} />
-              </button>
+              />
             </div>
           </div>
         </div>

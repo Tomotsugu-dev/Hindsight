@@ -1,6 +1,7 @@
 import type { Ref } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
+import { Button } from "../Button/Button";
 import { MAX_CARDS, MIN_CARDS } from "../../state/insightCards";
 import type { CardId, CardValue } from "../../utils/insightCards";
 import type { InsightMode, InsightScope } from "../../utils/insightWindows";
@@ -59,17 +60,12 @@ export function EditBar({
         )}
       </div>
       <div className={styles.editActions}>
-        <button type="button" className={`${styles.btn} ${styles.btnQuiet}`} onClick={onReset}>
+        <Button variant="ghost" size="sm" onClick={onReset}>
           {t(`${K}.reset`)}
-        </button>
-        <button
-          ref={doneRef}
-          type="button"
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          onClick={onDone}
-        >
+        </Button>
+        <Button ref={doneRef} variant="solid" tone="accent" size="sm" onClick={onDone}>
           {t(`${K}.done`)}
-        </button>
+        </Button>
       </div>
     </div>
   );

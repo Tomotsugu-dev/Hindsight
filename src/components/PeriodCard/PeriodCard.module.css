@@ -56,69 +56,15 @@
   gap: calc(12px * var(--density));
 }
 
-/* 日期导航：outlined 按钮组，配合 .glow 跟随鼠标的描边光 */
 .dayNav {
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--density));
 }
 
-.navBtn {
-  width: calc(var(--control-height-sm) * var(--density));
-  height: calc(var(--control-height-sm) * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  color: var(--text-muted);
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.navBtn:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-.navBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
+/* The arrows stay in place when the label changes between "Today" and a date */
 .dayPill {
   min-width: calc(64px * var(--font-scale));
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.005em;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.dayPillClickable {
-  cursor: pointer;
-}
-
-.dayPillClickable:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-.dayPill:disabled {
-  cursor: default;
 }
 
 /* 滑动 carousel */
@@ -156,11 +102,6 @@
   padding: calc(22px * var(--density)) 0 calc(12px * var(--density));
   gap: calc(14px * var(--density));
   border-bottom: 0;
-}
-
-:global([data-layout="flat"]) .navBtn,
-:global([data-layout="flat"]) .dayPill {
-  border-color: var(--border-default);
 }
 
 @media (max-width: 900px) {

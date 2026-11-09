@@ -140,54 +140,6 @@
 
 /* —— 编辑模式 —— */
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(28px * var(--density));
-  padding: 0 calc(12px * var(--density));
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  font: inherit;
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    color 160ms var(--ease-out);
-}
-
-/* 平时卡片上方的「编辑卡片」 */
-.btnPlain {
-  background: var(--control-bg);
-  border-color: var(--border-default);
-  color: var(--text-muted);
-}
-.btnPlain:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.btnQuiet {
-  background: transparent;
-  color: var(--text-muted);
-}
-.btnQuiet:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.btnPrimary {
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-  font-weight: var(--font-weight-600);
-}
-.btnPrimary:hover {
-  background: var(--accent-fill-hover);
-}
-
 /* 编辑时卡片上方一行：统计口径在左，恢复默认和完成在右 */
 .editBar {
   display: flex;
@@ -261,6 +213,12 @@
 .tileGrip {
   position: absolute;
   right: calc(6px * var(--density));
+}
+.tileX {
+  top: calc(6px * var(--density));
+}
+.tileGrip {
+  bottom: calc(6px * var(--density));
   display: grid;
   place-items: center;
   width: calc(var(--control-height-sm) * var(--density));
@@ -270,27 +228,11 @@
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-faint);
-}
-.tileX {
-  top: calc(6px * var(--density));
-  cursor: pointer;
-}
-.tileGrip {
-  bottom: calc(6px * var(--density));
   cursor: grab;
 }
-.tileX:hover,
 .tileGrip:hover {
   background: var(--control-bg-hover);
   color: var(--text-strong);
-}
-.tileX[aria-disabled="true"] {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.tileX[aria-disabled="true"]:hover {
-  background: transparent;
-  color: var(--text-faint);
 }
 
 /* —— 卡片库 —— */

@@ -15,12 +15,7 @@ describe("PieView styles in dark mode", () => {
     expect(block(PIE_CSS, ".row:hover:not(:disabled)")).toContain("var(--hover-bg)");
   });
 
-  it("keeps the back button on the theme's control surface, also on hover", () => {
-    expect(block(DRILL_CSS, ".backBtn")).toContain("var(--control-bg)");
-    expect(block(DRILL_CSS, ".backBtn:hover")).toContain("var(--control-bg-hover)");
-  });
-
-  it("needs no dark mode rules for them", () => {
+  it("needs no dark mode rules for it", () => {
     expect(PIE_CSS).not.toContain("data-mode");
     expect(DRILL_CSS).not.toContain("data-mode");
   });

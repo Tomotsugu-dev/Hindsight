@@ -10,6 +10,8 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { GripVertical, SlidersHorizontal, X } from "lucide-react";
+import { Button } from "../Button/Button";
+import { IconButton } from "../Button/IconButton";
 import { useInsightData, type InsightFocus } from "../../hooks/useInsightData";
 import {
   addCard,
@@ -238,15 +240,9 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
         <div className={styles.head}>
           <p className={styles.note}>{note}</p>
           {!editing && (
-            <button
-              ref={editRef}
-              type="button"
-              className={`${styles.btn} ${styles.btnPlain}`}
-              onClick={start}
-            >
-              <SlidersHorizontal size={14} aria-hidden />
+            <Button ref={editRef} size="sm" icon={SlidersHorizontal} onClick={start}>
               {t(`${K}.edit`)}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -273,17 +269,16 @@ export function InsightTiles({ scope, offset, focus, accent }: Props) {
             <CardBody id={id} value={data.values[id]} ctx={ctx} />
             {editing && (
               <>
-                <button
-                  type="button"
+                <IconButton
+                  icon={X}
+                  label={t(`${K}.remove`, { name: nameOf(id) })}
+                  size="sm"
                   data-no-drag=""
                   className={styles.tileX}
-                  aria-label={t(`${K}.remove`, { name: nameOf(id) })}
                   aria-disabled={atMin || undefined}
                   title={atMin ? t(`${K}.keepMin`, { count: MIN_CARDS }) : undefined}
                   onClick={() => remove(id)}
-                >
-                  <X size={14} aria-hidden />
-                </button>
+                />
                 <button
                   ref={(el) => {
                     if (el) grips.current.set(id, el);

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { AppUsage, Category } from "../../api/hindsight";
 import type { BreakdownSlice } from "../../hooks/useSuperCategoryBreakdown";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { Button } from "../../components/Button/Button";
 import { useDurationFormatter } from "../../utils/duration";
 import { withViewTransition } from "../../utils/viewTransition";
 import { displayAppName } from "../../utils/displayName";
@@ -83,10 +84,9 @@ export function PieDrillDetail({ slice, allSlices, grandTotal, apps, onBack, cat
       onClick={handleBodyClick}
     >
       <header className={styles.head}>
-        <button type="button" className={styles.backBtn} onClick={handleBack}>
-          <ArrowLeft size={12} strokeWidth={2.2} />
+        <Button size="sm" icon={ArrowLeft} onClick={handleBack}>
           {t("today.pie.drill.back")}
-        </button>
+        </Button>
         <span className={styles.sep} />
         <span className={styles.swatch} style={{ background: slice.color }} aria-hidden />
         <span className={styles.title}>{slice.name}</span>
