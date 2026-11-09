@@ -108,12 +108,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 48px;
-  margin-top: 4px;
+  gap: calc(6px * var(--density));
+  min-height: calc(48px * var(--density));
+  margin-top: calc(4px * var(--density));
   border: 1px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--color-accent);
   transition:
