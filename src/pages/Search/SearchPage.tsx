@@ -150,7 +150,7 @@ export default function SearchPage() {
         <TextInput
           size="lg"
           icon={Search}
-          className={styles.searchField}
+          className={searching ? `${styles.searchField} ${styles.searching}` : styles.searchField}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("search.placeholder")}

@@ -43,6 +43,11 @@
   flex: 1;
 }
 
+/* Keeps a long query from running under the spinner */
+.searchBox .searchField.searching {
+  padding-right: calc(32px * var(--density));
+}
+
 /* Inside the box at the right end, over the input */
 .searchBusy {
   position: absolute;
