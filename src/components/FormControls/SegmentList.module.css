@@ -139,16 +139,6 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 38%, transparent);
 }
 
-.segmentTime {
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  opacity: var(--time-opacity, 0.85);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* —— 删除按钮浮层：hover 段时弹在条正上方，红色半透明 —— */
 .popupLayer {
   position: absolute;
