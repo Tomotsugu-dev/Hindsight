@@ -8,7 +8,7 @@
 
 # hindsight on the AUR is another program, which also installs /usr/bin/hindsight
 pkgname=hindsight-desktop
-pkgver=0.11.3
+pkgver=0.11.4
 pkgrel=1
 pkgdesc="Privacy-first activity tracking and AI summaries for desktop"
 arch=(x86_64)
