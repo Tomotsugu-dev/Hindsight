@@ -227,11 +227,11 @@
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-muted);
   cursor: grab;
 }
 .tileGrip:hover {
-  background: var(--control-bg-hover);
+  background: var(--fill-default);
   color: var(--text-strong);
 }
 
