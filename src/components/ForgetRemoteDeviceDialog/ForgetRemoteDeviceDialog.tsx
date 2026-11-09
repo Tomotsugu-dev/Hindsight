@@ -4,7 +4,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 import { Button } from "../Button/Button";
 import { TextInput } from "../TextInput/TextInput";
-// 复用 RemoveDeviceDialog 同款样式（backdrop / dialog / 文案），保持 modal 视觉一致。
+// Same backdrop, dialog and text styles as RemoveDeviceDialog, so the two dialogs look alike.
 import styles from "../RemoveDeviceDialog/RemoveDeviceDialog.module.css";
 
 interface Props {

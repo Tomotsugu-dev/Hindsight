@@ -1,5 +1,5 @@
-/* 复用 ConfirmDialog 的 backdrop / dialog 视觉，加 radio + input 专属样式。
-   保留一致的 modal grammar（同尺寸、同动画），降低视觉跳跃。 */
+/* Same backdrop and dialog as ConfirmDialog, plus the radio options and the confirm input, so
+   the dialogs look alike. */
 
 .backdrop {
   position: fixed;
@@ -131,6 +131,13 @@
 
 .confirmInput {
   font-family: var(--font-mono);
+}
+
+/* The dialog deletes data, so the focus ring is red, not the accent. The extra class wins over
+   TextInput's own focus style */
+.dialog .confirmInput:focus-within {
+  border-color: color-mix(in oklab, var(--status-error) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-error) 15%, transparent);
 }
 
 .actions {
