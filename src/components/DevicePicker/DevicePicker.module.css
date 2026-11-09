@@ -8,7 +8,7 @@
   display: inline-flex;
   align-items: center;
   gap: calc(7px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   padding: 0 calc(7px * var(--density)) 0 calc(5px * var(--density));
   border-radius: var(--radius-sm);
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
