@@ -1,6 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMouseGlow } from "../../hooks/useMouseGlow";
+import { PeriodNav } from "../PeriodNav/PeriodNav";
 import styles from "./PeriodCard.module.css";
 
 interface PeriodCardProps {
@@ -26,7 +25,7 @@ interface PeriodCardProps {
   onPrev: () => void;
   onNext: () => void;
   onJumpToCurrent: () => void;
-  /** 卡片头右侧 dayNav 之前的内容（一般是 DevicePicker） */
+  /** 卡片头右侧 period stepper 之前的内容（一般是 DevicePicker） */
   rightExtras?: ReactNode;
   /** 卡片头左侧 title 旁边的内容（如 ViewToggle 切「时段 / 占比」） */
   headLeftExtras?: ReactNode;
@@ -61,10 +60,6 @@ export function PeriodCard({
   footer,
   slides,
 }: PeriodCardProps) {
-  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
-
   const pillClickable = offset !== 0;
 
   return (
@@ -83,42 +78,18 @@ export function PeriodCard({
           <div className={styles.headRight}>
             {rightExtras}
 
-            <div className={styles.dayNav}>
-              <button
-                ref={prevBtnRef}
-                type="button"
-                className={`${styles.navBtn} glow`}
-                onClick={onPrev}
-                disabled={transitioning}
-                aria-label={prevAriaLabel}
-                title={prevAriaLabel}
-              >
-                <ChevronLeft size={14} strokeWidth={1.75} />
-              </button>
-
-              <button
-                ref={pillRef}
-                type="button"
-                className={`${styles.dayPill} ${pillClickable ? styles.dayPillClickable : ""} glow`}
-                onClick={onJumpToCurrent}
-                disabled={!pillClickable || transitioning}
-                title={pillClickable ? pillTooltip : undefined}
-              >
-                {pillLabel}
-              </button>
-
-              <button
-                ref={nextBtnRef}
-                type="button"
-                className={`${styles.navBtn} glow`}
-                onClick={onNext}
-                disabled={!canGoForward || transitioning}
-                aria-label={nextAriaLabel}
-                title={nextAriaLabel}
-              >
-                <ChevronRight size={14} strokeWidth={1.75} />
-              </button>
-            </div>
+            <PeriodNav
+              label={pillLabel}
+              currentTitle={pillTooltip}
+              prevLabel={prevAriaLabel}
+              nextLabel={nextAriaLabel}
+              isCurrent={!pillClickable}
+              canNext={canGoForward}
+              busy={transitioning}
+              onPrev={onPrev}
+              onNext={onNext}
+              onCurrent={onJumpToCurrent}
+            />
           </div>
         </div>
       </header>

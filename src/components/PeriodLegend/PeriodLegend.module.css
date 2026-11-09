@@ -2,16 +2,16 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
-  padding: 14px 18px 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  gap: calc(18px * var(--density));
+  padding: calc(14px * var(--density)) calc(18px * var(--density)) calc(16px * var(--density));
+  border-top: 1px solid var(--border-subtle);
 }
 
 .legendItem {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12px;
+  gap: calc(7px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-regular);
   font-weight: var(--font-weight-500);
 }
@@ -21,8 +21,8 @@
   height: 12px;
   border-radius: var(--radius-xs);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
-    0 1px 1px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
+    inset 0 0 0 1px var(--swatch-highlight),
+    0 1px 1px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
 }
 
 .level {
@@ -34,13 +34,13 @@
 }
 
 .levelBtn {
-  padding: 3px 10px;
+  padding: 3px calc(10px * var(--density));
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   cursor: pointer;
   transition:
@@ -67,7 +67,7 @@
 }
 
 :global([data-layout="flat"]) .legend {
-  padding: 14px 0 0;
+  padding: calc(14px * var(--density)) 0 0;
   border-top: 0;
 }
 
