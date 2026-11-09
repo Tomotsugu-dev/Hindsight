@@ -9,16 +9,14 @@ function block(css: string, selector: string): string {
   return css.slice(start, css.indexOf("}", start));
 }
 
-const DARK = ':global([data-mode="dark"])';
-
-// 浅色模式下这几处是半透明白底；深色模式下文字是浅色，白底会让它看不清
+// Dark mode needs no separate rule.
 describe("PieView styles in dark mode", () => {
   it("hovers category rows with the theme's hover color", () => {
-    expect(block(PIE_CSS, `${DARK} .row:hover:not(:disabled)`)).toContain("var(--hover-bg)");
+    expect(block(PIE_CSS, ".row:hover:not(:disabled)")).toContain("var(--hover-bg)");
   });
 
-  it("keeps the back button on a dark surface, also on hover", () => {
-    expect(block(DRILL_CSS, `${DARK} .backBtn`)).toContain("var(--surface-2)");
-    expect(block(DRILL_CSS, `${DARK} .backBtn:hover`)).toContain("var(--hover-bg)");
+  it("needs no dark mode rules for it", () => {
+    expect(PIE_CSS).not.toContain("data-mode");
+    expect(DRILL_CSS).not.toContain("data-mode");
   });
 });

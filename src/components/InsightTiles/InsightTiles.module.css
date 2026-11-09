@@ -1,7 +1,7 @@
 .area {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 /* 卡片上方一行：左边是卡片算的哪段时间，右边是编辑按钮 */
@@ -10,13 +10,13 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  min-height: 28px;
+  gap: calc(8px * var(--density)) calc(12px * var(--density));
+  min-height: calc(28px * var(--density));
 }
 
 .note {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -25,7 +25,7 @@
 .tiles {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 12px;
+  gap: calc(12px * var(--density));
 }
 
 /* 单 tile 复用三页 .card token 的视觉语言 */
@@ -35,14 +35,14 @@
   background: var(--surface-card-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: calc(14px * var(--density)) calc(16px * var(--density));
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   min-width: 0;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   transition:
     background-color 220ms var(--ease-out),
     border-color 220ms var(--ease-out);
@@ -52,9 +52,9 @@
 .value {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   min-width: 0;
-  font-size: 18px;
+  font-size: calc(var(--font-size-headline) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.01em;
@@ -68,8 +68,8 @@
 .preview {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
@@ -82,7 +82,7 @@
 }
 
 .up {
-  color: #16a34a;
+  color: var(--status-ok-strong);
 }
 .down {
   color: var(--status-error);
@@ -104,7 +104,7 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   letter-spacing: 0;
 }
@@ -115,7 +115,8 @@
   background: color-mix(in oklab, var(--tile-accent) 4%, var(--surface-card-elevated));
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
-  padding-left: 13px; /* 16 - (3 border) = 13 → 视觉上 value 起始位置不动 */
+  /* The tile's padding minus the 3px border, so the value does not move */
+  padding-left: calc(16px * var(--density) - 3px);
 }
 
 :global([data-layout="flat"]) .tile {
@@ -134,71 +135,23 @@
 :global([data-layout="flat"]) .tiles[data-drill] .tile {
   border-left: 2px solid var(--tile-accent);
   border-radius: 0;
-  padding-left: 14px;
+  padding-left: calc(16px * var(--density) - 2px);
 }
 
 /* —— 编辑模式 —— */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    color 160ms var(--ease-out);
-}
-
-/* 平时卡片上方的「编辑卡片」 */
-.btnPlain {
-  background: var(--control-bg);
-  border-color: var(--border-default);
-  color: var(--text-muted);
-}
-.btnPlain:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.btnQuiet {
-  background: transparent;
-  color: var(--text-muted);
-}
-.btnQuiet:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.btnPrimary {
-  background: var(--accent-fill);
-  color: #ffffff;
-  font-weight: var(--font-weight-600);
-}
-.btnPrimary:hover {
-  background: var(--accent-fill-hover);
-}
 
 /* 编辑时卡片上方一行：统计口径在左，恢复默认和完成在右 */
 .editBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
+  gap: calc(8px * var(--density)) calc(20px * var(--density));
 }
 
 .editActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   margin-left: auto;
 }
 
@@ -207,8 +160,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  font-size: 12px;
+  gap: calc(6px * var(--density)) calc(10px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -228,12 +181,12 @@
 }
 .seg button {
   border: 0;
-  padding: 4px 10px;
+  padding: calc(4px * var(--density)) calc(10px * var(--density));
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   cursor: pointer;
 }
 .seg button:hover {
@@ -242,12 +195,12 @@
 .seg button[aria-pressed="true"] {
   background: var(--surface-card-elevated);
   color: var(--text-strong);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
 }
 
 .tiles[data-editing] .tile {
   cursor: grab;
-  padding-right: 40px;
+  padding-right: calc(40px * var(--density));
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -259,37 +212,27 @@
 .tileX,
 .tileGrip {
   position: absolute;
-  right: 6px;
+  right: calc(6px * var(--density));
+}
+.tileX {
+  top: calc(6px * var(--density));
+}
+.tileGrip {
+  bottom: calc(6px * var(--density));
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: calc(var(--control-height-sm) * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   padding: 0;
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
-  color: var(--text-faint);
-}
-.tileX {
-  top: 6px;
-  cursor: pointer;
-}
-.tileGrip {
-  bottom: 6px;
+  color: var(--text-muted);
   cursor: grab;
 }
-.tileX:hover,
 .tileGrip:hover {
-  background: var(--control-bg-hover);
+  background: var(--fill-default);
   color: var(--text-strong);
-}
-.tileX[aria-disabled="true"] {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.tileX[aria-disabled="true"]:hover {
-  background: transparent;
-  color: var(--text-faint);
 }
 
 /* —— 卡片库 —— */
@@ -297,8 +240,8 @@
 .tray {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: calc(10px * var(--density));
+  padding: calc(14px * var(--density));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--surface-card);
@@ -312,17 +255,17 @@
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 4px 12px;
+  gap: calc(4px * var(--density)) calc(12px * var(--density));
 }
 .trayHead h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
 }
 
 .count {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -334,15 +277,15 @@
 .trayList {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .pick {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   min-width: 0;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--surface-card-elevated);
@@ -364,10 +307,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 .pickName {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
 }
@@ -376,7 +319,7 @@
   color: var(--color-accent);
 }
 .pickDesc {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -384,10 +327,10 @@
 .pickPrev {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   min-width: 0;
   margin-top: auto;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
 }
 .pickPrevLabel {
   color: var(--text-faint);
@@ -398,7 +341,7 @@
 
 .trayEmpty {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -447,19 +390,19 @@
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-md);
   box-shadow:
-    0 16px 36px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
+    0 16px 36px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
 }
 .tile.floating[data-landed] {
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 /* 从行里拖到卡片库上：松开会移除；只剩 3 张时移不走 */
 .dropNote {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
 }
 .tray[data-drop="remove"] {
@@ -480,9 +423,9 @@
 
 /* 操作后的提示（至少 3 张、已经 6 张、已加入……），几秒后自己清掉 */
 .msg {
-  margin: -4px 0 0;
-  min-height: 18px;
-  font-size: 12px;
+  margin: calc(-4px * var(--density)) 0 0;
+  min-height: calc(18px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
 }
 
 @media (max-width: 600px) {
