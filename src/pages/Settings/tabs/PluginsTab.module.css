@@ -214,9 +214,13 @@
   white-space: nowrap;
 }
 
-/* 已安装插件的控件撑满整行，「卸载」才能推到卡片的最右边 */
-.installedControls {
+/* An installed plugin: a line of controls, and the permission tree under it when opened. It fills
+   the row, so Uninstall can sit at the right end of the card */
+.installedBody {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -308,42 +312,104 @@
   color: var(--text-muted);
 }
 
-.permissions {
+/* Permission tree: like the file tree in an editor. A row with permissions under it has an arrow */
+.tree,
+.treeChildren {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.tree {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  counter-reset: permission;
 }
 
-/* A flex item shows no list marker, so the number comes from a counter */
-.permissions li {
+.treeRow {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 7px 12px 7px 6px;
   font-size: 12.5px;
-  counter-increment: permission;
+  border-top: 1px solid var(--border-subtle);
 }
 
-.permissions li::before {
-  content: counter(permission) ".";
+.tree > li:first-child > .treeRow {
+  border-top: none;
+}
+
+.treeRow:hover {
+  background: var(--fill-default);
+}
+
+/* The arrow and the space without one are the same width, so the boxes on one level line up */
+.twistie {
+  display: inline-flex;
   flex: none;
-  min-width: 1.4em;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+}
+
+button.twistie {
+  cursor: pointer;
+}
+
+button.twistie:hover {
+  background: var(--fill-strong);
+  color: var(--text-strong);
+}
+
+/* The arrow in the tree and on the Permissions button. It turns down when open */
+.chevron {
+  flex: none;
+  transition: transform 120ms ease-out;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.treeLabel {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-top: 1px;
+  cursor: pointer;
+}
+
+.treeLabel input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--color-accent);
+}
+
+.treeLabel input:disabled {
+  cursor: default;
+}
+
+/* How many under a closed row are checked, or "Required" */
+.treeNote {
+  flex: none;
+  margin-top: 2px;
+  font-size: 11.5px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.permissions li + li {
-  border-top: 1px solid var(--border-subtle);
+  white-space: nowrap;
 }
 
 .risk {
   flex: none;
-  margin-left: auto;
-  margin-top: 1px;
+  margin-top: 2px;
   padding: 0 6px;
   border-radius: var(--radius-pill);
   background: var(--status-error-soft);

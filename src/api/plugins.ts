@@ -85,6 +85,11 @@ export interface Market {
   localZips: LocalZip[];
   /** Set when the online list could not be fetched; the rest is still filled */
   onlineError: string | null;
+  /** The permissions the manifest of each installed plugin asks for, by plugin id. A plugin
+   * whose manifest cannot be read is not in it */
+  askedPermissions: Record<string, string[]>;
+  /** The permission each permission depends on: permission → the one it depends on */
+  permissionDependsOn: Record<string, string>;
 }
 
 /** An enabled plugin that has a page. */
@@ -105,6 +110,8 @@ export const pluginsApi = {
   uninstall: (id: string, deleteData: boolean) =>
     invoke<void>("plugin_uninstall", { id, deleteData }),
   setEnabled: (id: string, enabled: boolean) => invoke<void>("plugin_set_enabled", { id, enabled }),
+  setPermissions: (id: string, permissions: string[]) =>
+    invoke<void>("plugin_set_permissions", { id, permissions }),
   openZipsFolder: () => invoke<void>("plugin_open_zips_folder"),
   pages: () => invoke<PluginPage[]>("plugin_pages"),
   /** The path of icon.png of each installed plugin that has one, by plugin id */

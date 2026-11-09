@@ -41,9 +41,15 @@ pub async fn plugin_open_market(pool: State<'_, DbPool>) -> Result<Market, Strin
         log::warn!("plugins: cannot read the download counts: {e}");
         Default::default()
     });
-    market::list(&pool, &plugin_zips_dir(), online, &download_counts)
-        .await
-        .map_err(Into::into)
+    market::list(
+        &pool,
+        &plugins_dir(),
+        &plugin_zips_dir(),
+        online,
+        &download_counts,
+    )
+    .await
+    .map_err(Into::into)
 }
 
 /// Installs or updates a plugin from the zip `file_name` in the plugin zip folder.
@@ -113,6 +119,23 @@ pub async fn plugin_set_enabled(
     repo::set_enabled(&pool, &id, enabled).await?;
     plugins::refresh(&app, &pool).await;
     Ok(())
+}
+
+/// Replaces the permissions of a plugin.
+///
+/// The plugin API and events read the table each time, so the change works at once without
+/// reloading the plugin.
+///
+/// See [`install::set_permissions`].
+#[tauri::command]
+pub async fn plugin_set_permissions(
+    pool: State<'_, DbPool>,
+    id: String,
+    permissions: Vec<String>,
+) -> Result<(), String> {
+    install::set_permissions(&pool, &plugins_dir(), &id, permissions)
+        .await
+        .map_err(Into::into)
 }
 
 /// Lists the enabled plugins that have a page, for the sidebar and the plugin pages.

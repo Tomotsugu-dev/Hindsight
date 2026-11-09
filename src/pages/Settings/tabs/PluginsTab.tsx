@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  ChevronRight,
   CloudDownload,
   ExternalLink,
   FolderOpen,
@@ -31,7 +32,8 @@ import { markPluginsSeen } from "../../../state/pluginsSeen";
 import { usePluginIcons } from "../../../state/pluginIcons";
 import { logError } from "../../../lib/logger";
 import { pickDescription } from "../../../utils/pickDescription";
-import { HIGH_RISK, permissionKey } from "./pluginPermissions";
+import { keptChoices } from "./pluginPermissions";
+import { PermissionTree } from "./PermissionTree";
 import { filterMarket, repoUrl, type MarketFilter } from "./pluginMarket";
 import filterBarStyles from "../../Apps/AppsFilterBar.module.css";
 import styles from "./PluginsTab.module.css";
@@ -41,16 +43,19 @@ type Source = "official" | "thirdParty" | "local";
 
 /** What the install dialog shows, and how to install once the user agrees. */
 interface InstallTarget {
+  id: string;
   name: string;
   version: string;
   source: Source;
   /** From the online list. `null` for a zip */
   author: string | null;
+  /** The permissions the manifest asks for */
   permissions: string[];
   storageMb: number | null;
   /** `null` when the online list does not say */
   runsInBackground: boolean | null;
-  run: () => Promise<void>;
+  /** Installs it. `approved` is the permissions the user checked */
+  run: (approved: string[]) => Promise<void>;
 }
 
 type OpensInChoice = "main" | "window";
@@ -61,6 +66,7 @@ const toChoice = (opensIn: OpensIn): OpensInChoice => (opensIn === "main" ? "mai
 
 /** The install dialog for one version in the online list. */
 const onlineTarget = (plugin: OnlinePlugin, v: OnlineVersion): InstallTarget => ({
+  id: plugin.id,
   name: plugin.name,
   version: v.version,
   source: plugin.official ? "official" : "thirdParty",
@@ -68,7 +74,7 @@ const onlineTarget = (plugin: OnlinePlugin, v: OnlineVersion): InstallTarget => 
   permissions: v.permissions,
   storageMb: v.storage_mb,
   runsInBackground: null,
-  run: () => pluginsApi.installOnline(plugin.id, v.version, v.permissions, v.storage_mb),
+  run: (approved) => pluginsApi.installOnline(plugin.id, v.version, approved, v.storage_mb),
 });
 
 /** Settings → Plugins: installed plugins, the plugin market, and zips installed by hand.
@@ -87,6 +93,10 @@ export default function PluginsTab() {
   const [installing, setInstalling] = useState<InstallTarget | null>(null);
   /** The checkbox in the install dialog. Install is allowed only when it is checked */
   const [agreed, setAgreed] = useState(false);
+  /** The permissions checked in the install dialog */
+  const [approved, setApproved] = useState<string[]>([]);
+  /** The installed plugin whose permissions are open */
+  const [editing, setEditing] = useState<string | null>(null);
   const [uninstalling, setUninstalling] = useState<InstalledPlugin | null>(null);
   const [deleteData, setDeleteData] = useState(false);
 
@@ -146,6 +156,16 @@ export default function PluginsTab() {
       false,
     );
 
+  const setPermissions = (plugin: InstalledPlugin, permissions: string[]) =>
+    act(
+      plugin.id,
+      async () => {
+        await pluginsApi.setPermissions(plugin.id, permissions);
+        updateInstalled(plugin.id, (p) => ({ ...p, permissions }));
+      },
+      false,
+    );
+
   const showWindow = (plugin: InstalledPlugin) => {
     pluginsApi.openWindow(plugin.id).catch((e) => {
       logError("plugins.openWindow", e);
@@ -153,15 +173,29 @@ export default function PluginsTab() {
     });
   };
 
+  /** Checks every permission for a new install. Over an installed version, follows the user's
+   * last choice; see keptChoices. */
   const openInstall = (target: InstallTarget) => {
+    const old = market?.installed.find((p) => p.id === target.id);
+    if (market && old) {
+      // Without the old manifest, take it that the old version asked only for the approved ones,
+      // so every other permission counts as newly asked
+      const oldAsked = market.askedPermissions[old.id] ?? old.permissions;
+      setApproved(
+        keptChoices(target.permissions, oldAsked, old.permissions, market.permissionDependsOn),
+      );
+    } else {
+      setApproved(target.permissions);
+    }
     setAgreed(false);
     setInstalling(target);
   };
 
   const confirmInstall = () => {
     const target = installing;
+    const chosen = approved;
     setInstalling(null);
-    if (target) void act(`install:${target.name}`, target.run, true);
+    if (target) void act(`install:${target.name}`, () => target.run(chosen), true);
   };
 
   const confirmUninstall = () => {
@@ -220,6 +254,10 @@ export default function PluginsTab() {
               });
             }
             const working = busy !== null;
+            // Without the manifest, what it asks for is not known, so the permissions cannot be
+            // changed
+            const asked = market.askedPermissions[plugin.id] ?? [];
+            const editingThis = editing === plugin.id;
             return (
               <Row
                 key={plugin.id}
@@ -245,67 +283,96 @@ export default function PluginsTab() {
                   />
                 }
               >
-                <div className={`${styles.controls} ${styles.installedControls}`}>
-                  {onlinePlugin ? (
-                    <MarketStats
-                      count={onlinePlugin.download_count}
-                      repo={onlinePlugin.repo}
-                      className={styles.installedStats}
-                    />
-                  ) : null}
-                  {plugin.ui.hasPage ? (
-                    <SimplePicker
-                      value={toChoice(plugin.ui.opensIn)}
-                      options={opensInOptions}
+                <div className={styles.installedBody}>
+                  <div className={styles.controls}>
+                    {onlinePlugin ? (
+                      <MarketStats
+                        count={onlinePlugin.download_count}
+                        repo={onlinePlugin.repo}
+                        className={styles.installedStats}
+                      />
+                    ) : null}
+                    {plugin.ui.hasPage ? (
+                      <SimplePicker
+                        value={toChoice(plugin.ui.opensIn)}
+                        options={opensInOptions}
+                        disabled={working}
+                        onChange={(choice) => void setOpensIn(plugin, choice)}
+                      />
+                    ) : null}
+                    {versionOptions.length > 0 ? (
+                      <SimplePicker
+                        value={plugin.version}
+                        options={versionOptions}
+                        disabled={working}
+                        onChange={(version) => {
+                          const v = online.find((o) => o.version === version);
+                          if (onlinePlugin && v && v.kind !== "same") {
+                            openInstall(onlineTarget(onlinePlugin, v));
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {onlinePlugin && update ? (
+                      <button
+                        type="button"
+                        className={styles.btnPrimary}
+                        disabled={working}
+                        onClick={() => openInstall(onlineTarget(onlinePlugin, update))}
+                      >
+                        {t("plugins.installed.update", { version: update.version })}
+                      </button>
+                    ) : null}
+                    {/* A plugin in the sidebar is opened from there */}
+                    {plugin.ui.hasPage && toChoice(plugin.ui.opensIn) === "window" ? (
+                      <button
+                        type="button"
+                        className={styles.btn}
+                        disabled={!plugin.enabled}
+                        onClick={() => showWindow(plugin)}
+                      >
+                        {t("plugins.installed.show")}
+                      </button>
+                    ) : null}
+                    {asked.length > 0 ? (
+                      <button
+                        type="button"
+                        className={styles.btn}
+                        aria-expanded={editingThis}
+                        onClick={() => setEditing(editingThis ? null : plugin.id)}
+                      >
+                        <ChevronRight
+                          size={14}
+                          strokeWidth={2}
+                          className={`${styles.chevron} ${editingThis ? styles.chevronOpen : ""}`}
+                        />
+                        {t("plugins.installed.permissions", {
+                          checked: plugin.permissions.length,
+                          asked: asked.length,
+                        })}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`${styles.btnDanger} ${styles.rowEnd}`}
                       disabled={working}
-                      onChange={(choice) => void setOpensIn(plugin, choice)}
-                    />
-                  ) : null}
-                  {versionOptions.length > 0 ? (
-                    <SimplePicker
-                      value={plugin.version}
-                      options={versionOptions}
-                      disabled={working}
-                      onChange={(version) => {
-                        const v = online.find((o) => o.version === version);
-                        if (onlinePlugin && v && v.kind !== "same") {
-                          openInstall(onlineTarget(onlinePlugin, v));
-                        }
+                      onClick={() => {
+                        setDeleteData(false);
+                        setUninstalling(plugin);
                       }}
+                    >
+                      {busy === plugin.id ? t("plugins.working") : t("plugins.installed.uninstall")}
+                    </button>
+                  </div>
+                  {editingThis ? (
+                    <PermissionTree
+                      asked={asked}
+                      dependsOn={market.permissionDependsOn}
+                      checked={plugin.permissions}
+                      disabled={working}
+                      onChange={(permissions) => void setPermissions(plugin, permissions)}
                     />
                   ) : null}
-                  {onlinePlugin && update ? (
-                    <button
-                      type="button"
-                      className={styles.btnPrimary}
-                      disabled={working}
-                      onClick={() => openInstall(onlineTarget(onlinePlugin, update))}
-                    >
-                      {t("plugins.installed.update", { version: update.version })}
-                    </button>
-                  ) : null}
-                  {/* A plugin in the sidebar is opened from there */}
-                  {plugin.ui.hasPage && toChoice(plugin.ui.opensIn) === "window" ? (
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      disabled={!plugin.enabled}
-                      onClick={() => showWindow(plugin)}
-                    >
-                      {t("plugins.installed.show")}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={`${styles.btnDanger} ${styles.rowEnd}`}
-                    disabled={working}
-                    onClick={() => {
-                      setDeleteData(false);
-                      setUninstalling(plugin);
-                    }}
-                  >
-                    {busy === plugin.id ? t("plugins.working") : t("plugins.installed.uninstall")}
-                  </button>
                 </div>
               </Row>
             );
@@ -423,6 +490,7 @@ export default function PluginsTab() {
                   onClick={() =>
                     m &&
                     openInstall({
+                      id: m.id,
                       name: m.name,
                       version: m.version,
                       source: "local",
@@ -430,7 +498,7 @@ export default function PluginsTab() {
                       permissions: m.permissions,
                       storageMb: m.storageMb,
                       runsInBackground: m.runsInBackground,
-                      run: () => pluginsApi.install(zip.fileName, m.permissions, m.storageMb),
+                      run: (approved) => pluginsApi.install(zip.fileName, approved, m.storageMb),
                     })
                   }
                 >
@@ -455,7 +523,14 @@ export default function PluginsTab() {
         notice={installing ? <InstallWarning target={installing} /> : null}
         message={
           installing ? (
-            <InstallDetails target={installing} agreed={agreed} onAgree={setAgreed} />
+            <InstallDetails
+              target={installing}
+              dependsOn={market.permissionDependsOn}
+              checked={approved}
+              onCheck={setApproved}
+              agreed={agreed}
+              onAgree={setAgreed}
+            />
           ) : null
         }
         confirmLabel={t("plugins.install.confirm")}
@@ -596,41 +671,43 @@ function InstallWarning({ target }: { target: InstallTarget }) {
   );
 }
 
-/** What the plugin may do, shown before the user agrees. High-risk permissions are marked. */
+/** What the plugin may do, shown before the user agrees. The user can uncheck permissions, but
+ * not disk space or running in the background. */
 function InstallDetails({
   target,
+  dependsOn,
+  checked,
+  onCheck,
   agreed,
   onAgree,
 }: {
   target: InstallTarget;
+  dependsOn: Record<string, string>;
+  checked: string[];
+  onCheck: (checked: string[]) => void;
   agreed: boolean;
   onAgree: (agreed: boolean) => void;
 }) {
   const { t } = useTranslation();
   const official = target.source === "official";
-  const nothingAsked =
-    target.permissions.length === 0 && target.storageMb === null && !target.runsInBackground;
+  const fixed = [
+    target.storageMb !== null ? t("plugins.install.storage", { mb: target.storageMb }) : "",
+    target.runsInBackground ? t("plugins.install.background") : "",
+  ].filter(Boolean);
   return (
     <div className={styles.details}>
-      {nothingAsked ? (
+      {target.permissions.length === 0 && fixed.length === 0 ? (
         <p>{t("plugins.install.noPermissions")}</p>
       ) : (
         <div className={styles.asks}>
           <p className={styles.listLabel}>{t("plugins.install.permissions")}</p>
-          <ol className={styles.permissions}>
-            {target.permissions.map((p) => (
-              <li key={p}>
-                <span>{t(`plugins.permissions.${permissionKey(p)}`, { defaultValue: p })}</span>
-                {HIGH_RISK.has(p) ? (
-                  <span className={styles.risk}>{t("plugins.install.highRisk")}</span>
-                ) : null}
-              </li>
-            ))}
-            {target.storageMb !== null ? (
-              <li>{t("plugins.install.storage", { mb: target.storageMb })}</li>
-            ) : null}
-            {target.runsInBackground ? <li>{t("plugins.install.background")}</li> : null}
-          </ol>
+          <PermissionTree
+            asked={target.permissions}
+            dependsOn={dependsOn}
+            checked={checked}
+            onChange={onCheck}
+            fixed={fixed}
+          />
         </div>
       )}
       <label className={styles.consent}>
