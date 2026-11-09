@@ -221,7 +221,8 @@ export function CategoryRow({
           icon={Pencil}
           label={t("categories.list.renameAria")}
           variant="soft"
-          size="lg"
+          tone="accent"
+          quiet
           onClick={() => setEditingName(true)}
           onMouseDown={(e) => e.stopPropagation()}
           draggable={false}
@@ -234,7 +235,8 @@ export function CategoryRow({
             icon={Trash2}
             label={t("categories.list.deleteAria")}
             variant="soft"
-            size="lg"
+            tone="danger"
+            quiet
             onClick={() => setConfirmOpen(true)}
             onMouseDown={(e) => e.stopPropagation()}
             draggable={false}
