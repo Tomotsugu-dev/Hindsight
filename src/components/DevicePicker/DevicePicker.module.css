@@ -62,8 +62,8 @@
 /* —— 设备图标 tile：小色块带边框 —— */
 .tile {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: calc(20px * var(--density));
+  height: calc(20px * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
