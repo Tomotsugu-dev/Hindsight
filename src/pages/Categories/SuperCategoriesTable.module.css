@@ -244,6 +244,27 @@
   gap: 8px;
 }
 
+/* —— 跨大类拖拽的发光插入线：position:fixed，坐标由 JS 按最终落点算 —— */
+.dropLine {
+  position: fixed;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent),
+    0 0 10px color-mix(in oklab, var(--color-accent) 70%, transparent),
+    0 0 20px color-mix(in oklab, var(--color-accent) 40%, transparent);
+  pointer-events: none;
+  z-index: 9998;
+  transform: translateY(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropLine {
+    box-shadow: 0 0 0 1px var(--color-accent);
+  }
+}
+
 :global([data-layout="flat"]) .table {
   gap: 32px;
 }

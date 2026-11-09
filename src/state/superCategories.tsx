@@ -26,6 +26,12 @@ interface SuperCategoriesContextValue {
   reorder: (orderedIds: string[]) => Promise<void>;
   /** 给某分类指派/移出大类。superId = null 表示移出回到"未归入"。 */
   assignCategory: (categoryId: string, superId: string | null) => Promise<void>;
+  /** 跨大类移动：先改归属，再按目标落点写全局顺序，只刷新一次分类。 */
+  moveCategoryToSuper: (
+    categoryId: string,
+    superId: string | null,
+    orderedIds: string[],
+  ) => Promise<void>;
 }
 
 const SuperCategoriesContext = createContext<SuperCategoriesContextValue | null>(
@@ -105,6 +111,23 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
     [refreshCategories],
   );
 
+  const moveCategoryToSuper = useCallback(
+    async (
+      categoryId: string,
+      superId: string | null,
+      orderedIds: string[],
+    ) => {
+      // 先落归属，再落顺序。顺序失败时归属仍然正确，刷新后用户可以直接再拖一次。
+      await api.assignCategoryToSuper(categoryId, superId);
+      try {
+        await api.reorderCategories(orderedIds);
+      } finally {
+        await refreshCategories();
+      }
+    },
+    [refreshCategories],
+  );
+
   const value = useMemo<SuperCategoriesContextValue>(
     () => ({
       supers,
@@ -115,8 +138,19 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
       remove,
       reorder,
       assignCategory,
+      moveCategoryToSuper,
     }),
-    [supers, loading, refresh, create, update, remove, reorder, assignCategory],
+    [
+      supers,
+      loading,
+      refresh,
+      create,
+      update,
+      remove,
+      reorder,
+      assignCategory,
+      moveCategoryToSuper,
+    ],
   );
 
   return (
