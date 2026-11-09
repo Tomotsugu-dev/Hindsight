@@ -331,50 +331,6 @@
   color: var(--text-strong);
 }
 
-.btn,
-.btnDanger {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-.btn {
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-strong);
-}
-.btn:hover {
-  background: var(--fill-strong);
-}
-.btnDanger {
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--status-error);
-}
-.btnDanger:hover {
-  background: var(--status-error-soft);
-}
-.btn:active,
-.btnDanger:active {
-  transform: scale(0.97);
-}
-.btn:disabled,
-.btnDanger:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-}
-
 :global([data-layout="flat"]) .card:hover {
   box-shadow: none;
   transform: none;
