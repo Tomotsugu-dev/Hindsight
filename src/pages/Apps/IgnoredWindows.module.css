@@ -67,34 +67,10 @@
 .removeBtn {
   /* 常态隐身,hover 行才现身——同 AppDetailDrawer 的 ignoreBtn 语义 */
   opacity: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(24px * var(--density));
-  height: calc(24px * var(--density));
   flex-shrink: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    opacity 0.12s ease,
-    background 0.12s ease,
-    color 0.12s ease;
 }
 
 .row:hover .removeBtn,
 .removeBtn:focus-visible {
   opacity: 1;
-}
-
-.removeBtn:hover {
-  background: var(--fill-strong);
-  color: var(--text-strong);
-}
-
-.removeBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
 }

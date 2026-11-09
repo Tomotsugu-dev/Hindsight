@@ -20,6 +20,11 @@
 
 /* —— 搜索框 —— */
 
+.search {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
 .searchWrap {
   position: relative;
   display: flex;
