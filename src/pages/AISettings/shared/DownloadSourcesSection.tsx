@@ -8,6 +8,8 @@ import { ROUTES } from "../../../config/nav";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
+import { Button } from "../../../components/Button/Button";
+import { TextInput } from "../../../components/TextInput/TextInput";
 import { useSettings } from "../../../state/settings";
 import { logError } from "../../../lib/logger";
 import styles from "./DownloadSourcesSection.module.css";
@@ -95,7 +97,7 @@ export function DownloadSourcesSection() {
             description={t("aiSettings.downloadSources.huggingfaceHelp")}
             block
           >
-            <input
+            <TextInput
               type="url"
               className={styles.input}
               value={huggingfaceUrl}
@@ -110,7 +112,7 @@ export function DownloadSourcesSection() {
             description={t("aiSettings.downloadSources.githubHelp")}
             block
           >
-            <input
+            <TextInput
               type="url"
               className={styles.input}
               value={githubProxyUrl}
@@ -125,7 +127,7 @@ export function DownloadSourcesSection() {
             description={t("aiSettings.downloadSources.nugetHelp")}
             block
           >
-            <input
+            <TextInput
               type="url"
               className={styles.input}
               value={nugetUrl}
@@ -136,9 +138,9 @@ export function DownloadSourcesSection() {
             />
           </Row>
           <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.saveButton}
+            <Button
+              variant="solid"
+              tone="accent"
               disabled={saving}
               onClick={() =>
                 void save({
@@ -149,7 +151,7 @@ export function DownloadSourcesSection() {
               }
             >
               {t("aiSettings.downloadSources.save")}
-            </button>
+            </Button>
           </div>
         </>
       )}
