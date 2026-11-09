@@ -119,8 +119,7 @@
 
 .optionHint {
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  /* TODO: --text-soft is not defined in tokens.css, so this color is inherited */
-  color: var(--text-soft);
+  color: var(--text-muted);
   line-height: 1.45;
 }
 
