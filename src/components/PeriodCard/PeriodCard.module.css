@@ -24,7 +24,7 @@
   min-width: 0;
 }
 
-/* 行 2：headLeftExtras 跟 rightExtras + dayNav 各占一边 */
+/* 行 2：headLeftExtras 跟 rightExtras + period stepper 各占一边 */
 .cardControlsRow {
   display: flex;
   align-items: center;

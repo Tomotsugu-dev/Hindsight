@@ -25,7 +25,7 @@ interface PeriodCardProps {
   onPrev: () => void;
   onNext: () => void;
   onJumpToCurrent: () => void;
-  /** 卡片头右侧 dayNav 之前的内容（一般是 DevicePicker） */
+  /** 卡片头右侧 period stepper 之前的内容（一般是 DevicePicker） */
   rightExtras?: ReactNode;
   /** 卡片头左侧 title 旁边的内容（如 ViewToggle 切「时段 / 占比」） */
   headLeftExtras?: ReactNode;
