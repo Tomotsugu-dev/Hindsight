@@ -106,6 +106,18 @@
   background: var(--button-soft-bg);
 }
 
+/* Gray and red ghosts stay quiet until hovered, so rows of them do not shout. Accent ghosts read
+   as links, so they keep their color. */
+.button[data-variant="ghost"][data-tone="neutral"],
+.button[data-variant="ghost"][data-tone="danger"] {
+  color: var(--text-muted);
+}
+
+.button[data-variant="ghost"][data-tone="neutral"]:hover:not(:disabled, [aria-disabled="true"]),
+.button[data-variant="ghost"][data-tone="danger"]:hover:not(:disabled, [aria-disabled="true"]) {
+  color: var(--button-fg);
+}
+
 .button[data-size="sm"] {
   height: calc(var(--control-height-sm) * var(--density));
   padding: 0 calc(10px * var(--density));
