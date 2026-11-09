@@ -45,6 +45,8 @@ export function PeriodNav({
         icon={ChevronLeft}
         label={prevLabel}
         variant="soft"
+        tone="accent"
+        quiet
         size="sm"
         glow
         onClick={onPrev}
@@ -65,6 +67,8 @@ export function PeriodNav({
         icon={ChevronRight}
         label={nextLabel}
         variant="soft"
+        tone="accent"
+        quiet
         size="sm"
         glow
         onClick={onNext}
