@@ -8,42 +8,6 @@
   gap: calc(14px * var(--density));
 }
 
-/* DebugTab 内部 sub-tab：调试视图 / 调试设置。视觉上轻量，跟顶部 TabNav
-   不一样的层级——它属于 DebugTab 的内部分页，不是 AI 总结的顶级页签。 */
-.subTabNav {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--density));
-  padding: 3px;
-  background: color-mix(in oklab, var(--text-muted) 8%, transparent);
-  border-radius: var(--radius-sm);
-  align-self: flex-start;
-}
-.subTab {
-  display: inline-flex;
-  align-items: center;
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    color 140ms ease-out;
-}
-.subTab:hover:not(.subTabActive) {
-  color: var(--text-strong);
-}
-.subTabActive {
-  background: var(--surface);
-  color: var(--text-strong);
-  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
-}
-
 /* —— 顶部控件行：日期 / 段下拉 / 开始按钮 / 导出 —— */
 .header {
   display: flex;
@@ -52,210 +16,21 @@
   gap: calc(10px * var(--density));
 }
 
-/* 顶部次行：参数 + 次要按钮（删除 / 导出）。跟 .header 同一族视觉，间距略小，
-   margin-top 让它跟主行视觉上是一组。flex-wrap 留着以防窗口非常窄时还能折行。 */
-.subHeader {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: calc(10px * var(--density));
-  margin-top: calc(8px * var(--density));
-}
-
-/* dayNav / navBtn / dayPill 跟 Today 页 [TodayPage.module.css:66-128] 完全一致——
-   与 SimplePicker 用同一族 accent-tinted 边框色，视觉对齐 DevicePicker。 */
 .dateNav {
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--density));
 }
 
-.navBtn {
-  width: calc(var(--control-height-sm) * var(--density));
-  height: calc(var(--control-height-sm) * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.navBtn:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-.navBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .dayPill {
   min-width: calc(64px * var(--font-scale));
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
 }
 
-.dayPill:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-.dayPill:disabled {
-  cursor: default;
-}
-
-/* 段选择 native select：不抢风头，默认外观 */
-.segSelect {
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  background: var(--surface-card);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  color: var(--text-strong);
-  cursor: pointer;
-  outline: none;
-}
-
-.segSelect:focus {
-  border-color: var(--color-accent);
-}
-
-.segSelect:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* outline 风（透明底 + 1.5px 紫边 + 紫字）。跟 DailyTab / WeeklyTab 的 startBtn
-   同一族；debug tab 紧凑高 30 / pad 12 / font 12。 */
-.startBtn {
-  /* margin-left:auto 把 start/stop 推到 header flex 行的最右端——是 toolbar 的主操作按钮，
-     按 mac 软件惯例放右下 / 右上当 primary。delete / export 留在左侧次要操作组里。 */
+/* margin-left:auto 把 start/stop 推到 header flex 行的最右端——是 toolbar 的主操作按钮，
+   按 mac 软件惯例放右下 / 右上当 primary。generating 时 stop 替换 start，位置必须保持一致
+   避免布局跳动。delete / export 留在左侧次要操作组里。 */
+.mainAction {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
-}
-
-.startBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.startBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.startBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.stopBtn {
-  /* 跟 startBtn 一样推到行尾——generating 时它替换 startBtn，位置必须保持一致避免布局跳动 */
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: color-mix(in oklab, var(--status-pending) 14%, transparent);
-  border: 1px solid color-mix(in oklab, var(--status-pending) 38%, transparent);
-  color: var(--status-pending-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.stopBtn:hover {
-  background: color-mix(in oklab, var(--status-pending) 22%, transparent);
-}
-
-/* 引擎参数 Section 内：3 个 picker 横向 inline 排，跟顶部 header 那排视觉一致；
-   Section 自带 padding，这里只控间距 */
-.engineParamRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: calc(10px * var(--density));
-  padding: calc(14px * var(--density)) calc(20px * var(--density)) calc(8px * var(--density));
-}
-
-/* picker 行下面的 VRAM 估算条 —— 提示用户当前组合大概要多少显存 */
-.vramEst {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: calc(6px * var(--density)) calc(10px * var(--density));
-  padding: calc(8px * var(--density)) calc(20px * var(--density)) calc(14px * var(--density));
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-variant-numeric: tabular-nums;
-}
-
-.vramEstLabel {
-  font-weight: var(--font-weight-600);
-  color: var(--text-muted);
-}
-
-.vramEstValue {
-  font-weight: var(--font-weight-700);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-}
-
-.vramEstBreakdown {
-  color: var(--text-faint);
-  font-weight: var(--font-weight-400);
-}
-
-/* 三档颜色：< 16 GB 中性绿、16-24 GB 橙警告、> 24 GB 红危险 */
-.vramEstOk .vramEstValue {
-  color: var(--status-ok-strong);
-}
-
-.vramEstWarn .vramEstValue {
-  color: var(--status-pending-strong);
-}
-
-.vramEstDanger .vramEstValue {
-  color: var(--status-error-strong);
 }
 
 .infoIconWrap {
@@ -280,72 +55,6 @@
 .infoIconWrap:focus-visible {
   color: var(--color-accent);
   background: color-mix(in oklab, var(--color-accent) 10%, transparent);
-}
-
-/* 删除按钮：outline 风（透明底 + 1.5px 红边 + 红字）。跟 DailyTab / WeeklyTab /
-   AISettings 的 uninstallOutline 同一族；debug tab 整体 compact，按钮高 30 / pad 12 / 字 12。 */
-.deleteBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--status-error) 50%, transparent);
-  color: var(--status-error-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
-}
-
-.deleteBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-error) 8%, transparent);
-  border-color: var(--status-error);
-}
-
-.deleteBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.deleteBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 参考 DailyTab.module.css 的 .exportBtn——transparent + 实线浅边框 + 深色字。
-   不放 margin-left:auto：在 Section.headerAction 里跟 startBtn / deleteBtn 并排，
-   靠 Section 自己的 .headerAction margin-left:auto 整组推到右端就够了。 */
-.exportBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-
-.exportBtn:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.exportBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 /* —— 引擎状态条 —— */
@@ -581,29 +290,6 @@
   padding-right: calc(4px * var(--density));
 }
 
-/* —— Prompt 预览的小子标题 + 等宽 pre 块 —— */
-.promptSubLabel {
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  letter-spacing: -0.005em;
-  margin: 0;
-}
-
-.promptPre {
-  margin: 0;
-  padding: calc(10px * var(--density)) calc(12px * var(--density));
-  background: var(--fill-subtle);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  line-height: 1.55;
-  color: var(--text-strong);
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--font-mono);
-}
-
 .placeholder {
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
@@ -771,31 +457,6 @@
 /* 引擎日志面板的"刷新"小按钮，跟在 label 后 */
 .engineLogsRefreshBtn {
   margin-left: calc(8px * var(--density));
-  height: calc(18px * var(--density));
-  padding: 0 calc(8px * var(--density));
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-micro) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  cursor: pointer;
-  letter-spacing: 0.01em;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.engineLogsRefreshBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  color: var(--color-accent);
-}
-
-.engineLogsRefreshBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .spin {
