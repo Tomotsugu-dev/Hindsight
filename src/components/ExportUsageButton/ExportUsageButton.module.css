@@ -4,8 +4,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: calc(var(--control-height-sm) * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   padding: 0;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
