@@ -50,7 +50,7 @@ a {
    改成 accent 半透明高亮 + 白字，选中范围清晰。亮色不动。 */
 [data-mode="dark"] ::selection {
   background: color-mix(in oklab, var(--color-accent) 45%, transparent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* a11y 兜底：键盘聚焦时如果元素没有自定义 focus 样式，给一个默认的描边。
