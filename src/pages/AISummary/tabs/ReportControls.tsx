@@ -12,7 +12,8 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useMouseGlow } from "../../../hooks/useMouseGlow";
+import { Button } from "../../../components/Button/Button";
+import { IconButton } from "../../../components/Button/IconButton";
 import styles from "./ReportControls.module.css";
 
 interface ReportHeaderProps {
@@ -70,44 +71,38 @@ interface PeriodNavProps {
 
 /** 时段切换：[‹] [今天] [›]，点中间回到当前时段。样式照日统计的日期切换。 */
 export function PeriodNav(p: PeriodNavProps) {
-  const { ref: prevRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: labelRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextRef } = useMouseGlow<HTMLButtonElement>();
   const canReset = !p.atCurrent;
   return (
     <div className={styles.periodNav} role="group" aria-label={p.groupLabel}>
-      <button
-        ref={prevRef}
-        type="button"
-        className={`${styles.navBtn} glow`}
+      <IconButton
+        variant="soft"
+        size="sm"
+        glow
+        icon={ChevronLeft}
+        label={p.prevLabel}
         onClick={p.onPrev}
         disabled={p.locked}
-        aria-label={p.prevLabel}
-        title={p.prevLabel}
-      >
-        <ChevronLeft size={14} strokeWidth={1.75} />
-      </button>
-      <button
-        ref={labelRef}
-        type="button"
-        className={`${styles.navPill} ${canReset ? styles.navPillClickable : ""} glow`}
+      />
+      <Button
+        variant="soft"
+        size="sm"
+        glow
+        className={styles.navPill}
         onClick={p.onReset}
         disabled={p.locked || !canReset}
         title={canReset ? p.resetTitle : undefined}
       >
         {p.label}
-      </button>
-      <button
-        ref={nextRef}
-        type="button"
-        className={`${styles.navBtn} glow`}
+      </Button>
+      <IconButton
+        variant="soft"
+        size="sm"
+        glow
+        icon={ChevronRight}
+        label={p.nextLabel}
         onClick={p.onNext}
         disabled={p.locked || p.atCurrent}
-        aria-label={p.nextLabel}
-        title={p.nextLabel}
-      >
-        <ChevronRight size={14} strokeWidth={1.75} />
-      </button>
+      />
     </div>
   );
 }
@@ -122,76 +117,18 @@ interface MainButtonProps {
 
 /** 主按钮的轻重跟着状态走：没生成时实心，生成完浅底，在跑时中性。 */
 export function MainButton({ action, label, title, disabled, onClick }: MainButtonProps) {
-  const look =
-    action === "start"
-      ? styles.btnPrimary
-      : action === "regenerate"
-        ? styles.btnSoft
-        : styles.btnNeutral;
   return (
-    <button
-      type="button"
-      className={`${styles.btn} ${look}`}
+    <Button
+      size="lg"
+      variant={action === "start" ? "solid" : "soft"}
+      tone={action === "stop" ? "neutral" : "accent"}
+      icon={action === "start" ? Play : action === "regenerate" ? RefreshCcw : Square}
       onClick={onClick}
       disabled={disabled}
       title={title}
     >
-      {action === "start" ? (
-        <Play size={14} strokeWidth={2} />
-      ) : action === "regenerate" ? (
-        <RefreshCcw size={14} strokeWidth={2} />
-      ) : (
-        <Square size={13} strokeWidth={2.2} />
-      )}
       {label}
-    </button>
-  );
-}
-
-interface IconButtonProps {
-  /** 读屏名字 */
-  label: string;
-  title?: string;
-  /** 鼠标移上去变红，给删除用 */
-  danger?: boolean;
-  /** 小一号，放在正文行里 */
-  small?: boolean;
-  disabled?: boolean;
-  className?: string;
-  onClick: () => void;
-  children: ReactNode;
-}
-
-/** 只有图标的按钮：导出、删除、重新生成某一段。 */
-export function IconButton({
-  label,
-  title,
-  danger,
-  small,
-  disabled,
-  className,
-  onClick,
-  children,
-}: IconButtonProps) {
-  const classes = [
-    styles.iconBtn,
-    danger ? styles.iconBtnDanger : "",
-    small ? styles.iconBtnSmall : "",
-    className ?? "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return (
-    <button
-      type="button"
-      className={classes}
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={title}
-    >
-      {children}
-    </button>
+    </Button>
   );
 }
 
@@ -211,15 +148,7 @@ export function NoticeBars({ error, dismissLabel, onDismissError, notice }: Noti
         <div className={styles.errorBar}>
           <AlertTriangle size={14} strokeWidth={2.2} />
           <span>{error}</span>
-          <button
-            type="button"
-            className={styles.errorClose}
-            onClick={onDismissError}
-            aria-label={dismissLabel}
-            title={dismissLabel}
-          >
-            <X size={12} strokeWidth={2.4} />
-          </button>
+          <IconButton size="sm" icon={X} label={dismissLabel} onClick={onDismissError} />
         </div>
       ) : null}
       {notice ? (
