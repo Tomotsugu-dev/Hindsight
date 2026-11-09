@@ -107,7 +107,7 @@
 }
 
 .segment:not(:last-child) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 var(--segment-seam);
 }
 
 .xAxis {
@@ -126,9 +126,4 @@
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
-}
-
-/* The white seam between segments turns into a dark one, as in the day chart (HourlyChart). */
-:global([data-mode="dark"]) .segment:not(:last-child) {
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
 }

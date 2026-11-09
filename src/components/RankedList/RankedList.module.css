@@ -72,7 +72,7 @@
   border-radius: var(--radius-xs);
   flex-shrink: 0;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    inset 0 0 0 1px var(--swatch-highlight),
     0 1px 1px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
 }
 
