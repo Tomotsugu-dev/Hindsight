@@ -1,7 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "../Button/Button";
-import { IconButton } from "../Button/IconButton";
+import { PeriodNav } from "../PeriodNav/PeriodNav";
 import styles from "./PeriodCard.module.css";
 
 interface PeriodCardProps {
@@ -80,38 +78,18 @@ export function PeriodCard({
           <div className={styles.headRight}>
             {rightExtras}
 
-            <div className={styles.dayNav}>
-              <IconButton
-                icon={ChevronLeft}
-                label={prevAriaLabel}
-                variant="soft"
-                size="sm"
-                glow
-                onClick={onPrev}
-                disabled={transitioning}
-              />
-
-              <Button
-                size="sm"
-                glow
-                className={styles.dayPill}
-                onClick={onJumpToCurrent}
-                disabled={!pillClickable || transitioning}
-                title={pillClickable ? pillTooltip : undefined}
-              >
-                {pillLabel}
-              </Button>
-
-              <IconButton
-                icon={ChevronRight}
-                label={nextAriaLabel}
-                variant="soft"
-                size="sm"
-                glow
-                onClick={onNext}
-                disabled={!canGoForward || transitioning}
-              />
-            </div>
+            <PeriodNav
+              label={pillLabel}
+              currentTitle={pillTooltip}
+              prevLabel={prevAriaLabel}
+              nextLabel={nextAriaLabel}
+              isCurrent={!pillClickable}
+              canNext={canGoForward}
+              busy={transitioning}
+              onPrev={onPrev}
+              onNext={onNext}
+              onCurrent={onJumpToCurrent}
+            />
           </div>
         </div>
       </header>

@@ -56,17 +56,6 @@
   gap: calc(12px * var(--density));
 }
 
-.dayNav {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-}
-
-/* The arrows stay in place when the label changes between "Today" and a date */
-.dayPill {
-  min-width: calc(64px * var(--font-scale));
-}
-
 /* 滑动 carousel */
 .swipeFrame {
   position: relative;
