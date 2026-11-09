@@ -4,19 +4,19 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .backfillBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   cursor: pointer;
@@ -39,7 +39,7 @@
 }
 
 .backfillMsg {
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   text-align: right;
   max-width: 260px;
