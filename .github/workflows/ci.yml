@@ -1,5 +1,5 @@
-# Quality gate for pull requests and pushes to main: frontend lint, type check,
-# unit tests and build; backend fmt, clippy and tests. release.yml is separate
+# Quality gate for pull requests and pushes to main: frontend format check, lint,
+# type check, unit tests and build; backend fmt, clippy and tests. release.yml is separate
 # and only builds artifacts when a tag is pushed.
 #
 # Layout:
@@ -71,6 +71,9 @@ jobs:
 
       - name: Install deps
         run: npm ci
+
+      - name: Format check (prettier)
+        run: npm run format:check
 
       - name: Lint (eslint, ratcheted warnings)
         run: npm run lint
