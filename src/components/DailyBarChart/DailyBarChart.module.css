@@ -1,9 +1,9 @@
 .chart {
-  padding: 18px 16px 10px;
+  padding: calc(18px * var(--density)) calc(16px * var(--density)) calc(10px * var(--density));
 }
 
 :global([data-layout="flat"]) .chart {
-  padding: 18px 12px 10px 0;
+  padding: calc(18px * var(--density)) calc(12px * var(--density)) calc(10px * var(--density)) 0;
 }
 
 .plot {
@@ -14,15 +14,16 @@
 
 .yAxis {
   position: relative;
-  /* 刻度是英文短格式（16.5h）——40px 够放；.xAxis 的 margin-left 必须保持一致 */
-  width: 40px;
+  /* The ticks are short English labels such as 16.5h. .xAxis margin-left must stay equal to
+     this width. */
+  width: calc(40px * var(--font-scale));
   flex-shrink: 0;
 }
 
 .yTick {
   position: absolute;
-  right: 6px;
-  font-size: 10px;
+  right: calc(6px * var(--density));
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -34,7 +35,7 @@
 .plotArea {
   position: relative;
   flex: 1;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--border-strong);
 }
 
 .gridLine {
@@ -51,7 +52,7 @@
   inset: 0;
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 /* column 是个 <button>，重置浏览器默认外观；非交互态退化成纯展示。 */
@@ -111,28 +112,23 @@
 
 .xAxis {
   position: relative;
-  margin-left: 40px;
-  height: 18px;
-  margin-top: 6px;
+  margin-left: calc(40px * var(--font-scale));
+  height: calc(18px * var(--font-scale));
+  margin-top: calc(6px * var(--density));
 }
 
 .xLabel {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
 
-/* —— 暗色专属：跟日柱状图(HourlyChart)统一——段间白线改暗缝(0.32)、网格/基线改暗色可见。
-   亮色声明一律不动。 —— */
-:global([data-mode="dark"]) .plotArea {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
-}
-
+/* The white seam between segments turns into a dark one, as in the day chart (HourlyChart). */
 :global([data-mode="dark"]) .segment:not(:last-child) {
   box-shadow: inset 0 1px 0 rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
 }
