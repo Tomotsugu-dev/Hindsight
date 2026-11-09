@@ -176,19 +176,19 @@
 }
 
 .engineBadgeOk {
-  background: var(--status-ok-soft);
+  background: color-mix(in oklab, var(--status-ok-strong) 18%, transparent);
   color: var(--status-ok-strong);
 }
 
 /* 未安装 / starting：琥珀色，"需要操作" 的视觉提示 */
 .engineBadgeWarn {
-  background: var(--status-pending-soft);
+  background: color-mix(in oklab, var(--status-pending) 22%, transparent);
   color: var(--status-pending-strong);
 }
 
 /* 出错：红色 */
 .engineBadgeFail {
-  background: var(--status-error-soft);
+  background: color-mix(in oklab, var(--status-error-strong) 18%, transparent);
   color: var(--status-error-strong);
 }
 
@@ -980,12 +980,12 @@
    input's own rectangle. */
 .externalInput {
   width: 100%;
-  height: calc(32px * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: var(--surface-2);
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
+  background: var(--fill-default);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   font-family: var(--font-mono);
   outline: none;
@@ -993,6 +993,10 @@
     border-color 200ms ease-out,
     background-color 200ms ease-out,
     box-shadow 200ms ease-out;
+}
+
+.externalInput:hover {
+  border-color: var(--border-strong);
 }
 
 .externalInput:focus {
