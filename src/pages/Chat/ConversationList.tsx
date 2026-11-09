@@ -1,6 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { IconButton } from "../../components/Button/IconButton";
+import { TextInput } from "../../components/TextInput/TextInput";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { api, type ChatConversationMeta } from "../../api/hindsight";
 import { logError } from "../../lib/logger";
@@ -83,8 +85,7 @@ export default function ConversationList({
           {conversations.map((c) => (
             <li key={c.id}>
               {editingId === c.id ? (
-                <input
-                  type="text"
+                <TextInput
                   className={styles.convRenameInput}
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
@@ -108,27 +109,21 @@ export default function ConversationList({
                     <span className={styles.convTime}>{fmtUpdated(c.updatedTs)}</span>
                   </button>
                   <span className={styles.convActions}>
-                    <button
-                      type="button"
-                      className={styles.convActionBtn}
-                      aria-label={t("chat.conversations.renameAria")}
-                      title={t("chat.conversations.renameAria")}
+                    <IconButton
+                      size="sm"
+                      icon={Pencil}
+                      label={t("chat.conversations.renameAria")}
                       onClick={() => {
                         setEditingId(c.id);
                         setEditText(c.title);
                       }}
-                    >
-                      <Pencil size={12} strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.convActionBtn}
-                      aria-label={t("chat.conversations.deleteAria")}
-                      title={t("chat.conversations.deleteAria")}
+                    />
+                    <IconButton
+                      size="sm"
+                      icon={Trash2}
+                      label={t("chat.conversations.deleteAria")}
                       onClick={() => setDeleteTarget(c)}
-                    >
-                      <Trash2 size={12} strokeWidth={2} />
-                    </button>
+                    />
                   </span>
                 </div>
               )}

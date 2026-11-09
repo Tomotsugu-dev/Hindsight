@@ -14,14 +14,14 @@
 .table {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: calc(20px * var(--density));
 }
 
 /* —— 单个大类组：左右两栏 flex —— */
 .superBox {
   display: flex;
   align-items: stretch;
-  gap: 14px;
+  gap: calc(14px * var(--density));
   /* drag 结束 fly-box 落地、isSuperDragSource 移除时，源 superBox opacity 从 0.3 → 1
      需要平滑过渡，否则会"突然实色"——跟 fly-box snap 动画对齐。 */
   transition: opacity 420ms ease-out;
@@ -30,22 +30,22 @@
 /* —— 左侧 super card：全圆角、彩色背景 —— */
 .superCard {
   flex-shrink: 0;
-  width: 104px;
+  width: calc(104px * var(--font-scale));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 16px 10px;
+  gap: calc(8px * var(--density));
+  padding: calc(16px * var(--density)) calc(10px * var(--density));
   border-radius: var(--radius-lg);
   /* hover 时整张卡是可拖拽的（除内部 button / input 外） —— grab 光标提示
      拖动期间 body cursor 在 JS 里锁成 grabbing（见 SuperCategoriesTable.tsx 的 useEffect） */
   cursor: grab;
-  background: color-mix(in oklab, var(--sup-color, #94a3b8) 14%, var(--surface-1, #fff));
-  border: 1px solid color-mix(in oklab, var(--sup-color, #94a3b8) 28%, transparent);
+  background: color-mix(in oklab, var(--sup-color, var(--status-idle)) 14%, var(--surface-1));
+  border: 1px solid color-mix(in oklab, var(--sup-color, var(--status-idle)) 28%, transparent);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 24px color-mix(in oklab, var(--sup-color, #94a3b8) 12%, transparent);
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 24px color-mix(in oklab, var(--sup-color, var(--status-idle)) 12%, transparent);
   user-select: none;
   transition:
     background-color 160ms ease-out,
@@ -57,11 +57,11 @@
 }
 
 .superBox.orphan .superCard {
-  background: color-mix(in oklab, #94a3b8 6%, var(--surface-1, #fff));
-  border-color: rgba(0, 0, 0, 0.06);
+  background: color-mix(in oklab, var(--status-idle) 6%, var(--surface-1));
+  border-color: var(--border-subtle);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 6px 18px rgba(20, 20, 40, calc(0.05 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 6px 18px rgba(var(--shadow-rgb), calc(0.05 * var(--shadow-strength)));
   /* orphan 不能被拖（"未归入"是固定行），不显示 grab 提示 */
   cursor: default;
 }
@@ -69,7 +69,7 @@
 /* drop-target：所有 super card 在 chip drag 期间亮起紫虚线 */
 .superCard.dropTarget {
   border: 2px dashed var(--color-accent);
-  background: color-mix(in oklab, var(--color-accent) 6%, var(--surface-1, #fff));
+  background: color-mix(in oklab, var(--color-accent) 6%, var(--surface-1));
 }
 /* 鼠标 Y 命中的那个变实线 + 紫光环 */
 .superCard.dropHot {
@@ -77,7 +77,7 @@
   box-shadow:
     0 0 0 4px color-mix(in oklab, var(--color-accent) 18%, transparent),
     0 8px 24px color-mix(in oklab, var(--color-accent) 20%, transparent);
-  background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1, #fff));
+  background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1));
 }
 
 /* —— super card 顶部大 icon —— */
@@ -87,8 +87,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in oklab, var(--sup-color, #94a3b8) 22%, transparent);
-  color: var(--sup-color, #94a3b8);
+  background: color-mix(in oklab, var(--sup-color, var(--status-idle)) 22%, transparent);
+  color: var(--sup-color, var(--status-idle));
   border-radius: var(--radius-md);
   border: none;
   cursor: pointer;
@@ -96,7 +96,7 @@
   transition: transform 120ms ease-out;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 6px 16px color-mix(in oklab, var(--sup-color, #94a3b8) 22%, transparent);
+    0 6px 16px color-mix(in oklab, var(--sup-color, var(--status-idle)) 22%, transparent);
 }
 .superIcon:hover {
   transform: scale(1.04);
@@ -120,20 +120,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   width: 100%;
   text-align: center;
 }
 
 .superName {
-  font-size: 15px;
-  font-weight: var(--font-weight-700);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.012em;
   border: none;
   background: transparent;
   outline: none;
-  padding: 2px 6px;
+  padding: 2px calc(6px * var(--density));
   border-radius: var(--radius-sm);
   width: 100%;
   text-align: center;
@@ -147,17 +147,11 @@
   cursor: text;
 }
 .superName:focus {
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--control-bg);
 }
 .superBox.orphan .superName {
   color: var(--text-muted);
   cursor: default;
-}
-
-.superCount {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: var(--font-weight-500);
 }
 
 /* —— 右上角小 × 关闭按钮（macOS close button 风）——
@@ -165,21 +159,21 @@
    不占卡内空间、不压 icon / name；卡身 overflow 不裁（祖先无 overflow:hidden）。 */
 .superClose {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 18px;
-  height: 18px;
+  top: calc(-6px * var(--density));
+  right: calc(-6px * var(--density));
+  width: calc(18px * var(--density));
+  height: calc(18px * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-pill);
   color: var(--text-muted);
   cursor: pointer;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   opacity: 0;
   transform: scale(0.7);
   transform-origin: center;
@@ -202,7 +196,7 @@
 .superClose:hover {
   background: var(--status-error);
   border-color: var(--status-error);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* —— 右侧 rows 列：独立卡片堆叠 + 之间留 gap —— */
@@ -210,18 +204,18 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   min-width: 0;
 }
 
 .emptyHint {
-  padding: 24px 16px;
+  padding: calc(24px * var(--density)) calc(16px * var(--density));
   text-align: center;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
   font-style: italic;
   background: var(--fill-subtle);
-  border: 1px dashed rgba(0, 0, 0, 0.08);
+  border: 1px dashed var(--border-default);
   border-radius: var(--radius-lg);
 }
 
@@ -238,7 +232,7 @@
   box-shadow:
     0 0 0 4px color-mix(in oklab, var(--color-accent) 18%, transparent),
     0 8px 24px color-mix(in oklab, var(--color-accent) 20%, transparent) !important;
-  background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1, #fff)) !important;
+  background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1)) !important;
 }
 
 /* 大类拖动 fly-box 不再有专属类——
@@ -250,7 +244,7 @@
 .builtinBox {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 /* —— 跨大类拖拽的发光插入线：position:fixed，坐标由 JS 按最终落点算 —— */
@@ -275,7 +269,7 @@
 }
 
 :global([data-layout="flat"]) .table {
-  gap: 32px;
+  gap: calc(32px * var(--density));
 }
 
 :global([data-layout="flat"]) .superCard,
@@ -287,10 +281,6 @@
   box-shadow: none;
 }
 
-:global([data-layout="flat"]) .superName {
-  font-weight: var(--font-weight-500);
-}
-
 /* Group drop targets retain an explicit boundary during drag operations. */
 :global([data-layout="flat"]) .superCard.dropTarget {
   outline: 1px dashed var(--color-accent);
@@ -300,7 +290,7 @@
 :global([data-layout="flat"]) .superCard.dropHot {
   outline: 1px solid var(--color-accent);
   outline-offset: -1px;
-  background: color-mix(in oklab, var(--color-accent) 8%, white);
+  background: color-mix(in oklab, var(--color-accent) 8%, var(--surface-card));
 }
 
 :global([data-layout="flat"]) .superIcon {

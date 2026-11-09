@@ -11,6 +11,7 @@ import { useCategories } from "../../state/categories";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { IconButton } from "../../components/Button/IconButton";
 import type { Category } from "../../api/hindsight";
 import { EXCLUDED_CATEGORY_ID, PRIVATE_CATEGORY_ID } from "../../utils/privateCategory";
 import { AppList } from "./parts";
@@ -216,32 +217,30 @@ export function CategoryRow({
       </div>
 
       <div className={styles.catActions}>
-        <button
-          type="button"
-          className={styles.actionBtn}
+        <IconButton
+          icon={Pencil}
+          label={t("categories.list.renameAria")}
+          variant="soft"
+          tone="accent"
+          quiet
           onClick={() => setEditingName(true)}
-          aria-label={t("categories.list.renameAria")}
-          title={t("categories.list.renameAria")}
           onMouseDown={(e) => e.stopPropagation()}
           draggable={false}
-        >
-          <Pencil size={14} strokeWidth={1.85} />
-        </button>
+        />
         {/* 内置分类（如 v27 的 hidden）与 'other'（未分类时长的隐式归属，reports SQL
             COALESCE 到它）不允许删除：按钮不渲染，dialog 也不挂。
             后端 categories::delete 有二次防御 */}
         {!category.builtin && category.id !== "other" && (
-          <button
-            type="button"
-            className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+          <IconButton
+            icon={Trash2}
+            label={t("categories.list.deleteAria")}
+            variant="soft"
+            tone="danger"
+            quiet
             onClick={() => setConfirmOpen(true)}
-            aria-label={t("categories.list.deleteAria")}
-            title={t("categories.list.deleteAria")}
             onMouseDown={(e) => e.stopPropagation()}
             draggable={false}
-          >
-            <Trash2 size={14} strokeWidth={1.85} />
-          </button>
+          />
         )}
       </div>
 

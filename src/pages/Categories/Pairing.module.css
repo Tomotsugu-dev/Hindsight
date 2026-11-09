@@ -1,11 +1,11 @@
 .pairing {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   /* 多设备场景：列总宽超过容器时横向滚动，单列不会被压缩 */
   overflow-x: auto;
   /* 给底部留出滚动条空间，避免滚动条压到内容 */
-  padding-bottom: 4px;
+  padding-bottom: calc(4px * var(--density));
 }
 
 /* —— 自定义横向滚动条：永远可见的细条，让用户知道可以左右滑动 —— */
@@ -31,7 +31,7 @@
 /* Firefox 滚动条样式（细 + 半透明拇指） */
 .pairing {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.18) rgba(0, 0, 0, 0.04);
+  scrollbar-color: var(--scrollbar-thumb) var(--fill-default);
 }
 
 /* device cols / 统一名 / 指派下拉 / 行末删除（28）。
@@ -40,10 +40,12 @@
 .row {
   position: relative;
   display: grid;
-  grid-template-columns: var(--device-cols) 80px 160px 28px;
+  grid-template-columns:
+    var(--device-cols) calc(80px * var(--font-scale)) 160px
+    calc(28px * var(--density));
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
+  gap: calc(12px * var(--density));
+  padding: calc(6px * var(--density)) calc(12px * var(--density));
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   transition:
@@ -58,7 +60,9 @@
    展开宽度与左侧设备列一致（160px）。用 :has() 让任意一行的 nameCol 被 hover 时同步展开整列。*/
 .pairing:has(.nameCol:hover) .row,
 .pairing:has(.nameCol:hover) .devHeader {
-  grid-template-columns: var(--device-cols) 160px 160px 28px;
+  grid-template-columns:
+    var(--device-cols) calc(160px * var(--font-scale)) 160px
+    calc(28px * var(--density));
 }
 
 /* zebra：相邻行底色错开一档，分块更清晰。先于 hover / hot 写，
@@ -77,16 +81,16 @@
 
 /* 未分类行：淡黄橙色背景提醒去指派。优先级压过 .rowEven / .rowOdd 的灰色斑马纹 */
 .row.unassigned {
-  background: rgba(251, 191, 36, 0.1);
+  background: color-mix(in oklab, var(--status-pending) 10%, transparent);
 }
 
 .row.unassigned:hover {
-  background: rgba(251, 191, 36, 0.16);
+  background: color-mix(in oklab, var(--status-pending) 16%, transparent);
 }
 
 /* 拖拽时悬停的目标行：撞起来 —— 抬升 + 阴影 + 描边 + 微缩放 */
 .row.hot {
-  background: color-mix(in oklab, var(--color-accent) 10%, white);
+  background: color-mix(in oklab, var(--color-accent) 10%, var(--surface-card));
   border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
   box-shadow:
     0 4px 12px color-mix(in oklab, var(--color-accent) 18%, transparent),
@@ -104,12 +108,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 48px;
-  margin-top: 4px;
+  gap: calc(6px * var(--density));
+  min-height: calc(48px * var(--density));
+  margin-top: calc(4px * var(--density));
   border: 1px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--color-accent);
   transition:
@@ -132,7 +136,7 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 36px;
+  min-height: calc(36px * var(--density));
 }
 
 /* 空槽：居中虚线，比文字"—"更像"留位"的视觉语言 */
@@ -143,32 +147,26 @@
 .emptyDash {
   flex: 1;
   height: 0;
-  border-top: 1px dashed rgba(0, 0, 0, 0.18);
-  margin: 0 12px;
+  border-top: 1px dashed var(--border-dashed);
+  margin: 0 calc(12px * var(--density));
 }
 
-/* —— 暗色专属：这页是密集多设备表格，亮色靠 2.5% 黑斑马纹 + gap 分行；暗色下黑斑马纹、
-   黑虚线全看不见 → 行糊在一起。恢复暗色的分行信号（亮色声明一律不动）：行距加大、
-   斑马纹改淡白、hover 可见、空列虚线改淡白。unassigned/hot 等特殊态用 :not 排除，
-   保持它们各自的黄/accent 高亮。 —— */
+/* Dark mode spaces the rows further apart, because the faint zebra stripes do not separate
+   them well on a dark background. */
 :global([data-mode="dark"]) .pairing {
-  gap: 7px;
-}
-
-:global([data-mode="dark"]) .emptyDash {
-  border-top-color: rgba(255, 255, 255, 0.14);
+  gap: calc(7px * var(--density));
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   cursor: grab;
   user-select: none;
   font-variant-numeric: tabular-nums;
   width: 100%;
   min-width: 0;
-  padding: 4px 8px;
+  padding: calc(4px * var(--density)) calc(8px * var(--density));
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   transition:
@@ -179,7 +177,7 @@
 
 .chip:hover {
   background: var(--fill-default);
-  border-color: rgba(0, 0, 0, 0.06);
+  border-color: var(--border-subtle);
 }
 
 .chip:active {
@@ -189,7 +187,7 @@
 /* 源 chip 在拖动过程中变虚线占位 —— 占据原槽，告诉你"原始位置在这" */
 .chipPlaceholder {
   opacity: 0.35;
-  border: 1px dashed rgba(0, 0, 0, 0.25);
+  border: 1px dashed var(--border-dashed);
   background: transparent;
   pointer-events: none;
 }
@@ -200,13 +198,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
 }
 
 .chipMeta {
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   color: var(--text-muted);
   flex-shrink: 0;
   font-feature-settings: "tnum";
@@ -248,12 +246,12 @@
 
 .nameInput {
   width: 100%;
-  height: 28px;
-  padding: 0 8px;
+  height: calc(28px * var(--density));
+  padding: 0 calc(8px * var(--density));
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   outline: none;
@@ -267,19 +265,12 @@
    用 .row:hover 触发，比 .nameInput:hover 命中区域大得多。*/
 .row:hover .nameInput,
 .nameInput:hover {
-  border-color: rgba(0, 0, 0, 0.12);
-  background: rgba(255, 255, 255, 0.6);
-}
-
-/* 暗色：hover 提示底亮色是 60% 白，暗色下就是刺眼灰白框。改成淡白提示。亮色不动。 */
-:global([data-mode="dark"]) .row:hover .nameInput,
-:global([data-mode="dark"]) .nameInput:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-strong);
+  background: var(--control-bg);
 }
 
 .nameInput:focus {
-  border-color: color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.08));
+  border-color: color-mix(in oklab, var(--color-accent) 35%, var(--border-default));
   background: var(--surface-card);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
@@ -287,27 +278,29 @@
 .actionCol {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   justify-content: flex-start;
   /* trigger 整体右移 50px（actionCol 列宽 160 - trigger 宽 ~110 = 50px buffer），
      让 trigger 离左侧 Display name 列文字有充分呼吸空间 */
-  padding-left: 50px;
+  padding-left: calc(50px * var(--density));
 }
 
 /* 表头跟 row 用同一套列模板，hover 表格时同步展开统一名列 */
 .devHeader {
   display: grid;
-  grid-template-columns: var(--device-cols) 80px 160px 28px;
+  grid-template-columns:
+    var(--device-cols) calc(80px * var(--font-scale)) 160px
+    calc(28px * var(--density));
   transition: grid-template-columns 280ms var(--ease-out);
-  gap: 12px;
-  padding: 0 12px 8px;
-  font-size: 10px;
+  gap: calc(12px * var(--density));
+  padding: 0 calc(12px * var(--density)) calc(8px * var(--density));
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: calc(4px * var(--density));
 }
 
 .devHeaderName {
@@ -319,7 +312,7 @@
 }
 
 .devHeaderActionPad {
-  min-width: 64px;
+  min-width: calc(64px * var(--font-scale));
 }
 
 /* 行末删除按钮所在列：固定 28px 宽（grid template 已分配） */
@@ -330,9 +323,9 @@
 }
 
 .toolbar {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
-  padding: 0 4px 12px;
+  padding: 0 calc(4px * var(--density)) calc(12px * var(--density));
   line-height: 1.5;
 }
 
@@ -344,17 +337,17 @@
   pointer-events: none;
   transform: translate(-50%, -50%) scale(1.04);
   background: var(--surface-card);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 35%, rgba(0, 0, 0, 0.12));
+  border: 1px solid color-mix(in oklab, var(--color-accent) 35%, var(--border-strong));
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  padding: calc(6px * var(--density)) calc(10px * var(--density));
   box-shadow:
-    0 8px 24px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
-    0 2px 4px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 8px 24px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
+    0 2px 4px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
     0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: calc(8px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   user-select: none;
@@ -362,31 +355,6 @@
 }
 
 .flyChipMeta {
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   color: var(--text-muted);
-}
-
-/* 空行末尾的删除按钮：低饱和度，hover 时变红色提示破坏性操作 */
-.deleteRowBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: var(--radius-sm);
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.deleteRowBtn:hover {
-  background: color-mix(in oklab, #ef4444 10%, transparent);
-  border-color: color-mix(in oklab, #ef4444 35%, transparent);
-  color: var(--status-error);
 }
