@@ -6,50 +6,8 @@
   app-region: no-drag;
 }
 
+/* The input takes its font from the box, so the path is in the monospace font */
 .input {
   width: 280px;
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  color: var(--text-strong);
   font-family: var(--font-mono);
-  outline: none;
-  transition:
-    border-color 200ms ease-out,
-    background-color 200ms ease-out,
-    box-shadow 200ms ease-out;
-}
-
-.input:focus {
-  background: var(--surface-card);
-  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
-}
-
-.pick {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-
-.pick:hover {
-  background: var(--fill-strong);
-}
-
-.pick:active {
-  transform: scale(0.97);
 }
