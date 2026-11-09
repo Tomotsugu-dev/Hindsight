@@ -1,13 +1,13 @@
 .hint {
   margin: 0;
-  padding: var(--space-3) 0;
+  padding: calc(var(--space-3) * var(--density)) 0;
   font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
 }
 
 .error {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: calc(var(--space-2) * var(--density)) calc(var(--space-3) * var(--density));
   border-radius: var(--radius-sm);
   background: var(--status-error-soft);
   font-size: calc(var(--font-size-body) * var(--font-scale));
@@ -19,89 +19,23 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-}
-
-/* Same look as the open-folder buttons in the Data tab */
-.btn,
-.btnPrimary,
-.btnDanger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-
-.btn {
-  background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  color: var(--text-strong);
-}
-
-.btn:hover {
-  background: var(--fill-strong);
-}
-
-.btnPrimary {
-  background: var(--accent-fill);
-  border: 1px solid transparent;
-  color: #fff;
-}
-
-.btnPrimary:hover {
-  background: var(--accent-fill-hover);
-}
-
-.btnDanger {
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--status-error);
-}
-
-.btnDanger:hover {
-  background: var(--status-error-soft);
-}
-
-.btn:active,
-.btnPrimary:active,
-.btnDanger:active {
-  transform: scale(0.97);
-}
-
-.btn:disabled,
-.btnPrimary:disabled,
-.btnDanger:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-}
-
-:global([data-mode="dark"]) .btn {
-  border-color: rgba(255, 255, 255, 0.08);
+  gap: calc(var(--space-2) * var(--density));
 }
 
 /* Plugin market: two cards a row, cards in a row as tall as the tallest */
 .marketGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 12px;
+  gap: calc(10px * var(--density));
+  padding: calc(12px * var(--density));
 }
 
 .marketCard {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   min-width: 0;
-  padding: 12px 14px;
+  padding: calc(12px * var(--density)) calc(14px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -110,7 +44,7 @@
 .marketHead {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   min-width: 0;
 }
 
@@ -152,13 +86,13 @@
 }
 
 .marketName {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
 }
 
 .marketMeta {
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -166,9 +100,9 @@
 .marketStats {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   min-width: 0;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -176,13 +110,13 @@
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   font-variant-numeric: tabular-nums;
 }
 
 /* 下载次数后面有仓库链接时，中间隔一条竖线 */
 .marketDownloads + .marketRepo {
-  padding-left: 8px;
+  padding-left: calc(8px * var(--density));
   border-left: 1px solid var(--border-default);
 }
 
@@ -220,7 +154,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   min-width: 0;
 }
 
@@ -246,7 +180,7 @@
   flex: 1;
   margin: 0;
   overflow: hidden;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.5;
   color: var(--text-regular);
   -webkit-box-orient: vertical;
@@ -262,7 +196,7 @@
 .details {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
 }
 
 .details p {
@@ -271,12 +205,12 @@
 
 .callout {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: calc(10px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   border-radius: var(--radius-sm);
   background: var(--status-pending-soft);
   color: var(--text-regular);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -293,7 +227,7 @@
 .callout > div {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: calc(var(--space-1) * var(--density));
 }
 
 .calloutRisk {
@@ -304,11 +238,11 @@
 .asks {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .listLabel {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -329,9 +263,10 @@
 .treeRow {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
-  padding: 7px 12px 7px 6px;
-  font-size: 12.5px;
+  gap: calc(4px * var(--density));
+  padding: calc(7px * var(--density)) calc(12px * var(--density)) calc(7px * var(--density))
+    calc(6px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -378,30 +313,16 @@ button.twistie:hover {
 }
 
 .treeLabel {
-  display: flex;
   flex: 1;
-  align-items: flex-start;
-  gap: var(--space-2);
   min-width: 0;
   padding-top: 1px;
-  cursor: pointer;
-}
-
-.treeLabel input {
-  flex: none;
-  margin: 2px 0 0;
-  accent-color: var(--color-accent);
-}
-
-.treeLabel input:disabled {
-  cursor: default;
 }
 
 /* How many under a closed row are checked, or "Required" */
 .treeNote {
   flex: none;
   margin-top: 2px;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -410,34 +331,16 @@ button.twistie:hover {
 .risk {
   flex: none;
   margin-top: 2px;
-  padding: 0 6px;
+  padding: 0 calc(6px * var(--density));
   border-radius: var(--radius-pill);
   background: var(--status-error-soft);
   color: var(--status-error);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;
 }
 
 .consent {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
-  cursor: pointer;
-}
-
-.consent input {
-  flex: none;
-  margin: 2px 0 0;
-  accent-color: var(--color-accent);
-}
-
-/* Uninstall dialog */
-.check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  cursor: pointer;
 }

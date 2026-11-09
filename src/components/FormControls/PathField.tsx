@@ -1,5 +1,7 @@
 import { FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button } from "../Button/Button";
+import { TextInput } from "../TextInput/TextInput";
 import styles from "./PathField.module.css";
 
 interface PathFieldProps {
@@ -17,17 +19,16 @@ export function PathField({ value, onChange, onPick, readOnly, pickLabel }: Path
   const label = pickLabel ?? t("components.pathField.pickLabel");
   return (
     <div className={styles.wrap}>
-      <input
+      <TextInput
         className={styles.input}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         spellCheck={false}
         readOnly={readOnly}
       />
-      <button type="button" className={styles.pick} onClick={onPick}>
-        <FolderOpen size={14} strokeWidth={1.85} />
+      <Button icon={FolderOpen} onClick={onPick}>
         {label}
-      </button>
+      </Button>
     </div>
   );
 }

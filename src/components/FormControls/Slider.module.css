@@ -1,7 +1,7 @@
 .wrap {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: calc(14px * var(--density));
   width: 280px;
 }
 
@@ -25,10 +25,10 @@
     to right,
     color-mix(in oklab, var(--color-accent) 78%, white) 0%,
     var(--color-accent) var(--fill, 0%),
-    rgba(0, 0, 0, 0.07) var(--fill, 0%),
-    rgba(0, 0, 0, 0.07) 100%
+    var(--fill-strong) var(--fill, 0%),
+    var(--fill-strong) 100%
   );
-  box-shadow: inset 0 1px 1.5px rgba(0, 0, 0, calc(0.06 * var(--shadow-strength)));
+  box-shadow: inset 0 1px 1.5px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   outline: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -46,7 +46,7 @@
   background: linear-gradient(180deg, #ffffff 0%, #f3f3f5 100%);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength))),
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.16 * var(--shadow-strength))),
     0 0 0 0 color-mix(in oklab, var(--color-accent) 25%, transparent);
   cursor: grab;
   transition:
@@ -57,7 +57,7 @@
 .input::-webkit-slider-thumb:hover {
   transform: scale(1.08);
   box-shadow:
-    0 1px 3px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
+    0 1px 3px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
     0 0 0 6px color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
@@ -66,7 +66,7 @@
   cursor: grabbing;
   transform: scale(1.14);
   box-shadow:
-    0 2px 5px rgba(20, 20, 40, calc(0.22 * var(--shadow-strength))),
+    0 2px 5px rgba(var(--shadow-rgb), calc(0.22 * var(--shadow-strength))),
     0 0 0 8px color-mix(in oklab, var(--color-accent) 20%, transparent);
 }
 
@@ -77,25 +77,25 @@
   border-radius: 50%;
   background: linear-gradient(180deg, #ffffff 0%, #f3f3f5 100%);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 1px 2px rgba(20, 20, 40, calc(0.16 * var(--shadow-strength)));
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.16 * var(--shadow-strength)));
   cursor: grab;
 }
 
 /* —— 数值徽章 ——
    白底浮起样式；本身是个 spinbutton —— 支持点击聚焦 + 键盘输入 */
 .valueBox {
-  min-width: 64px;
+  min-width: calc(64px * var(--font-scale));
   display: inline-flex;
   align-items: baseline;
   justify-content: flex-end;
   gap: 3px;
-  padding: 5px 12px;
+  padding: calc(5px * var(--density)) calc(12px * var(--density));
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+    0 1px 0 var(--hairline-hi) inset,
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
   font-variant-numeric: tabular-nums;
   outline: none;
   cursor: text;
@@ -108,37 +108,21 @@
 }
 
 .valueBox:hover {
-  border-color: rgba(0, 0, 0, 0.12);
+  border-color: var(--border-strong);
 }
 
 .valueBoxFocused {
   border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 0 var(--hairline-hi) inset,
     0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
-}
-
-/* 暗色：未填充轨道段是 7% 黑（暗底看不见空轨）、valueBox 黑边看不见。
-   未填充段改淡白（空轨可见）、valueBox 边淡白。白球 thumb + accent 填充保留。亮色不动。 */
-:global([data-mode="dark"]) .input {
-  background: linear-gradient(
-    to right,
-    color-mix(in oklab, var(--color-accent) 78%, white) 0%,
-    var(--color-accent) var(--fill, 0%),
-    rgba(255, 255, 255, 0.1) var(--fill, 0%),
-    rgba(255, 255, 255, 0.1) 100%
-  );
-}
-
-:global([data-mode="dark"]) .valueBox {
-  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* —— 数字滚轴：参考 TimeField，每位一个 column，strip 滚动 —— */
 .digits {
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   line-height: 1;
   color: var(--text-strong);
@@ -174,7 +158,7 @@
 }
 
 .suffix {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
 }
 

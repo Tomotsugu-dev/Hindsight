@@ -7,6 +7,7 @@ import { stripAppSuffix } from "../../utils/windowTitle";
 import { logError } from "../../lib/logger";
 import { api, type AppGroup, type TitleUsage } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { IconButton } from "../Button/IconButton";
 import { ChartOffIcon } from "../icons/ChartOffIcon";
 import { SiteIcon } from "../SiteIcon/SiteIcon";
 import { useSiteIcons } from "../SiteIcon/useSiteIcons";
@@ -251,16 +252,14 @@ export function WindowTitles({
       {bar(row.secs, max)}
       <span className={styles.titleTime}>{fmtSecs(row.secs)}</span>
       {row.title !== "" && (
-        <button
-          type="button"
+        <IconButton
+          size="sm"
+          icon={ChartOffIcon}
+          label={t("appDetail.ignore.button")}
           className={styles.ignoreBtn}
           disabled={ignoreBusy}
-          aria-label={t("appDetail.ignore.button")}
-          title={t("appDetail.ignore.button")}
           onClick={() => void ignoreTitle(row.title)}
-        >
-          <ChartOffIcon size={14} strokeWidth={2} />
-        </button>
+        />
       )}
     </li>
   );

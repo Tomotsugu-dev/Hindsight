@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Upload } from "lucide-react";
+import { IconButton } from "../Button/IconButton";
 import { ExportUsageDialog, type QuickKey } from "../ExportUsageDialog/ExportUsageDialog";
-import styles from "./ExportUsageButton.module.css";
 
 interface Props {
   /** 预选的导出范围:日统计传 today、周统计传 week、月统计传 month。 */
@@ -25,15 +25,15 @@ export function ExportUsageButton({ defaultQuick }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        className={styles.btn}
+      <IconButton
+        variant="soft"
+        tone="accent"
+        quiet
+        size="sm"
+        icon={Upload}
+        label={t("settings.data.export.rowLabel")}
         onClick={() => setOpen(true)}
-        title={t("settings.data.export.rowLabel")}
-        aria-label={t("settings.data.export.rowLabel")}
-      >
-        <Upload size={14} strokeWidth={2} />
-      </button>
+      />
       <ExportUsageDialog open={open} onClose={() => setOpen(false)} defaultQuick={defaultQuick} />
     </>
   );

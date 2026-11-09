@@ -1,55 +1,13 @@
 .wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
 
+/* The input takes its font family from the box, so the path is in the monospace font */
 .input {
   width: 280px;
-  height: 30px;
-  padding: 0 10px;
-  background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--text-strong);
   font-family: var(--font-mono);
-  outline: none;
-  transition:
-    border-color 200ms ease-out,
-    background-color 200ms ease-out,
-    box-shadow 200ms ease-out;
-}
-
-.input:focus {
-  background: var(--surface-card);
-  border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
-}
-
-.pick {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-
-.pick:hover {
-  background: var(--fill-strong);
-}
-
-.pick:active {
-  transform: scale(0.97);
 }

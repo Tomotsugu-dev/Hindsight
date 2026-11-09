@@ -3,9 +3,9 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  height: 36px;
-  padding: 0 var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
+  height: calc(36px * var(--density));
+  padding: 0 calc(var(--space-3) * var(--density));
   border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: calc(var(--font-size-body) * var(--font-scale));
@@ -86,13 +86,13 @@
 .badge {
   flex-shrink: 0;
   margin-left: auto;
-  padding: 0 6px;
+  padding: 0 calc(6px * var(--density));
   border-radius: var(--radius-pill);
   background: var(--status-error);
-  color: #fff;
-  font-size: 10px;
+  color: var(--text-on-accent);
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
-  line-height: 16px;
+  line-height: 1.6;
 }
 
 :global([data-layout="flat"]) .item {

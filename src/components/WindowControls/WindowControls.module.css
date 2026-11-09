@@ -40,5 +40,5 @@
 
 .close:hover {
   background: var(--status-error);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }

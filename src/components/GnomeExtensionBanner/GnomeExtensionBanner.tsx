@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Puzzle } from "lucide-react";
 import { api, type GnomeExtensionStatus } from "../../api/hindsight";
 import { logError } from "../../lib/logger";
+import { Button } from "../Button/Button";
 import styles from "./GnomeExtensionBanner.module.css";
 
 /**
@@ -56,16 +57,17 @@ export function GnomeExtensionBanner() {
             : t(`components.gnomeExtension.${status}`)}
         </span>
         {status === "off" && (
-          <button
-            type="button"
-            className={styles.btn}
+          <Button
+            variant="outline"
+            tone="warning"
+            size="sm"
             onClick={() => void enable()}
             disabled={enabling}
           >
             {enabling
               ? t("components.gnomeExtension.enabling")
               : t("components.gnomeExtension.enable")}
-          </button>
+          </Button>
         )}
       </div>
     </div>

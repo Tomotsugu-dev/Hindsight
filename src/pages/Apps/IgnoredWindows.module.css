@@ -1,19 +1,19 @@
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: calc(8px * var(--density));
+  margin-bottom: calc(10px * var(--density));
   color: var(--text-strong);
 }
 
 .title {
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
+  font-weight: var(--font-weight-600);
   flex-shrink: 0;
 }
 
 .hint {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
   min-width: 0;
   overflow: hidden;
@@ -22,8 +22,8 @@
 }
 
 .notice {
-  margin-bottom: 8px;
-  font-size: 12.5px;
+  margin-bottom: calc(8px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
 }
 
@@ -39,8 +39,8 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
+  gap: calc(10px * var(--density));
+  padding: calc(6px * var(--density)) calc(8px * var(--density));
   border-radius: var(--radius-sm);
 }
 
@@ -49,7 +49,7 @@
 }
 
 .proc {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   flex-shrink: 0;
 }
@@ -57,7 +57,7 @@
 .kw {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -67,34 +67,10 @@
 .removeBtn {
   /* 常态隐身,hover 行才现身——同 AppDetailDrawer 的 ignoreBtn 语义 */
   opacity: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
   flex-shrink: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    opacity 0.12s ease,
-    background 0.12s ease,
-    color 0.12s ease;
 }
 
 .row:hover .removeBtn,
 .removeBtn:focus-visible {
   opacity: 1;
-}
-
-.removeBtn:hover {
-  background: var(--fill-strong);
-  color: var(--text-strong);
-}
-
-.removeBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
 }

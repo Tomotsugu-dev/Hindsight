@@ -4,8 +4,9 @@ import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
 import { downloadDir, join } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { Button } from "../Button/Button";
 import { DateRangePicker } from "../DateRangePicker/DateRangePicker";
 import { useDurationFormatter } from "../../utils/duration";
 import { api } from "../../api/hindsight";
@@ -331,9 +332,9 @@ export function ExportUsageDialog({ open, onClose, defaultQuick = "month" }: Pro
               <span>{t("settings.data.export.doneTitle")}</span>
               <code className={styles.donePath}>{donePath}</code>
             </div>
-            <button type="button" className={styles.revealBtn} onClick={revealDone}>
+            <Button size="sm" onClick={revealDone} className={styles.revealBtn}>
               {t("settings.data.export.reveal")}
-            </button>
+            </Button>
           </div>
         )}
         {error && (
@@ -341,24 +342,18 @@ export function ExportUsageDialog({ open, onClose, defaultQuick = "month" }: Pro
         )}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
-            onClick={onClose}
-            disabled={busy}
-          >
+          <Button onClick={onClose} disabled={busy}>
             {donePath ? t("common.close") : t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnPrimary}`}
+          </Button>
+          <Button
+            variant="solid"
+            tone="accent"
             onClick={runExport}
+            loading={busy}
             disabled={!canExport}
-            aria-busy={busy}
           >
-            {busy && <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} />}
             {busy ? t("settings.data.export.busy") : t("settings.data.export.confirm")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

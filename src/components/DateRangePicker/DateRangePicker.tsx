@@ -2,6 +2,7 @@ import { useLayoutEffect, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { usePicker } from "../../hooks/usePicker";
+import { IconButton } from "../Button/IconButton";
 import styles from "./DateRangePicker.module.css";
 
 /** 日期范围选择器(自绘日历,替代 `<input type="date">`——原生弹出日历是浏览器
@@ -134,26 +135,22 @@ export function DateRangePicker({ start, end, max, disabled, onChange }: Props) 
       {open && (
         <div className={styles.panel} data-direction={direction} role="dialog">
           <div className={styles.head}>
-            <button
-              type="button"
-              className={styles.navBtn}
+            <IconButton
+              icon={ChevronLeft}
+              label={t("common.dateRange.prevMonth")}
+              size="sm"
               onClick={() =>
                 setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))
               }
-              aria-label={t("common.dateRange.prevMonth")}
-            >
-              <ChevronLeft size={14} strokeWidth={2} />
-            </button>
+            />
             <span className={styles.monthTitle}>{monthTitle}</span>
-            <button
-              type="button"
-              className={styles.navBtn}
+            <IconButton
+              icon={ChevronRight}
+              label={t("common.dateRange.nextMonth")}
+              size="sm"
               onClick={() => setViewMonth(nextMonthFirst)}
               disabled={nextDisabled}
-              aria-label={t("common.dateRange.nextMonth")}
-            >
-              <ChevronRight size={14} strokeWidth={2} />
-            </button>
+            />
           </div>
 
           {/* role=grid:日历的正确语义 */}

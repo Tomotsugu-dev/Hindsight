@@ -4,24 +4,24 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 56px 24px;
+  gap: calc(8px * var(--density));
+  padding: calc(56px * var(--density)) calc(24px * var(--density));
   background: var(--fill-subtle);
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   border-radius: var(--radius-md);
   text-align: center;
 }
 
 .title {
-  font-size: 15px;
-  font-weight: var(--font-weight-600);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.01em;
   margin: 0;
 }
 
 .hint {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;

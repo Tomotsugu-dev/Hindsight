@@ -102,7 +102,7 @@
   width: var(--sb-current-width);
   overflow: hidden;
   z-index: var(--z-chrome-sidebar);
-  filter: drop-shadow(8px 0 18px rgba(20, 20, 40, 0.06));
+  filter: drop-shadow(8px 0 18px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength))));
 }
 
 :global([data-layout="flat"]) .sidebarHost {
