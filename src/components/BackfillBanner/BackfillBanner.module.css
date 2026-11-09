@@ -24,31 +24,6 @@
   line-height: 1.4;
 }
 
-.bannerBtn {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  border: 1px solid color-mix(in oklab, var(--status-pending) 45%, transparent);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--status-pending);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.bannerBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-pending) 12%, transparent);
-}
-
-.bannerBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .bannerSpin {
   flex-shrink: 0;
   color: var(--status-pending);
