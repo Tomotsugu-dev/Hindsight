@@ -3,19 +3,19 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: calc(12px * var(--density)) calc(16px * var(--density));
 }
 
 .text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   min-width: 0;
 }
 
 .title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-display) * var(--font-scale));
+  font-weight: var(--font-weight-display);
   color: var(--text-strong);
   letter-spacing: -0.015em;
   margin: 0;

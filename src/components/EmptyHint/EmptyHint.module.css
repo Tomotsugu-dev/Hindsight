@@ -1,6 +1,6 @@
 .empty {
-  padding: 28px 16px;
+  padding: calc(28px * var(--density)) calc(16px * var(--density));
   text-align: center;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-faint);
 }
