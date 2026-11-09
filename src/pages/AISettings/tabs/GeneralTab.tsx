@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, Clock, Filter, Minus, Plus, ScanText, Timer } from "lucide-react";
+import { IconButton } from "../../../components/Button/IconButton";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -82,9 +83,11 @@ export default function GeneralTab() {
             block
             actions={
               <>
-                <button
-                  type="button"
-                  className={styles.timeDotBtn}
+                <IconButton
+                  variant="outline"
+                  size="sm"
+                  icon={Plus}
+                  label={t("aiSettings.autoSummary.addTimeAria")}
                   onClick={() =>
                     updateAi({
                       autoSummaryTimes: [
@@ -95,13 +98,12 @@ export default function GeneralTab() {
                     })
                   }
                   disabled={summaryTimes.length >= 6}
-                  aria-label={t("aiSettings.autoSummary.addTimeAria")}
-                >
-                  <Plus size={12} strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={styles.timeDotBtn}
+                />
+                <IconButton
+                  variant="outline"
+                  size="sm"
+                  icon={Minus}
+                  label={t("aiSettings.autoSummary.removeTimeAria")}
                   onClick={() =>
                     updateAi({
                       autoSummaryTimes: summaryTimes.slice(0, -1),
@@ -109,10 +111,7 @@ export default function GeneralTab() {
                     })
                   }
                   disabled={summaryTimes.length <= 1}
-                  aria-label={t("aiSettings.autoSummary.removeTimeAria")}
-                >
-                  <Minus size={12} strokeWidth={2.25} />
-                </button>
+                />
               </>
             }
           >
@@ -145,9 +144,11 @@ export default function GeneralTab() {
             block
             actions={
               <>
-                <button
-                  type="button"
-                  className={styles.timeDotBtn}
+                <IconButton
+                  variant="outline"
+                  size="sm"
+                  icon={Plus}
+                  label={t("aiSettings.autoSummary.addTimeAria")}
                   onClick={() =>
                     update({
                       memoryOcrDailyTimes: [
@@ -157,19 +158,15 @@ export default function GeneralTab() {
                     })
                   }
                   disabled={ocrTimes.length >= 6}
-                  aria-label={t("aiSettings.autoSummary.addTimeAria")}
-                >
-                  <Plus size={12} strokeWidth={2.25} />
-                </button>
-                <button
-                  type="button"
-                  className={styles.timeDotBtn}
+                />
+                <IconButton
+                  variant="outline"
+                  size="sm"
+                  icon={Minus}
+                  label={t("aiSettings.autoSummary.removeTimeAria")}
                   onClick={() => update({ memoryOcrDailyTimes: ocrTimes.slice(0, -1) })}
                   disabled={ocrTimes.length <= 1}
-                  aria-label={t("aiSettings.autoSummary.removeTimeAria")}
-                >
-                  <Minus size={12} strokeWidth={2.25} />
-                </button>
+                />
               </>
             }
           >

@@ -10,12 +10,12 @@ import {
   Download,
   FolderOpen,
   Info,
-  Loader2,
   Pilcrow,
   Server,
   Trash2,
   XCircle,
 } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
@@ -394,46 +394,41 @@ function EngineSection() {
         {progress ? <EngineProgress key={progress.stage} progress={progress} /> : null}
 
         {/* 第 3 行：5 个按钮平铺一行
-          下载 / 测试连接 (主操作 紫 outline) + 释放显存 / 打开 (维护 灰 ghost) + 卸载 (红 outline)
-          颜色编码：紫 = 主操作 / 灰 = 中性维护 / 红 = 破坏 */}
+          左：下载 / 测试连接；右：释放显存 / 打开 / 卸载 */}
         <div className={styles.engineActionsFlat}>
-          <button
-            type="button"
-            className={styles.engineDownloadOutline}
+          <Button
+            variant="outline"
+            tone="accent"
+            size="lg"
+            icon={Download}
             onClick={() => void onDownload()}
-            disabled={busy}
+            loading={busy}
           >
-            {busy ? (
-              <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
-            ) : (
-              <Download size={16} strokeWidth={2.2} />
-            )}
-            <span>{downloadBtnLabel}</span>
-          </button>
-          <button
-            type="button"
-            className={styles.engineDownloadOutline}
+            {downloadBtnLabel}
+          </Button>
+          <Button
+            variant="outline"
+            tone="accent"
+            size="lg"
+            icon={Cable}
             onClick={() => void onTestLocal()}
-            disabled={busy || !installed || engineBusy}
+            loading={engineBusy}
+            disabled={busy || !installed}
             title={
               installed
                 ? t("aiSettings.engine.actions.testTooltipReady")
                 : t("aiSettings.engine.actions.testTooltipNotInstalled")
             }
           >
-            {engineBusy ? (
-              <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-            ) : (
-              <Cable size={14} strokeWidth={2} />
-            )}
             {t("aiSettings.engine.actions.testConnection")}
-          </button>
+          </Button>
           {/* spacer：让"释放显存 / 打开 / 卸载"靠右贴齐，跟左边主操作分组 */}
           <span className={styles.engineActionsSpacer} aria-hidden="true" />
           {/* 释放显存：永远显示。未装 / 未跑 → disabled 灰着不可点；引擎在跑时才激活。 */}
-          <button
-            type="button"
-            className={styles.engineSecondaryGhost}
+          <Button
+            variant="outline"
+            size="lg"
+            icon={ArrowUpFromLine}
             onClick={() => void onReleaseVram()}
             disabled={!installed || status.runtime.state !== "running" || engineBusy}
             title={
@@ -444,12 +439,12 @@ function EngineSection() {
                   : t("aiSettings.engine.actions.releaseVramTooltip")
             }
           >
-            <ArrowUpFromLine size={14} strokeWidth={1.85} />
             {t("aiSettings.engine.actions.releaseVram")}
-          </button>
-          <button
-            type="button"
-            className={styles.engineSecondaryGhost}
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            icon={FolderOpen}
             onClick={() => void api.openEngineDir().catch((e) => logError("engine.openDir", e))}
             disabled={busy || !installed}
             title={
@@ -458,12 +453,13 @@ function EngineSection() {
                 : t("aiSettings.engine.actions.openFolderTooltipNotInstalled")
             }
           >
-            <FolderOpen size={14} strokeWidth={1.85} />
             {t("common.open")}
-          </button>
-          <button
-            type="button"
-            className={styles.engineUninstallOutline}
+          </Button>
+          <Button
+            variant="outline"
+            tone="danger"
+            size="lg"
+            icon={Trash2}
             onClick={onDelete}
             disabled={busy || !installed}
             title={
@@ -472,9 +468,8 @@ function EngineSection() {
                 : t("aiSettings.engine.actions.uninstallTooltipNotInstalled")
             }
           >
-            <Trash2 size={14} strokeWidth={1.85} />
             {t("aiSettings.engine.actions.uninstall")}
-          </button>
+          </Button>
         </div>
 
         {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
@@ -603,35 +598,31 @@ function OcrRuntimeSection() {
         {progress ? <EngineProgress key={progress.stage} progress={progress} /> : null}
 
         <div className={styles.engineActionsFlat}>
-          <button
-            type="button"
-            className={styles.engineDownloadOutline}
+          <Button
+            variant="outline"
+            tone="accent"
+            size="lg"
+            icon={Download}
             onClick={() => void onDownload()}
-            disabled={busy}
+            loading={busy}
           >
-            {busy ? (
-              <Loader2 size={16} strokeWidth={2.2} className={styles.testSpin} />
-            ) : (
-              <Download size={16} strokeWidth={2.2} />
-            )}
-            <span>
-              {busy
-                ? t("aiSettings.engine.actions.downloading")
-                : installed
-                  ? t("aiSettings.engine.actions.redownload")
-                  : t("aiSettings.engine.ocr.download")}
-            </span>
-          </button>
+            {busy
+              ? t("aiSettings.engine.actions.downloading")
+              : installed
+                ? t("aiSettings.engine.actions.redownload")
+                : t("aiSettings.engine.ocr.download")}
+          </Button>
           <span className={styles.engineActionsSpacer} aria-hidden="true" />
-          <button
-            type="button"
-            className={styles.engineUninstallOutline}
+          <Button
+            variant="outline"
+            tone="danger"
+            size="lg"
+            icon={Trash2}
             onClick={() => setConfirmingDelete(true)}
             disabled={busy || !installed}
           >
-            <Trash2 size={14} strokeWidth={1.85} />
             {t("aiSettings.engine.actions.uninstall")}
-          </button>
+          </Button>
         </div>
       </div>
       <ConfirmDialog

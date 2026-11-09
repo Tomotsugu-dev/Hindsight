@@ -1,52 +1,7 @@
-.page {
-  padding: calc(32px * var(--density)) calc(32px * var(--density)) calc(48px * var(--density));
-  max-width: 720px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  margin-bottom: calc(24px * var(--density));
-}
-
-.title {
-  font-size: calc(var(--font-size-display) * var(--font-scale));
-  font-weight: var(--font-weight-display);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
-}
-
 .content {
   display: flex;
   flex-direction: column;
   gap: calc(24px * var(--density));
-}
-
-/* —— 文本输入 —— */
-.textInput {
-  width: 280px;
-  height: calc(32px * var(--density));
-  padding: 0 calc(10px * var(--density));
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  color: var(--text-strong);
-  outline: none;
-  transition:
-    border-color 160ms ease-out,
-    box-shadow 160ms ease-out;
-}
-
-.textInput:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-
-.textInput::placeholder {
-  color: var(--text-faint);
 }
 
 /* —— textarea —— */
@@ -150,128 +105,6 @@
   letter-spacing: -0.005em;
 }
 
-/* 重置 = 灰色虚线 ghost；不抢主操作 */
-.promptResetBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: transparent;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.promptResetBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  color: var(--color-accent);
-}
-
-.promptResetBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 保存 = 蓝色实心，主操作 */
-.promptSaveBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: var(--accent-fill);
-  border: 1px solid var(--accent-fill);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--text-on-accent);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.promptSaveBtn:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.promptSaveBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* —— 测试连接 —— */
-.testRow {
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--density));
-  flex-wrap: wrap;
-}
-
-.testBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(8px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(24px * var(--density));
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.testBtn:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.testBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.testBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.testHint {
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  color: var(--text-faint);
-}
-
-/* —— 测试连接状态行 —— */
-.testStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  /* 失败可能比较长，超出宽度自然换行不溢出 */
-  max-width: 100%;
-  word-break: break-word;
-}
-
-.testStatusOk {
-  color: var(--status-ok-strong);
-}
-
-.testStatusFail {
-  color: var(--status-error-strong);
-}
-
 .testSpin {
   animation: testSpin 900ms linear infinite;
 }
@@ -327,135 +160,10 @@
   min-width: 0;
 }
 
-/* 维护类按钮的 ghost 风：跟 .engineDownloadOutline / .engineUninstallOutline 同尺寸，
-   但视觉更轻——透明底 + 浅灰边 + 灰字，"中性维护"语义。hover 时背景轻 wash 给可点反馈。 */
-.engineSecondaryGhost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: transparent;
-  border: 1.5px solid var(--border-strong);
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.engineSecondaryGhost:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.engineSecondaryGhost:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.engineSecondaryGhost:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* 第 3 行：检测到的加速后端，整行灰字（size 已移到第 1 行右侧） */
 .engineDetectedRow {
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
-}
-
-/* 主操作 + 维护操作：竖分割两栏
-   - 左栈：下载 AI 引擎 + 测试连接（垂直堆叠，左对齐）
-   - 中：1px 竖分割
-   - 右栈：大小 + 打开 + 卸载（+ 释放显存）右对齐
-   align-items: stretch 让左右两栈等高，分割线自然贯穿到底。 */
-.engineSplit {
-  display: flex;
-  align-items: stretch;
-  gap: calc(16px * var(--density));
-  margin-top: calc(4px * var(--density));
-}
-
-.engineLeftCol {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  /* flex-start 让按钮各自按内容宽度自适应；下面的 .engineDownloadOutline
-     设了 min-width 让两个按钮自然等宽（取较长那个为基准），不会拉到栈满宽。 */
-  align-items: flex-start;
-  gap: calc(8px * var(--density));
-}
-
-.engineRightCol {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: calc(8px * var(--density));
-}
-
-.engineVerticalDivider {
-  /* absolute 定位到 body 容器 50%（横向居中于 split 行的两栈之间）；
-     top/bottom 0 让它横跨整个 body 高度（name / status / device / split 所有行）。
-     transform: translateX(-50%) 把 2px 宽度本身的中点对齐到 50%。 */
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1px;
-  background: var(--border-strong);
-  pointer-events: none;
-}
-
-/* 「下载 llama 引擎」按钮：outline 紫色，跟 AISummary tabs 的 .startBtn 同款风格。
-   主操作但属于"发现 / 浏览"语义而非支付级 CTA，所以走 outline 不是 solid。
-   尺寸跟 .testBtn 对齐（h36 / pad 24）让 busy 状态宽度变化时不抖。 */
-.engineDownloadOutline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.engineDownloadOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.engineDownloadOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.engineDownloadOutline:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 旧 .engineHead 留着兼容（如别处仍用），但本 tab 已不引用 */
-.engineHead {
-  display: flex;
-  align-items: center;
-  gap: calc(10px * var(--density));
-  flex-wrap: wrap;
 }
 
 .engineBadge {
@@ -472,11 +180,6 @@
   color: var(--status-ok-strong);
 }
 
-.engineBadgeOff {
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-
 /* 未安装 / starting：琥珀色，"需要操作" 的视觉提示 */
 .engineBadgeWarn {
   background: var(--status-pending-soft);
@@ -487,21 +190,6 @@
 .engineBadgeFail {
   background: var(--status-error-soft);
   color: var(--status-error-strong);
-}
-
-.engineMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--density));
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  color: var(--text-strong);
-  letter-spacing: -0.005em;
-}
-
-.engineMetaSep {
-  color: var(--text-faint);
-  margin: 0 2px;
 }
 
 /* 版本号 hover info（学 Section.module.css 的 infoTip 模式） */
@@ -598,13 +286,6 @@
   flex: 1;
 }
 
-/* 标题 + 正文分两行的警示变体(runtime 更新提示用;
-   noCuda 那块是刻意连排的一句话,不套这个) */
-.engineWarningStacked strong {
-  display: block;
-  margin-bottom: 2px;
-}
-
 .engineWarningLink {
   padding: 0;
   border: 0;
@@ -630,13 +311,6 @@
   padding: calc(8px * var(--density)) calc(10px * var(--density));
 }
 
-.engineActions {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--density));
-  /* 下载按钮左对齐"未安装"badge，跟 engineHead 同一垂直线 */
-}
-
 /* picker 行下面的 VRAM 估算块——两行布局：
    1) 估算占用 + 拆分细节
    2) 系统 VRAM 总量 + 风险标签（仅当 systemVram 存在时） */
@@ -660,57 +334,9 @@
   color: var(--text-muted);
 }
 
-/* "应用推荐" 按钮——挂在第一行右端（margin-left: auto 推到最右）。
-   accent 色胶囊 + Sparkles，悬停时柔和渐变阴影；推荐细节（slots/ctx/batch）
-   走 native title，不再单独占一行避免视觉噪声。 */
+/* Pushes the button to the end of the first row */
 .vramRecommendBtn {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--density));
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(12px * var(--density)) 0 calc(10px * var(--density));
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  letter-spacing: -0.005em;
-  color: var(--color-accent);
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, transparent);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  box-shadow:
-    0 1px 0 var(--hairline-hi) inset,
-    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
-  transition:
-    background 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    box-shadow 160ms var(--ease-out),
-    transform 80ms var(--ease-out);
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
-.vramRecommendBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 32%, transparent);
-  box-shadow:
-    0 1px 0 var(--hairline-hi) inset,
-    0 2px 6px color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-
-.vramRecommendBtn:active:not(:disabled) {
-  transform: scale(0.97);
-  box-shadow:
-    0 1px 0 var(--hairline-hi) inset,
-    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
-}
-
-.vramRecommendBtn:disabled {
-  cursor: default;
-  color: var(--text-faint);
-  background: var(--fill-subtle);
-  border-color: var(--border-default);
-  box-shadow: none;
 }
 
 .vramEstLabel {
@@ -721,11 +347,6 @@
 .vramEstValue {
   font-weight: var(--font-weight-700);
   font-size: calc(var(--font-size-body) * var(--font-scale));
-}
-
-.vramEstBreakdown {
-  color: var(--text-faint);
-  font-weight: var(--font-weight-400);
 }
 
 /* Info icon —— 把权重 / KV / ctx / slots 拆分细节折进 native title tooltip
@@ -781,43 +402,6 @@
   letter-spacing: 0.01em;
 }
 
-/* 「卸载」按钮 outline 风：跟 AISummary tabs 的 .deleteBtn / AISettings 卡片的
-   .uninstallOutline 同一族——透明底 + 1.5px 红边 + 红字。height 36 跟左栈下载/测试
-   等高，padding 14 对齐。颜色编码统一：红 = 破坏性操作。 */
-.engineUninstallOutline {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--status-error) 50%, transparent);
-  color: var(--status-error-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.engineUninstallOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-error) 8%, transparent);
-  border-color: var(--status-error);
-}
-
-.engineUninstallOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.engineUninstallOutline:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
 /* —— 模型管理 Section（Phase 1B-β） —— */
 .modelsSection {
   display: flex;
@@ -827,7 +411,7 @@
 }
 
 /* 模型 tab 顶部 toolbar：3 个筛选 picker 左对齐 + 1 个排序 picker 右对齐。
-   gap: 8px 跟 .engineActions 同；wrap 让窄屏自动换行；spacer 用 flex:1 把排序推到右边 */
+   wrap 让窄屏自动换行；spacer 用 flex:1 把排序推到右边 */
 .modelsToolbar {
   display: flex;
   align-items: center;
@@ -934,179 +518,6 @@
   display: inline-flex;
   align-items: center;
   gap: calc(8px * var(--density));
-  flex-shrink: 0;
-}
-
-/* "使用" 状态徽章——跟 .testBtn 等宽等高，
-   颜色跟 .engineBadgeOk（"已安装"）同步：半透明绿底 + 深绿字。
-   状态而非动作，所以不用 testBtn 那种纯色实心强调。 */
-/* "使用" 状态徽章——尺寸跟 .testBtn 等大，颜色 + 描边跟 .engineStart
-   ("启动引擎" 按钮) 同一族绿色，视觉上是 "ghost tint" 而不是实心强调 */
-.modelActivePill {
-  display: inline-flex;
-  align-items: center;
-  /* 不要 justify-content: center —— testBtn 默认 flex-start，icon 贴左 padding 内沿。
-     这里也得 flex-start，stacked 卡片间 icon 才能纵向对齐 */
-  gap: calc(8px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(24px * var(--density));
-  background: color-mix(in oklab, var(--status-ok-strong) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--status-ok-strong) 26%, transparent);
-  color: var(--status-ok-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  user-select: none;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-
-/* hover：颜色加深一档，提示"点击可取消激活，切回已下载" */
-.modelActivePill:hover {
-  background: color-mix(in oklab, var(--status-ok-strong) 20%, transparent);
-  border-color: color-mix(in oklab, var(--status-ok-strong) 40%, transparent);
-}
-
-.modelActivePill:active {
-  background: color-mix(in oklab, var(--status-ok-strong) 26%, transparent);
-}
-
-/* "已下载" 状态按钮——灰色 outline，可点击切到"使用中"。
-   视觉：与 testBtn (蓝实心) / modelActivePill (绿实心) 都拉开差距，
-   保留可点感（hover 微微抬一下 + accent 描边），但不抢"使用中"的高亮。 */
-.modelReadyBtn {
-  display: inline-flex;
-  align-items: center;
-  /* 跟 testBtn / modelActivePill 一样 flex-start，icon 贴左 padding 内沿 */
-  gap: calc(8px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(24px * var(--density));
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.modelReadyBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
-  color: var(--color-accent);
-}
-
-.modelReadyBtn:active {
-  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-}
-
-/* 模型卡右侧的下载按钮收窄：默认 .testBtn 是引擎下载用的大按钮 (min-width 110/padding 24)，
-   推荐卡列表里同时挤了 [下载] [Text] [卸载] 多枚按钮，下载按钮收紧到刚好包住
-   "下载中…" 文字，给 step toggle 留位 */
-.modelCardRight .testBtn {
-  min-width: 0;
-  padding: 0 calc(12px * var(--density));
-}
-
-/* 下载 CTA outline 风：紫色描边 + 紫色字 / icon + 透明底。设计稿里推荐卡列表的"下载"
-   是发现 / 浏览态，不是支付级 CTA —— 用 outline 让强调比 .testBtn solid 弱一档，
-   不喧宾夺主（用户在选模型不是在结账）。hover 时背景轻微着色暗示可点。
-   推荐卡列表专用，覆盖 .modelCardRight .testBtn 的 solid 风。 */
-.modelCardRight .downloadOutline {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  min-width: 0;
-  background: transparent;
-  color: var(--color-accent);
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.modelCardRight .downloadOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.modelCardRight .downloadOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.modelCardRight .downloadOutline:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 卸载按钮 outline 风：红边 + 红字 + 透明底。跟同行的 .downloadOutline 是同一族
-   "outline 描边"风格，仅颜色换成红色保留破坏性 affordance。hover 时背景轻微着色。
-   推荐卡列表专用。 */
-.modelCardRight .uninstallOutline {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  min-width: 0;
-  background: transparent;
-  color: var(--status-error-strong);
-  border: 1.5px solid color-mix(in oklab, var(--status-error) 50%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.modelCardRight .uninstallOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-error) 8%, transparent);
-  border-color: var(--status-error);
-}
-
-.modelCardRight .uninstallOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.modelCardRight .uninstallOutline:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* 「已下载」状态徽章：同款 outline 风（紫边 + 紫字 + ✓ icon），跟未下载的"下载"按钮
-   视觉等大 + 等强度，让两态切换一目了然。显示用，不可点；卸载走右边的 trash icon。 */
-.installedBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: transparent;
-  color: var(--color-accent);
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  user-select: none;
   flex-shrink: 0;
 }
 
@@ -1451,69 +862,6 @@
   margin-left: 0;
 }
 
-/* —— 三个运行时控制按钮：共用尺寸结构 + 各自语义色 —— */
-.engineStart,
-.engineStop,
-.engineTest {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-lg) * var(--density));
-  padding: 0 calc(18px * var(--density));
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    color 160ms ease-out;
-}
-
-/* 启动引擎：绿色 = "go" */
-.engineStart {
-  background: color-mix(in oklab, var(--status-ok-strong) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--status-ok-strong) 26%, transparent);
-  color: var(--status-ok-strong);
-}
-
-.engineStart:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-ok-strong) 20%, transparent);
-  border-color: color-mix(in oklab, var(--status-ok-strong) 42%, transparent);
-}
-
-/* 停止：琥珀 = "caution"（reversible，比 destructive 卸载弱一档） */
-.engineStop {
-  background: color-mix(in oklab, var(--status-pending) 14%, transparent);
-  border: 1px solid color-mix(in oklab, var(--status-pending) 30%, transparent);
-  color: var(--status-pending-strong);
-}
-
-.engineStop:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-pending) 22%, transparent);
-  border-color: color-mix(in oklab, var(--status-pending) 46%, transparent);
-}
-
-/* 测试连接：蓝色 = "info / diagnostic" */
-.engineTest {
-  background: color-mix(in oklab, var(--status-info) 11%, transparent);
-  border: 1px solid color-mix(in oklab, var(--status-info) 26%, transparent);
-  color: var(--status-info-strong);
-}
-
-.engineTest:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-info) 18%, transparent);
-  border-color: color-mix(in oklab, var(--status-info) 40%, transparent);
-}
-
-.engineStart:disabled,
-.engineStop:disabled,
-.engineTest:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
 /* 测试连接结果 inline 展示 */
 .engineRuntimeStatus {
   display: inline-flex;
@@ -1628,7 +976,8 @@
   gap: calc(24px * var(--density));
 }
 
-/* 文本输入框：跟 PathField 同款配色，让 base URL / API key / model 输入感观一致 */
+/* Model name box of the combobox. It stays a plain input because the menu is placed from the
+   input's own rectangle. */
 .externalInput {
   width: 100%;
   height: calc(32px * var(--density));
@@ -1664,26 +1013,11 @@
   width: 100%;
 }
 
-.externalEyeBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(32px * var(--density));
-  height: calc(32px * var(--density));
-  padding: 0;
-  background: var(--surface-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 160ms ease-out,
-    background-color 160ms ease-out;
-}
-
-.externalEyeBtn:hover {
-  color: var(--text-strong);
-  background: var(--fill-strong);
+/* TextInput: the box takes the width, and the input inside takes the mono font from it */
+.externalField {
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-mono);
 }
 
 /* 测试连接行：按钮 + 状态文字横排 */
@@ -1694,38 +1028,6 @@
   flex-wrap: wrap;
   margin-top: calc(4px * var(--density));
   padding: 0 calc(20px * var(--density)) calc(14px * var(--density));
-}
-
-/* 蓝色实心：跟 .testBtn 同款，但稍微低调一点（高度短点、padding 小点） */
-.externalTestBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.externalTestBtn:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.externalTestBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.externalTestBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .externalTestOk {
@@ -1787,36 +1089,6 @@
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
-}
-
-/* 定时计划:时间点 +/− 小按钮(贴在「指定处理时间」标题行尾) */
-.timeDotBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(20px * var(--density));
-  height: calc(20px * var(--density));
-  padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 120ms ease-out,
-    border-color 120ms ease-out,
-    background-color 120ms ease-out;
-}
-
-.timeDotBtn:hover:not(:disabled) {
-  color: var(--color-accent);
-  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-}
-
-.timeDotBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* 云端 API:已保存配置 chips */
