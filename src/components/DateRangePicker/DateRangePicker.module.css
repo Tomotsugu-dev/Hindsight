@@ -109,30 +109,6 @@
   color: var(--text-strong);
 }
 
-.navBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(24px * var(--density));
-  height: calc(24px * var(--density));
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.navBtn:hover:not(:disabled) {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.navBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
