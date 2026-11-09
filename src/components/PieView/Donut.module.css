@@ -3,7 +3,7 @@
   overflow: visible;
   /* 给整环加一层柔阴影，环看起来"浮起"立体感更强；
      用 drop-shadow 不是 box-shadow —— SVG 要按形状投，不是按矩形 */
-  filter: drop-shadow(0 4px 14px rgba(20, 20, 40, 0.08));
+  filter: drop-shadow(0 4px 14px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))));
 }
 
 .segment {
@@ -35,7 +35,7 @@
 
 .centerPct {
   font-weight: var(--font-weight-700);
-  font-size: 14px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   fill: var(--color-accent);
   font-variant-numeric: tabular-nums;
 }

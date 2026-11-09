@@ -1,9 +1,9 @@
 .body {
   display: grid;
   grid-template-columns: 200px 1fr;
-  gap: var(--space-6, 24px);
+  gap: calc(var(--space-6) * var(--density));
   align-items: center;
-  padding: var(--space-5, 20px) var(--space-5, 20px) var(--space-5, 20px);
+  padding: calc(var(--space-5) * var(--density));
 }
 
 /* 小类同心环那一层的环更大 */
@@ -16,9 +16,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2, 8px);
+  gap: calc(var(--space-2) * var(--density));
   /* 比 donut size 略大让 drop-shadow 有展示空间 */
-  padding: var(--space-2, 8px);
+  padding: calc(var(--space-2) * var(--density));
 }
 
 /* 只有大类那一层环下面的提示：往下滚还有一层 */
@@ -26,7 +26,7 @@
   margin: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   text-align: center;
@@ -41,8 +41,8 @@
   list-style: none;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) 110px max-content;
-  column-gap: var(--space-3, 12px);
-  row-gap: var(--space-1, 4px);
+  column-gap: calc(var(--space-3) * var(--density));
+  row-gap: calc(var(--space-1) * var(--density));
   min-width: 0;
 }
 
@@ -58,10 +58,10 @@
   grid-column: 1 / -1;
   align-items: center;
   /* 行内项之间的间距由 list 的 column-gap 控；padding 仍走自己 */
-  padding: 7px var(--space-3, 12px);
+  padding: calc(7px * var(--density)) calc(var(--space-3) * var(--density));
   border: 1px solid transparent;
   background: transparent;
-  border-radius: var(--radius-md, 10px);
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-family: inherit;
   font-size: calc(var(--font-size-body) * var(--font-scale));
@@ -75,10 +75,6 @@
 }
 
 .row:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.7);
-}
-
-:global([data-mode="dark"]) .row:hover:not(:disabled) {
   background: var(--hover-bg);
 }
 
@@ -87,7 +83,7 @@
   border-color: color-mix(in oklab, var(--row-color) 42%, transparent);
   transform: translateX(2px);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
     0 4px 12px color-mix(in oklab, var(--row-color) 14%, transparent);
 }
 
@@ -119,7 +115,7 @@
 
 .name {
   /* 在 list column-gap (12px) 之上再补 6px，icon 与 name 之间留 18px */
-  margin-left: 6px;
+  margin-left: calc(6px * var(--density));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   overflow: hidden;
@@ -154,7 +150,7 @@
 .num {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   font-variant-numeric: tabular-nums;
   justify-self: end;
   white-space: nowrap;
@@ -162,7 +158,7 @@
 
 .pct {
   display: inline-block;
-  min-width: 30px;
+  min-width: calc(30px * var(--font-scale));
   text-align: right;
   font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-700);
@@ -178,7 +174,7 @@
 
 .time {
   display: inline-block;
-  min-width: 84px;
+  min-width: calc(84px * var(--font-scale));
   text-align: right;
   font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);
@@ -189,19 +185,19 @@
 .tags {
   grid-column: 1 / -1;
   margin: 0;
-  padding: var(--space-3, 12px) 0 0;
+  padding: calc(var(--space-3) * var(--density)) 0 0;
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   border-top: 1px solid var(--border-subtle);
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 3px;
+  gap: calc(6px * var(--density));
+  padding: 3px calc(10px * var(--density)) 3px 3px;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: color-mix(in oklab, var(--row-color) 8%, transparent);
@@ -259,5 +255,5 @@
 /* 空态 */
 .empty {
   grid-column: 1 / -1;
-  padding: var(--space-7, 28px) 0;
+  padding: calc(var(--space-7) * var(--density)) 0;
 }
