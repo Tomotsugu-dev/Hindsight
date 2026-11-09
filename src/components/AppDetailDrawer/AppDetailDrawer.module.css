@@ -79,28 +79,6 @@
   flex-shrink: 0;
 }
 
-.closeBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(var(--control-height-md) * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.closeBtn:hover {
-  background: var(--fill-strong);
-  color: var(--text-strong);
-}
-
 /* —— Body —— */
 .body {
   flex: 1;
@@ -280,36 +258,16 @@
 .ignoreBtn {
   /* 常态隐身,hover 行或键盘聚焦才现身——列表是浏览面,操作按钮别抢戏 */
   opacity: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(24px * var(--density));
-  height: calc(24px * var(--density));
   flex-shrink: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    opacity 0.12s ease,
-    background 0.12s ease,
-    color 0.12s ease;
+}
+
+.titleRow .ignoreBtn:disabled {
+  opacity: 0.4;
 }
 
 .titleRow:hover .ignoreBtn,
 .ignoreBtn:focus-visible {
   opacity: 1;
-}
-
-.ignoreBtn:hover {
-  background: var(--fill-strong);
-  color: var(--text-strong);
-}
-
-.ignoreBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .ignoreNotice {
