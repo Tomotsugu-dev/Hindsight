@@ -7,12 +7,13 @@
 .trigger {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 7px 4px 5px;
+  gap: calc(7px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(7px * var(--density)) 0 calc(5px * var(--density));
   border-radius: var(--radius-sm);
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
   background: var(--control-bg);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
@@ -34,7 +35,7 @@
 /* —— label 容器：宽度定死，超长设备名 ellipsis 截断，避免 trigger 宽度跟着设备名漂移 —— */
 .labelStack {
   display: inline-block;
-  width: 150px;
+  width: calc(150px * var(--font-scale));
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -47,6 +48,8 @@
 }
 
 .chev {
+  width: calc(12px * var(--font-scale));
+  height: calc(12px * var(--font-scale));
   color: var(--text-faint);
   transition: transform 200ms var(--ease-out);
   flex-shrink: 0;
@@ -68,10 +71,10 @@
   background: color-mix(in oklab, var(--tile-color, var(--color-accent)) 14%, transparent);
   color: var(--tile-color, var(--color-accent));
   border: 1px solid
-    color-mix(in oklab, var(--tile-color, var(--color-accent)) 22%, rgba(0, 0, 0, 0.05));
+    color-mix(in oklab, var(--tile-color, var(--color-accent)) 22%, var(--border-subtle));
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 1px 1px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+    0 1px 1px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
 }
 
 .tileMuted {
@@ -83,20 +86,20 @@
 /* —— 下拉菜单 —— */
 .menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 6px * var(--density));
   left: 0;
   right: 0;
   z-index: var(--z-dropdown);
   /* 跟 trigger 等宽：wrap 是 inline-flex，width:auto 自适应 trigger 宽度；
      菜单 left:0/right:0 拉满 wrap 的宽度，从而跟 trigger 完全一致 */
-  padding: 4px;
+  padding: calc(4px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
-    0 4px 12px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
-    0 12px 28px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
+    0 4px 12px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
+    0 12px 28px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
   /* 出场 */
   animation: menuIn 200ms var(--ease-out);
   transform-origin: top center;
@@ -116,12 +119,12 @@
 .item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
-  height: 32px;
-  padding: 0 7px;
+  height: calc(32px * var(--density));
+  padding: 0 calc(7px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-regular);
   text-align: left;
@@ -153,13 +156,15 @@
 }
 
 .itemCheck {
+  width: calc(13px * var(--font-scale));
+  height: calc(13px * var(--font-scale));
   color: var(--color-accent);
   flex-shrink: 0;
 }
 
 .sep {
   height: 1px;
-  margin: 4px 4px;
+  margin: calc(4px * var(--density)) calc(4px * var(--density));
   background: var(--border-default);
 }
 
