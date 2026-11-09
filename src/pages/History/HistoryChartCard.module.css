@@ -103,6 +103,10 @@
   gap: calc(6px * var(--density));
 }
 
+.pill {
+  min-width: calc(64px * var(--font-scale));
+}
+
 :global([data-layout="flat"]) .card {
   background: transparent;
   border: 0;

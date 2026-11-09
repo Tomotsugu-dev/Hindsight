@@ -89,6 +89,7 @@ export function HistoryChartCard({
               <Button
                 size="sm"
                 glow
+                className={styles.pill}
                 onClick={nav.onCurrent}
                 disabled={nav.isCurrent}
                 title={nav.isCurrent ? undefined : nav.currentTooltip}
