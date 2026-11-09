@@ -17,7 +17,7 @@
   --heat: 0%;
   position: relative;
   width: 100%;
-  height: calc(88px * var(--density));
+  min-height: calc(88px * var(--density));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -111,7 +111,7 @@
 }
 
 .tileDate {
-  font-size: calc(var(--font-size-headline) * var(--font-scale));
+  font-size: calc(var(--font-size-display) * var(--font-scale));
   font-weight: var(--font-weight-600);
   line-height: 1;
   font-variant-numeric: tabular-nums;
