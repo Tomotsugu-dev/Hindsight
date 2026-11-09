@@ -16,7 +16,7 @@ use crate::error::{Error, Result};
 use crate::island::content::Content;
 use crate::repo::plugins::{self as repo, Plugin};
 use crate::storage::DbPool;
-use categories::{CategoryRef, SuperCategoryRef};
+use categories::{apps, sites, CategoryRef, SuperCategoryRef};
 
 /// What a call needs from the app. It is the same for every call.
 pub struct Host<'a, N, I> {
@@ -74,6 +74,10 @@ pub async fn call(
         }
         Method::ListCategories => serde_json::to_value(CategoryRef::list(pool).await?)?,
         Method::ListSuperCategories => serde_json::to_value(SuperCategoryRef::list(pool).await?)?,
+        Method::ListAppCategories => serde_json::to_value(apps::list(pool).await?)?,
+        Method::WriteAppCategory => apps::write(pool, params).await?,
+        Method::ListSiteCategories => serde_json::to_value(sites::list(pool).await?)?,
+        Method::WriteSiteCategory => sites::write(pool, params).await?,
         Method::SendNotification => notifications::send(&plugin, params, notify)?,
         Method::ShowIsland => island::show(&plugin, params, island)?,
         Method::HideIsland => island::hide(island)?,
@@ -93,6 +97,14 @@ enum Method {
     ListCategories,
     /// `super_categories.list`
     ListSuperCategories,
+    /// `categories.app.list`
+    ListAppCategories,
+    /// `categories.app.write`
+    WriteAppCategory,
+    /// `categories.site.list`
+    ListSiteCategories,
+    /// `categories.site.write`
+    WriteSiteCategory,
     /// `notifications.send`
     SendNotification,
     /// `island.show`
@@ -116,6 +128,10 @@ impl Method {
             "stats.day_by_category" => Ok(Self::DayByCategory),
             "categories.list" => Ok(Self::ListCategories),
             "super_categories.list" => Ok(Self::ListSuperCategories),
+            "categories.app.list" => Ok(Self::ListAppCategories),
+            "categories.app.write" => Ok(Self::WriteAppCategory),
+            "categories.site.list" => Ok(Self::ListSiteCategories),
+            "categories.site.write" => Ok(Self::WriteSiteCategory),
             "notifications.send" => Ok(Self::SendNotification),
             "island.show" => Ok(Self::ShowIsland),
             "island.hide" => Ok(Self::HideIsland),
@@ -132,6 +148,10 @@ impl Method {
             Self::DayByCategory => Some("stats.read"),
             Self::ListCategories => Some("categories.read"),
             Self::ListSuperCategories => Some("super_categories.read"),
+            Self::ListAppCategories => Some("categories.app.read"),
+            Self::WriteAppCategory => Some("categories.app.write"),
+            Self::ListSiteCategories => Some("categories.site.read"),
+            Self::WriteSiteCategory => Some("categories.site.write"),
             Self::SendNotification => Some("notifications"),
             Self::ShowIsland | Self::HideIsland => Some("island"),
             Self::DbExecute | Self::DbQuery => None,
@@ -228,6 +248,10 @@ mod tests {
             ("stats.day_by_category", "stats.read"),
             ("categories.list", "categories.read"),
             ("super_categories.list", "super_categories.read"),
+            ("categories.app.list", "categories.app.read"),
+            ("categories.app.write", "categories.app.write"),
+            ("categories.site.list", "categories.site.read"),
+            ("categories.site.write", "categories.site.write"),
             ("notifications.send", "notifications"),
             ("island.show", "island"),
             ("island.hide", "island"),

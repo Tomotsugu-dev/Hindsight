@@ -48,7 +48,7 @@ pub(crate) async fn insert_activity(
 }
 
 /// 同 [`insert_activity`]，但带网站域名（`url_host`），给网站规则的测试用。
-pub(super) async fn insert_visit(
+pub(crate) async fn insert_visit(
     pool: &DbPool,
     local_date: &str,
     process_name: &str,
