@@ -3,10 +3,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4);
+  gap: calc(var(--space-4) * var(--density));
   width: 100%;
   height: 100%;
-  padding: var(--space-8);
+  padding: calc(var(--space-8) * var(--density));
   text-align: center;
   color: var(--text-regular);
 }
@@ -27,12 +27,12 @@
 }
 
 .btn {
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-5);
+  margin-top: calc(var(--space-2) * var(--density));
+  padding: calc(var(--space-2) * var(--density)) calc(var(--space-5) * var(--density));
   border: none;
   border-radius: var(--radius-md);
   background: var(--accent-fill);
-  color: #ffffff;
+  color: var(--text-on-accent);
   font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   cursor: pointer;
