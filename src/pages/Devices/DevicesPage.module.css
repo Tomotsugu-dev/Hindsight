@@ -1,19 +1,19 @@
 .page {
-  padding: 32px 32px 48px;
+  padding: calc(32px * var(--density)) calc(32px * var(--density)) calc(48px * var(--density));
   max-width: 720px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: calc(24px * var(--density));
 }
 
 /* Device sections share the flat theme's open layout and light dividers. */
 :global([data-layout="flat"]) .page {
-  gap: 32px;
+  gap: calc(32px * var(--density));
 }
 
 :global([data-layout="flat"]) .syncCard {
-  padding: 20px 0;
+  padding: calc(20px * var(--density)) 0;
   background: transparent;
   border: 0;
   border-top: 1px solid var(--border-default);
@@ -47,7 +47,7 @@
 }
 
 :global([data-layout="flat"]) .empty {
-  padding: 18px 0;
+  padding: calc(18px * var(--density)) 0;
   background: transparent;
   border: 0;
   border-top: 1px solid var(--border-default);
@@ -57,19 +57,19 @@
 .header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
 }
 
 .title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-display) * var(--font-scale));
+  font-weight: var(--font-weight-display);
   color: var(--text-strong);
   letter-spacing: -0.015em;
   margin: 0;
 }
 
 .meta {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   margin: 0;
 }
@@ -77,29 +77,29 @@
 .syncCard {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px 18px;
+  gap: calc(16px * var(--density));
+  padding: calc(16px * var(--density)) calc(18px * var(--density));
   background: var(--surface-card-elevated);
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 .syncHeader {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: calc(16px * var(--density));
 }
 
 .syncCardConnected {
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, var(--color-accent) 5%, #ffffff),
-    #fbfbfd
+    color-mix(in oklab, var(--color-accent) 5%, var(--surface-card)),
+    var(--surface-card-elevated)
   );
-  border-color: color-mix(in oklab, var(--color-accent) 22%, rgba(0, 0, 0, 0.07));
+  border-color: color-mix(in oklab, var(--color-accent) 22%, var(--border-default));
 }
 
 /* —— 暗色：账户卡「已连接」态、OAuth setup 面板、面板关闭钮原本都是 accent×白 的亮卡，
@@ -121,7 +121,7 @@
     color-mix(in oklab, var(--color-accent) 6%, var(--surface-card-elevated))
   );
   border-color: color-mix(in oklab, var(--color-accent) 26%, transparent);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength)));
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.2 * var(--shadow-strength)));
 }
 
 :global([data-mode="dark"]) .setupClose {
@@ -155,22 +155,22 @@
 }
 
 .syncTitle {
-  font-size: 14px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
 
 .syncMeta {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
 .syncStats {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: calc(6px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   letter-spacing: 0.01em;
   padding-top: 2px;
@@ -192,8 +192,8 @@
   border-radius: 50%;
   background: var(--status-ok);
   box-shadow:
-    0 0 0 1px rgba(34, 197, 94, 0.2),
-    0 0 4px rgba(34, 197, 94, 0.45);
+    0 0 0 1px color-mix(in oklab, var(--status-ok) 20%, transparent),
+    0 0 4px color-mix(in oklab, var(--status-ok) 45%, transparent);
   flex-shrink: 0;
 }
 
@@ -206,8 +206,8 @@
 .syncDotPending {
   background: var(--status-pending);
   box-shadow:
-    0 0 0 1px rgba(245, 158, 11, 0.22),
-    0 0 4px rgba(245, 158, 11, 0.5);
+    0 0 0 1px color-mix(in oklab, var(--status-pending) 22%, transparent),
+    0 0 4px color-mix(in oklab, var(--status-pending) 50%, transparent);
   animation: syncDotPulse 1.6s ease-in-out infinite;
 }
 
@@ -215,14 +215,14 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 1px rgba(245, 158, 11, 0.22),
-      0 0 4px rgba(245, 158, 11, 0.5);
+      0 0 0 1px color-mix(in oklab, var(--status-pending) 22%, transparent),
+      0 0 4px color-mix(in oklab, var(--status-pending) 50%, transparent);
     transform: scale(1);
   }
   50% {
     box-shadow:
-      0 0 0 2px rgba(245, 158, 11, 0.18),
-      0 0 8px rgba(245, 158, 11, 0.6);
+      0 0 0 2px color-mix(in oklab, var(--status-pending) 18%, transparent),
+      0 0 8px color-mix(in oklab, var(--status-pending) 60%, transparent);
     transform: scale(1.1);
   }
 }
@@ -242,20 +242,20 @@
 .syncActions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   flex-shrink: 0;
 }
 
 .smallBtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
+  gap: calc(5px * var(--density));
+  height: calc(28px * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   transition:
@@ -273,16 +273,16 @@
 }
 
 .smallBtnDanger:hover {
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--status-error-soft);
   color: var(--status-error);
-  border-color: rgba(239, 68, 68, 0.2);
+  border-color: color-mix(in oklab, var(--status-error) 22%, transparent);
 }
 
 /* 凭证失效时按钮平时就是 accent 色，hover 加深 */
 .smallBtnAccent {
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   color: var(--color-accent);
-  border-color: color-mix(in oklab, var(--color-accent) 28%, rgba(0, 0, 0, 0.06));
+  border-color: color-mix(in oklab, var(--color-accent) 28%, var(--border-subtle));
   transition:
     background-color 180ms ease-out,
     color 180ms ease-out,
@@ -306,7 +306,7 @@
   grid-area: 1 / 1;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5px * var(--density));
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -321,13 +321,13 @@
 .connectBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: var(--accent-fill);
-  color: #ffffff;
+  color: var(--text-on-accent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
   transition:
@@ -352,14 +352,14 @@
 .serviceGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 .serviceCard {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
+  gap: calc(4px * var(--density));
+  padding: calc(12px * var(--density)) calc(14px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -372,8 +372,8 @@
 .serviceName {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
 }
@@ -383,25 +383,25 @@
 }
 
 .serviceDesc {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.5;
 }
 
 .serviceFoot {
-  margin-top: 8px;
+  margin-top: calc(8px * var(--density));
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .serviceCurrent {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   margin-right: auto;
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--color-accent);
 }
@@ -410,7 +410,7 @@
 .davForm {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--density));
 }
 
 /* 表单底部的「连接」按钮，靠右放 */
@@ -422,10 +422,10 @@
    静态淡灰底 + 轻 pulse 动画，避免渲染出错误的 connectBtn(蓝)/smallBtn(灰) 然后秒切。 */
 .syncActionsSkeleton {
   display: inline-block;
-  height: 28px;
-  width: 96px;
+  height: calc(28px * var(--density));
+  width: calc(96px * var(--font-scale));
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   animation: syncActionsSkeletonPulse 1.2s ease-in-out infinite;
 }
@@ -441,12 +441,12 @@
 }
 
 .syncError {
-  padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.18);
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
+  background: var(--status-error-soft);
+  border: 1px solid color-mix(in oklab, var(--status-error) 22%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: #b91c1c;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--status-error-strong);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -454,11 +454,11 @@
 /* —— "改凭证" 内嵌文字链：已配置但未登录态用 —— */
 .editCredsLink {
   align-self: flex-start;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--density));
   background: transparent;
   border: none;
   padding: 0;
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--color-accent);
   letter-spacing: -0.005em;
@@ -467,7 +467,7 @@
 }
 
 .editCredsLink:hover {
-  color: color-mix(in oklab, var(--color-accent) 78%, #000000);
+  color: color-mix(in oklab, var(--color-accent) 78%, var(--text-strong));
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -478,7 +478,7 @@
   display: grid;
   grid-template-rows: 0fr;
   /* 收起时抵掉卡片 16px 的间隔：高度为 0 的面板也占一格间隔，不抵掉就空出一块 */
-  margin-top: -16px;
+  margin-top: calc(-16px * var(--density));
   transition:
     grid-template-rows 360ms var(--ease-out),
     margin-top 360ms var(--ease-out);
@@ -510,15 +510,15 @@
 .setupPanel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 4px;
-  padding: 16px 18px 18px;
+  gap: calc(14px * var(--density));
+  margin-top: calc(4px * var(--density));
+  padding: calc(16px * var(--density)) calc(18px * var(--density)) calc(18px * var(--density));
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, var(--color-accent) 5%, #ffffff),
-    color-mix(in oklab, var(--color-accent) 1%, #fbfbfd)
+    color-mix(in oklab, var(--color-accent) 5%, var(--surface-card)),
+    color-mix(in oklab, var(--color-accent) 1%, var(--surface-card-elevated))
   );
-  border: 1px solid color-mix(in oklab, var(--color-accent) 16%, rgba(0, 0, 0, 0.05));
+  border: 1px solid color-mix(in oklab, var(--color-accent) 16%, var(--border-subtle));
   border-radius: var(--radius-md);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
@@ -526,8 +526,8 @@
 .setupHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: calc(8px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-700);
   color: var(--color-accent);
   letter-spacing: 0.06em;
@@ -541,13 +541,13 @@
 
 .setupClose {
   margin-left: auto;
-  height: 22px;
-  padding: 0 9px;
-  font-size: 11px;
+  height: calc(22px * var(--density));
+  padding: 0 calc(9px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--control-bg);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   letter-spacing: 0;
   text-transform: none;
@@ -567,7 +567,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--density));
   position: relative;
 }
 
@@ -590,7 +590,7 @@
 .setupSteps > li {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: calc(12px * var(--density));
   position: relative;
 }
 
@@ -603,17 +603,17 @@
   justify-content: center;
   background: linear-gradient(
     135deg,
-    color-mix(in oklab, var(--color-accent) 22%, #ffffff),
-    color-mix(in oklab, var(--color-accent) 8%, #ffffff)
+    color-mix(in oklab, var(--color-accent) 22%, var(--surface-card)),
+    color-mix(in oklab, var(--color-accent) 8%, var(--surface-card))
   );
   color: var(--color-accent);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-700);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    var(--shadow-inset-hi),
     0 1px 2px color-mix(in srgb, var(--color-accent) 18%, transparent),
     0 0 0 1px color-mix(in oklab, var(--color-accent) 22%, transparent);
   position: relative;
@@ -625,19 +625,19 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   padding-top: 1px;
 }
 
 .stepTitle {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
 
 .stepDesc {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.55;
 }
@@ -652,13 +652,13 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 22px;
+  gap: calc(4px * var(--density));
+  height: calc(22px * var(--density));
   padding: 0;
   background: transparent;
   color: var(--color-accent);
   border: none;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   cursor: pointer;
@@ -668,8 +668,8 @@
 }
 
 .stepBtn:hover {
-  color: color-mix(in oklab, var(--color-accent) 78%, #000000);
-  gap: 6px;
+  color: color-mix(in oklab, var(--color-accent) 78%, var(--text-strong));
+  gap: calc(6px * var(--density));
 }
 
 .stepBtn:hover svg {
@@ -688,9 +688,9 @@
   background: #1a73e8;
   color: #fff;
   font-weight: var(--font-weight-600);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1;
-  padding: 3px 8px;
+  padding: 3px calc(8px * var(--density));
   border-radius: var(--radius-xs);
   letter-spacing: 0.01em;
   vertical-align: 1px;
@@ -707,12 +707,12 @@
 .credField {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  gap: calc(6px * var(--density));
+  margin-top: calc(6px * var(--density));
 }
 
 .credLabel {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-muted);
   letter-spacing: 0.04em;
@@ -721,16 +721,16 @@
 
 .credInput {
   width: 100%;
-  height: 32px;
-  padding: 0 11px;
+  height: calc(32px * var(--density));
+  padding: 0 calc(11px * var(--density));
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-strong);
   font-family: var(--font-mono);
   outline: none;
-  box-shadow: 0 1px 1px rgba(20, 20, 40, calc(0.03 * var(--shadow-strength))) inset;
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), calc(0.03 * var(--shadow-strength))) inset;
   transition:
     border-color 200ms ease-out,
     background-color 200ms ease-out,
@@ -749,16 +749,16 @@
 }
 
 .credInputWithBtn {
-  padding-right: 38px;
+  padding-right: calc(38px * var(--density));
 }
 
 .credEyeBtn {
   position: absolute;
-  right: 4px;
+  right: calc(4px * var(--density));
   top: 50%;
   transform: translateY(-50%);
-  width: 26px;
-  height: 26px;
+  width: calc(var(--control-height-sm) * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -785,49 +785,44 @@
   background: var(--surface-card);
   border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
   box-shadow:
-    0 1px 1px rgba(20, 20, 40, calc(0.03 * var(--shadow-strength))) inset,
+    0 1px 1px rgba(var(--shadow-rgb), calc(0.03 * var(--shadow-strength))) inset,
     0 0 0 3px color-mix(in oklab, var(--color-accent) 16%, transparent);
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 .sectionTitle {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: 0;
   margin: 0;
-  padding: 0 4px;
+  padding: 0 calc(4px * var(--density));
 }
 
 .deviceRow {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px 18px 16px 28px;
-  background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  gap: calc(16px * var(--density));
+  padding: calc(16px * var(--density)) calc(18px * var(--density)) calc(16px * var(--density))
+    calc(28px * var(--density));
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 16px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
-}
-
-/* 暗色：surface-card(#16161a) 跟页面底(#0e0e11) 太接近，卡几乎看不出填充、显得扁平。
-   提到 surface-card-elevated(#1d1d23)——比背景亮一档，跟设置页卡片同款体积感。亮色不动。 */
-:global([data-mode="dark"]) .deviceRow {
-  background: var(--surface-card-elevated);
+  box-shadow: 0 1px 16px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
 }
 
 .deviceRow::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 12px;
-  bottom: 12px;
+  top: calc(12px * var(--density));
+  bottom: calc(12px * var(--density));
   width: 4px;
   border-radius: 0 3px 3px 0;
   background: var(--cat-color);
@@ -869,18 +864,18 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .deviceNameRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .deviceName {
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   cursor: pointer;
@@ -891,15 +886,15 @@
 
 .deviceNameInput {
   flex: 0 0 auto;
-  min-width: 120px;
-  max-width: 240px;
-  height: 28px;
-  padding: 0 10px;
+  min-width: calc(120px * var(--font-scale));
+  max-width: calc(240px * var(--font-scale));
+  height: calc(28px * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -908,11 +903,11 @@
 .tag {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 7px;
+  height: calc(18px * var(--density));
+  padding: 0 calc(7px * var(--density));
   background: color-mix(in oklab, var(--cat-color) 18%, transparent);
   color: var(--cat-color);
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-600);
   border-radius: var(--radius-xs);
   letter-spacing: 0.02em;
@@ -921,8 +916,8 @@
 .metaRow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -933,13 +928,13 @@
 .deviceActions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-shrink: 0;
 }
 
 .actionBtn {
-  width: 34px;
-  height: 34px;
+  width: calc(34px * var(--density));
+  height: calc(34px * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -962,11 +957,11 @@
 }
 
 .empty {
-  padding: 18px 18px;
+  padding: calc(18px * var(--density)) calc(18px * var(--density));
   background: var(--surface-card-elevated);
-  border: 1px dashed rgba(0, 0, 0, 0.08);
+  border: 1px dashed var(--border-default);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -974,23 +969,23 @@
 /* ── 同步内容:可选上云三挡 ── */
 
 .datasetBlock {
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: calc(14px * var(--density));
+  padding-top: calc(12px * var(--density));
   border-top: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .datasetHeader {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
 }
 
 .datasetHint {
   margin: 0;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -998,8 +993,8 @@
 .datasetRow {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 0;
+  gap: calc(12px * var(--density));
+  padding: calc(6px * var(--density)) 0;
 }
 
 .datasetText {
@@ -1011,13 +1006,13 @@
 }
 
 .datasetLabel {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
 }
 
 .datasetDesc {
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -1027,9 +1022,9 @@
 .oauthFallback {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 8px 12px;
+  gap: calc(10px * var(--density));
+  margin-top: calc(12px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
   border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--status-pending) 8%, transparent);
   border: 1px solid color-mix(in oklab, var(--status-pending) 32%, transparent);
@@ -1037,7 +1032,7 @@
 
 .oauthFallbackText {
   flex: 1;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.45;
   color: var(--text-strong);
 }
