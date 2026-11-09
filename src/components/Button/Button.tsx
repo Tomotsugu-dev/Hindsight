@@ -15,10 +15,18 @@ export type ButtonTone = "accent" | "neutral" | "warning" | "danger";
 /** The three control heights in tokens.css. */
 export type ControlSize = "sm" | "md" | "lg";
 
+/** Buttons also come in xs, for small icons in dense rows. */
+export type ButtonSize = "xs" | ControlSize;
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   tone?: ButtonTone;
-  size?: ControlSize;
+  size?: ButtonSize;
+  /**
+   * Gray until the mouse is on it, then the tone shows, such as a row's delete that turns red.
+   * On by default for gray and red ghost buttons. Has no effect on solid buttons.
+   */
+  quiet?: boolean;
   /** Shown before the text */
   icon?: LucideIcon;
   /** Shows a spinner in place of the icon, and the button cannot be pressed */
@@ -31,13 +39,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 /**
  * A button for an action, such as Save or Uninstall.
  *
- * It carries `data-part="button"`, `data-variant`, `data-tone` and `data-size`, so a theme can
- * style it. `className` is for layout only, such as a margin; the look comes from the props.
+ * It carries `data-part="button"`, `data-variant`, `data-tone`, `data-size` and `data-quiet`, so
+ * a theme can style it. `className` is for layout only, such as a margin; the look comes from the props.
  */
 export function Button({
   variant = "soft",
   tone = "neutral",
   size = "md",
+  quiet = variant === "ghost" && tone !== "accent",
   icon: Icon,
   loading = false,
   glow = false,
@@ -70,6 +79,7 @@ export function Button({
       data-variant={variant}
       data-tone={tone}
       data-size={size}
+      data-quiet={quiet || undefined}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
     >

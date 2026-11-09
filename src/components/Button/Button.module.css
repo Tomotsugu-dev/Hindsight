@@ -107,16 +107,34 @@
   background: var(--button-soft-bg);
 }
 
-/* Gray and red ghosts stay quiet until hovered, so rows of them do not shout. Accent ghosts read
-   as links, so they keep their color. */
-.button[data-variant="ghost"][data-tone="neutral"],
-.button[data-variant="ghost"][data-tone="danger"] {
+/* Quiet: gray at rest, so a row of them stays calm; the tone shows on hover */
+.button[data-quiet]:not([data-variant="solid"]) {
   color: var(--text-muted);
 }
 
-.button[data-variant="ghost"][data-tone="neutral"]:hover:not(:disabled, [aria-disabled="true"]),
-.button[data-variant="ghost"][data-tone="danger"]:hover:not(:disabled, [aria-disabled="true"]) {
+.button[data-quiet][data-variant="soft"] {
+  background: var(--fill-default);
+  border-color: var(--border-subtle);
+}
+
+.button[data-quiet][data-variant="outline"] {
+  border-color: var(--border-strong);
+}
+
+.button[data-quiet]:not([data-variant="solid"]):hover:not(:disabled, [aria-disabled="true"]) {
   color: var(--button-fg);
+}
+
+.button[data-quiet][data-variant="soft"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--button-soft-bg);
+  border-color: var(--button-soft-border);
+}
+
+.button[data-size="xs"] {
+  gap: calc(4px * var(--density));
+  height: calc(var(--control-height-xs) * var(--density));
+  padding: 0 calc(6px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
 }
 
 .button[data-size="sm"] {
@@ -157,6 +175,11 @@
   flex: none;
   width: calc(var(--control-icon-size) * var(--font-scale));
   height: calc(var(--control-icon-size) * var(--font-scale));
+}
+
+.button[data-size="xs"] .icon {
+  width: calc(var(--control-icon-size-xs) * var(--font-scale));
+  height: calc(var(--control-icon-size-xs) * var(--font-scale));
 }
 
 .spinning {

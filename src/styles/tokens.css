@@ -208,6 +208,8 @@
   --density: 1;
 
   /* —— Controls —— buttons, inputs and menus. Components multiply the heights by --density */
+  /* Only buttons come in xs: small icons in dense rows, such as a list row's remove button */
+  --control-height-xs: 20px;
   --control-height-sm: 26px;
   --control-height-md: 30px;
   --control-height-lg: 36px;
@@ -216,6 +218,7 @@
   --button-border-width: 1px;
   /* Icons in buttons and inputs. Components multiply them by --font-scale */
   --control-icon-size: 14px;
+  --control-icon-size-xs: 12px;
 
   /* —— Layout —— */
   --sidebar-width: 176px;

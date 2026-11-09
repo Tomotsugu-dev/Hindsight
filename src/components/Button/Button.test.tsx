@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { Trash2 } from "lucide-react";
 import { describe, expect, it } from "vitest";
-import { Button } from "./Button";
+import { Button, type ButtonProps } from "./Button";
 import { IconButton } from "./IconButton";
 
 describe("Button", () => {
@@ -41,6 +41,17 @@ describe("Button", () => {
   it("glow 时带上全局的 glow 类，鼠标靠近时描边发光；默认没有", () => {
     expect(renderToStaticMarkup(<Button glow>今天</Button>)).toMatch(/class="[^"]*\bglow\b/);
     expect(renderToStaticMarkup(<Button>今天</Button>)).not.toMatch(/\bglow\b/);
+  });
+
+  it("灰色和红色的 ghost 默认 quiet，强调色的不是；其他样式要自己开", () => {
+    const quiet = (props: ButtonProps) =>
+      renderToStaticMarkup(<Button {...props}>删除</Button>).includes("data-quiet");
+    expect(quiet({ variant: "ghost" })).toBe(true);
+    expect(quiet({ variant: "ghost", tone: "danger" })).toBe(true);
+    expect(quiet({ variant: "ghost", tone: "accent" })).toBe(false);
+    expect(quiet({ variant: "soft", tone: "danger" })).toBe(false);
+    expect(quiet({ variant: "soft", tone: "danger", quiet: true })).toBe(true);
+    expect(quiet({ variant: "ghost", quiet: false })).toBe(false);
   });
 });
 

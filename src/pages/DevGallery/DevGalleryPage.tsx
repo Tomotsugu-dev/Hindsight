@@ -5,9 +5,9 @@ import { useState, type CSSProperties } from "react";
 import { Download, ListFilter, MoreHorizontal, Search, Trash2, X } from "lucide-react";
 import {
   Button,
+  type ButtonSize,
   type ButtonTone,
   type ButtonVariant,
-  type ControlSize,
 } from "../../components/Button/Button";
 import { IconButton } from "../../components/Button/IconButton";
 import { TextInput } from "../../components/TextInput/TextInput";
@@ -17,7 +17,7 @@ import styles from "./DevGalleryPage.module.css";
 
 const VARIANTS: ButtonVariant[] = ["solid", "soft", "outline", "ghost"];
 const TONES: ButtonTone[] = ["accent", "neutral", "danger"];
-const SIZES: ControlSize[] = ["sm", "md", "lg"];
+const SIZES: ButtonSize[] = ["xs", "sm", "md", "lg"];
 const LEVELS = [
   "display",
   "headline",
@@ -123,10 +123,28 @@ export default function DevGalleryPage() {
             </Button>
             <IconButton size={size} icon={X} label="Close" />
             <IconButton size={size} icon={MoreHorizontal} label="More" variant="soft" />
-            <SimplePicker size={size} value={period} options={PERIODS} onChange={setPeriod} />
-            <TextInput size={size} icon={Search} placeholder="Search" aria-label="Search" />
+            {/* Pickers and inputs have no xs */}
+            {size !== "xs" ? (
+              <>
+                <SimplePicker size={size} value={period} options={PERIODS} onChange={setPeriod} />
+                <TextInput size={size} icon={Search} placeholder="Search" aria-label="Search" />
+              </>
+            ) : null}
           </div>
         ))}
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.heading}>Button: quiet (gray until hovered)</h2>
+        <div className={styles.grid}>
+          {TONES.map((tone) =>
+            VARIANTS.filter((variant) => variant !== "solid").map((variant) => (
+              <Button key={`${tone}-${variant}`} variant={variant} tone={tone} quiet>
+                {variant} {tone}
+              </Button>
+            )),
+          )}
+        </div>
       </section>
 
       <section className={styles.section}>
