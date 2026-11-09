@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { Button } from "../../components/Button/Button";
+import { IconButton } from "../../components/Button/IconButton";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
 import {
@@ -107,15 +109,7 @@ export function AppDetailCard({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={onClose}
-            aria-label={t("common.close")}
-            title={t("common.close")}
-          >
-            <X size={18} strokeWidth={2} />
-          </button>
+          <IconButton icon={X} label={t("common.close")} onClick={onClose} />
         </div>
         {activeKeys.length > 0 && (
           <div className={styles.detailDates}>
@@ -128,9 +122,9 @@ export function AppDetailCard({
         <div className={styles.detailTotalRow}>
           <span className={styles.detailTotal}>{fmtHM(Math.round(totalSecs / 60))}</span>
           {selectedDay !== null && (
-            <button type="button" className={styles.textBtn} onClick={() => setDrawerOpen(true)}>
+            <Button size="sm" onClick={() => setDrawerOpen(true)}>
               {t("history.app.dayDetail")}
-            </button>
+            </Button>
           )}
         </div>
       </header>

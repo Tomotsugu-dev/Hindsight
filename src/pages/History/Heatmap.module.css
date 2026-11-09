@@ -152,24 +152,6 @@
   color: var(--text-muted);
 }
 
-.resetBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--density));
-  padding: 3px calc(10px * var(--density));
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-strong);
-  font: inherit;
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  cursor: pointer;
-}
-
-.resetBtn:hover {
-  background: var(--surface-2);
-}
-
 .legend {
   display: inline-flex;
   align-items: center;
