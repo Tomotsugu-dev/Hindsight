@@ -15,7 +15,7 @@
   cursor: inherit;
 }
 
+/* Only the box looks disabled; the text stays readable, as on a row that is always on */
 .checkbox:has(.box:disabled) {
-  opacity: 0.5;
   cursor: not-allowed;
 }
