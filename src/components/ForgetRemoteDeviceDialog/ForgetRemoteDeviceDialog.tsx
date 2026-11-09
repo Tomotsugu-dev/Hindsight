@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
-// 复用 RemoveDeviceDialog 同款样式（backdrop / dialog / btn / input），保持 modal 视觉一致。
+import { Button } from "../Button/Button";
+import { TextInput } from "../TextInput/TextInput";
+// Same backdrop, dialog and text styles as RemoveDeviceDialog, so the two dialogs look alike.
 import styles from "../RemoveDeviceDialog/RemoveDeviceDialog.module.css";
 
 interface Props {
@@ -71,8 +73,7 @@ export function ForgetRemoteDeviceDialog({ open, deviceName, onConfirm, onCancel
         <p className={styles.confirmPrompt}>
           {t("settings.data.removeDeviceDialog.typeToConfirmPrompt", { keyword })}
         </p>
-        <input
-          type="text"
+        <TextInput
           className={styles.confirmInput}
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -85,17 +86,10 @@ export function ForgetRemoteDeviceDialog({ open, deviceName, onConfirm, onCancel
         />
 
         <div className={styles.actions}>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
-            {t("settings.data.removeDeviceDialog.cancel")}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnDanger}`}
-            onClick={onConfirm}
-            disabled={!canConfirm}
-          >
+          <Button onClick={onCancel}>{t("settings.data.removeDeviceDialog.cancel")}</Button>
+          <Button variant="solid" tone="danger" onClick={onConfirm} disabled={!canConfirm}>
             {t("devices.forgetDialog.confirm")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

@@ -8,8 +8,10 @@ import {
   loadBundledReleaseNotes,
 } from "../../lib/bundledReleaseNotes";
 import { pickReleaseNotesForLang } from "../../lib/releaseNotes";
+import { Button } from "../Button/Button";
 import { MarkdownText } from "../MarkdownText/MarkdownText";
-// Title, notes text and buttons look the same as ConfirmDialog, so reuse its styles.
+// Backdrop, title, notes text and the row of buttons look the same as ConfirmDialog, so reuse
+// its styles.
 import confirmStyles from "../ConfirmDialog/ConfirmDialog.module.css";
 import styles from "./ReleaseNotesDialog.module.css";
 
@@ -104,15 +106,15 @@ export function ReleaseNotesDialog({ version, onClose }: ReleaseNotesDialogProps
           </div>
         </div>
         <div className={confirmStyles.actions}>
-          <button
-            type="button"
-            className={`${confirmStyles.btn} ${confirmStyles.btnConfirm}`}
+          <Button
+            variant="solid"
+            tone="accent"
             onClick={onClose}
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
             {t("common.close")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,
