@@ -8,7 +8,9 @@
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    0 12px 32px rgba(var(--shadow-rgb), calc(0.16 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
   gap: calc(12px * var(--density));
