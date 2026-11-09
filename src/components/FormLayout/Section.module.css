@@ -1,14 +1,14 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--density));
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 4px;
+  gap: calc(12px * var(--density));
+  padding: 0 calc(4px * var(--density));
 }
 
 .headText {
@@ -25,19 +25,19 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   flex-shrink: 0;
 }
 
 .titleRow {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .title {
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   margin: 0;
@@ -74,21 +74,21 @@
 .infoTip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 8px * var(--density));
   transform: translateX(-50%) translateY(4px);
   z-index: 10;
   width: max-content;
   max-width: 280px;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-400);
   line-height: 1.5;
-  color: #fff;
-  background: rgba(28, 28, 36, 0.94);
+  color: var(--text-on-tooltip);
+  background: var(--surface-tooltip);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength))),
-    0 2px 4px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+    0 4px 12px -2px rgba(var(--shadow-rgb), calc(0.2 * var(--shadow-strength))),
+    0 2px 4px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   transition:
@@ -106,7 +106,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(28, 28, 36, 0.94);
+  border-top-color: var(--surface-tooltip);
 }
 
 .infoWrap:hover .infoTip,
@@ -116,7 +116,7 @@
 }
 
 .description {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-400);
   color: var(--text-muted);
   line-height: 1.5;
@@ -139,7 +139,7 @@
 }
 
 .tone_danger {
-  background: color-mix(in oklab, #ef4444 13%, transparent);
+  background: color-mix(in oklab, var(--status-error) 13%, transparent);
   color: var(--status-error);
 }
 
@@ -153,8 +153,8 @@
      row 内容是文字/控件，不会撑出 card 边框，所以 visible 不影响圆角观感。 */
   overflow: visible;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 /* —— 可折叠 Section ——
@@ -177,7 +177,7 @@
 .section.collapsible:focus-within .cardWrap {
   grid-template-rows: 1fr;
   /* header 跟 card 之间留 12px——展开时才出现，避免折叠态有空白 */
-  margin-top: 12px;
+  margin-top: calc(12px * var(--density));
   opacity: 1;
   pointer-events: auto;
 }
@@ -200,7 +200,7 @@
 
 /* Flat settings sections use a single rule to separate their contents. */
 :global([data-layout="flat"]) .section {
-  gap: 16px;
+  gap: calc(16px * var(--density));
 }
 
 :global([data-layout="flat"]) .header {

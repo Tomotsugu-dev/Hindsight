@@ -1,15 +1,15 @@
 .page {
-  padding: 32px 32px 48px;
+  padding: calc(32px * var(--density)) calc(32px * var(--density)) calc(48px * var(--density));
   max-width: 720px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: calc(24px * var(--density));
 }
 
 /* Keep category colors and drag feedback while presenting the list as rows. */
 :global([data-layout="flat"]) .page {
-  gap: 32px;
+  gap: calc(32px * var(--density));
 }
 
 :global([data-layout="flat"]) .card {
@@ -24,16 +24,10 @@
   box-shadow: none;
 }
 
-:global([data-layout="flat"]) .catRowHot {
-  background: color-mix(in oklab, var(--color-accent) 8%, white);
-  border-bottom-color: var(--color-accent);
-  outline: 1px solid var(--color-accent);
-}
-
 .header {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: calc(16px * var(--density));
 }
 
 /* 两个「新建」按钮的容器：靠右贴齐 + 按钮之间小 gap，
@@ -41,7 +35,7 @@
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   margin-left: auto;
 }
 
@@ -49,19 +43,11 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
+  gap: calc(4px * var(--density));
 }
 
 .meta {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   margin: 0;
 }
@@ -76,8 +62,8 @@
 
 /* "未指派背景为黄色"提示：跟列表里 row 的 unassigned 黄橙色对应，只用文字色不加底色 */
 .metaUnassigned {
-  margin-left: 8px;
-  color: #d97706;
+  margin-left: calc(8px * var(--density));
+  color: var(--status-pending-strong);
   font-weight: var(--font-weight-medium);
 }
 
@@ -87,7 +73,7 @@
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
-  margin-left: 6px;
+  margin-left: calc(6px * var(--density));
   padding: 0;
   border: 0;
   background: transparent;
@@ -103,23 +89,23 @@
 
 .infoTipBody {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 6px * var(--density));
   left: 0;
   z-index: var(--z-dropdown);
   width: max-content;
-  max-width: 320px;
-  padding: 10px 12px;
-  background: rgba(20, 20, 40, 0.94);
-  color: #ffffff;
-  font-size: 11px;
+  max-width: calc(320px * var(--font-scale));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
+  background: var(--surface-tooltip);
+  color: var(--text-on-tooltip);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-400);
   line-height: 1.6;
   letter-spacing: 0.01em;
   text-transform: none;
   border-radius: var(--radius-sm);
   box-shadow:
-    0 8px 24px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
-    0 1px 2px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 8px 24px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   pointer-events: none;
   opacity: 0;
   transform: translateY(-2px);
@@ -137,21 +123,22 @@
 .card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--density));
 }
 
 .catRow {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px 18px 16px 28px;
+  gap: calc(16px * var(--density));
+  padding: calc(16px * var(--density)) calc(18px * var(--density)) calc(16px * var(--density))
+    calc(28px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 6px 16px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 6px 16px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
   transition:
     background-color 140ms ease-out,
     border-color 140ms ease-out,
@@ -164,8 +151,8 @@
   content: "";
   position: absolute;
   left: 0;
-  top: 12px;
-  bottom: 12px;
+  top: calc(12px * var(--density));
+  bottom: calc(12px * var(--density));
   width: 4px;
   border-radius: 0 3px 3px 0;
   background: var(--cat-color);
@@ -176,17 +163,6 @@
   opacity: 0.45;
 }
 
-/* 拖拽悬停目标行：抬升 + accent 描边 + 阴影 + 微缩放 = 物理碰撞抬起感
-   （跟 PairingSection 的 .row.hot 完全同款的视觉语言）*/
-.catRowHot {
-  background: color-mix(in oklab, var(--color-accent) 8%, white);
-  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-  box-shadow:
-    0 6px 16px color-mix(in oklab, var(--color-accent) 18%, transparent),
-    0 0 0 2px color-mix(in oklab, var(--color-accent) 22%, transparent);
-  transform: translateY(-1px) scale(1.005);
-}
-
 /* 落地撞击：源行刚 reorder 到位时短暂"啪嗒"一下（squish + restore），
    配合 FLIP 的 back-ease 给一个有重量感的着陆 */
 @keyframes catLand {
@@ -195,7 +171,7 @@
   }
   35% {
     transform: translateY(0) scaleY(0.94);
-    box-shadow: 0 1px 1px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    box-shadow: 0 1px 1px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   }
   70% {
     transform: translateY(0) scaleY(1.015);
@@ -205,10 +181,6 @@
   }
 }
 
-.catRowLanded {
-  animation: catLand 320ms var(--ease-out);
-}
-
 /* 新建的分类：着陆撞击 + 一圈渐隐的 accent 描边。
    新建按钮在页头，新分类却落在下方的「未归入」行——不给这一下，用户点完
    看不到任何变化（issue #19 的反馈）。描边用 outline 而不是 box-shadow：
@@ -216,7 +188,7 @@
 @keyframes catJustCreatedRing {
   0% {
     outline-color: color-mix(in oklab, var(--color-accent) 85%, transparent);
-    background: color-mix(in oklab, var(--color-accent) 10%, white);
+    background: color-mix(in oklab, var(--color-accent) 10%, var(--surface-card));
   }
   70% {
     outline-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
@@ -247,9 +219,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 32px;
-  margin-right: -8px;
+  width: calc(18px * var(--density));
+  height: calc(32px * var(--density));
+  margin-right: calc(-8px * var(--density));
   padding: 0;
   background: transparent;
   border: none;
@@ -285,14 +257,14 @@
   pointer-events: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 18px 0 28px;
+  gap: calc(12px * var(--density));
+  padding: 0 calc(18px * var(--density)) 0 calc(28px * var(--density));
   background: var(--surface-card);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 30%, rgba(0, 0, 0, 0.08));
+  border: 1px solid color-mix(in oklab, var(--color-accent) 30%, var(--border-default));
   border-radius: var(--radius-lg);
   box-shadow:
-    0 12px 28px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
+    0 12px 28px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
     0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
   user-select: none;
   transform: scale(1.02);
@@ -302,8 +274,8 @@
   content: "";
   position: absolute;
   left: 0;
-  top: 12px;
-  bottom: 12px;
+  top: calc(12px * var(--density));
+  bottom: calc(12px * var(--density));
   width: 4px;
   border-radius: 0 3px 3px 0;
   background: var(--cat-color);
@@ -322,8 +294,8 @@
 }
 
 .catFlyName {
-  font-size: 15px;
-  font-weight: var(--font-weight-600);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
@@ -364,18 +336,18 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .catNameRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .catName {
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   /* I-beam 提示「双击可改名」，跟 .superName 同款语义 */
@@ -385,21 +357,21 @@
 /* 内置分类名字后面的一句说明 */
 .catDesc {
   min-width: 0;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
 .catNameInput {
   flex: 0 0 auto;
-  min-width: 100px;
-  max-width: 220px;
-  height: 28px;
-  padding: 0 10px;
+  min-width: calc(100px * var(--font-scale));
+  max-width: calc(220px * var(--font-scale));
+  height: calc(28px * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -408,45 +380,8 @@
 .catActions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-shrink: 0;
-}
-
-/* 编辑 / 删除按钮：中性灰底 + 中性灰 icon，避免跟用户自选的分类色撞色。
-   意图通过 hover 传达：
-     - 编辑 hover → 紫色（accent，主操作）
-     - 删除 hover → 红色（destructive 警示）
-   两个按钮**默认看起来一样**——把"危险性"留给鼠标交互那一刻 */
-.actionBtn {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  background: var(--fill-default);
-  color: var(--text-muted, #64748b);
-  border: none;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out,
-    transform 100ms ease-out;
-}
-
-.actionBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-  color: var(--color-accent);
-}
-
-.actionBtn:active {
-  transform: scale(0.94);
-}
-
-/* delete 按钮 hover 时**覆盖**普通 actionBtn 的紫色 hover，改为红色 danger 警示 */
-.actionBtnDanger:hover {
-  background: rgba(239, 68, 68, 0.14);
-  color: var(--status-error);
 }
 
 /* —— App chips 的"两行夹片" —— 默认 height 锁到 2 行 + 底部渐隐 mask；
@@ -460,7 +395,7 @@
    原来用 `height: 56px → auto` 依赖 CSS `interpolate-size: allow-keywords`（2024 Chromium-only），
    导致 macOS WKWebView 直接 snap 没动画，Windows WebView2 才正常。 */
 .appListClip {
-  --collapsed-h: 56px; /* 2 行 chip (24px) + 1 个 6px gap + 一点 buffer */
+  --collapsed-h: calc(56px * var(--density)); /* 2 行 chip (24px) + 1 个 6px gap + 一点 buffer */
   position: relative;
   width: 100%; /* 锁宽：hover 时绝不允许横向变化 */
   box-sizing: border-box;
@@ -486,7 +421,7 @@
 .appList {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   overflow: hidden;
   min-height: 0;
 }
@@ -494,12 +429,12 @@
 .appChip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 4px 0 5px;
+  gap: calc(5px * var(--density));
+  height: calc(24px * var(--density));
+  padding: 0 calc(4px * var(--density)) 0 calc(5px * var(--density));
   background: var(--fill-default);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-regular);
   font-variant-numeric: tabular-nums;
@@ -519,7 +454,7 @@
 }
 
 .appChipRemove:hover {
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--status-error-soft);
   color: var(--status-error);
 }
 
@@ -527,12 +462,12 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  height: 24px;
-  padding: 0 8px;
+  height: calc(24px * var(--density));
+  padding: 0 calc(8px * var(--density));
   background: transparent;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border: 1px dashed var(--border-dashed);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   transition:
@@ -546,13 +481,13 @@
 }
 
 .appAddInput {
-  height: 24px;
-  padding: 0 8px;
-  width: 140px;
+  height: calc(24px * var(--density));
+  padding: 0 calc(8px * var(--density));
+  width: calc(140px * var(--font-scale));
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   outline: none;
@@ -560,161 +495,22 @@
 }
 
 .empty {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-faint);
   font-style: italic;
-  padding: 16px;
-}
-
-/* 主创建按钮——outline 紫边风，跟 AI 总结 .startBtn 同款。
-   蓝紫 = 主操作的视觉编码统一；outline 比 solid 克制，
-   跟 AI 设置 .downloadOutline 等同族对齐。 */
-.createBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
-  flex-shrink: 0;
-}
-
-.createBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.createBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.createBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 新建进行中:create 要等一次全量 refresh,给个转圈别让按钮看着像没反应 */
-@keyframes createSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.createSpin {
-  animation: createSpin 900ms linear infinite;
-}
-
-.createForm {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 18px 16px 28px;
-  background: var(--surface-card);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 25%, rgba(0, 0, 0, 0.06));
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 0 0 3px color-mix(in oklab, var(--color-accent) 10%, transparent),
-    0 6px 16px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
-}
-
-.createForm::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 4px;
-  border-radius: 0 3px 3px 0;
-  background: var(--cat-color);
-}
-
-.iconBtn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-faint);
-  background: var(--fill-default);
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out,
-    transform 100ms ease-out;
-  border: none;
-  cursor: pointer;
-}
-
-.iconBtn:hover {
-  background: var(--fill-strong);
-  color: var(--text-strong);
-}
-
-.iconBtn:active {
-  transform: scale(0.92);
-}
-
-.iconBtnPrimary {
-  background: var(--accent-fill);
-  color: #ffffff;
-}
-
-.iconBtnPrimary:hover {
-  background: var(--accent-fill-hover);
-  color: #ffffff;
-}
-
-.unclassRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.unclassRow:last-child {
-  border-bottom: none;
-}
-
-.unclassName {
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.unclassMeta {
-  font-size: 11px;
-  color: var(--text-muted);
-  flex: 1;
-  font-variant-numeric: tabular-nums;
+  padding: calc(16px * var(--density));
 }
 
 .assignBtn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 10px;
+  gap: calc(4px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: var(--fill-subtle);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   cursor: pointer;
@@ -749,13 +545,13 @@
      .assignMenuThumb——实测 macOS WKWebView 无视 ::-webkit-scrollbar 自定义
      样式(原生 overlay 条不滚不显示),要常驻可见只能自己画。 */
   overflow: hidden;
-  padding: 4px;
+  padding: calc(4px * var(--density));
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 6px 18px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength))),
-    0 1px 2px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 6px 18px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength))),
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -780,8 +576,8 @@
 /* 自绘滚动条(ScrollIndicator)的轨道定位:贴菜单右缘,避开上下 padding。
    thumb 样式/交互在组件里,常驻可见就是"可滚动/还有更多"的提示。 */
 .assignMenuTrack {
-  top: 4px;
-  bottom: 4px;
+  top: calc(4px * var(--density));
+  bottom: calc(4px * var(--density));
   right: 2px;
   width: 4px;
 }
@@ -789,16 +585,16 @@
 .assignOption {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  /* 滚动盒限高后,flex 子项默认会被压扁凑高度(行高变形=丑);
-     禁缩,行永远 26px,放不下的走滚动 */
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
+  /* A scroll box with a height limit would squeeze its flex children to fit.
+     The rows must not shrink; whatever does not fit scrolls. */
   flex: none;
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--density));
   background: transparent;
   border: none;
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
@@ -859,7 +655,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 110px;
+  max-width: calc(110px * var(--font-scale));
 }
 
 /* 「取消分类」选项：灰底，没有色点 */
@@ -890,28 +686,28 @@
   /* fixed + 运行时坐标:躲开 .appList 的 overflow:hidden 裁剪 */
   position: fixed;
   z-index: 9999;
-  min-width: 220px;
+  min-width: calc(220px * var(--font-scale));
   width: max-content;
-  max-width: 320px;
+  max-width: calc(320px * var(--font-scale));
   max-height: 264px;
   overflow-y: auto;
-  padding: 4px;
+  padding: calc(4px * var(--density));
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, calc(0.12 * var(--shadow-strength)));
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
 }
 
 .appSuggestOption {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
-  padding: 5px 8px;
+  padding: calc(5px * var(--density)) calc(8px * var(--density));
   border: none;
   border-radius: 5px;
   background: transparent;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-strong);
   cursor: pointer;
   text-align: left;
@@ -933,8 +729,8 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
 }
 
@@ -959,5 +755,5 @@
 .tabContent {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: calc(24px * var(--density));
 }

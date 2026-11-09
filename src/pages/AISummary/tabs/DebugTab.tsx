@@ -2,11 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
-import { useMouseGlow } from "../../../hooks/useMouseGlow";
 import {
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Download,
   Info,
@@ -30,6 +27,8 @@ import { useSettings } from "../../../state/settings";
 import { useDebugState } from "../DebugStateContext";
 import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
+import { Button } from "../../../components/Button/Button";
+import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
 import { Row } from "../../../components/FormLayout/Row";
 import { Section } from "../../../components/FormLayout/Section";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
@@ -82,10 +81,6 @@ export default function DebugTab() {
   const [scope, setScope] = useState<DebugScope>("daily");
   const [generating, setGenerating] = useState(false);
 
-  // 鼠标接近发光特效：跟 Today / DailyTab 同款
-  const { ref: prevBtnRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextBtnRef } = useMouseGlow<HTMLButtonElement>();
   const [enginePhase, setEnginePhase] = useState<string | null>(null);
   const [topError, setTopError] = useState<string | null>(null);
   /** 成功提示（绿色 successBar）：导出 markdown 落盘后短暂显示，3.5s 自清。 */
@@ -406,69 +401,55 @@ export default function DebugTab() {
             disabled={generating}
           />
 
-          <div className={styles.dateNav}>
-            <button
-              ref={prevBtnRef}
-              type="button"
-              className={`${styles.navBtn} glow`}
-              onClick={() => setDayOffset((v) => v - 1)}
-              disabled={generating}
-              aria-label={t(
-                scope === "daily"
-                  ? "aiSummary.debug.dateNav.prevDayAria"
-                  : scope === "weekly"
-                    ? "aiSummary.debug.dateNav.prevWeekAria"
-                    : "aiSummary.debug.dateNav.prevMonthAria",
-              )}
-            >
-              <ChevronLeft size={14} strokeWidth={1.75} />
-            </button>
-            <button
-              ref={pillRef}
-              type="button"
-              className={`${styles.dayPill} glow`}
-              onClick={() => setDayOffset(0)}
-              disabled={generating || dayOffset === 0}
-              title={t(
-                scope === "daily"
-                  ? "aiSummary.debug.dateNav.todayBack"
-                  : scope === "weekly"
-                    ? "aiSummary.debug.dateNav.thisWeekBack"
-                    : "aiSummary.debug.dateNav.thisMonthBack",
-              )}
-            >
-              {offsetLabel(scope, dayOffset, t)}
-            </button>
-            <button
-              ref={nextBtnRef}
-              type="button"
-              className={`${styles.navBtn} glow`}
-              onClick={() => setDayOffset((v) => v + 1)}
-              disabled={generating || dayOffset >= 0}
-              aria-label={t(
-                scope === "daily"
-                  ? "aiSummary.debug.dateNav.nextDayAria"
-                  : scope === "weekly"
-                    ? "aiSummary.debug.dateNav.nextWeekAria"
-                    : "aiSummary.debug.dateNav.nextMonthAria",
-              )}
-            >
-              <ChevronRight size={14} strokeWidth={1.75} />
-            </button>
-          </div>
+          <PeriodNav
+            label={offsetLabel(scope, dayOffset, t)}
+            currentTitle={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.todayBack"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.thisWeekBack"
+                  : "aiSummary.debug.dateNav.thisMonthBack",
+            )}
+            prevLabel={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.prevDayAria"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.prevWeekAria"
+                  : "aiSummary.debug.dateNav.prevMonthAria",
+            )}
+            nextLabel={t(
+              scope === "daily"
+                ? "aiSummary.debug.dateNav.nextDayAria"
+                : scope === "weekly"
+                  ? "aiSummary.debug.dateNav.nextWeekAria"
+                  : "aiSummary.debug.dateNav.nextMonthAria",
+            )}
+            isCurrent={dayOffset === 0}
+            canNext={dayOffset < 0}
+            busy={generating}
+            onPrev={() => setDayOffset((v) => v - 1)}
+            onNext={() => setDayOffset((v) => v + 1)}
+            onCurrent={() => setDayOffset(0)}
+          />
 
           {/* start / stop 放主行最右端：CSS margin-left:auto 推到行尾，"主操作"按钮放第一行
             最显眼位置。按钮文案缩短为"重新生成"避免在 960px 窗口里换行，旁边 Info icon hover 看完整说明。 */}
           {generating ? (
-            <button type="button" className={styles.stopBtn} onClick={() => void onStop()}>
-              <Square size={14} strokeWidth={2} />
+            <Button
+              tone="warning"
+              className={styles.mainAction}
+              icon={Square}
+              onClick={() => void onStop()}
+            >
               {t("aiSummary.debug.actions.stop")}
-            </button>
+            </Button>
           ) : (
             <>
-              <button
-                type="button"
-                className={styles.startBtn}
+              <Button
+                variant="outline"
+                tone="accent"
+                className={styles.mainAction}
+                icon={Play}
                 onClick={() => void onStart()}
                 disabled={!hasModel || scope !== "daily"}
                 title={
@@ -479,9 +460,8 @@ export default function DebugTab() {
                       : t("aiSummary.debug.actions.startTooltipNoModel")
                 }
               >
-                <Play size={14} strokeWidth={2} />
                 {t("aiSummary.debug.actions.start")}
-              </button>
+              </Button>
               <button
                 type="button"
                 className={styles.infoIconWrap}
@@ -551,9 +531,10 @@ export default function DebugTab() {
           icon={Newspaper}
           headerAction={
             <>
-              <button
-                type="button"
-                className={styles.deleteBtn}
+              <Button
+                variant="outline"
+                tone="danger"
+                icon={Trash2}
                 onClick={() => {
                   if (generating) return;
                   setConfirmingClear(true);
@@ -561,12 +542,11 @@ export default function DebugTab() {
                 disabled={generating || summaries.length === 0}
                 title={t("aiSummary.debug.actions.clearSummariesTooltip")}
               >
-                <Trash2 size={13} strokeWidth={2} />
                 {t("aiSummary.debug.actions.clearSummaries")}
-              </button>
-              <button
-                type="button"
-                className={styles.exportBtn}
+              </Button>
+              <Button
+                variant="outline"
+                icon={Download}
                 onClick={onExportSummariesMd}
                 disabled={summaries.length === 0}
                 title={
@@ -575,9 +555,8 @@ export default function DebugTab() {
                     : t("aiSummary.debug.actions.exportSummariesMdTooltip")
                 }
               >
-                <Download size={13} strokeWidth={2} />
                 {t("aiSummary.debug.actions.exportSummariesMd")}
-              </button>
+              </Button>
             </>
           }
         >
@@ -674,8 +653,11 @@ export default function DebugTab() {
         <div className={styles.panelWrap}>
           <span className={styles.panelLabel}>
             {t("aiSummary.debug.engineLogs.label")}
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              tone="accent"
+              quiet
+              size="xs"
               className={styles.engineLogsRefreshBtn}
               onClick={() => void refreshEngineLogs()}
               disabled={engineLogsBusy}
@@ -684,9 +666,12 @@ export default function DebugTab() {
               {engineLogsBusy
                 ? t("aiSummary.debug.engineLogs.refreshing")
                 : t("aiSummary.debug.engineLogs.refresh")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
+              tone="accent"
+              quiet
+              size="xs"
               className={styles.engineLogsRefreshBtn}
               onClick={() => void copyEngineLogs()}
               disabled={engineLogs.length === 0}
@@ -695,7 +680,7 @@ export default function DebugTab() {
               {engineLogsCopied
                 ? t("aiSummary.debug.engineLogs.copied")
                 : t("aiSummary.debug.engineLogs.copy")}
-            </button>
+            </Button>
           </span>
           <div className={styles.panel}>
             <div className={styles.logBox}>

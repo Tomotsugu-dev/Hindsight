@@ -22,8 +22,8 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  gap: 24px;
-  padding: 40px 16px;
+  gap: calc(24px * var(--density));
+  padding: calc(40px * var(--density)) calc(16px * var(--density));
   background: var(--fill-subtle);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
@@ -33,7 +33,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   text-align: center;
 }
 
@@ -46,19 +46,19 @@
   border-radius: var(--radius-md);
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   color: var(--color-accent);
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--density));
 }
 
 .emptyHeroTitle {
-  font-size: 16px;
-  font-weight: var(--font-weight-600);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.01em;
   margin: 0;
 }
 
 .emptyHeroHint {
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
@@ -69,7 +69,7 @@
   display: grid;
   /* 6 张卡（固定 5 + 随机位）走 2×3，与 4 张时代同宽不破排版 */
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: calc(10px * var(--density));
   width: 100%;
   max-width: 640px;
 }
@@ -77,8 +77,8 @@
 .presetCard {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px 14px 12px;
+  gap: calc(6px * var(--density));
+  padding: calc(14px * var(--density)) calc(14px * var(--density)) calc(12px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -93,9 +93,9 @@
 
 .presetCard:hover {
   border-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
-  background: color-mix(in oklab, var(--color-accent) 4%, white);
+  background: color-mix(in oklab, var(--color-accent) 4%, var(--surface-card));
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+  box-shadow: 0 4px 12px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 .presetCard:active {
@@ -114,7 +114,7 @@
 }
 
 .presetLabel {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-muted);
   letter-spacing: 0.04em;
@@ -122,7 +122,7 @@
 }
 
 .presetQuestion {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   line-height: 1.5;
@@ -134,13 +134,13 @@
 .messageList {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--density));
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   /* 消息列表永不横滚:内容超宽一律由气泡内的局部滚动(如表格)消化 */
   overflow-x: hidden;
-  padding: 4px 4px 12px;
+  padding: calc(4px * var(--density)) calc(4px * var(--density)) calc(12px * var(--density));
   scroll-behavior: smooth;
 }
 
@@ -163,7 +163,7 @@
 .bubbleRow {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .bubbleRowUser {
@@ -176,9 +176,9 @@
 
 .bubble {
   max-width: 78%;
-  padding: 10px 14px;
+  padding: calc(10px * var(--density)) calc(14px * var(--density));
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.6;
   letter-spacing: -0.005em;
   word-break: break-word;
@@ -186,7 +186,7 @@
 
 .bubbleUser {
   background: var(--accent-fill);
-  color: #fff;
+  color: var(--text-on-accent);
   border-bottom-right-radius: 4px;
   /* 提问支持 Shift+Enter 多行后,气泡里保留用户敲的换行 */
   white-space: pre-wrap;
@@ -197,7 +197,7 @@
   border: 1px solid var(--border-default);
   color: var(--text-strong);
   border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
 }
 
 .bubbleText {
@@ -207,7 +207,7 @@
 
 .bubbleAssistant .bubbleText + .searchHits,
 .bubbleAssistant .bubbleMd + .searchHits {
-  margin-top: 10px;
+  margin-top: calc(10px * var(--density));
 }
 
 /* ── 助手回答的 Markdown 容器：字号行高与 bubbleText 一致，元素间距收紧 ── */
@@ -215,9 +215,9 @@
 /* 气泡底部 token 用量:↑ 上行 ↓ 下行,小灰字 */
 .tokenMeta {
   display: flex;
-  gap: 10px;
-  margin-top: 6px;
-  font-size: 11px;
+  gap: calc(10px * var(--density));
+  margin-top: calc(6px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
 }
 
@@ -225,26 +225,6 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-}
-
-.msgAction {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 3px;
-  color: var(--text-faint);
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.msgAction:hover:not(:disabled) {
-  color: var(--text-secondary);
-}
-
-.msgAction:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 .versionNav {
@@ -281,16 +261,16 @@
 .msgActionsUser {
   display: flex;
   justify-content: flex-end;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--density));
 }
 
 /* 助手侧操作行(气泡外下方):版本切换 / 复制 / 重试 */
 .msgActions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  font-size: 11px;
+  gap: calc(10px * var(--density));
+  margin-top: calc(4px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
 }
 
@@ -300,8 +280,8 @@
   width: 78%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: calc(8px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
@@ -313,7 +293,7 @@
   outline: none;
   background: none;
   resize: vertical;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.6;
   font-family: inherit;
   color: var(--text-strong);
@@ -323,41 +303,19 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--density));
 }
 
 .editHint {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   line-height: 1.4;
 }
 
 .editBtns {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-shrink: 0;
-}
-
-.editCancel,
-.editSave {
-  padding: 5px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  cursor: pointer;
-  border: 1px solid var(--border-default);
-  background: var(--surface-card);
-  color: var(--text-strong);
-}
-
-.editSave {
-  background: var(--accent-fill);
-  border-color: var(--accent-fill);
-  color: #fff;
-}
-
-.editSave:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* —— 操作行统一悬浮提示:深底白字,悬停片刻后上方弹出(样式对齐 TimeField)—— */
@@ -372,18 +330,18 @@
 .msgActionsUser [data-tip]::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 6px * var(--density));
   left: 50%;
   transform: translateX(-50%);
-  padding: 5px 10px;
-  background: #1a1a1f;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 11px;
+  padding: calc(5px * var(--density)) calc(10px * var(--density));
+  background: var(--surface-tooltip);
+  color: var(--text-on-tooltip);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-500);
   letter-spacing: 0.005em;
   white-space: nowrap;
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 14px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength)));
+  box-shadow: 0 4px 14px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   z-index: 20;
@@ -398,7 +356,7 @@
 }
 
 .bubbleMd {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -412,13 +370,13 @@
 }
 
 .bubbleMd p {
-  margin: 0 0 8px;
+  margin: 0 0 calc(8px * var(--density));
 }
 
 .bubbleMd ul,
 .bubbleMd ol {
-  margin: 0 0 8px;
-  padding-left: 20px;
+  margin: 0 0 calc(8px * var(--density));
+  padding-left: calc(20px * var(--density));
 }
 
 .bubbleMd li {
@@ -426,15 +384,15 @@
 }
 
 .bubbleMd code {
-  padding: 1px 5px;
+  padding: 1px calc(5px * var(--density));
   background: var(--surface-2);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
 }
 
 .bubbleMd pre {
-  margin: 0 0 8px;
-  padding: 10px 12px;
+  margin: 0 0 calc(8px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   overflow-x: auto;
@@ -450,14 +408,14 @@
   display: block;
   max-width: 100%;
   overflow-x: auto;
-  margin: 0 0 8px;
+  margin: 0 0 calc(8px * var(--density));
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
 }
 
 .bubbleMd th,
 .bubbleMd td {
-  padding: 4px 10px;
+  padding: calc(4px * var(--density)) calc(10px * var(--density));
   border: 1px solid var(--border-default);
   text-align: left;
 }
@@ -468,8 +426,8 @@
 }
 
 .bubbleMd blockquote {
-  margin: 0 0 8px;
-  padding-left: 10px;
+  margin: 0 0 calc(8px * var(--density));
+  padding-left: calc(10px * var(--density));
   border-left: 3px solid var(--border-strong);
   color: var(--text-muted);
 }
@@ -479,8 +437,8 @@
 .bubbleMd h2,
 .bubbleMd h3,
 .bubbleMd h4 {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 calc(8px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
 }
 
@@ -502,14 +460,14 @@
 .searchHits {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .searchHit {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: calc(6px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -518,17 +476,17 @@
 .searchHitHead {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-wrap: wrap;
 }
 
 .searchHitChip {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 8px;
+  height: calc(20px * var(--density));
+  padding: 0 calc(8px * var(--density));
   border-radius: var(--radius-xs);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
   background: color-mix(in oklab, var(--color-accent) 14%, transparent);
@@ -537,7 +495,7 @@
 }
 
 .searchHitDate {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -546,7 +504,7 @@
 
 .searchHitSnippet {
   margin: 0;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.55;
   color: var(--text-strong);
 }
@@ -556,12 +514,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 26px;
+  gap: calc(4px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
@@ -582,8 +540,8 @@
 .typing {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 2px;
+  gap: calc(5px * var(--density));
+  padding: calc(4px * var(--density)) 2px;
 }
 
 .typingDot {
@@ -622,13 +580,14 @@
   /* 底对齐:输入框单行时与 32px 的发送按钮等高(视觉同居中),
      多行长高后按钮贴底不悬空 */
   align-items: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 8px 8px 8px 14px;
+  gap: calc(8px * var(--density));
+  margin-top: calc(16px * var(--density));
+  padding: calc(8px * var(--density)) calc(8px * var(--density)) calc(8px * var(--density))
+    calc(14px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
   transition:
     border-color 160ms ease-out,
     box-shadow 160ms ease-out;
@@ -637,7 +596,7 @@
 .composer:focus-within {
   border-color: color-mix(in oklab, var(--color-accent) 42%, var(--border-default));
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
     0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
@@ -646,17 +605,17 @@
   /* Shift+Enter 多行:单行(32px)起步随内容长高,到上限后内部滚动。
      不支持 field-sizing 的浏览器退化为固定单行,换行内容滚动查看 */
   field-sizing: content;
-  min-height: 32px;
-  max-height: 128px;
-  padding: 6px 0;
+  min-height: calc(32px * var(--density));
+  max-height: calc(128px * var(--font-scale));
+  padding: calc(6px * var(--density)) 0;
   background: transparent;
   border: none;
   outline: none;
   resize: none;
   overflow-y: auto;
   font: inherit;
-  font-size: 13.5px;
-  line-height: 20px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  line-height: 1.54;
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
@@ -670,12 +629,12 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: calc(32px * var(--density));
+  height: calc(32px * var(--density));
   background: var(--accent-fill);
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--text-on-accent);
   cursor: pointer;
   transition:
     background-color 140ms ease-out,
@@ -699,10 +658,6 @@
   background: transparent;
   border: 0;
   border-radius: 0;
-}
-
-:global([data-layout="flat"]) .emptyHeroTitle {
-  font-weight: var(--font-weight-500);
 }
 
 /* Action cards and the composer keep their boundaries without elevation. */

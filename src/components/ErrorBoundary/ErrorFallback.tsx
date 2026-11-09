@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Button } from "../Button/Button";
 import styles from "./ErrorBoundary.module.css";
 
 // 兜底 UI 单独成文件，才能用 useTranslation（class 边界不能用 hook），
@@ -10,9 +11,14 @@ export function ErrorFallback() {
     <div className={styles.wrap} role="alert">
       <h1 className={styles.title}>{t("common.errorBoundary.title")}</h1>
       <p className={styles.message}>{t("common.errorBoundary.message")}</p>
-      <button type="button" className={styles.btn} onClick={() => window.location.reload()}>
+      <Button
+        variant="solid"
+        tone="accent"
+        className={styles.reload}
+        onClick={() => window.location.reload()}
+      >
         {t("common.errorBoundary.reload")}
-      </button>
+      </Button>
     </div>
   );
 }

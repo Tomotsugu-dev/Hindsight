@@ -2,19 +2,19 @@
 .list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 /* —— 单条 chip：跟分类页 .appChip 同款方圆角 —— */
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 4px 0 8px;
+  gap: calc(5px * var(--density));
+  min-height: calc(24px * var(--density));
+  padding: 0 calc(4px * var(--density)) 0 calc(8px * var(--density));
   background: var(--fill-default);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-regular);
   font-variant-numeric: tabular-nums;
@@ -43,7 +43,7 @@
 }
 
 .chipRemove:hover {
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--status-error-soft);
   color: var(--status-error);
 }
 
@@ -52,12 +52,12 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  height: 24px;
-  padding: 0 8px;
+  min-height: calc(24px * var(--density));
+  padding: 0 calc(8px * var(--density));
   background: transparent;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border: 1px dashed var(--border-dashed);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
@@ -73,13 +73,13 @@
 
 /* —— 输入态：实线 + accent 微光，跟分类页 .appAddInput 同款 —— */
 .addInput {
-  height: 24px;
-  padding: 0 8px;
+  min-height: calc(24px * var(--density));
+  padding: 0 calc(8px * var(--density));
   width: 160px;
   background: var(--surface-card);
   border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   outline: none;
@@ -96,21 +96,21 @@
 .tier {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--density));
 }
 
 /* A line above the second tier */
 .tier + .tier {
-  margin-top: 8px;
-  padding-top: 32px;
+  margin-top: calc(8px * var(--density));
+  padding-top: calc(32px * var(--density));
   border-top: 1px solid var(--border-default);
 }
 
 .tierHeader {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 4px;
+  gap: calc(12px * var(--density));
+  padding: 0 calc(4px * var(--density));
 }
 
 .tierIcon {
@@ -134,15 +134,15 @@
 
 .tierTitle {
   margin: 0;
-  font-size: 17px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-headline) * var(--font-scale));
+  font-weight: var(--font-weight-headline);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
 
 .tierDescription {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -151,21 +151,21 @@
 .tierBody {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-left: 56px;
+  gap: calc(20px * var(--density));
+  margin-left: calc(40px + 16px * var(--density));
 }
 
 /* Same look as the Open buttons on the Data tab */
 .openLink {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  min-height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-strong);
   text-decoration: none;
@@ -184,8 +184,8 @@
 
 .footnote {
   margin: 0;
-  padding: 0 4px;
-  font-size: 12px;
+  padding: 0 calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -213,23 +213,23 @@
   max-width: 320px;
   max-height: 264px;
   overflow-y: auto;
-  padding: 4px;
+  padding: calc(4px * var(--density));
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, calc(0.12 * var(--shadow-strength)));
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
 }
 
 .suggestOption {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
-  padding: 5px 8px;
+  padding: calc(5px * var(--density)) calc(8px * var(--density));
   border: none;
   border-radius: 5px;
   background: transparent;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-strong);
   cursor: pointer;
   text-align: left;

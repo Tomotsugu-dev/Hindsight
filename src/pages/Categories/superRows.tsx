@@ -102,6 +102,8 @@ function SuperRow_({
     dragging ? styles.dropTarget : "",
     isHot ? styles.dropHot : "",
     isSuperDragTarget ? styles.superCardDropHot : "",
+    // TODO: catRowJustCreated is defined in Categories.module.css, not in this file, so a new
+    // group card never shows the ring.
     justCreated ? styles.catRowJustCreated : "",
   ]
     .filter(Boolean)

@@ -48,8 +48,8 @@
   background-image: linear-gradient(var(--fill-default), var(--fill-default));
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 4px 14px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength))),
-    0 1px 3px rgba(20, 20, 40, calc(0.05 * var(--shadow-strength)));
+    0 4px 14px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
+    0 1px 3px rgba(var(--shadow-rgb), calc(0.05 * var(--shadow-strength)));
 }
 
 /* 恢复 pointer-events 只在 visible 状态：CSS 规则上子元素 pointer-events: auto
@@ -62,9 +62,9 @@
 /* 暗色：亮色高光线在深底上刺眼，换成暗阴影 */
 :global([data-mode="dark"]) .floatingTabs nav {
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 4px 14px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength))),
-    0 1px 3px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
+    0 1px 0 var(--hairline-hi) inset,
+    0 4px 14px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-strength))),
+    0 1px 3px rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
 }
 
 /* Keep scrolling content behind an opaque surface without a floating card. */

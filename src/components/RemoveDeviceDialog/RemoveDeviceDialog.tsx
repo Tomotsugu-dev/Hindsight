@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
+import { Button } from "../Button/Button";
+import { TextInput } from "../TextInput/TextInput";
 import styles from "./RemoveDeviceDialog.module.css";
 
 interface Props {
@@ -118,8 +120,7 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
             keyword,
           })}
         </p>
-        <input
-          type="text"
+        <TextInput
           className={styles.confirmInput}
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -132,17 +133,15 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
         />
 
         <div className={styles.actions}>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
-            {t("settings.data.removeDeviceDialog.cancel")}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnDanger}`}
+          <Button onClick={onCancel}>{t("settings.data.removeDeviceDialog.cancel")}</Button>
+          <Button
+            variant="solid"
+            tone="danger"
             onClick={() => onConfirm(keepLocal)}
             disabled={!canConfirm}
           >
             {t("settings.data.removeDeviceDialog.confirm")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

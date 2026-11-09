@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
+import { IconButton } from "../Button/IconButton";
 import { AppIcon } from "../AppIcon/AppIcon";
 import { EmptyHint } from "../EmptyHint/EmptyHint";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
@@ -138,15 +139,7 @@ export function AppDetailDrawer({ app, scope, offset, deviceId, onClose }: AppDe
             ) : null}
           </div>
           <div className={styles.headTotal}>{fmtHM(app.minutes)}</div>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={onClose}
-            aria-label={t("common.close")}
-            title={t("common.close")}
-          >
-            <X size={18} strokeWidth={2} />
-          </button>
+          <IconButton icon={X} label={t("common.close")} onClick={onClose} />
         </header>
 
         <div className={styles.body}>

@@ -5,12 +5,12 @@
 .top {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--density));
 }
 
 .subtitle {
-  margin: 0 0 4px;
-  font-size: 13px;
+  margin: 0 0 calc(4px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -18,211 +18,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--density));
   flex-wrap: wrap;
 }
 
 .actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-
-/* 时段切换：照日统计 PeriodCard 的 dayNav，三个分开的描边按钮，配 .glow 跟随鼠标的描边光 */
-.periodNav {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.navBtn {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  color: var(--text-muted);
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.navBtn:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-.navBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.navPill {
-  min-width: 64px;
-  height: 26px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
-  background: var(--control-bg);
-  font-size: 12px;
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.005em;
-  white-space: nowrap;
-  transition:
-    color 180ms var(--ease-out),
-    background-color 180ms var(--ease-out);
-}
-
-.navPillClickable {
-  cursor: pointer;
-}
-
-.navPillClickable:hover:not(:disabled) {
-  color: var(--color-accent);
-  background: var(--control-bg-hover);
-}
-
-/* 已经在当前时段，或者在跑：点了没用，但文字不变灰 */
-.navPill:disabled {
-  cursor: default;
-}
-
-:global([data-layout="flat"]) .navBtn,
-:global([data-layout="flat"]) .navPill {
-  border-color: var(--border-default);
-}
-
-/* —— 按钮 —— */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms var(--ease-out),
-    filter 140ms var(--ease-out),
-    transform 120ms var(--ease-out);
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 还没生成：开始总结是这页唯一要做的事 */
-.btnPrimary {
-  background: var(--accent-fill);
-  color: #fff;
-}
-
-.btnPrimary:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-/* 已经生成：重新生成退到次要 */
-.btnSoft {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
-.btnSoft:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-
-.btnNeutral {
-  background: color-mix(in oklab, var(--text-strong) 8%, transparent);
-  color: var(--text-strong);
-}
-
-.btnNeutral:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--text-strong) 12%, transparent);
-}
-
-.iconBtn {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms var(--ease-out),
-    color 140ms var(--ease-out);
-}
-
-.iconBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--text-strong) 7%, transparent);
-  color: var(--text-strong);
-}
-
-.iconBtn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.iconBtnSmall {
-  width: 28px;
-  height: 28px;
-}
-
-.iconBtnDanger:hover:not(:disabled) {
-  background: var(--status-error-soft);
-  color: var(--status-error);
-}
-
-.textBtn {
-  flex: none;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  font-weight: var(--font-weight-600);
-  color: var(--color-accent);
-  cursor: pointer;
-}
-
-.textBtn:hover:not(:disabled) {
-  background: var(--color-accent-soft);
-}
-
-.textBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  gap: calc(4px * var(--density));
 }
 
 /* —— 状态行 —— */
 .statusLine {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 18px;
-  font-size: 12.5px;
+  gap: calc(6px * var(--density));
+  min-height: calc(18px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -248,10 +60,10 @@
 .successBar {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: calc(8px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -291,37 +103,12 @@
   }
 }
 
-/* 错误条上的关闭按钮 X：让用户能主动 dismiss 旧错误，不被它一直挡视线 */
-.errorClose {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.7;
-  transition:
-    opacity 120ms var(--ease-out),
-    background 120ms var(--ease-out);
-}
-
-.errorClose:hover {
-  opacity: 1;
-  background: var(--status-error-soft);
-}
-
 /* —— 正在生成：几条灰条占位，最后两条收短，像一段话的结尾 —— */
 .skeleton {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-top: 10px;
+  gap: calc(9px * var(--density));
+  margin-top: calc(10px * var(--density));
   animation: reportPulse 1.4s ease-in-out infinite;
 }
 
@@ -348,15 +135,15 @@
 
 /* —— 生成失败 —— */
 .errorBox {
-  margin-top: 6px;
+  margin-top: calc(6px * var(--density));
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: calc(10px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   border-radius: var(--radius-sm);
   background: var(--status-error-soft);
   color: color-mix(in oklab, var(--status-error) 70%, var(--text-strong));
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.5;
 }
 

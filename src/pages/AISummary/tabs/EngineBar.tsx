@@ -58,7 +58,7 @@ export function EngineBar({ engine }: { engine: EngineStatus | null }) {
       {rt.error ? (
         <>
           <span className={styles.engineSep}>·</span>
-          <span style={{ color: "#dc2626" }}>
+          <span style={{ color: "var(--status-error-strong)" }}>
             {t("aiSummary.debug.engineBar.error")}
             {rt.error}
           </span>
