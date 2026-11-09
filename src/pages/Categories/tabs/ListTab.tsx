@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { useCategories } from "../../../state/categories";
 import { useSuperCategories } from "../../../state/superCategories";
 import { CATEGORY_PALETTE, ICON_NAMES } from "../../../config/categoryIcons";
@@ -88,35 +89,29 @@ export default function ListTab() {
     <>
       <header className={styles.header}>
         <p className={styles.meta}>{t("categories.intro")}</p>
-        {/* 两个按钮包到 .headerActions 里——避免两个 createBtn 各自 margin-left:auto
-            导致 flex 把剩余空间平分给两边、按钮之间出现一大段空隙 */}
+        {/* The buttons share .headerActions so they stay together on the right. With
+            margin-left:auto on each, the free space would split between them. */}
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={styles.createBtn}
+          <Button
+            variant="outline"
+            tone="accent"
+            icon={Plus}
+            loading={creating === "cat"}
             onClick={() => void handleNewCategory()}
             disabled={creating !== null}
           >
-            {creating === "cat" ? (
-              <Loader2 size={14} strokeWidth={2} className={styles.createSpin} />
-            ) : (
-              <Plus size={14} strokeWidth={2} />
-            )}
             {t("categories.newCategory")}
-          </button>
-          <button
-            type="button"
-            className={styles.createBtn}
+          </Button>
+          <Button
+            variant="outline"
+            tone="accent"
+            icon={Plus}
+            loading={creating === "super"}
             onClick={() => void handleNewSuper()}
             disabled={creating !== null}
           >
-            {creating === "super" ? (
-              <Loader2 size={14} strokeWidth={2} className={styles.createSpin} />
-            ) : (
-              <Plus size={14} strokeWidth={2} />
-            )}
             {t("categories.super.newButton")}
-          </button>
+          </Button>
         </div>
       </header>
 

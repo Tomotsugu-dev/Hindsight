@@ -12,6 +12,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
 import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
 import { PRIVATE_CATEGORY_ID, purgeFailedReason } from "../../utils/privateCategory";
+import { TextInput } from "../../components/TextInput/TextInput";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SiteIcon } from "../../components/SiteIcon/SiteIcon";
 import { useSiteIcons } from "../../components/SiteIcon/useSiteIcons";
@@ -306,18 +307,15 @@ export default function SitesPage() {
       </header>
 
       <div className={filterBarStyles.bar}>
-        <div className={`${filterBarStyles.searchWrap} ${styles.siteSearch}`}>
-          <Search size={14} strokeWidth={2} className={filterBarStyles.searchIcon} aria-hidden />
-          <input
-            className={filterBarStyles.searchInput}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("categories.sites.searchPlaceholder")}
-            aria-label={t("categories.sites.searchPlaceholder")}
-            spellCheck={false}
-          />
-        </div>
+        <TextInput
+          className={filterBarStyles.search}
+          icon={Search}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("categories.sites.searchPlaceholder")}
+          aria-label={t("categories.sites.searchPlaceholder")}
+          spellCheck={false}
+        />
         <div className={`${filterBarStyles.rightGroup} ${styles.filterActions}`}>
           <CategoryFilterDropdown
             categories={categories}

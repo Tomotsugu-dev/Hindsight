@@ -10,6 +10,7 @@ import {
   User,
   type LucideProps,
 } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { UpdateIcon } from "../../../components/icons/UpdateIcon";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
@@ -108,23 +109,13 @@ export default function AboutTab() {
           >
             {appVersion || "—"}
           </button>
-          <button
-            type="button"
-            className={styles.checkBtn}
-            onClick={() => void checkNow()}
-            disabled={checkBtnDisabled}
-          >
-            <RefreshCw
-              size={13}
-              strokeWidth={1.85}
-              className={phase === "checking" || phase === "installing" ? styles.spinning : ""}
-            />
+          <Button icon={RefreshCw} onClick={() => void checkNow()} loading={checkBtnDisabled}>
             {phase === "checking"
               ? t("settings.about.update.checkingBtn")
               : phase === "installing"
                 ? t("settings.about.update.installingBtn")
                 : t("settings.about.update.checkBtn")}
-          </button>
+          </Button>
         </Row>
 
         <Row label={t("settings.about.update.autoLabel")}>

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { api, type IgnoreRule } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { IconButton } from "../../components/Button/IconButton";
 import { ChartOffIcon } from "../../components/icons/ChartOffIcon";
 import { displayAppName } from "../../utils/displayName";
 import { logError } from "../../lib/logger";
@@ -79,16 +80,14 @@ export function IgnoredWindowsSection() {
             <span className={styles.kw} title={r.titleKeyword ?? undefined}>
               {r.titleKeyword ?? t("apps.ignored.wholeApp")}
             </span>
-            <button
-              type="button"
+            <IconButton
+              icon={X}
+              size="sm"
               className={styles.removeBtn}
               disabled={busy}
-              aria-label={t("apps.ignored.remove")}
-              title={t("apps.ignored.remove")}
+              label={t("apps.ignored.remove")}
               onClick={() => void remove(r)}
-            >
-              <X size={14} strokeWidth={2} />
-            </button>
+            />
           </li>
         ))}
       </ul>

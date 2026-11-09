@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { TriangleAlert } from "lucide-react";
+import { Button } from "../../components/Button/Button";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import styles from "./SyncOptInDialog.module.css";
 
@@ -62,19 +63,17 @@ export function SyncOptInDialog({
         <p className={styles.body}>{body}</p>
         <p className={styles.note}>{t("devices.cloud.datasets.confirmNote")}</p>
         <div className={styles.actions}>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
-            {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnConfirm}`}
+          <Button onClick={onCancel}>{t("common.cancel")}</Button>
+          <Button
+            variant="solid"
+            tone="warning"
             onClick={onConfirm}
             // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
             {t("devices.cloud.datasets.confirmAction")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

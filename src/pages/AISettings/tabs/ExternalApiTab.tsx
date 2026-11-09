@@ -14,6 +14,9 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
+import { IconButton } from "../../../components/Button/IconButton";
+import { TextInput } from "../../../components/TextInput/TextInput";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -458,9 +461,8 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
               }
               block
             >
-              <input
-                type="text"
-                className={styles.externalInput}
+              <TextInput
+                className={styles.externalField}
                 value={ai.endpoint}
                 onChange={(e) => updateAi({ endpoint: e.target.value })}
                 placeholder={t("aiSettings.external.baseUrlPlaceholder")}
@@ -472,9 +474,9 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
 
             <Row label={t("aiSettings.external.apiKeyLabel")} block>
               <div className={styles.externalKeyRow}>
-                <input
+                <TextInput
                   type={showKey ? "text" : "password"}
-                  className={styles.externalInput}
+                  className={styles.externalField}
                   value={ai.apiKey}
                   onChange={(e) => updateAi({ apiKey: e.target.value })}
                   placeholder={t("aiSettings.external.apiKeyPlaceholder")}
@@ -482,27 +484,16 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
                   autoCapitalize="off"
                   autoCorrect="off"
                 />
-                <button
-                  type="button"
-                  className={styles.externalEyeBtn}
+                <IconButton
+                  variant="soft"
+                  icon={showKey ? EyeOff : Eye}
                   onClick={() => setShowKey((v) => !v)}
-                  aria-label={
+                  label={
                     showKey
                       ? t("aiSettings.external.apiKeyHide")
                       : t("aiSettings.external.apiKeyShow")
                   }
-                  title={
-                    showKey
-                      ? t("aiSettings.external.apiKeyHide")
-                      : t("aiSettings.external.apiKeyShow")
-                  }
-                >
-                  {showKey ? (
-                    <EyeOff size={14} strokeWidth={1.85} />
-                  ) : (
-                    <Eye size={14} strokeWidth={1.85} />
-                  )}
-                </button>
+                />
               </div>
             </Row>
 
@@ -530,20 +521,13 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
                     autoCapitalize="off"
                     autoCorrect="off"
                   />
-                  <button
-                    type="button"
-                    className={styles.externalEyeBtn}
+                  <IconButton
+                    variant="soft"
+                    icon={Download}
                     onClick={() => void fetchModels()}
-                    disabled={modelFetch === "running"}
-                    aria-label={t("aiSettings.external.fetchModels")}
-                    title={t("aiSettings.external.fetchModels")}
-                  >
-                    {modelFetch === "running" ? (
-                      <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
-                    ) : (
-                      <Download size={14} strokeWidth={1.85} />
-                    )}
-                  </button>
+                    loading={modelFetch === "running"}
+                    label={t("aiSettings.external.fetchModels")}
+                  />
                 </div>
                 {modelMenuOpen &&
                   (() => {
@@ -602,9 +586,10 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
             </Row>
 
             <div className={styles.externalActionRow}>
-              <button
-                type="button"
-                className={styles.externalTestBtn}
+              <Button
+                variant="solid"
+                tone="accent"
+                icon={Plus}
                 onClick={saveCurrentProfile}
                 disabled={
                   !ai.endpoint.trim() ||
@@ -613,24 +598,18 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
                 }
                 title={t("aiSettings.external.saveProfileHint")}
               >
-                <Plus size={13} strokeWidth={2.25} />
                 {t("aiSettings.external.saveProfile")}
-              </button>
-              <button
-                type="button"
-                className={styles.externalTestBtn}
+              </Button>
+              <Button
+                variant="solid"
+                tone="accent"
                 onClick={() => void runApiTest()}
-                disabled={textTest.running}
+                loading={textTest.running}
               >
-                {textTest.running ? (
-                  <>
-                    <Loader2 size={13} strokeWidth={2} className={styles.testSpin} />
-                    {t("aiSettings.external.testRunning")}
-                  </>
-                ) : (
-                  t("aiSettings.external.testTextButton")
-                )}
-              </button>
+                {textTest.running
+                  ? t("aiSettings.external.testRunning")
+                  : t("aiSettings.external.testTextButton")}
+              </Button>
             </div>
             {textTest.conn !== "idle" ? (
               <div className={styles.externalTestSteps}>
