@@ -41,7 +41,7 @@
   position: relative;
   display: grid;
   grid-template-columns:
-    var(--device-cols) calc(80px * var(--font-scale)) calc(160px * var(--font-scale))
+    var(--device-cols) calc(80px * var(--font-scale)) 160px
     calc(28px * var(--density));
   align-items: center;
   gap: calc(12px * var(--density));
@@ -61,7 +61,7 @@
 .pairing:has(.nameCol:hover) .row,
 .pairing:has(.nameCol:hover) .devHeader {
   grid-template-columns:
-    var(--device-cols) calc(160px * var(--font-scale)) calc(160px * var(--font-scale))
+    var(--device-cols) calc(160px * var(--font-scale)) 160px
     calc(28px * var(--density));
 }
 
@@ -81,11 +81,11 @@
 
 /* 未分类行：淡黄橙色背景提醒去指派。优先级压过 .rowEven / .rowOdd 的灰色斑马纹 */
 .row.unassigned {
-  background: var(--status-pending-soft);
+  background: color-mix(in oklab, var(--status-pending) 10%, transparent);
 }
 
 .row.unassigned:hover {
-  background: color-mix(in oklab, var(--status-pending) 18%, transparent);
+  background: color-mix(in oklab, var(--status-pending) 16%, transparent);
 }
 
 /* 拖拽时悬停的目标行：撞起来 —— 抬升 + 阴影 + 描边 + 微缩放 */
@@ -289,7 +289,7 @@
 .devHeader {
   display: grid;
   grid-template-columns:
-    var(--device-cols) calc(80px * var(--font-scale)) calc(160px * var(--font-scale))
+    var(--device-cols) calc(80px * var(--font-scale)) 160px
     calc(28px * var(--density));
   transition: grid-template-columns 280ms var(--ease-out);
   gap: calc(12px * var(--density));
