@@ -12,10 +12,10 @@ import {
   FolderOpen,
   HardDrive,
   ImageDown,
-  Loader2,
   PieChart,
   Trash2,
 } from "lucide-react";
+import { Button } from "../../../components/Button/Button";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Slider } from "../../../components/FormControls/Slider";
@@ -28,7 +28,6 @@ import { api, type AuthState, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
 import { canClearCloud } from "../../Devices/syncAccount";
 import { formatBytes } from "../../../utils/formatBytes";
-import styles from "./DataTab.module.css";
 
 /** "db" = 从云端重建本机数据；"shots" = 清空截图；"remove" = 从云端移除本设备 */
 type PurgeTarget = "db" | "shots" | "remove";
@@ -225,10 +224,9 @@ export default function DataTab() {
           description={t("settings.data.export.rowDescription")}
           icon={FileDown}
         >
-          <button type="button" className={styles.exportBtn} onClick={() => setExportOpen(true)}>
-            <FileDown size={14} strokeWidth={1.85} />
+          <Button icon={FileDown} onClick={() => setExportOpen(true)}>
             {t("settings.data.export.rowButton")}
-          </button>
+          </Button>
         </Row>
       </Section>
 
@@ -243,15 +241,13 @@ export default function DataTab() {
           description={t("settings.data.cleanup.purgeShotsDescription")}
           icon={ImageDown}
         >
-          <button
-            type="button"
-            className={styles.openBtn}
+          <Button
+            icon={FolderOpen}
             onClick={openShots}
             title={t("settings.data.cleanup.purgeShotsOpenTitle")}
           >
-            <FolderOpen size={14} strokeWidth={1.85} />
             {t("common.open")}
-          </button>
+          </Button>
           <PurgeButton
             target="shots"
             variant="neutral"
@@ -266,15 +262,13 @@ export default function DataTab() {
           description={t("settings.data.cleanup.purgeDbDescription")}
           icon={DatabaseBackup}
         >
-          <button
-            type="button"
-            className={styles.openBtn}
+          <Button
+            icon={FolderOpen}
             onClick={revealDb}
             title={t("settings.data.cleanup.purgeDbOpenTitle")}
           >
-            <FolderOpen size={14} strokeWidth={1.85} />
             {t("common.open")}
-          </button>
+          </Button>
           <PurgeButton
             target="db"
             variant="neutral"
@@ -376,26 +370,16 @@ function PurgeButton({
 }) {
   const isBusy = busyTarget === target;
   const isLocked = busyTarget !== null && !isBusy;
-  const variantClass = variant === "danger" ? styles.dangerBtn : styles.neutralBtn;
-  const busyClass = isBusy
-    ? variant === "danger"
-      ? styles.dangerBtnBusy
-      : styles.neutralBtnBusy
-    : "";
   return (
-    <button
-      type="button"
-      className={`${variantClass} ${busyClass}`}
+    <Button
+      variant={variant === "danger" ? "soft" : "outline"}
+      tone="danger"
+      icon={Trash2}
       onClick={onClick}
-      disabled={disabled || isBusy || isLocked}
-      aria-busy={isBusy}
+      disabled={disabled || isLocked}
+      loading={isBusy}
     >
-      {isBusy ? (
-        <Loader2 size={13} strokeWidth={2.25} className={styles.spinning} />
-      ) : (
-        <Trash2 size={13} strokeWidth={2.25} />
-      )}
       {isBusy ? busyLabel : idleLabel}
-    </button>
+    </Button>
   );
 }
