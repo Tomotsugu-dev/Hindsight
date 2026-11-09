@@ -71,8 +71,8 @@
   background: var(--surface-1);
   border-radius: var(--radius-sm);
   box-shadow:
-    var(--shadow-inset-hi),
-    var(--shadow-sm),
+    0 1px 0 var(--hairline-hi) inset,
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
     0 4px 10px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength)));
   pointer-events: none;
   /* 首帧不带过渡，避免从 0 滑过来 */
@@ -97,8 +97,8 @@
 
 :global([data-mode="dark"]) .pill {
   box-shadow:
-    var(--shadow-inset-hi),
-    var(--shadow-sm),
+    0 1px 0 var(--hairline-hi) inset,
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-strength))),
     0 4px 10px rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
 }
 
