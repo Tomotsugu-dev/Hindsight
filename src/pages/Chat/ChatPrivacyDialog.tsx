@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Cloud, HardDrive } from "lucide-react";
+import { Button } from "../../components/Button/Button";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import type { AiConfig } from "../../api/hindsight";
 import { chatLocalModelName, chatUsesCloud } from "./chatRouting";
@@ -77,19 +78,17 @@ export function ChatPrivacyDialog({ open, ai, onConfirm, onCancel }: ChatPrivacy
         {cloud && <p className={styles.bodyCloud}>{t("chat.privacy.bodyCloud")}</p>}
 
         <div className={styles.actions}>
-          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
-            {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnConfirm}`}
+          <Button onClick={onCancel}>{t("common.cancel")}</Button>
+          <Button
+            variant="solid"
+            tone="accent"
             onClick={onConfirm}
             // 弹窗打开时聚焦默认按钮符合 a11y 最佳实践
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
           >
             {t("chat.privacy.confirm")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,
