@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import ctl from "./ReportControls.module.css";
+import { Button } from "../../../components/Button/Button";
 import styles from "./SummaryEditor.module.css";
 
 interface SummaryEditorProps {
@@ -61,17 +61,12 @@ export function SummaryEditor({ initial, onSave, onCancel }: SummaryEditorProps)
       />
       <div className={styles.footer}>
         <p className={styles.note}>{t("aiSummary.edit.note")}</p>
-        <button type="button" className={ctl.textBtn} onClick={onCancel} disabled={saving}>
+        <Button variant="ghost" tone="accent" onClick={onCancel} disabled={saving}>
           {t("common.cancel")}
-        </button>
-        <button
-          type="button"
-          className={`${ctl.btn} ${ctl.btnPrimary} ${styles.saveBtn}`}
-          onClick={() => void save()}
-          disabled={!canSave}
-        >
+        </Button>
+        <Button variant="solid" tone="accent" onClick={() => void save()} disabled={!canSave}>
           {saving ? t("aiSummary.edit.saving") : t("common.save")}
-        </button>
+        </Button>
       </div>
     </div>
   );

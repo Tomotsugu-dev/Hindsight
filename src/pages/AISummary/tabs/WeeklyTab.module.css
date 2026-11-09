@@ -6,7 +6,7 @@
 .heat {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: calc(8px * var(--density));
   margin: 0;
   padding: 0;
   list-style: none;
@@ -17,12 +17,12 @@
   --heat: 0%;
   position: relative;
   width: 100%;
-  height: 88px;
+  min-height: calc(88px * var(--density));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: color-mix(in oklab, var(--color-accent) var(--heat), var(--surface-card-elevated));
@@ -37,7 +37,7 @@
 
 .tile:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(20, 20, 40, calc(0.1 * var(--shadow-strength)));
+  box-shadow: 0 6px 16px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
 }
 
 .tile:focus-visible,
@@ -64,7 +64,7 @@
 
 /* 浅色主题最深一级换白字，其余用深字，对比度都在 4.5 以上 */
 .tile[data-level="5"] {
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* 深色主题整体压暗一档：满色的主题色在黑底上太刺眼。这几档用默认的浅字就够 */
@@ -83,13 +83,12 @@
 
 :global([data-mode="dark"]) .tile[data-level="5"] {
   --heat: 78%;
-  color: #fff;
 }
 
 /* 没有日报：不上色，虚线框，点了看空 */
 .tile[data-kind="noDaily"] {
   background: transparent;
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--border-dashed);
   color: var(--text-muted);
 }
 
@@ -107,12 +106,12 @@
 }
 
 .tileWeekday {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   opacity: 0.8;
 }
 
 .tileDate {
-  font-size: 22px;
+  font-size: calc(var(--font-size-display) * var(--font-scale));
   font-weight: var(--font-weight-600);
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -120,15 +119,15 @@
 
 .tileTime {
   min-height: 1.2em;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   opacity: 0.8;
   font-variant-numeric: tabular-nums;
 }
 
 .todayDot {
   position: absolute;
-  top: 11px;
-  right: 11px;
+  top: calc(11px * var(--density));
+  right: calc(11px * var(--density));
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -136,32 +135,32 @@
 }
 
 /* —— 下方面板 —— */
-/* 面板标题 18，比时间轴的段名 16 大一级 */
+/* 面板标题比时间轴的段名大一级 */
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px 24px 24px;
+  gap: calc(16px * var(--density));
+  padding: calc(20px * var(--density)) calc(24px * var(--density)) calc(24px * var(--density));
   background: var(--surface-card-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 .panelHead {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
+  gap: calc(8px * var(--density));
+  min-height: calc(28px * var(--density));
 }
 
 .panelTitle {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(var(--font-size-headline) * var(--font-scale));
   line-height: 1.3;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-headline);
   color: var(--text-strong);
 }
 
@@ -169,7 +168,7 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
 }
 
 .panelBody {
@@ -189,7 +188,7 @@
 
 /* 整周回顾：一整段连贯的文字，按文章排 */
 .bodyText {
-  font-size: 15px;
+  font-size: calc(var(--font-size-title) * var(--font-scale));
   line-height: 1.85;
   color: var(--text-regular);
 }
@@ -200,14 +199,14 @@
 
 .bodyMuted {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   line-height: 1.7;
   color: var(--text-muted);
 }
 
 /* 点中那天的日报：时间轴和日报页同一套，第一段的上边距让给面板标题 */
 .dayTimeline {
-  margin-top: -14px;
+  margin-top: calc(-14px * var(--density));
 }
 
 /* 点中的那天没有日报 */
@@ -215,21 +214,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 24px 0 8px;
+  gap: calc(6px * var(--density));
+  padding: calc(24px * var(--density)) 0 calc(8px * var(--density));
   text-align: center;
 }
 
 .dayEmptyTitle {
   margin: 0;
-  font-size: 16px;
-  font-weight: var(--font-weight-600);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
 }
 
 .dayEmptyNote {
-  margin: 0 0 10px;
-  font-size: 13px;
+  margin: 0 0 calc(10px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
 }
 
