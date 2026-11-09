@@ -43,6 +43,18 @@
   --button-outline-border-hover: var(--color-accent);
 }
 
+.button[data-tone="warning"] {
+  --button-fg: var(--status-pending-strong);
+  --button-solid-bg: var(--status-pending);
+  --button-solid-bg-hover: var(--status-pending-strong);
+  --button-on-solid: var(--text-on-accent);
+  --button-soft-bg: var(--status-pending-soft);
+  --button-soft-bg-hover: color-mix(in oklab, var(--status-pending) 18%, transparent);
+  --button-soft-border: color-mix(in oklab, var(--status-pending) 22%, transparent);
+  --button-outline-border: color-mix(in oklab, var(--status-pending) 50%, transparent);
+  --button-outline-border-hover: var(--status-pending);
+}
+
 .button[data-tone="danger"] {
   --button-fg: var(--status-error-strong);
   --button-solid-bg: var(--status-error);
@@ -60,7 +72,7 @@
   color: var(--button-on-solid);
 }
 
-.button[data-variant="solid"]:hover:not(:disabled) {
+.button[data-variant="solid"]:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--button-solid-bg-hover);
 }
 
@@ -70,7 +82,7 @@
   color: var(--button-fg);
 }
 
-.button[data-variant="soft"]:hover:not(:disabled) {
+.button[data-variant="soft"]:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--button-soft-bg-hover);
 }
 
@@ -80,7 +92,7 @@
   color: var(--button-fg);
 }
 
-.button[data-variant="outline"]:hover:not(:disabled) {
+.button[data-variant="outline"]:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--button-soft-bg);
   border-color: var(--button-outline-border-hover);
 }
@@ -90,7 +102,7 @@
   color: var(--button-fg);
 }
 
-.button[data-variant="ghost"]:hover:not(:disabled) {
+.button[data-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--button-soft-bg);
 }
 
@@ -111,11 +123,13 @@
   aspect-ratio: 1;
 }
 
-.button:active:not(:disabled) {
+.button:active:not(:disabled, [aria-disabled="true"]) {
   transform: scale(0.97);
 }
 
-.button:disabled {
+/* aria-disabled is for a button that must stay focusable, such as one with a tooltip saying why */
+.button:disabled,
+.button[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
 }

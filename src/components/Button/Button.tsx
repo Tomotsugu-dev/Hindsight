@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import { useCallback, type ButtonHTMLAttributes, type Ref } from "react";
 import { Loader2, type LucideIcon } from "lucide-react";
 import { useMouseGlow } from "../../hooks/useMouseGlow";
 import styles from "./Button.module.css";
@@ -6,8 +6,11 @@ import styles from "./Button.module.css";
 /** How the button is drawn. */
 export type ButtonVariant = "solid" | "soft" | "outline" | "ghost";
 
-/** Which color the variant uses: the accent, gray, or red for actions that delete or remove. */
-export type ButtonTone = "accent" | "neutral" | "danger";
+/**
+ * Which color the variant uses: the accent, gray, amber in a warning, or red for actions that
+ * delete or remove.
+ */
+export type ButtonTone = "accent" | "neutral" | "warning" | "danger";
 
 /** The three control heights in tokens.css. */
 export type ControlSize = "sm" | "md" | "lg";
@@ -22,6 +25,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   /** Lights up the border as the mouse comes near, like the arrows that change the period */
   glow?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -41,15 +45,25 @@ export function Button({
   className,
   disabled,
   children,
+  ref,
   ...rest
 }: ButtonProps) {
   // Hooks cannot be called conditionally, so every button has the ref; only a glow button uses it
   const { ref: glowRef } = useMouseGlow<HTMLButtonElement>();
+  // The glow and the caller may both need the element
+  const setRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      if (glow) glowRef.current = el;
+      if (typeof ref === "function") ref(el);
+      else if (ref) ref.current = el;
+    },
+    [glow, glowRef, ref],
+  );
   const classes = [styles.button, glow ? "glow" : null, className].filter(Boolean).join(" ");
   return (
     <button
       {...rest}
-      ref={glow ? glowRef : undefined}
+      ref={setRef}
       type={type}
       className={classes}
       data-part="button"
