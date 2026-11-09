@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: var(--z-modal-backdrop);
-  background: rgba(20, 20, 40, 0.32);
+  background: var(--surface-backdrop);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
@@ -18,22 +18,22 @@
   z-index: var(--z-modal);
   min-width: 340px;
   max-width: 460px;
-  padding: 22px 22px 16px;
+  padding: calc(22px * var(--density)) calc(22px * var(--density)) calc(16px * var(--density));
   background: var(--surface-card);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 12px 36px rgba(20, 20, 40, calc(0.22 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength)));
+    0 1px 0 var(--hairline-hi) inset,
+    0 12px 36px rgba(var(--shadow-rgb), calc(0.22 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--density));
   animation: scaleIn 220ms var(--ease-spring);
 }
 
 .title {
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   margin: 0;
@@ -43,12 +43,12 @@
 .routeRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: calc(8px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   border: 1px solid var(--border-default);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   word-break: break-all;
@@ -61,14 +61,14 @@
 }
 
 .body {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-regular);
   line-height: 1.55;
   margin: 0;
 }
 
 .bodyCloud {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.55;
   margin: 0;
   color: var(--status-pending);
@@ -78,18 +78,18 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 6px;
+  gap: calc(8px * var(--density));
+  margin-top: calc(6px * var(--density));
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 14px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(14px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   border: 1px solid transparent;
@@ -107,7 +107,7 @@
 
 .btnCancel {
   background: var(--fill-default);
-  border-color: rgba(0, 0, 0, 0.06);
+  border-color: var(--border-subtle);
   color: var(--text-strong);
 }
 
@@ -117,7 +117,7 @@
 
 .btnConfirm {
   background: var(--accent-fill);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 .btnConfirm:hover {
