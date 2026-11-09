@@ -10,6 +10,39 @@ export interface MenuPlacement {
 /** 菜单离窗口边缘至少留的距离 */
 const EDGE_MARGIN = 8;
 
+/** The sizes in SimplePicker.module.css before --density: an item, the menu's padding top and
+ * bottom together, and the gap between the trigger and the menu */
+const ITEM_HEIGHT = 32;
+const MENU_PADDING = 8;
+const TRIGGER_GAP = 6;
+/** The menu shows at most this many items, and scrolls for the rest */
+const MAX_VISIBLE_ITEMS = 8;
+
+export interface MenuSize {
+  /** The height of the whole menu */
+  height: number;
+  /** The highest the menu may be */
+  maxHeight: number;
+  /** The gap between the trigger and the menu */
+  gap: number;
+}
+
+/**
+ * Returns how tall a menu of `itemCount` items is, before it is drawn.
+ *
+ * `density` is the --density the menu is drawn with. The CSS multiplies the sizes by it, so
+ * this does too; otherwise a compact theme would get a menu placed for the default sizes.
+ */
+export function menuSize(itemCount: number, density: number): MenuSize {
+  const item = ITEM_HEIGHT * density;
+  const padding = MENU_PADDING * density;
+  return {
+    height: itemCount * item + padding,
+    maxHeight: MAX_VISIBLE_ITEMS * item + padding,
+    gap: TRIGGER_GAP * density,
+  };
+}
+
 /**
  * 按 trigger 在视口里的位置，决定菜单往哪边展开、最多多高。
  *

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeMenu } from "./menuPlacement";
+import { menuSize, placeMenu } from "./menuPlacement";
 
 // 视口 720 高，trigger 高 30，间距 6，菜单离窗口边缘留 8
 const VIEWPORT = 720;
@@ -32,5 +32,15 @@ describe("placeMenu", () => {
   it("菜单高度正好等于下方空间时仍向下展开", () => {
     const p = placeMenu({ top: 500, bottom: 530 }, VIEWPORT, 176, GAP);
     expect(p).toEqual({ direction: "down", maxHeight: 176 });
+  });
+});
+
+describe("menuSize", () => {
+  it("默认密度：每项 32、上下内边距共 8、最多露 8 项", () => {
+    expect(menuSize(3, 1)).toEqual({ height: 104, maxHeight: 264, gap: 6 });
+  });
+
+  it("主题把密度调小，估算的高度跟着变小，不按默认尺寸放菜单", () => {
+    expect(menuSize(3, 0.5)).toEqual({ height: 52, maxHeight: 132, gap: 3 });
   });
 });

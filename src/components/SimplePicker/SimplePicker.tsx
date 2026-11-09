@@ -1,15 +1,9 @@
 import { useLayoutEffect, useState } from "react";
 import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { usePicker } from "../../hooks/usePicker";
-import { placeMenu, type MenuPlacement } from "./menuPlacement";
+import type { ControlSize } from "../Button/Button";
+import { menuSize, placeMenu, type MenuPlacement } from "./menuPlacement";
 import styles from "./SimplePicker.module.css";
-
-/** 单条 .item 高度 32 + 4px 上下 padding 估算；6px 是 trigger 到菜单的 gap。 */
-const ITEM_HEIGHT = 32;
-const MENU_PADDING = 8;
-const TRIGGER_GAP = 6;
-/** 菜单最多露出 8 项，多的在菜单里滚动 */
-const MAX_MENU_HEIGHT = 8 * ITEM_HEIGHT + MENU_PADDING;
 
 export interface SimplePickerOption<T extends string> {
   value: T;
@@ -23,6 +17,8 @@ interface SimplePickerProps<T extends string> {
   disabled?: boolean;
   /** 文字左边的图标。筛选用 ListFilter，排序用 ArrowUpDown，全软件统一 */
   icon?: LucideIcon;
+  /** Next to buttons, use the buttons' size so the heights match */
+  size?: ControlSize;
 }
 
 /**
@@ -30,6 +26,9 @@ interface SimplePickerProps<T extends string> {
  * 用 string-typed value 做精确匹配，泛型 T 让调用方拿到 onChange 的精确类型。
  *
  * 展开/外点关闭/Esc 关闭抽到 [usePicker] hook。
+ *
+ * The button carries `data-part="select"` and `data-size`, and the menu `data-part="menu"`, for
+ * themes.
  */
 export function SimplePicker<T extends string>({
   value,
@@ -37,6 +36,7 @@ export function SimplePicker<T extends string>({
   onChange,
   disabled,
   icon: Icon,
+  size = "sm",
 }: SimplePickerProps<T>) {
   const { open, wrapRef, toggle, close } = usePicker();
   const current = options.find((o) => o.value === value);
@@ -47,14 +47,17 @@ export function SimplePicker<T extends string>({
   // 撑出窗口被裁。useLayoutEffect 在 paint 前定位置，避免一帧闪现。
   useLayoutEffect(() => {
     if (!open || !wrapRef.current) return;
-    const estMenuHeight = Math.min(options.length * ITEM_HEIGHT + MENU_PADDING, MAX_MENU_HEIGHT);
+    // A theme can set --density on this page or part, so read it where the menu is drawn
+    const density =
+      Number.parseFloat(getComputedStyle(wrapRef.current).getPropertyValue("--density")) || 1;
+    const size = menuSize(options.length, density);
     const p = placeMenu(
       wrapRef.current.getBoundingClientRect(),
       window.innerHeight,
-      estMenuHeight,
-      TRIGGER_GAP,
+      Math.min(size.height, size.maxHeight),
+      size.gap,
     );
-    setPlacement({ ...p, maxHeight: Math.min(p.maxHeight, MAX_MENU_HEIGHT) });
+    setPlacement({ ...p, maxHeight: Math.min(p.maxHeight, size.maxHeight) });
   }, [open, options.length, wrapRef]);
 
   return (
@@ -66,8 +69,10 @@ export function SimplePicker<T extends string>({
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
+        data-part="select"
+        data-size={size}
       >
-        {Icon ? <Icon size={13} strokeWidth={2} className={styles.icon} aria-hidden /> : null}
+        {Icon ? <Icon strokeWidth={2} className={styles.icon} aria-hidden /> : null}
         {/* 用 grid 让所有候选 label 占同一格，trigger 宽度跟着最宽的 label 走，
             切换不抖。隐藏的 measure span 只撑宽，可见的 label 居中显示。 */}
         <span className={styles.labelStack}>
@@ -78,16 +83,13 @@ export function SimplePicker<T extends string>({
             </span>
           ))}
         </span>
-        <ChevronDown
-          size={12}
-          strokeWidth={2}
-          className={`${styles.chev} ${open ? styles.chevOpen : ""}`}
-        />
+        <ChevronDown strokeWidth={2} className={`${styles.chev} ${open ? styles.chevOpen : ""}`} />
       </button>
 
       {open && (
         <div
           className={styles.menu}
+          data-part="menu"
           data-direction={placement?.direction ?? "down"}
           style={{ maxHeight: placement?.maxHeight }}
         >
@@ -102,9 +104,7 @@ export function SimplePicker<T extends string>({
               }}
             >
               <span className={styles.itemLabel}>{opt.label}</span>
-              {opt.value === value && (
-                <Check size={13} strokeWidth={2.25} className={styles.itemCheck} />
-              )}
+              {opt.value === value && <Check strokeWidth={2.25} className={styles.itemCheck} />}
             </button>
           ))}
         </div>
