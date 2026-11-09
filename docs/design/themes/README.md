@@ -64,21 +64,32 @@ A theme starts from the colors of the Default theme. With `"mode": "dark"`, it s
 
 | Group | Variables |
 |---|---|
-| Accent | `--color-accent`, `--color-accent-soft` (the light accent background, such as the selected item) |
+| Accent | `--color-accent`, `--color-accent-soft` (the light accent background, such as the selected item), `--accent-fill` and `--accent-fill-hover` (the background of solid accent buttons), `--text-on-accent` (text and icons on the accent and status colors) |
+| Selected text | `--selection-bg`, `--selection-fg` |
 | Sidebar | `--sidebar-gradient` (any CSS background), `--sidebar-border` |
 | Surfaces | `--surface-app` (the page), `--surface-card`, `--surface-card-elevated`, `--surface-overlay` (menus and dialogs), `--surface-1`, `--surface-2` |
+| Tooltips and dialogs | `--surface-tooltip`, `--text-on-tooltip`, `--surface-backdrop` (dims the page behind a dialog) |
 | Selected item in the sidebar | `--pill-bg`, `--pill-blur` (a `backdrop-filter` value), `--pill-shadow`, `--text-on-pill` |
 | Hover | `--hover-bg` |
 | Text | `--text-strong`, `--text-regular`, `--text-muted`, `--text-faint` |
-| Status | `--status-ok`, `--status-pending`, `--status-idle`, `--status-error`, `--status-ok-soft`, `--status-error-soft`, `--status-pending-soft` |
-| Borders | `--border-subtle`, `--border-default`, `--border-strong`, `--hairline-hi` (the thin light line on the top edge of cards and buttons) |
+| Status | `--status-ok`, `--status-pending`, `--status-idle`, `--status-error`, `--status-info`, `--status-ok-soft`, `--status-error-soft`, `--status-pending-soft`, `--status-info-soft`, `--status-ok-strong`, `--status-error-strong`, `--status-pending-strong`, `--status-info-strong` (text on the soft backgrounds) |
+| Borders | `--border-subtle`, `--border-default`, `--border-strong`, `--border-dashed` (empty slots and add buttons), `--hairline-hi` (the thin light line on the top edge of cards and buttons) |
+| Gray fills | `--fill-subtle`, `--fill-default`, `--fill-strong` (tracks, inputs and gray buttons) |
+| Switches | `--toggle-track`, `--toggle-track-hover`, `--toggle-thumb` (a switch while it is off) |
 | Controls | `--control-bg`, `--control-bg-hover` (menus and date buttons) |
+| Buttons and inputs | `--control-height-xs`, `--control-height-sm`, `--control-height-md`, `--control-height-lg`, `--control-icon-size`, `--control-icon-size-xs`, `--button-radius`, `--button-font-weight`, `--button-border-width` |
 | Scrollbar | `--scrollbar-thumb`, `--scrollbar-thumb-hover` |
-| Shadows | `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-inset-hi`, `--shadow-strength` |
+| Shadows | `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-inset-hi`, `--shadow-strength`, `--shadow-rgb` |
 | Corners | `--radius-xs`, `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl` |
 | Fonts | `--font-sans`, `--font-mono` (paths and code) |
+| Text sizes | `--font-size-display` (page titles), `--font-size-headline`, `--font-size-title`, `--font-size-body-lg`, `--font-size-body`, `--font-size-body-sm`, `--font-size-caption`, `--font-size-micro` (badges and chart labels) |
+| Text weights | `--font-weight-display`, `--font-weight-headline`, `--font-weight-title`, `--font-weight-regular`, `--font-weight-medium`, `--font-weight-semibold` |
+| Scale | `--font-scale`, `--density` |
 
 - `--shadow-strength` is a number. The opacity of every dark shadow is multiplied by it: `0` removes the shadows, `1` is the default, and `2` makes them twice as dark.
+- `--shadow-rgb` is the color of dark shadows, as three numbers: `"20, 20, 40"`.
+- `--font-scale` and `--density` are numbers, and `1` is the default. Text sizes are multiplied by `--font-scale`, and spacing and control heights by `--density`. `1.1` makes the text 10% larger. `0.9` makes the layout tighter.
+- Give text sizes and control heights in px, for example `"--font-size-body": "14px"`. `--font-scale` and `--density` still apply to them.
 - Set `--color-accent-soft` together with `--color-accent`. The light accent background does not change by itself.
 - A value can have at most 300 characters. It cannot be only spaces, and it cannot have `;`, `{`, `}` or control characters.
 - A variable that is not on this list has no effect. The theme still works, and its card in Settings lists the variables that had no effect.
