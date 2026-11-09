@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
+import { Checkbox } from "../../../components/Checkbox/Checkbox";
 import {
   HIGH_RISK,
   permissionKey,
@@ -73,19 +74,16 @@ export function PermissionTree({
           ) : (
             <span className={styles.twistie} aria-hidden />
           )}
-          <label className={styles.treeLabel}>
-            <input
-              type="checkbox"
-              checked={checked.includes(node.name)}
-              disabled={disabled}
-              onChange={(e) =>
-                onChange(setChecked(checked, node.name, e.target.checked, asked, dependsOn))
-              }
-            />
-            <span>
-              {t(`plugins.permissions.${permissionKey(node.name)}`, { defaultValue: node.name })}
-            </span>
-          </label>
+          <Checkbox
+            className={styles.treeLabel}
+            checked={checked.includes(node.name)}
+            disabled={disabled}
+            onChange={(e) =>
+              onChange(setChecked(checked, node.name, e.target.checked, asked, dependsOn))
+            }
+          >
+            {t(`plugins.permissions.${permissionKey(node.name)}`, { defaultValue: node.name })}
+          </Checkbox>
           {hasChildren && !isOpen ? (
             <span className={styles.treeNote}>
               {under.filter((p) => checked.includes(p)).length}/{under.length}
@@ -107,10 +105,9 @@ export function PermissionTree({
         <li key={label}>
           <div className={styles.treeRow} style={{ paddingLeft: "calc(6px * var(--density))" }}>
             <span className={styles.twistie} aria-hidden />
-            <label className={styles.treeLabel}>
-              <input type="checkbox" checked disabled readOnly />
-              <span>{label}</span>
-            </label>
+            <Checkbox className={styles.treeLabel} checked disabled readOnly>
+              {label}
+            </Checkbox>
             <span className={styles.treeNote}>{t("plugins.permissionTree.required")}</span>
           </div>
         </li>

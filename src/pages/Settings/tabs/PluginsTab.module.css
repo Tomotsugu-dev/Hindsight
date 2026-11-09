@@ -22,68 +22,6 @@
   gap: calc(var(--space-2) * var(--density));
 }
 
-/* Same look as the open-folder buttons in the Data tab */
-.btn,
-.btnPrimary,
-.btnDanger {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 180ms ease-out,
-    transform 120ms ease-out;
-}
-
-.btn {
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-strong);
-}
-
-.btn:hover {
-  background: var(--fill-strong);
-}
-
-.btnPrimary {
-  background: var(--accent-fill);
-  border: 1px solid transparent;
-  color: var(--text-on-accent);
-}
-
-.btnPrimary:hover {
-  background: var(--accent-fill-hover);
-}
-
-.btnDanger {
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--status-error);
-}
-
-.btnDanger:hover {
-  background: var(--status-error-soft);
-}
-
-.btn:active,
-.btnPrimary:active,
-.btnDanger:active {
-  transform: scale(0.97);
-}
-
-.btn:disabled,
-.btnPrimary:disabled,
-.btnDanger:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-}
-
 /* Plugin market: two cards a row, cards in a row as tall as the tallest */
 .marketGrid {
   display: grid;
@@ -375,23 +313,9 @@ button.twistie:hover {
 }
 
 .treeLabel {
-  display: flex;
   flex: 1;
-  align-items: flex-start;
-  gap: calc(var(--space-2) * var(--density));
   min-width: 0;
   padding-top: 1px;
-  cursor: pointer;
-}
-
-.treeLabel input {
-  flex: none;
-  margin: 2px 0 0;
-  accent-color: var(--color-accent);
-}
-
-.treeLabel input:disabled {
-  cursor: default;
 }
 
 /* How many under a closed row are checked, or "Required" */
@@ -417,24 +341,6 @@ button.twistie:hover {
 }
 
 .consent {
-  display: flex;
-  align-items: flex-start;
-  gap: calc(var(--space-2) * var(--density));
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
-  cursor: pointer;
-}
-
-.consent input {
-  flex: none;
-  margin: 2px 0 0;
-  accent-color: var(--color-accent);
-}
-
-/* Uninstall dialog */
-.check {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--space-2) * var(--density));
-  cursor: pointer;
 }
