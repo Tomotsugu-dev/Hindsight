@@ -130,7 +130,7 @@ function PromptSection({
                   : t("aiSettings.prompt.hint.default")}
             </span>
             <Button
-              variant="ghost"
+              variant="outline"
               icon={RotateCcw}
               onClick={handleReset}
               disabled={draft === DEFAULT_SYSTEM_PROMPTS[language]}
