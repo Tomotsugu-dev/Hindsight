@@ -1,5 +1,7 @@
 import { Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button } from "../Button/Button";
+import { IconButton } from "../Button/IconButton";
 import { TimeField } from "./TimeField";
 import styles from "./TimeRangeList.module.css";
 
@@ -38,21 +40,19 @@ export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
             <TimeField value={range.start} onChange={(v) => update(i, { start: v })} />
             <span className={styles.dash}>{t("components.timeRangeList.to")}</span>
             <TimeField value={range.end} onChange={(v) => update(i, { end: v })} />
-            <button
-              type="button"
-              className={styles.remove}
+            <IconButton
+              icon={X}
+              label={t("components.timeRangeList.removeAria")}
+              tone="danger"
+              size="sm"
               onClick={() => remove(i)}
-              aria-label={t("components.timeRangeList.removeAria")}
-            >
-              <X size={13} strokeWidth={2} />
-            </button>
+            />
           </div>
         ))
       )}
-      <button type="button" className={styles.add} onClick={add}>
-        <Plus size={14} strokeWidth={2} />
+      <Button icon={Plus} onClick={add}>
         {t("components.timeRangeList.addBtn")}
-      </button>
+      </Button>
     </div>
   );
 }
