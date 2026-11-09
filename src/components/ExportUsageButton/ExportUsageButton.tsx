@@ -27,6 +27,8 @@ export function ExportUsageButton({ defaultQuick }: Props) {
     <>
       <IconButton
         variant="soft"
+        tone="accent"
+        quiet
         size="sm"
         icon={Upload}
         label={t("settings.data.export.rowLabel")}
