@@ -146,7 +146,7 @@
   align-items: center;
   justify-content: space-between;
   gap: calc(12px * var(--density));
-  min-height: calc(24px * var(--density));
+  min-height: calc(var(--control-height-sm) * var(--density));
   margin-top: calc(10px * var(--density));
   font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-muted);

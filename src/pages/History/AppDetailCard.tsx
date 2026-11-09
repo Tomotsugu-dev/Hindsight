@@ -122,7 +122,7 @@ export function AppDetailCard({
         <div className={styles.detailTotalRow}>
           <span className={styles.detailTotal}>{fmtHM(Math.round(totalSecs / 60))}</span>
           {selectedDay !== null && (
-            <Button size="sm" onClick={() => setDrawerOpen(true)}>
+            <Button size="sm" variant="outline" onClick={() => setDrawerOpen(true)}>
               {t("history.app.dayDetail")}
             </Button>
           )}

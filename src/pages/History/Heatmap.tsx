@@ -214,7 +214,7 @@ export function Heatmap({
 
       <div className={styles.footer}>
         {zoomed ? (
-          <Button size="sm" icon={ZoomOut} onClick={onResetZoom}>
+          <Button size="sm" variant="outline" icon={ZoomOut} onClick={onResetZoom}>
             {t("history.chart.resetZoom")}
           </Button>
         ) : (
