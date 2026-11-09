@@ -64,11 +64,7 @@ export function DailyBarChart({
       <div className={styles.plot}>
         <div className={styles.yAxis} aria-hidden>
           {yTicks.map((tick) => (
-            <span
-              key={tick}
-              className={styles.yTick}
-              style={{ bottom: `${(tick / yMax) * 100}%` }}
-            >
+            <span key={tick} className={styles.yTick} style={{ bottom: `${(tick / yMax) * 100}%` }}>
               {fmtTickLabel(tick)}
             </span>
           ))}

@@ -7,11 +7,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { SUMMARY_CLOUD_SENTINEL, type AiConfig } from "../../api/hindsight";
-import {
-  chatCloudReady,
-  chatLocalModelName,
-  chatUsesCloud,
-} from "./chatRouting";
+import { chatCloudReady, chatLocalModelName, chatUsesCloud } from "./chatRouting";
 
 // ⚠️ 镜像契约:本文件测的三个函数是后端 src-tauri/src/ai/config.rs 里
 // chat_cloud_ready / chat_use_cloud / effective_chat_main(+effective_summary_main
@@ -49,9 +45,9 @@ function baseAi(patch: Partial<AiConfig> = {}): AiConfig {
     parallelSlots: null,
     ctxSize: null,
     autoSummary: false,
-  autoSummaryAt: null,
-  autoSummaryTimes: [],
-  externalProfiles: [],
+    autoSummaryAt: null,
+    autoSummaryTimes: [],
+    externalProfiles: [],
     summaryBatchSize: null,
     summaryParallelSlots: null,
     summaryCtxSize: null,
@@ -93,23 +89,17 @@ describe("chatUsesCloud(镜像 config.rs chat_use_cloud)", () => {
   });
 
   it("显式 sentinel → 云端 ready 才上云;不 ready 退化本地不硬卡", () => {
-    expect(chatUsesCloud(cloudReadyAi({ chatMain: SUMMARY_CLOUD_SENTINEL }))).toBe(
-      true,
-    );
+    expect(chatUsesCloud(cloudReadyAi({ chatMain: SUMMARY_CLOUD_SENTINEL }))).toBe(true);
     // sentinel 残留但三元组不齐:不能报错卡死,静默走本地 fallback
-    expect(
-      chatUsesCloud(cloudReadyAi({ chatMain: SUMMARY_CLOUD_SENTINEL, model: "" })),
-    ).toBe(false);
-    expect(
-      chatUsesCloud(baseAi({ chatMain: SUMMARY_CLOUD_SENTINEL })),
-    ).toBe(false);
+    expect(chatUsesCloud(cloudReadyAi({ chatMain: SUMMARY_CLOUD_SENTINEL, model: "" }))).toBe(
+      false,
+    );
+    expect(chatUsesCloud(baseAi({ chatMain: SUMMARY_CLOUD_SENTINEL }))).toBe(false);
   });
 
   it("空(自动)→ 跟随云端 ready 状态", () => {
     expect(chatUsesCloud(cloudReadyAi({ chatMain: "" }))).toBe(true);
-    expect(
-      chatUsesCloud(cloudReadyAi({ chatMain: "", externalEnabled: false })),
-    ).toBe(false);
+    expect(chatUsesCloud(cloudReadyAi({ chatMain: "", externalEnabled: false }))).toBe(false);
   });
 
   it("纯空白 chatMain 视同空(自动),不当成本地文件名", () => {
@@ -130,18 +120,16 @@ describe("chatLocalModelName(镜像 config.rs effective_chat_main 三级链)", (
   it("二级:chatMain 空或 sentinel → 穿透到 summaryMain", () => {
     const base = { summaryMain: "sum.gguf", activeMain: "active.gguf" };
     expect(chatLocalModelName(baseAi({ ...base, chatMain: "" }))).toBe("sum.gguf");
-    expect(
-      chatLocalModelName(baseAi({ ...base, chatMain: SUMMARY_CLOUD_SENTINEL })),
-    ).toBe("sum.gguf");
+    expect(chatLocalModelName(baseAi({ ...base, chatMain: SUMMARY_CLOUD_SENTINEL }))).toBe(
+      "sum.gguf",
+    );
   });
 
   it("三级:summaryMain 也空或为 sentinel → 落到 activeMain", () => {
     // sentinel 是"用云端"标记不是文件名,本地路径必须穿过它看 activeMain,
     // 否则会把 "__cloud__" 当文件名去加载
     expect(
-      chatLocalModelName(
-        baseAi({ chatMain: "", summaryMain: "", activeMain: "active.gguf" }),
-      ),
+      chatLocalModelName(baseAi({ chatMain: "", summaryMain: "", activeMain: "active.gguf" })),
     ).toBe("active.gguf");
     expect(
       chatLocalModelName(
@@ -159,11 +147,7 @@ describe("chatLocalModelName(镜像 config.rs effective_chat_main 三级链)", (
   });
 
   it("返回值已 trim(显式名带空白时不会带进引擎启动参数)", () => {
-    expect(chatLocalModelName(baseAi({ chatMain: "  chat.gguf  " }))).toBe(
-      "chat.gguf",
-    );
-    expect(chatLocalModelName(baseAi({ activeMain: " active.gguf " }))).toBe(
-      "active.gguf",
-    );
+    expect(chatLocalModelName(baseAi({ chatMain: "  chat.gguf  " }))).toBe("chat.gguf");
+    expect(chatLocalModelName(baseAi({ activeMain: " active.gguf " }))).toBe("active.gguf");
   });
 });

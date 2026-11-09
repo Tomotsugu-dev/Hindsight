@@ -21,8 +21,6 @@ import {
 } from "../../lib/appSuggest";
 import styles from "./Categories.module.css";
 
-
-
 export function AppList({ category }: { category: Category }) {
   const { t } = useTranslation();
   const { categories, unassignApp, assignApp, refresh } = useCategories();
@@ -72,18 +70,14 @@ export function AppList({ category }: { category: Category }) {
     [groups, category.apps],
   );
 
-  const matches = useMemo(
-    () => filterAppSuggestions(pool, draft, SUGGEST_MAX),
-    [pool, draft],
-  );
+  const matches = useMemo(() => filterAppSuggestions(pool, draft, SUGGEST_MAX), [pool, draft]);
 
   // 输入变化后高亮回到"无",避免指到过滤后错位的项
   useEffect(() => {
     setHi(-1);
   }, [draft]);
 
-  const catOf = (id: string | null) =>
-    id ? categories.find((x) => x.id === id) ?? null : null;
+  const catOf = (id: string | null) => (id ? (categories.find((x) => x.id === id) ?? null) : null);
 
   const commitName = async (name: string) => {
     const trimmed = name.trim();
@@ -123,11 +117,7 @@ export function AppList({ category }: { category: Category }) {
         const display = displayAppName(app);
         return (
           <span key={app} className={styles.appChip}>
-            <AppIcon
-              processName={app}
-              fallbackColor={category.color}
-              size={14}
-            />
+            <AppIcon processName={app} fallbackColor={category.color} size={14} />
             {display}
             <button
               type="button"
@@ -160,9 +150,7 @@ export function AppList({ category }: { category: Category }) {
                 setHi((v) => (matches.length ? (v + 1) % matches.length : -1));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
-                setHi((v) =>
-                  matches.length ? (v - 1 + matches.length) % matches.length : -1,
-                );
+                setHi((v) => (matches.length ? (v - 1 + matches.length) % matches.length : -1));
               } else if (e.key === "Enter") {
                 void commit();
               } else if (e.key === "Escape") {
@@ -178,66 +166,58 @@ export function AppList({ category }: { category: Category }) {
                 role="listbox"
                 style={{ top: menuRect.top, left: menuRect.left }}
               >
-              {matches.map((s, i) => {
-                const cat = catOf(s.categoryId);
-                const CatIcon = cat ? resolveCategoryIcon(cat.icon) : null;
-                return (
-                  <button
-                    key={s.process}
-                    type="button"
-                    role="option"
-                    aria-selected={i === hi}
-                    className={`${styles.appSuggestOption} ${
-                      i === hi ? styles.appSuggestOptionHi : ""
-                    }`}
-                    // mousedown + preventDefault:先于输入框 blur 落点,
-                    // 避免 blur 把半截输入原文提交出去
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      void commitName(s.process);
-                    }}
-                    onMouseEnter={() => setHi(i)}
-                  >
-                    <AppIcon
-                      processName={s.process}
-                      fallbackColor={category.color}
-                      size={14}
-                    />
-                    <span className={styles.appSuggestLabel}>{s.display}</span>
-                    {/* 未分类 = 该收编的:accent 小圆点;已分类的显示现属分类
+                {matches.map((s, i) => {
+                  const cat = catOf(s.categoryId);
+                  const CatIcon = cat ? resolveCategoryIcon(cat.icon) : null;
+                  return (
+                    <button
+                      key={s.process}
+                      type="button"
+                      role="option"
+                      aria-selected={i === hi}
+                      className={`${styles.appSuggestOption} ${
+                        i === hi ? styles.appSuggestOptionHi : ""
+                      }`}
+                      // mousedown + preventDefault:先于输入框 blur 落点,
+                      // 避免 blur 把半截输入原文提交出去
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        void commitName(s.process);
+                      }}
+                      onMouseEnter={() => setHi(i)}
+                    >
+                      <AppIcon processName={s.process} fallbackColor={category.color} size={14} />
+                      <span className={styles.appSuggestLabel}>{s.display}</span>
+                      {/* 未分类 = 该收编的:accent 小圆点;已分类的显示现属分类
                         (图标染分类色 + 灰字名,与 AssignDropdown 同款视觉) */}
-                    {s.categoryId === null ? (
-                      <span className={styles.appSuggestDot} aria-hidden />
-                    ) : (
-                      cat &&
-                      CatIcon && (
-                        <span
-                          className={styles.appSuggestMeta}
-                          style={{ "--cat-color": cat.color } as CSSProperties}
-                        >
-                          <CatIcon
-                            size={11}
-                            strokeWidth={2}
-                            className={styles.appSuggestMetaIcon}
-                            aria-hidden
-                          />
-                          {cat.name}
-                        </span>
-                      )
-                    )}
-                  </button>
-                );
-              })}
+                      {s.categoryId === null ? (
+                        <span className={styles.appSuggestDot} aria-hidden />
+                      ) : (
+                        cat &&
+                        CatIcon && (
+                          <span
+                            className={styles.appSuggestMeta}
+                            style={{ "--cat-color": cat.color } as CSSProperties}
+                          >
+                            <CatIcon
+                              size={11}
+                              strokeWidth={2}
+                              className={styles.appSuggestMetaIcon}
+                              aria-hidden
+                            />
+                            {cat.name}
+                          </span>
+                        )
+                      )}
+                    </button>
+                  );
+                })}
               </div>,
               document.body,
             )}
         </span>
       ) : (
-        <button
-          type="button"
-          className={styles.appAddBtn}
-          onClick={() => setAdding(true)}
-        >
+        <button type="button" className={styles.appAddBtn} onClick={() => setAdding(true)}>
           <Plus size={11} strokeWidth={2} />
           {t("categories.appList.add")}
         </button>
@@ -268,9 +248,7 @@ export function AssignDropdown({
 }) {
   const { t } = useTranslation();
   const current =
-    currentCategoryId != null
-      ? categories.find((c) => c.id === currentCategoryId) ?? null
-      : null;
+    currentCategoryId != null ? (categories.find((c) => c.id === currentCategoryId) ?? null) : null;
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState<MenuRect | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -329,9 +307,7 @@ export function AssignDropdown({
   // trigger 按 current 是否存在切换显示形态：
   //   未分类 → "+ 指派"
   //   已分类 → "<分类 icon> <分类名>"（icon 染分类色，跟 chip filter 一族对齐）
-  const triggerStyle = current
-    ? ({ "--cat-color": current.color } as CSSProperties)
-    : undefined;
+  const triggerStyle = current ? ({ "--cat-color": current.color } as CSSProperties) : undefined;
   const CurrentIcon = current ? resolveCategoryIcon(current.icon) : null;
 
   return (
@@ -376,49 +352,44 @@ export function AssignDropdown({
           }}
         >
           <div ref={scrollRef} className={styles.assignMenuScroll}>
-          {allowClear && current && (
-            <button
-              type="button"
-              role="menuitem"
-              className={`${styles.assignOption} ${styles.assignOptionClear}`}
-              onClick={() => {
-                setOpen(false);
-                void onPick(null);
-              }}
-            >
-              <span className={styles.assignOptionLabel}>
-                {clearLabel ?? t("categories.assign.clear")}
-              </span>
-            </button>
-          )}
-          {categories.map((c) => {
-            const style = { "--cat-color": c.color } as CSSProperties;
-            const isCurrent = current?.id === c.id;
-            const Icon = resolveCategoryIcon(c.icon);
-            return (
+            {allowClear && current && (
               <button
-                key={c.id}
                 type="button"
                 role="menuitem"
-                className={`${styles.assignOption} ${
-                  isCurrent ? styles.assignOptionCurrent : ""
-                }`}
-                style={style}
+                className={`${styles.assignOption} ${styles.assignOptionClear}`}
                 onClick={() => {
                   setOpen(false);
-                  void onPick(c.id);
+                  void onPick(null);
                 }}
               >
-                <Icon
-                  size={12}
-                  strokeWidth={2}
-                  className={styles.assignOptionIcon}
-                  aria-hidden
-                />
-                <span className={styles.assignOptionLabel}>{c.name}</span>
+                <span className={styles.assignOptionLabel}>
+                  {clearLabel ?? t("categories.assign.clear")}
+                </span>
               </button>
-            );
-          })}
+            )}
+            {categories.map((c) => {
+              const style = { "--cat-color": c.color } as CSSProperties;
+              const isCurrent = current?.id === c.id;
+              const Icon = resolveCategoryIcon(c.icon);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="menuitem"
+                  className={`${styles.assignOption} ${
+                    isCurrent ? styles.assignOptionCurrent : ""
+                  }`}
+                  style={style}
+                  onClick={() => {
+                    setOpen(false);
+                    void onPick(c.id);
+                  }}
+                >
+                  <Icon size={12} strokeWidth={2} className={styles.assignOptionIcon} aria-hidden />
+                  <span className={styles.assignOptionLabel}>{c.name}</span>
+                </button>
+              );
+            })}
           </div>
           {/* 1A:自绘常驻滚动条(WKWebView 画不出自定义原生条,见组件注释) */}
           <ScrollIndicator targetRef={scrollRef} className={styles.assignMenuTrack} />
@@ -427,4 +398,3 @@ export function AssignDropdown({
     </div>
   );
 }
-

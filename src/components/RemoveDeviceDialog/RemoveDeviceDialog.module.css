@@ -85,7 +85,9 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
 }
 
 .option:hover {
@@ -136,7 +138,9 @@
   border-radius: var(--radius-sm);
   background: var(--fill-subtle);
   outline: none;
-  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
 }
 
 .confirmInput:focus {
@@ -199,8 +203,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes scaleIn {

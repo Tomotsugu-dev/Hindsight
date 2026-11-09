@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthState } from "../../api/hindsight";
-import {
-  canClearCloud,
-  connectErrorKind,
-  serviceKind,
-  webdavAccountLabel,
-} from "./syncAccount";
+import { canClearCloud, connectErrorKind, serviceKind, webdavAccountLabel } from "./syncAccount";
 
 const base: AuthState = {
   backend: "drive",
@@ -19,9 +14,9 @@ const base: AuthState = {
 
 describe("webdavAccountLabel", () => {
   it("显示用户名和服务器", () => {
-    expect(
-      webdavAccountLabel("https://dav.jianguoyun.com/dav/", "you@example.com"),
-    ).toBe("you@example.com @ dav.jianguoyun.com");
+    expect(webdavAccountLabel("https://dav.jianguoyun.com/dav/", "you@example.com")).toBe(
+      "you@example.com @ dav.jianguoyun.com",
+    );
   });
 
   it("地址解析不了就原样显示", () => {
@@ -37,17 +32,13 @@ describe("webdavAccountLabel", () => {
 
 describe("connectErrorKind", () => {
   it("认出后端的四种错误", () => {
-    expect(connectErrorKind("webdav propfind returned 401: Unauthorized")).toBe(
-      "wrongPassword",
-    );
+    expect(connectErrorKind("webdav propfind returned 401: Unauthorized")).toBe("wrongPassword");
     expect(
       connectErrorKind(
         "webdav propfind returned 503: <s:exception>BlockedTemporarily</s:exception>",
       ),
     ).toBe("serverBusy");
-    expect(connectErrorKind("webdav propfind returned 429: Too Many Requests")).toBe(
-      "serverBusy",
-    );
+    expect(connectErrorKind("webdav propfind returned 429: Too Many Requests")).toBe("serverBusy");
     expect(connectErrorKind("invalid input: WebDAV URL must be https")).toBe("notHttps");
     expect(
       connectErrorKind("invalid input: WebDAV URL is invalid: relative URL without a base"),
@@ -76,9 +67,7 @@ describe("serviceKind", () => {
 
   it("坚果云的地址认成坚果云，不管路径和大小写", () => {
     expect(serviceKind(onWebdav("https://dav.jianguoyun.com/dav/"))).toBe("nutstore");
-    expect(serviceKind(onWebdav("https://DAV.jianguoyun.com/dav/hindsight"))).toBe(
-      "nutstore",
-    );
+    expect(serviceKind(onWebdav("https://DAV.jianguoyun.com/dav/hindsight"))).toBe("nutstore");
   });
 
   it("其他服务器和解析不了的地址都是 WebDAV", () => {

@@ -31,9 +31,7 @@ describe("dtoToDaySummary", () => {
   });
 
   it("segments 原样透传", () => {
-    const segments: CategoryTime[] = [
-      { categoryId: "work", secs: 1800 },
-    ];
+    const segments: CategoryTime[] = [{ categoryId: "work", secs: 1800 }];
     const out = dtoToDaySummary({ date: "2024-06-15", segments });
     expect(out.segments).toBe(segments);
   });
@@ -42,12 +40,10 @@ describe("dtoToDaySummary", () => {
     // 契约哨兵:格式一旦被后端改坏,要在边界处响亮报错——
     // 否则 Invalid Date 的 getDay()/getTime() 变 NaN,在下游图表里极难追踪
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() =>
-      dtoToDaySummary({ date: "not-a-date", segments: [] }),
-    ).toThrow(/Invalid date from backend: not-a-date/);
-    expect(() => dtoToDaySummary({ date: "", segments: [] })).toThrow(
-      /Invalid date from backend/,
+    expect(() => dtoToDaySummary({ date: "not-a-date", segments: [] })).toThrow(
+      /Invalid date from backend: not-a-date/,
     );
+    expect(() => dtoToDaySummary({ date: "", segments: [] })).toThrow(/Invalid date from backend/);
     // throw 前先走 logError,devtools 里能按 scope 搜到
     expect(errSpy).toHaveBeenCalled();
   });

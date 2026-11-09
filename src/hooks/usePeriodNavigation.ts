@@ -27,9 +27,7 @@ export interface PeriodNavigationState {
  *
  * 视觉细节由调用方提供的 swipeAnimated CSS class 决定，hook 只负责状态机。
  */
-export function usePeriodNavigation(opts?: {
-  swipeDuration?: number;
-}): PeriodNavigationState {
+export function usePeriodNavigation(opts?: { swipeDuration?: number }): PeriodNavigationState {
   const swipeDuration = opts?.swipeDuration ?? 420;
   const [offset, setOffset] = useState(0);
   const [delta, setDelta] = useState(0);

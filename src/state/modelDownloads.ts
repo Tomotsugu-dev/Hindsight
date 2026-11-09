@@ -17,11 +17,7 @@
  */
 
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import {
-  api,
-  MODEL_DOWNLOAD_EVENT,
-  type ModelDownloadProgress,
-} from "../api/hindsight";
+import { api, MODEL_DOWNLOAD_EVENT, type ModelDownloadProgress } from "../api/hindsight";
 import { logError } from "../lib/logger";
 
 type ProgressMap = Readonly<Record<string, ModelDownloadProgress>>;

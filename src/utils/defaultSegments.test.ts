@@ -18,8 +18,8 @@ describe("isDefaultSegments", () => {
     expect(isDefaultSegments(ZH)).toBe(true);
   });
   it("英文默认同样命中(跨语言默认集识别)", () => {
-    const en = ["Late Night", "Early Morning", "Morning", "Afternoon", "Evening"].map(
-      (l, i) => seg(l, ZH[i].startHour, ZH[i].endHour),
+    const en = ["Late Night", "Early Morning", "Morning", "Afternoon", "Evening"].map((l, i) =>
+      seg(l, ZH[i].startHour, ZH[i].endHour),
     );
     expect(isDefaultSegments(en)).toBe(true);
   });

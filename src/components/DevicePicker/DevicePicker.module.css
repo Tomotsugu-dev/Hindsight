@@ -67,7 +67,8 @@
   border-radius: var(--radius-xs);
   background: color-mix(in oklab, var(--tile-color, var(--color-accent)) 14%, transparent);
   color: var(--tile-color, var(--color-accent));
-  border: 1px solid color-mix(in oklab, var(--tile-color, var(--color-accent)) 22%, rgba(0, 0, 0, 0.05));
+  border: 1px solid
+    color-mix(in oklab, var(--tile-color, var(--color-accent)) 22%, rgba(0, 0, 0, 0.05));
   box-shadow:
     0 1px 0 var(--hairline-hi) inset,
     0 1px 1px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));

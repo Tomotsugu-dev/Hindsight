@@ -26,11 +26,7 @@ interface State {
   loading: boolean;
 }
 
-export function useHourApps(
-  dayOffset: number,
-  hour: number | null,
-  deviceId?: string,
-): State {
+export function useHourApps(dayOffset: number, hour: number | null, deviceId?: string): State {
   const cacheRef = useRef<Cache>(new Map());
   const [state, setState] = useState<State>({ apps: null, loading: false });
 
@@ -39,10 +35,7 @@ export function useHourApps(
     offset: dayOffset,
     deviceId,
   });
-  if (
-    lastScopeRef.current.offset !== dayOffset ||
-    lastScopeRef.current.deviceId !== deviceId
-  ) {
+  if (lastScopeRef.current.offset !== dayOffset || lastScopeRef.current.deviceId !== deviceId) {
     cacheRef.current.clear();
     lastScopeRef.current = { offset: dayOffset, deviceId };
   }

@@ -63,7 +63,10 @@ export default function DataTab() {
   const [auth, setAuth] = useState<AuthState | null>(null);
   useEffect(() => {
     const fetchAuth = () => {
-      api.authStatus().then(setAuth).catch(() => setAuth(null));
+      api
+        .authStatus()
+        .then(setAuth)
+        .catch(() => setAuth(null));
     };
     fetchAuth();
     window.addEventListener("focus", fetchAuth);
@@ -74,9 +77,7 @@ export default function DataTab() {
 
   if (!settings) return null;
 
-  const total = storage
-    ? storage.dbBytes + storage.memoryDbBytes + storage.screenshotsBytes
-    : 0;
+  const total = storage ? storage.dbBytes + storage.memoryDbBytes + storage.screenshotsBytes : 0;
 
   const runSimple = async (which: "db" | "shots") => {
     setSimpleConfirm(null);

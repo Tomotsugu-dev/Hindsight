@@ -41,10 +41,7 @@ export interface Thread {
  *  - 同父的多条 user = 编辑产生的分支,按 `choice`(缺省最新)选一条走;
  *  - assistant 沿链取,相邻的折叠成重试版本组;
  *  - 旧线性数据迁移后是单链,天然退化为原有渲染。 */
-export function buildThread(
-  rows: ChatStoredMessage[],
-  choice: Record<string, string>,
-): Thread {
+export function buildThread(rows: ChatStoredMessage[], choice: Record<string, string>): Thread {
   const byParent = new Map<string, ChatStoredMessage[]>();
   for (const m of rows) {
     const key = m.parentGuid ?? "";

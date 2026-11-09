@@ -109,19 +109,9 @@ describe("applyFilter", () => {
 
   it("name_asc / name_desc 按 displayName 排序", () => {
     const asc = applyFilter(GROUPS, { ...BASE, sortBy: "name_asc" });
-    expect(asc.map((g) => g.displayName)).toEqual([
-      "Chrome",
-      "Notepad",
-      "Slack",
-      "VSCode",
-    ]);
+    expect(asc.map((g) => g.displayName)).toEqual(["Chrome", "Notepad", "Slack", "VSCode"]);
     const desc = applyFilter(GROUPS, { ...BASE, sortBy: "name_desc" });
-    expect(desc.map((g) => g.displayName)).toEqual([
-      "VSCode",
-      "Slack",
-      "Notepad",
-      "Chrome",
-    ]);
+    expect(desc.map((g) => g.displayName)).toEqual(["VSCode", "Slack", "Notepad", "Chrome"]);
   });
 
   it("过滤 + 排序组合：分类过滤后再按时长降序", () => {

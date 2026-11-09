@@ -115,12 +115,7 @@ export default function WeekPage() {
 
   const totalMinutes = useMemo(
     () =>
-      Math.round(
-          days.reduce(
-            (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
-            0,
-          ) / 60,
-        ),
+      Math.round(days.reduce((sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0), 0) / 60),
     [days],
   );
 
@@ -131,17 +126,12 @@ export default function WeekPage() {
   const completedMinutes = useMemo(
     () =>
       Math.round(
-        completedDays.reduce(
-          (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
-          0,
-        ) / 60,
+        completedDays.reduce((sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0), 0) / 60,
       ),
     [completedDays],
   );
   const avgPerCompletedDay =
-    completedDays.length > 0
-      ? Math.round(completedMinutes / completedDays.length)
-      : undefined;
+    completedDays.length > 0 ? Math.round(completedMinutes / completedDays.length) : undefined;
 
   // 点某天 → 该 day index 高亮，其它淡化；toggle
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -154,8 +144,7 @@ export default function WeekPage() {
     setSelectedApp(null);
     setHoverAppId(null);
   }, [offset, selectedDeviceId]);
-  const handleDayClick = (i: number) =>
-    setSelectedIndex((prev) => (prev === i ? null : i));
+  const handleDayClick = (i: number) => setSelectedIndex((prev) => (prev === i ? null : i));
   useClickOutsideBars(selectedIndex !== null, () => setSelectedIndex(null));
 
   const selectedDay = selectedIndex !== null ? days[selectedIndex] : null;
@@ -163,8 +152,7 @@ export default function WeekPage() {
   const dayApps = useSelectedDayApps(selectedDayOffset, selectedDeviceId);
 
   const segmentsForRanks = useMemo(
-    () =>
-      selectedIndex === null || !days[selectedIndex] ? days : [days[selectedIndex]],
+    () => (selectedIndex === null || !days[selectedIndex] ? days : [days[selectedIndex]]),
     [days, selectedIndex],
   );
   // 跟 segmentsForRanks 同 scope 的总时长：选中某天时就是该天总和，否则全周。
@@ -172,11 +160,9 @@ export default function WeekPage() {
   const scopedMinutes = useMemo(
     () =>
       Math.round(
-          segmentsForRanks.reduce(
-            (sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0),
-            0,
-          ) / 60,
-        ),
+        segmentsForRanks.reduce((sum, d) => sum + d.segments.reduce((s, x) => s + x.secs, 0), 0) /
+          60,
+      ),
     [segmentsForRanks],
   );
   const appsForRanks = useMemo(
@@ -207,9 +193,7 @@ export default function WeekPage() {
 
   // drill 状态下：底部两卡片同步缩进到该大类范围（详见 TodayPage 同名块注释）
   const drilledSlice =
-    drillId !== null
-      ? currBreakdown.slices.find((s) => s.id === drillId) ?? null
-      : null;
+    drillId !== null ? (currBreakdown.slices.find((s) => s.id === drillId) ?? null) : null;
   const childCatIds = useMemo(
     () => (drilledSlice ? new Set(drilledSlice.cats.map((c) => c.id)) : null),
     [drilledSlice],
@@ -228,15 +212,11 @@ export default function WeekPage() {
     [appRanks, childCatIds, pickedCat],
   );
   const displayedCategoryRanks = useMemo(
-    () =>
-      childCatIds
-        ? categoryRanks.filter((r) => childCatIds.has(r.id))
-        : categoryRanks,
+    () => (childCatIds ? categoryRanks.filter((r) => childCatIds.has(r.id)) : categoryRanks),
     [categoryRanks, childCatIds],
   );
-  const appsTitle = pickedCat || drilledSlice
-    ? t("today.pie.drill.appsTitle")
-    : t("week.ranks.topApps");
+  const appsTitle =
+    pickedCat || drilledSlice ? t("today.pie.drill.appsTitle") : t("week.ranks.topApps");
   const categoriesTitle = drilledSlice
     ? t("today.pie.drill.categoriesTitle")
     : rankLevel === "supers"
@@ -359,9 +339,7 @@ export default function WeekPage() {
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{appsTitle}</h2>
             <div className={styles.cardHeadRight}>
-              {selectionLabel && (
-                <span className={styles.selectionLabel}>{selectionLabel}</span>
-              )}
+              {selectionLabel && <span className={styles.selectionLabel}>{selectionLabel}</span>}
               {/* 总活动时间（跟 TodayPage 同款语义）：
                   选中某天 → 该天总时长；否则选中小类 → 小类小计；否则 drill → 大类小计；否则全周。 */}
               <span className={styles.cardTotal}>
@@ -381,9 +359,7 @@ export default function WeekPage() {
             <ScrollBox maxHeight={280}>
               <RankedList
                 items={displayedAppRanks}
-                onItemHover={
-                  view === "pie" ? (item) => setHoverAppId(item?.id ?? null) : undefined
-                }
+                onItemHover={view === "pie" ? (item) => setHoverAppId(item?.id ?? null) : undefined}
                 onItemClick={(item) =>
                   setSelectedApp({
                     name: item.name,
@@ -404,9 +380,7 @@ export default function WeekPage() {
         <section className={styles.card} data-part="card" data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
-            {selectionLabel && (
-              <span className={styles.selectionLabel}>{selectionLabel}</span>
-            )}
+            {selectionLabel && <span className={styles.selectionLabel}>{selectionLabel}</span>}
           </header>
           {displayedCategoryRanks.length > 0 ? (
             <ScrollBox maxHeight={280}>

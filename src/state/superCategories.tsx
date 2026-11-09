@@ -34,9 +34,7 @@ interface SuperCategoriesContextValue {
   ) => Promise<void>;
 }
 
-const SuperCategoriesContext = createContext<SuperCategoriesContextValue | null>(
-  null,
-);
+const SuperCategoriesContext = createContext<SuperCategoriesContextValue | null>(null);
 
 export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
   const [supers, setSupers] = useState<SuperCategory[]>([]);
@@ -112,11 +110,7 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
   );
 
   const moveCategoryToSuper = useCallback(
-    async (
-      categoryId: string,
-      superId: string | null,
-      orderedIds: string[],
-    ) => {
+    async (categoryId: string, superId: string | null, orderedIds: string[]) => {
       // 先落归属，再落顺序。顺序失败时归属仍然正确，刷新后用户可以直接再拖一次。
       await api.assignCategoryToSuper(categoryId, superId);
       try {
@@ -154,9 +148,7 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SuperCategoriesContext.Provider value={value}>
-      {children}
-    </SuperCategoriesContext.Provider>
+    <SuperCategoriesContext.Provider value={value}>{children}</SuperCategoriesContext.Provider>
   );
 }
 
@@ -164,9 +156,7 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
 export function useSuperCategories() {
   const ctx = useContext(SuperCategoriesContext);
   if (!ctx) {
-    throw new Error(
-      "useSuperCategories must be used within SuperCategoriesProvider",
-    );
+    throw new Error("useSuperCategories must be used within SuperCategoriesProvider");
   }
   return ctx;
 }

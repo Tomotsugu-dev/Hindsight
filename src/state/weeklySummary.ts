@@ -220,8 +220,6 @@ export async function cancelWeeklyGenerate(): Promise<void> {
 }
 
 /** 拉某周已落库行。前端 useEffect(date) 时调一次。 */
-export async function fetchWeeklyRow(
-  weekStart: string,
-): Promise<SegmentSummaryRow | null> {
+export async function fetchWeeklyRow(weekStart: string): Promise<SegmentSummaryRow | null> {
   return api.getWeekSummary(weekStart);
 }

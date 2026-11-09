@@ -47,11 +47,7 @@ export function PeriodLegend({ workHoursLabel, level = "cats", onLevelChange }: 
       ) : null}
       {items.map((item) => (
         <span key={item.id} className={styles.legendItem}>
-          <span
-            className={styles.legendDot}
-            style={{ background: item.color }}
-            aria-hidden
-          />
+          <span className={styles.legendDot} style={{ background: item.color }} aria-hidden />
           {item.name}
         </span>
       ))}

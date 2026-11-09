@@ -38,9 +38,7 @@ export function WeeklyBarChart({
   const toParts = useBarParts(level);
   const order = new Map(categories.map((c, i) => [c.id, i]));
   const sortSegments = (segments: DaySummary["segments"]) =>
-    [...segments].sort(
-      (a, b) => (order.get(a.categoryId) ?? 99) - (order.get(b.categoryId) ?? 99),
-    );
+    [...segments].sort((a, b) => (order.get(a.categoryId) ?? 99) - (order.get(b.categoryId) ?? 99));
 
   // 时长格式化 —— 复用 common.duration.* 资源；空值用占位符
   const fmtTotal = (min: number): string => {

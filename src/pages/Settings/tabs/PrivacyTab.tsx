@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AppWindow, EyeOff, Globe, Plus, X } from "lucide-react";
@@ -15,11 +9,7 @@ import { AppIcon } from "../../../components/AppIcon/AppIcon";
 import { useSettings } from "../../../state/settings";
 import { api, type AppGroup } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
-import {
-  buildAppSuggestions,
-  filterAppSuggestions,
-  SUGGEST_MAX,
-} from "../../../lib/appSuggest";
+import { buildAppSuggestions, filterAppSuggestions, SUGGEST_MAX } from "../../../lib/appSuggest";
 import styles from "./PrivacyTab.module.css";
 
 interface KeywordEditorProps {
@@ -89,11 +79,7 @@ function KeywordEditor({
   // 候选池 / 过滤与分类页共用同一套规则；已加过的关键词不再重复建议
   const matches = useMemo(() => {
     if (!suggestApps || !groups) return [];
-    return filterAppSuggestions(
-      buildAppSuggestions(groups, value),
-      draft,
-      SUGGEST_MAX,
-    );
+    return filterAppSuggestions(buildAppSuggestions(groups, value), draft, SUGGEST_MAX);
   }, [suggestApps, groups, value, draft]);
 
   // 输入变化后高亮回到"无"，避免指到过滤后错位的项
@@ -189,9 +175,7 @@ function KeywordEditor({
                     type="button"
                     role="option"
                     aria-selected={i === hi}
-                    className={`${styles.suggestOption} ${
-                      i === hi ? styles.suggestOptionHi : ""
-                    }`}
+                    className={`${styles.suggestOption} ${i === hi ? styles.suggestOptionHi : ""}`}
                     // mousedown + preventDefault：先于输入框 blur 落点，
                     // 否则 blur 会把半截输入原文先提交出去
                     onMouseDown={(e) => {
@@ -200,11 +184,7 @@ function KeywordEditor({
                     }}
                     onMouseEnter={() => setHi(i)}
                   >
-                    <AppIcon
-                      processName={s.process}
-                      fallbackColor="var(--text-faint)"
-                      size={14}
-                    />
+                    <AppIcon processName={s.process} fallbackColor="var(--text-faint)" size={14} />
                     <span className={styles.suggestLabel}>{s.display}</span>
                   </button>
                 ))}
@@ -213,11 +193,7 @@ function KeywordEditor({
             )}
         </>
       ) : (
-        <button
-          type="button"
-          className={styles.addBtn}
-          onClick={() => setAdding(true)}
-        >
+        <button type="button" className={styles.addBtn} onClick={() => setAdding(true)}>
           <Plus size={11} strokeWidth={2} />
           {addLabel}
         </button>
@@ -283,13 +259,9 @@ export default function PrivacyTab() {
       >
         <p className={styles.notice}>
           {t("settings.privacy.scope.noticePrefix")}
-          <strong className={styles.attention}>
-            {t("settings.privacy.scope.noticeEmph")}
-          </strong>
+          <strong className={styles.attention}>{t("settings.privacy.scope.noticeEmph")}</strong>
           {t("settings.privacy.scope.noticeMiddle")}
-          <span className={styles.kbd}>
-            {t("settings.privacy.scope.noticeKbd")}
-          </span>
+          <span className={styles.kbd}>{t("settings.privacy.scope.noticeKbd")}</span>
           {t("settings.privacy.scope.noticeSuffix")}
         </p>
       </Section>

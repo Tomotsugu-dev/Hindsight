@@ -271,7 +271,9 @@
   color: var(--text-faint);
   cursor: help;
   outline: none;
-  transition: color 140ms ease-out, background-color 140ms ease-out;
+  transition:
+    color 140ms ease-out,
+    background-color 140ms ease-out;
 }
 
 .infoIconWrap:hover,
@@ -505,8 +507,14 @@
   animation: debugSuccessFadeIn 200ms var(--ease-out);
 }
 @keyframes debugSuccessFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .engineHint {
@@ -605,7 +613,6 @@
   border-radius: var(--radius-sm);
   line-height: 1.6;
 }
-
 
 /* 时段色圆点（.summaryChip 用） */
 .segDot {
@@ -795,6 +802,10 @@
 }
 
 @keyframes debugTabSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

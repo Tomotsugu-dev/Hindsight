@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppGroup } from "../api/hindsight";
-import {
-  buildAppSuggestions,
-  filterAppSuggestions,
-  SUGGEST_MAX,
-} from "./appSuggest";
+import { buildAppSuggestions, filterAppSuggestions, SUGGEST_MAX } from "./appSuggest";
 
 function group(
   displayName: string,
@@ -32,11 +28,7 @@ describe("buildAppSuggestions", () => {
         ["Code Helper", 10],
       ]),
     ]);
-    expect(pool.map((s) => s.process)).toEqual([
-      "Code",
-      "Code Helper",
-      "Google Chrome",
-    ]);
+    expect(pool.map((s) => s.process)).toEqual(["Code", "Code Helper", "Google Chrome"]);
   });
 
   it("未分类优先,组内按近 7 天用时降序", () => {
@@ -48,16 +40,17 @@ describe("buildAppSuggestions", () => {
       ]),
     ]);
     // 用时最长的 Busy 仍排在未分类之后——收编新应用是最高频场景
-    expect(pool.map((s) => s.process)).toEqual([
-      "Fresh Big",
-      "Fresh Small",
-      "Busy",
-    ]);
+    expect(pool.map((s) => s.process)).toEqual(["Fresh Big", "Fresh Small", "Busy"]);
   });
 
   it("exclude 命中的进程不进池,且忽略大小写", () => {
     const pool = buildAppSuggestions(
-      [group("组", null, [["Google Chrome", 10], ["Code", 5]])],
+      [
+        group("组", null, [
+          ["Google Chrome", 10],
+          ["Code", 5],
+        ]),
+      ],
       ["  google chrome  "],
     );
     expect(pool.map((s) => s.process)).toEqual(["Code"]);
@@ -81,21 +74,15 @@ describe("filterAppSuggestions", () => {
   });
 
   it("进程名子串命中,忽略大小写", () => {
-    expect(filterAppSuggestions(pool, "CHROM").map((s) => s.process)).toEqual([
-      "Google Chrome",
-    ]);
+    expect(filterAppSuggestions(pool, "CHROM").map((s) => s.process)).toEqual(["Google Chrome"]);
   });
 
   it("组名也参与匹配(用户可能只记得中文名)", () => {
-    expect(filterAppSuggestions(pool, "微信").map((s) => s.process)).toEqual([
-      "WeChat",
-    ]);
+    expect(filterAppSuggestions(pool, "微信").map((s) => s.process)).toEqual(["WeChat"]);
   });
 
   it("显示名参与匹配(进程名带后缀时)", () => {
-    const withExe = buildAppSuggestions([
-      group("组", null, [["notepad.exe", 1]]),
-    ]);
+    const withExe = buildAppSuggestions([group("组", null, [["notepad.exe", 1]])]);
     // 用户输 "notepad" 应该命中 notepad.exe
     expect(filterAppSuggestions(withExe, "notepad")).toHaveLength(1);
   });

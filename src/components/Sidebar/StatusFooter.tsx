@@ -25,10 +25,7 @@ function parseHM(s: string): number {
   return h + (Number.isNaN(m) ? 0 : m / 60);
 }
 
-export function StatusFooter({
-  captureStatus = "ok",
-  onToggleCapture,
-}: StatusFooterProps) {
+export function StatusFooter({ captureStatus = "ok", onToggleCapture }: StatusFooterProps) {
   const { settings } = useSettings();
   const { t } = useTranslation();
   const [tick, setTick] = useState(0);
@@ -64,8 +61,7 @@ export function StatusFooter({
     LOCALE_OPTIONS.findIndex((o) => o.value === locale),
   );
   const currentOption = LOCALE_OPTIONS[currentIdx];
-  const nextOption =
-    LOCALE_OPTIONS[(currentIdx + 1) % LOCALE_OPTIONS.length];
+  const nextOption = LOCALE_OPTIONS[(currentIdx + 1) % LOCALE_OPTIONS.length];
 
   return (
     <div className={styles.footer}>
@@ -89,10 +85,7 @@ export function StatusFooter({
                 aria-hidden
               />
             ) : (
-              <span
-                className={`${styles.dot} ${styles[`dot_${captureStatus}`]}`}
-                aria-hidden
-              />
+              <span className={`${styles.dot} ${styles[`dot_${captureStatus}`]}`} aria-hidden />
             )}
             <span className={styles.text}>{t(CAPTURE_TEXT_KEY[captureStatus])}</span>
           </span>

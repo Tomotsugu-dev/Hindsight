@@ -28,7 +28,9 @@
   font-size: var(--font-size-xs, 11px);
   font-weight: var(--font-weight-600);
   cursor: pointer;
-  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out);
+  transition:
+    color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
 }
 
 .backBtn:hover {

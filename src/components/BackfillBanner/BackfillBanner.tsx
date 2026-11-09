@@ -79,7 +79,8 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       setStoppedNotice(false);
       return;
     }
-    if (!residentOn) setStoppedNotice(false); // 常驻被(从任何入口)关掉,"将继续"不再成立
+    if (!residentOn)
+      setStoppedNotice(false); // 常驻被(从任何入口)关掉,"将继续"不再成立
     else if (stopping) setStoppedNotice(true);
     setStopping(false);
   }, [polling, stopping, residentOn]);
@@ -100,14 +101,11 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     setOcrConfirm(false);
     setPhase("downloading");
     setDlMb(0);
-    const unlisten = await listen<EngineDownloadProgress>(
-      ENGINE_DOWNLOAD_EVENT,
-      (ev) => {
-        if (ev.payload.stage === "runtime" && ev.payload.phase === "downloading") {
-          setDlMb(Math.round(ev.payload.downloaded / 1024 / 1024));
-        }
-      },
-    );
+    const unlisten = await listen<EngineDownloadProgress>(ENGINE_DOWNLOAD_EVENT, (ev) => {
+      if (ev.payload.stage === "runtime" && ev.payload.phase === "downloading") {
+        setDlMb(Math.round(ev.payload.downloaded / 1024 / 1024));
+      }
+    });
     try {
       await api.downloadOcrRuntime();
     } catch (e) {
@@ -165,12 +163,9 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
     <div className={styles.banner} role="status">
       <DatabaseZap size={14} strokeWidth={2} className={styles.bannerIcon} />
       <span className={styles.bannerText}>
-        {effective === "running" &&
-          t("chat.backfill.running", { count: stats.total })}
-        {effective === "downloading" &&
-          t("chat.backfill.downloadingOcr", { mb: dlMb })}
-        {effective === "background" &&
-          t("chat.backfill.alreadyRunning", { count: stats.total })}
+        {effective === "running" && t("chat.backfill.running", { count: stats.total })}
+        {effective === "downloading" && t("chat.backfill.downloadingOcr", { mb: dlMb })}
+        {effective === "background" && t("chat.backfill.alreadyRunning", { count: stats.total })}
         {effective === "failed" && t("chat.backfill.failed", { msg: errMsg })}
         {effective === "idle" &&
           (stoppedNotice
@@ -198,12 +193,7 @@ export default function BackfillBanner({ stats, onRefresh }: BackfillBannerProps
       {/* 手动批与后台批(常驻/别处触发)的当前轮都能停;常驻模式下个周期
           仍会继续消化,彻底停走 设置 → 常驻 OCR 开关 */}
       {polling && (
-        <button
-          type="button"
-          className={styles.bannerBtn}
-          onClick={stopRun}
-          disabled={stopping}
-        >
+        <button type="button" className={styles.bannerBtn} onClick={stopRun} disabled={stopping}>
           {stopping ? t("chat.backfill.stopping") : t("chat.backfill.stop")}
         </button>
       )}

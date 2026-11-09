@@ -115,13 +115,7 @@ function CapBadge({
 function ToolSupportBadge({ supports }: { supports: boolean | null }) {
   const { t } = useTranslation();
   if (supports === true) {
-    return (
-      <CapBadge
-        cap="TOOLS"
-        label="Tool-use"
-        tip={t("aiSettings.models.local.toolsTip")}
-      />
-    );
+    return <CapBadge cap="TOOLS" label="Tool-use" tip={t("aiSettings.models.local.toolsTip")} />;
   }
   if (supports === false) {
     return (
@@ -172,10 +166,7 @@ function commonPrefixLen(a: string[], b: string[]): number {
 /** 给一个本地主模型文件，从候选 mmproj 里按文件名公共前缀自动配对一个。
  *  要求公共前缀 ≥2 段（如 gemma-4）才算命中，避免把 12B 的 mmproj 配到 31B。
  *  多个候选取公共前缀最长者。找不到返回 null（纯文本模型 / 命名不规范）。 */
-function autoPairMmproj(
-  mainName: string,
-  mmprojs: ModelEntry[],
-): ModelEntry | null {
+function autoPairMmproj(mainName: string, mmprojs: ModelEntry[]): ModelEntry | null {
   const ms = fileSegments(mainName);
   let best: ModelEntry | null = null;
   let bestLen = 1; // 需 ≥2 段才配对
@@ -205,8 +196,7 @@ export function ModelsSection() {
   // 比较时永远拿 sentinel 跟 rec.mainFile 比，永远不命中——所以本地卡正确显示成"未选"。
   const summaryMain = settings?.ai.summaryMain || settings?.ai.activeMain || "";
   // 云端卡用 RAW 字段判，避免 fallback 链上 activeMain 的干扰。
-  const cloudIsSelectedAsSummary =
-    (settings?.ai.summaryMain || "") === SUMMARY_CLOUD_SENTINEL;
+  const cloudIsSelectedAsSummary = (settings?.ai.summaryMain || "") === SUMMARY_CLOUD_SENTINEL;
 
   const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
   const [local, setLocal] = useState<ModelEntry[]>([]);
@@ -233,9 +223,7 @@ export function ModelsSection() {
   const [error, setError] = useState<string | null>(null);
   // 正在从本地磁盘导入（拷贝）中的文件 basename 集合——UI 据此把导入按钮切到进度态。
   // 用落盘名（= 源文件 basename）做 key，跟下载进度事件的 file 字段对齐。
-  const [importingFiles, setImportingFiles] = useState<ReadonlySet<string>>(
-    new Set<string>(),
-  );
+  const [importingFiles, setImportingFiles] = useState<ReadonlySet<string>>(new Set<string>());
   // 自定义 HF 仓库下载表单展开态——默认收起，避免抢推荐卡的视觉重心
   const [showCustom, setShowCustom] = useState(false);
   const [customRepo, setCustomRepo] = useState("");
@@ -250,21 +238,15 @@ export function ModelsSection() {
   // 当前正在 onDownloadRecommended 流程里的 rec.mainFile 集合——必须按 rec 维度跟踪，
   // 不能仅靠 busyFiles：所有 unsloth 镜像的 mmproj 都叫 mmproj-F16.gguf，单看
   // busyFiles.has("mmproj-F16.gguf") 会让所有 vision 卡都判定为 busy，进度条串扰。
-  const [confirmingUninstall, setConfirmingUninstall] =
-    useState<RecommendedModel | null>(null);
+  const [confirmingUninstall, setConfirmingUninstall] = useState<RecommendedModel | null>(null);
   // 云端选择的隐私确认弹窗：选 Text = 轻警示（上传应用名/分类/活动时间线）。
   // 取消选择不弹。
   const [cloudConfirm, setCloudConfirm] = useState(false);
-  const [busyRecs, setBusyRecs] = useState<ReadonlySet<string>>(
-    new Set<string>(),
-  );
+  const [busyRecs, setBusyRecs] = useState<ReadonlySet<string>>(new Set<string>());
 
   const refresh = async () => {
     try {
-      const [rec, loc] = await Promise.all([
-        api.listRecommendedModels(),
-        api.listLocalModels(),
-      ]);
+      const [rec, loc] = await Promise.all([api.listRecommendedModels(), api.listLocalModels()]);
       setRecommended(rec);
       setLocal(loc);
     } catch (e) {
@@ -288,8 +270,7 @@ export function ModelsSection() {
   // 已安装只看 main 文件:VLM 移除后全部推理是纯文本,mmproj 不再是使用门槛。
   // 否则用户手动导入的 main(没有改名版 mmproj)会被推荐卡吞掉又判未安装,
   // 既不在"本地模型"区出现、又无法选用——只剩个不可点的卸载按钮。
-  const isInstalled = (rec: RecommendedModel): boolean =>
-    localFilenames.has(rec.mainFile);
+  const isInstalled = (rec: RecommendedModel): boolean => localFilenames.has(rec.mainFile);
 
   // 推荐列表占用的落盘文件名（main + mmproj saveAs）。本地文件里不在这个集合的，
   // 就是用户自己导入/手动放进模型目录、但不在推荐列表里的模型——它们不会被任何
@@ -307,30 +288,23 @@ export function ModelsSection() {
   const orphanMains = orphanLocals.filter((m) => !m.isMmproj);
   const pairedMmprojNames = new Set<string>();
   // 第一轮：按文件名前缀配对（每次从尚未配走的 mmproj 里挑，避免多主模型抢同一个）。
-  const localPairs: { main: ModelEntry; mmproj: ModelEntry | null }[] =
-    orphanMains.map((main) => {
-      const avail = orphanMmprojs.filter(
-        (m) => !pairedMmprojNames.has(m.filename),
-      );
-      const mmproj = autoPairMmproj(main.filename, avail);
-      if (mmproj) pairedMmprojNames.add(mmproj.filename);
-      return { main, mmproj };
-    });
+  const localPairs: { main: ModelEntry; mmproj: ModelEntry | null }[] = orphanMains.map((main) => {
+    const avail = orphanMmprojs.filter((m) => !pairedMmprojNames.has(m.filename));
+    const mmproj = autoPairMmproj(main.filename, avail);
+    if (mmproj) pairedMmprojNames.add(mmproj.filename);
+    return { main, mmproj };
+  });
   // 第二轮兜底：LM Studio 等给 mmproj 用通用名（gemma-3 系列都叫 mmproj-model-f16.gguf，
   // 不含模型标识），文件名前缀配不上。此时若恰好只剩 1 个没配到 mmproj 的主模型 +
   // 1 个未被配走的 mmproj，无歧义地把它们配对。
   const stillUnpaired = localPairs.filter((p) => !p.mmproj);
-  const remainMmprojs = orphanMmprojs.filter(
-    (m) => !pairedMmprojNames.has(m.filename),
-  );
+  const remainMmprojs = orphanMmprojs.filter((m) => !pairedMmprojNames.has(m.filename));
   if (stillUnpaired.length === 1 && remainMmprojs.length === 1) {
     stillUnpaired[0].mmproj = remainMmprojs[0];
     pairedMmprojNames.add(remainMmprojs[0].filename);
   }
   // 没配到任何主模型的孤儿 mmproj：单独列一张卡，只提供删除（无法单独当模型用）。
-  const unpairedMmprojs = orphanMmprojs.filter(
-    (m) => !pairedMmprojNames.has(m.filename),
-  );
+  const unpairedMmprojs = orphanMmprojs.filter((m) => !pairedMmprojNames.has(m.filename));
 
   // 品牌选项：从当前 recommended 数据动态收集（去重 + 字典序），避免硬编码——
   // 未来 JSON 加新品牌不需要改前端代码。
@@ -350,9 +324,7 @@ export function ModelsSection() {
   const displayed = useMemo<RecommendedModel[]>(() => {
     let list = recommended;
     if (filterStatus !== "all") {
-      list = list.filter((r) =>
-        filterStatus === "installed" ? isInstalled(r) : !isInstalled(r),
-      );
+      list = list.filter((r) => (filterStatus === "installed" ? isInstalled(r) : !isInstalled(r)));
     }
     if (filterBrand !== "all") {
       list = list.filter((r) => r.brand === filterBrand);
@@ -439,9 +411,7 @@ export function ModelsSection() {
         // "已安装"只看 main，用户手动导入 main 时 mmproj 多半缺席，
         // 写个不存在的文件名会让引擎启动时加载失败
         const mmprojLocal =
-          rec.mmprojFile && localFilenames.has(mmprojSaveAs(rec))
-            ? mmprojSaveAs(rec)
-            : null;
+          rec.mmprojFile && localFilenames.has(mmprojSaveAs(rec)) ? mmprojSaveAs(rec) : null;
         await api.setStepModel("summary", rec.mainFile, mmprojLocal);
       }
       await reload();
@@ -485,8 +455,7 @@ export function ModelsSection() {
   };
 
   const customMainBusy = !!customMainFile && busyFiles.has(customMainFile);
-  const customMmprojBusy =
-    !!customMmprojFile && busyFiles.has(customMmprojFile);
+  const customMmprojBusy = !!customMmprojFile && busyFiles.has(customMmprojFile);
   const customBusy = customMainBusy || customMmprojBusy;
 
   const onDownloadCustom = async () => {
@@ -573,10 +542,7 @@ export function ModelsSection() {
 
   /** 本地模型卡的 summary toggle：跟推荐卡同逻辑，但 main/mmproj 用本地真实落盘名。
    *  mmproj 为自动配对的结果（纯文本模型为 null，只写 main）。 */
-  const onToggleLocalStep = async (
-    main: ModelEntry,
-    mmproj: ModelEntry | null,
-  ) => {
+  const onToggleLocalStep = async (main: ModelEntry, mmproj: ModelEntry | null) => {
     setError(null);
     const current = settings?.ai.summaryMain || settings?.ai.activeMain || "";
     try {
@@ -592,10 +558,7 @@ export function ModelsSection() {
   };
 
   /** 删本地模型：main + 自动配对的 mmproj 一起删（孤儿 mmproj 传 null 只删自己）。 */
-  const onDeleteLocal = async (
-    main: ModelEntry,
-    mmproj: ModelEntry | null,
-  ) => {
+  const onDeleteLocal = async (main: ModelEntry, mmproj: ModelEntry | null) => {
     setError(null);
     try {
       await api.deleteModel(main.filename);
@@ -634,10 +597,7 @@ export function ModelsSection() {
       {error ? <div className={styles.engineError}>{error}</div> : null}
 
       <div className={styles.modelsToolbar}>
-        <div
-          className={styles.modelsToolbarItem}
-          title={t("aiSettings.models.toolbar.statusAll")}
-        >
+        <div className={styles.modelsToolbarItem} title={t("aiSettings.models.toolbar.statusAll")}>
           <SimplePicker<FilterStatus>
             value={filterStatus}
             options={statusOptions}
@@ -645,10 +605,7 @@ export function ModelsSection() {
             icon={ListFilter}
           />
         </div>
-        <div
-          className={styles.modelsToolbarItem}
-          title={t("aiSettings.models.toolbar.brandAll")}
-        >
+        <div className={styles.modelsToolbarItem} title={t("aiSettings.models.toolbar.brandAll")}>
           <SimplePicker<string>
             value={filterBrand}
             options={brandOptions}
@@ -676,19 +633,14 @@ export function ModelsSection() {
           <div className={`${styles.modelCard} ${styles.modelCardCloud}`}>
             <div className={styles.modelCardRow}>
               <div className={styles.modelCardLeft}>
-                <Cloud
-                  size={22}
-                  strokeWidth={2}
-                  className={styles.modelCardCloudIcon}
-                />
+                <Cloud size={22} strokeWidth={2} className={styles.modelCardCloudIcon} />
                 <span className={styles.modelCardName}>
                   {t("aiSettings.models.cloud.cardTitle", {
                     provider: settings.ai.externalProvider || "cloud",
                   })}
                 </span>
                 <span className={styles.modelCardSize}>
-                  {settings.ai.model ||
-                    t("aiSettings.models.cloud.modelUnset")}
+                  {settings.ai.model || t("aiSettings.models.cloud.modelUnset")}
                 </span>
               </div>
               <div className={styles.modelCardRight}>
@@ -717,10 +669,7 @@ export function ModelsSection() {
             key={rec.mainFile}
             rec={rec}
             installed={isInstalled(rec)}
-            supportsTools={
-              local.find((m) => m.filename === rec.mainFile)?.supportsTools ??
-              null
-            }
+            supportsTools={local.find((m) => m.filename === rec.mainFile)?.supportsTools ?? null}
             usedForSummary={summaryMain === rec.mainFile}
             busyFiles={busyFiles}
             partialMap={partialMap}
@@ -737,9 +686,7 @@ export function ModelsSection() {
             main 自动配对 mmproj（按文件名前缀）。 */}
         {localPairs.length > 0 || unpairedMmprojs.length > 0 ? (
           <>
-            <div className={styles.modelCustomHint}>
-              {t("aiSettings.models.local.title")}
-            </div>
+            <div className={styles.modelCustomHint}>{t("aiSettings.models.local.title")}</div>
             {localPairs.map(({ main, mmproj }) => (
               <LocalModelCard
                 key={main.filename}
@@ -784,11 +731,7 @@ export function ModelsSection() {
 
         {/* 导入本地已有 GGUF 文件——给"自己下好/网盘拷来/别的机器传来"的模型一个入口。
             拷贝进模型目录，源文件不动，进入清单后跟下载来的模型完全等价。 */}
-        <ImportLocalModel
-          importing={importingFiles}
-          progress={progress}
-          onImport={onImportLocal}
-        />
+        <ImportLocalModel importing={importingFiles} progress={progress} onImport={onImportLocal} />
       </div>
       <ConfirmDialog
         open={confirmingUninstall != null}
@@ -842,8 +785,7 @@ function ImportLocalModel({
   const current = busy ? Array.from(importing)[0] : "";
   // 拷贝进度复用下载事件通道，按落盘名索引；有总字节数才显示百分比
   const cur = current ? progress[current] : null;
-  const pct =
-    cur && cur.total ? Math.floor((cur.downloaded / cur.total) * 100) : null;
+  const pct = cur && cur.total ? Math.floor((cur.downloaded / cur.total) * 100) : null;
   const label =
     pct != null
       ? t("aiSettings.models.import.importingPct", { name: current, pct })
@@ -858,11 +800,7 @@ function ImportLocalModel({
       title={t("aiSettings.models.import.tooltip")}
     >
       {busy ? (
-        <Loader2
-          size={14}
-          strokeWidth={2}
-          className={styles.testSpin}
-        />
+        <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
       ) : (
         <FolderInput size={14} strokeWidth={2} />
       )}
@@ -908,8 +846,7 @@ function CustomHfDownload({
   onDownload: () => void;
 }) {
   const { t } = useTranslation();
-  const canSubmit =
-    !busy && repo.trim().length > 0 && mainFile.trim().length > 0;
+  const canSubmit = !busy && repo.trim().length > 0 && mainFile.trim().length > 0;
   const activeFile = mainBusy ? mainFile : mmprojBusy ? mmprojFile : "";
   const activeProgress = activeFile ? progress[activeFile] : null;
   const activeIsMmproj = activeFile === mmprojFile && !!mmprojFile;
@@ -921,9 +858,7 @@ function CustomHfDownload({
         className={styles.modelExpandBtn}
         onClick={onToggle}
         disabled={busy && !show}
-        title={
-          busy && !show ? t("aiSettings.models.expand.busyTooltip") : undefined
-        }
+        title={busy && !show ? t("aiSettings.models.expand.busyTooltip") : undefined}
       >
         {show ? (
           <ChevronDown
@@ -934,22 +869,16 @@ function CustomHfDownload({
         ) : (
           <Plus size={14} strokeWidth={2} />
         )}
-        {show
-          ? t("aiSettings.models.custom.collapse")
-          : t("aiSettings.models.custom.expand")}
+        {show ? t("aiSettings.models.custom.collapse") : t("aiSettings.models.custom.expand")}
       </button>
 
       <div
-        className={`${styles.modelTailWrap} ${
-          show ? styles.modelTailWrapOpen : ""
-        }`}
+        className={`${styles.modelTailWrap} ${show ? styles.modelTailWrapOpen : ""}`}
         aria-hidden={!show}
       >
         <div className={styles.modelTailInner}>
           <div className={styles.modelCustomCard}>
-            <div className={styles.modelCustomHint}>
-              {t("aiSettings.models.custom.hint")}
-            </div>
+            <div className={styles.modelCustomHint}>{t("aiSettings.models.custom.hint")}</div>
             <label className={styles.modelCustomField}>
               <span className={styles.modelCustomLabel}>
                 {t("aiSettings.models.custom.repoLabel")}
@@ -989,9 +918,7 @@ function CustomHfDownload({
               <input
                 type="text"
                 className={styles.externalInput}
-                placeholder={t(
-                  "aiSettings.models.custom.mmprojFilePlaceholder",
-                )}
+                placeholder={t("aiSettings.models.custom.mmprojFilePlaceholder")}
                 value={mmprojFile}
                 onChange={(e) => setMmprojFile(e.target.value)}
                 spellCheck={false}
@@ -1008,11 +935,7 @@ function CustomHfDownload({
                 disabled={!canSubmit}
               >
                 {busy ? (
-                  <Loader2
-                    size={14}
-                    strokeWidth={2}
-                    className={styles.testSpin}
-                  />
+                  <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
                 ) : (
                   <Download size={14} strokeWidth={2} />
                 )}
@@ -1032,8 +955,7 @@ function CustomHfDownload({
                   {activeIsMmproj
                     ? t("aiSettings.models.card.progressMmproj")
                     : t("aiSettings.models.card.progressMain")}{" "}
-                  ·{" "}
-                  {(activeProgress.downloaded / 1024 / 1024).toFixed(1)} /
+                  · {(activeProgress.downloaded / 1024 / 1024).toFixed(1)} /
                   {activeProgress.total
                     ? ` ${(activeProgress.total / 1024 / 1024).toFixed(1)}`
                     : ` ${t("aiSettings.models.card.progressUnknownTotal")}`}{" "}
@@ -1072,8 +994,7 @@ function LocalModelCard({
   onDelete: (main: ModelEntry, mmproj: ModelEntry | null) => void;
 }) {
   const { t } = useTranslation();
-  const totalGB =
-    (main.sizeBytes + (mmproj?.sizeBytes ?? 0)) / 1024 / 1024 / 1024;
+  const totalGB = (main.sizeBytes + (mmproj?.sizeBytes ?? 0)) / 1024 / 1024 / 1024;
 
   return (
     <div className={styles.modelCard}>
@@ -1174,11 +1095,7 @@ function RecommendedCard({
   const mainBusy = busyFiles.has(rec.mainFile);
   const mmprojBusy = !!mmprojLocal && busyFiles.has(mmprojLocal);
   const busy = mainBusy || mmprojBusy;
-  const activeFile = mainBusy
-    ? rec.mainFile
-    : mmprojBusy
-      ? mmprojLocal
-      : null;
+  const activeFile = mainBusy ? rec.mainFile : mmprojBusy ? mmprojLocal : null;
   const activeProgress = activeFile ? progress[activeFile] : null;
   const activeIsMmproj = activeFile === mmprojLocal && !!mmprojLocal;
   // 已暂停态：partial 存在但不在 inflight。仅看 mainFile（每个 rec 唯一）的 partial
@@ -1220,11 +1137,7 @@ function RecommendedCard({
                   repo: rec.repo,
                 })}
               >
-                <Info
-                  size={12}
-                  strokeWidth={2.2}
-                  className={styles.engineInfoIcon}
-                />
+                <Info size={12} strokeWidth={2.2} className={styles.engineInfoIcon} />
                 <span className={styles.engineInfoTip} role="tooltip">
                   {t("aiSettings.models.card.hfTooltipPrefix")}
                   <code>{rec.repo}</code>
@@ -1344,8 +1257,7 @@ function RecommendedCard({
             {activeIsMmproj
               ? t("aiSettings.models.card.progressMmproj")
               : t("aiSettings.models.card.progressMain")}{" "}
-            ·{" "}
-            {(activeProgress.downloaded / 1024 / 1024).toFixed(1)} /
+            · {(activeProgress.downloaded / 1024 / 1024).toFixed(1)} /
             {activeProgress.total
               ? ` ${(activeProgress.total / 1024 / 1024).toFixed(1)}`
               : ` ${t("aiSettings.models.card.progressUnknownTotal")}`}{" "}

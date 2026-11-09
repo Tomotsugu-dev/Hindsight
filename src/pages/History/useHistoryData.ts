@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  api,
-  type AppDetail,
-  type AppUsage,
-  type DaySummaryDto,
-} from "../../api/hindsight";
+import { api, type AppDetail, type AppUsage, type DaySummaryDto } from "../../api/hindsight";
 import { logError } from "../../lib/logger";
 
 interface Loaded<T> {
@@ -78,24 +73,13 @@ export function useRangeDays(from: string | null, to: string, deviceId: string |
   return useLoad(from === null ? null : [from, to, deviceId ?? null], loadDays);
 }
 
-async function loadApps(
-  from: string,
-  to: string,
-  deviceId: string | null,
-): Promise<AppUsage[]> {
+async function loadApps(from: string, to: string, deviceId: string | null): Promise<AppUsage[]> {
   return api.getRangeApps(from, to, deviceId ?? undefined);
 }
 
 /** from..to 每个应用的总时长；from 为 null 时不拉。 */
-export function useRangeApps(
-  from: string | null,
-  to: string | null,
-  deviceId: string | undefined,
-) {
-  return useLoad(
-    from === null || to === null ? null : [from, to, deviceId ?? null],
-    loadApps,
-  );
+export function useRangeApps(from: string | null, to: string | null, deviceId: string | undefined) {
+  return useLoad(from === null || to === null ? null : [from, to, deviceId ?? null], loadApps);
 }
 
 async function loadAppDetail(
@@ -115,9 +99,7 @@ export function useAppRangeDetail(
   deviceId: string | undefined,
 ) {
   return useLoad(
-    groupId === null || from === null || to === null
-      ? null
-      : [from, to, groupId, deviceId ?? null],
+    groupId === null || from === null || to === null ? null : [from, to, groupId, deviceId ?? null],
     loadAppDetail,
   );
 }

@@ -81,44 +81,44 @@ export function PeriodCard({
           <div className={styles.cardHeadLeft}>{headLeftExtras}</div>
 
           <div className={styles.headRight}>
-          {rightExtras}
+            {rightExtras}
 
-          <div className={styles.dayNav}>
-            <button
-              ref={prevBtnRef}
-              type="button"
-              className={`${styles.navBtn} glow`}
-              onClick={onPrev}
-              disabled={transitioning}
-              aria-label={prevAriaLabel}
-              title={prevAriaLabel}
-            >
-              <ChevronLeft size={14} strokeWidth={1.75} />
-            </button>
+            <div className={styles.dayNav}>
+              <button
+                ref={prevBtnRef}
+                type="button"
+                className={`${styles.navBtn} glow`}
+                onClick={onPrev}
+                disabled={transitioning}
+                aria-label={prevAriaLabel}
+                title={prevAriaLabel}
+              >
+                <ChevronLeft size={14} strokeWidth={1.75} />
+              </button>
 
-            <button
-              ref={pillRef}
-              type="button"
-              className={`${styles.dayPill} ${pillClickable ? styles.dayPillClickable : ""} glow`}
-              onClick={onJumpToCurrent}
-              disabled={!pillClickable || transitioning}
-              title={pillClickable ? pillTooltip : undefined}
-            >
-              {pillLabel}
-            </button>
+              <button
+                ref={pillRef}
+                type="button"
+                className={`${styles.dayPill} ${pillClickable ? styles.dayPillClickable : ""} glow`}
+                onClick={onJumpToCurrent}
+                disabled={!pillClickable || transitioning}
+                title={pillClickable ? pillTooltip : undefined}
+              >
+                {pillLabel}
+              </button>
 
-            <button
-              ref={nextBtnRef}
-              type="button"
-              className={`${styles.navBtn} glow`}
-              onClick={onNext}
-              disabled={!canGoForward || transitioning}
-              aria-label={nextAriaLabel}
-              title={nextAriaLabel}
-            >
-              <ChevronRight size={14} strokeWidth={1.75} />
-            </button>
-          </div>
+              <button
+                ref={nextBtnRef}
+                type="button"
+                className={`${styles.navBtn} glow`}
+                onClick={onNext}
+                disabled={!canGoForward || transitioning}
+                aria-label={nextAriaLabel}
+                title={nextAriaLabel}
+              >
+                <ChevronRight size={14} strokeWidth={1.75} />
+              </button>
+            </div>
           </div>
         </div>
       </header>

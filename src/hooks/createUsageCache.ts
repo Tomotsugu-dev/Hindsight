@@ -157,10 +157,7 @@ export function createUsageCache<TData>(config: UsageCacheConfig<TData>) {
       return () => clearInterval(t);
     }, [currentOffset, fetchOne, invalidateOnRollover]);
 
-    const get = useCallback(
-      (offset: number): TData => cache.get(offset) ?? emptyValue,
-      [cache],
-    );
+    const get = useCallback((offset: number): TData => cache.get(offset) ?? emptyValue, [cache]);
 
     return { get };
   };

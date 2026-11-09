@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 /** 排序方式枚举：default = 保持入参顺序（PairingSection 现有的 device-sort + 未指派靠前）。 */
-export type AppsSortBy =
-  | "default"
-  | "duration_desc"
-  | "duration_asc"
-  | "name_asc"
-  | "name_desc";
+export type AppsSortBy = "default" | "duration_desc" | "duration_asc" | "name_asc" | "name_desc";
 
 const VALID_SORT_BYS: AppsSortBy[] = [
   "default",
@@ -66,7 +61,7 @@ function loadFromStorage(): AppsFilter {
       unassignedOnly: legacy ? true : parsed.unassignedOnly === true,
       sortBy:
         typeof parsed.sortBy === "string" && VALID_SORT_BYS.includes(parsed.sortBy)
-          ? (parsed.sortBy)
+          ? parsed.sortBy
           : "default",
     };
   } catch {
@@ -138,9 +133,7 @@ export function useAppsFilter() {
 
   /** 是否当前有任何"激活"的筛选条件（用来决定是否显示 noResults 的"清除筛选"按钮）。 */
   const isFiltering =
-    filter.search.length > 0 ||
-    filter.selectedCategoryIds.length > 0 ||
-    filter.unassignedOnly;
+    filter.search.length > 0 || filter.selectedCategoryIds.length > 0 || filter.unassignedOnly;
 
   return {
     filter,

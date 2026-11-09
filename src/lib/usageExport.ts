@@ -833,7 +833,11 @@ function iconStyleRules(icons: Map<string, string>, classes: Map<string, string>
 }
 
 /** 应用图标单元格：有图就用它的类，没有就分类色圆角块 + 首字符。 */
-function appIconHtml(a: AppStat, colors: Map<string, string>, classes: Map<string, string>): string {
+function appIconHtml(
+  a: AppStat,
+  colors: Map<string, string>,
+  classes: Map<string, string>,
+): string {
   const color = colors.get(a.categoryId) ?? "#94a3b8";
   const cls = classes.get(a.iconProcess ?? "");
   if (cls) return `<span class="app-icon ${cls}" aria-hidden="true"></span>`;
@@ -900,7 +904,9 @@ function periodRowHtml(
   ];
 
   if (zero) {
-    out.push(`<p class="empty">${htmlEscape(t("settings.data.export.file.noData"))}</p></div></div>`);
+    out.push(
+      `<p class="empty">${htmlEscape(t("settings.data.export.file.noData"))}</p></div></div>`,
+    );
     return out.join("");
   }
 

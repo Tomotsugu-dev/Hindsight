@@ -48,34 +48,17 @@ function monthTicks(buckets: DetailBucket[]): string[] {
   const n = buckets.length;
   if (n === 0) return [];
   const idxs = [
-    ...new Set([
-      0,
-      Math.floor(n * 0.25),
-      Math.floor(n * 0.5),
-      Math.floor(n * 0.75),
-      n - 1,
-    ]),
+    ...new Set([0, Math.floor(n * 0.25), Math.floor(n * 0.5), Math.floor(n * 0.75), n - 1]),
   ];
   return idxs.map((i) => String(keyDate(buckets[i].key).getDate()));
 }
 
-export function AppDetailDrawer({
-  app,
-  scope,
-  offset,
-  deviceId,
-  onClose,
-}: AppDetailDrawerProps) {
+export function AppDetailDrawer({ app, scope, offset, deviceId, onClose }: AppDetailDrawerProps) {
   const { t, i18n } = useTranslation();
   const fmtHM = useDurationFormatter();
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const { detail, loading } = useAppDetail(
-    scope,
-    offset,
-    app?.groupId ?? null,
-    deviceId,
-  );
+  const { detail, loading } = useAppDetail(scope, offset, app?.groupId ?? null, deviceId);
 
   useFocusTrap(app !== null, panelRef);
 
@@ -90,10 +73,7 @@ export function AppDetailDrawer({
   }, [app, onClose]);
 
   const buckets = useMemo(() => detail?.buckets ?? [], [detail]);
-  const maxBucket = useMemo(
-    () => Math.max(...buckets.map((b) => b.secs), 1),
-    [buckets],
-  );
+  const maxBucket = useMemo(() => Math.max(...buckets.map((b) => b.secs), 1), [buckets]);
 
   // 日期格式器跟随界面语言（hoist 出 map，避免每根柱子新建）
   const dateFmt = useMemo(
@@ -110,8 +90,7 @@ export function AppDetailDrawer({
     [i18n.language],
   );
 
-  const fmtSecs = (secs: number): string =>
-    fmtHM(Math.max(1, Math.round(secs / 60)));
+  const fmtSecs = (secs: number): string => fmtHM(Math.max(1, Math.round(secs / 60)));
 
   // 柱子 hover 文案：日=几点，周/月=哪天
   const bucketTip = (b: DetailBucket): string => {
@@ -146,22 +125,14 @@ export function AppDetailDrawer({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className={styles.head}>
-          <AppIcon
-            processName={app.iconProcess}
-            fallbackColor={app.color}
-            size={34}
-          />
+          <AppIcon processName={app.iconProcess} fallbackColor={app.color} size={34} />
           <div className={styles.headText}>
             <div className={styles.appName} title={app.name}>
               {app.name}
             </div>
             {app.categoryLabel ? (
               <div className={styles.appCat}>
-                <span
-                  className={styles.catDot}
-                  style={{ background: app.color }}
-                  aria-hidden
-                />
+                <span className={styles.catDot} style={{ background: app.color }} aria-hidden />
                 {app.categoryLabel}
               </div>
             ) : null}

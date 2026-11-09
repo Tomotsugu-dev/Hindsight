@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type PointerEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ZoomOut } from "lucide-react";
 import { useDurationFormatter } from "../../utils/duration";
@@ -230,11 +223,7 @@ export function Heatmap({
         <span className={styles.legend}>
           <span>{t("history.heatmap.less")}</span>
           {LEVEL_MIX.map((_, level) => (
-            <span
-              key={level}
-              className={styles.legendCell}
-              style={{ background: fill(level) }}
-            />
+            <span key={level} className={styles.legendCell} style={{ background: fill(level) }} />
           ))}
           <span>{t("history.heatmap.more")}</span>
         </span>

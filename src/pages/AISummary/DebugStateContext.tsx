@@ -7,14 +7,7 @@
 // settings.ai 是用户全局值；这里 init 一次性从 settings 拷贝默认值，之后两个
 // debug tab 内改值都是 local，不回写 settings——跟原 DebugTab 行为一致。
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_SYSTEM_PROMPTS, overrideKey } from "../../lib/aiPrompts";
 import { useSettings } from "../../state/settings";
 
@@ -58,15 +51,11 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     initedRef.current = true;
     setDebugExcluded(settings.ai.excludedCategories);
     // 调试参数初值——优先用 summary 专用字段，未设则 fallback 到旧全局字段
-    setDebugSummaryBatchSize(
-      settings.ai.summaryBatchSize ?? settings.ai.batchSize ?? null,
-    );
+    setDebugSummaryBatchSize(settings.ai.summaryBatchSize ?? settings.ai.batchSize ?? null);
     setDebugSummaryParallelSlots(
       settings.ai.summaryParallelSlots ?? settings.ai.parallelSlots ?? 1,
     );
-    setDebugSummaryCtxSize(
-      settings.ai.summaryCtxSize ?? settings.ai.ctxSize ?? null,
-    );
+    setDebugSummaryCtxSize(settings.ai.summaryCtxSize ?? settings.ai.ctxSize ?? null);
     // prompt：settings 覆盖优先，否则内置默认；保证 textarea 一打开就有真实文本
     const lang = settings.ai.promptLanguage;
     const key = overrideKey(lang);
@@ -90,11 +79,7 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
     setDebugExternalEnabled,
   };
 
-  return (
-    <DebugStateContext.Provider value={value}>
-      {children}
-    </DebugStateContext.Provider>
-  );
+  return <DebugStateContext.Provider value={value}>{children}</DebugStateContext.Provider>;
 }
 
 // Provider + 配套 hook 同文件是 React Context 的标准布局；为消除 Vite Fast Refresh

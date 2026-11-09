@@ -3,10 +3,5 @@ import { PlaceholderTab } from "./PlaceholderTab";
 
 export default function MonthlyTab() {
   const { t } = useTranslation();
-  return (
-    <PlaceholderTab
-      title={t("aiSummary.monthly.title")}
-      hint={t("aiSummary.monthly.hint")}
-    />
-  );
+  return <PlaceholderTab title={t("aiSummary.monthly.title")} hint={t("aiSummary.monthly.hint")} />;
 }

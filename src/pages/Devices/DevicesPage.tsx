@@ -31,12 +31,7 @@ import { logError } from "../../lib/logger";
 import { api, OAUTH_URL_EVENT, type AuthState, type SyncStatus } from "../../api/hindsight";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SyncOptInDialog } from "./SyncOptInDialog";
-import {
-  connectErrorKind,
-  NUTSTORE_DAV_URL,
-  serviceKind,
-  webdavAccountLabel,
-} from "./syncAccount";
+import { connectErrorKind, NUTSTORE_DAV_URL, serviceKind, webdavAccountLabel } from "./syncAccount";
 import styles from "./DevicesPage.module.css";
 
 /** 可选上云三挡的字段名(settings 布尔键)。 */
@@ -62,10 +57,16 @@ export default function DevicesPage() {
   // 同步账号：云同步卡片要用，「从云端移除」按钮也要看后端（WebDAV 上还不能移除）
   const [auth, setAuth] = useState<AuthState | null>(null);
   useEffect(() => {
-    api.authStatus().then(setAuth).catch(() => setAuth(null));
+    api
+      .authStatus()
+      .then(setAuth)
+      .catch(() => setAuth(null));
   }, []);
   const refreshAuth = () => {
-    api.authStatus().then(setAuth).catch(() => setAuth(null));
+    api
+      .authStatus()
+      .then(setAuth)
+      .catch(() => setAuth(null));
   };
 
   const runForget = async () => {
@@ -75,9 +76,7 @@ export default function DevicesPage() {
     setForgetBusyId(target.id);
     try {
       const deleted = await api.forgetRemoteDevice(target.id);
-      window.alert(
-        t("devices.forgetDialog.doneToast", { name: target.name, count: deleted }),
-      );
+      window.alert(t("devices.forgetDialog.doneToast", { name: target.name, count: deleted }));
       void reload();
     } catch (e) {
       logError("devices.forgetRemote", e);
@@ -193,7 +192,10 @@ function CloudSyncCard({
 
   useEffect(() => {
     const fetchSync = () => {
-      api.syncStatus().then(setSync).catch(() => {});
+      api
+        .syncStatus()
+        .then(setSync)
+        .catch(() => {});
     };
     fetchSync();
     const t = window.setInterval(fetchSync, 10_000);
@@ -218,7 +220,10 @@ function CloudSyncCard({
     setChooserOpen(true);
   };
   const refreshSync = () => {
-    api.syncStatus().then(setSync).catch(() => {});
+    api
+      .syncStatus()
+      .then(setSync)
+      .catch(() => {});
   };
 
   const onSignIn = async () => {
@@ -229,17 +234,14 @@ function CloudSyncCard({
     setOauthCopied(false);
     // 等授权 URL 事件:opened=false 立即亮兜底;opened=true 延时 6s 仍在等则亮
     let fallbackTimer: number | undefined;
-    const unlisten = await listen<{ url: string; opened: boolean }>(
-      OAUTH_URL_EVENT,
-      (e) => {
-        setOauthUrl(e.payload.url);
-        if (!e.payload.opened) {
-          setShowOauthFallback(true);
-        } else {
-          fallbackTimer = window.setTimeout(() => setShowOauthFallback(true), 6000);
-        }
-      },
-    );
+    const unlisten = await listen<{ url: string; opened: boolean }>(OAUTH_URL_EVENT, (e) => {
+      setOauthUrl(e.payload.url);
+      if (!e.payload.opened) {
+        setShowOauthFallback(true);
+      } else {
+        fallbackTimer = window.setTimeout(() => setShowOauthFallback(true), 6000);
+      }
+    });
     try {
       const next = await api.signInWithGoogle();
       setAuth(next);
@@ -307,16 +309,11 @@ function CloudSyncCard({
   const signedIn = auth?.signedIn ?? false;
   const configured = auth?.configured ?? false;
   // 用户改凭证后 auth.configured 可能没及时更新，所以 UI 也按本地 settings 算一遍
-  const credsFilled = !!(
-    settings?.googleClientId.trim() && settings?.googleClientSecret.trim()
-  );
+  const credsFilled = !!(settings?.googleClientId.trim() && settings?.googleClientSecret.trim());
   const canSignIn = configured || credsFilled;
   const onWebdav = auth?.backend === "webdav";
   const serviceName = t(`devices.cloud.services.${serviceKind(auth)}.name`);
-  const webdavAccount = webdavAccountLabel(
-    auth?.webdavUrl ?? null,
-    auth?.webdavUser ?? null,
-  );
+  const webdavAccount = webdavAccountLabel(auth?.webdavUrl ?? null, auth?.webdavUser ?? null);
   // 选 Google：有 OAuth 凭证就直接登录，没有就先展开凭证面板
   const onPickGoogle = canSignIn ? onSignIn : () => setSetupOpen(true);
   // 凭证失效时的「重新登录」：Google 重走 OAuth，WebDAV 重新填密码
@@ -325,7 +322,10 @@ function CloudSyncCard({
   // 当填好凭证后，刷新一下 auth 让 configured 同步过来（用于按钮可点态）
   useEffect(() => {
     if (credsFilled && !configured && !signedIn) {
-      api.authStatus().then(setAuth).catch(() => {});
+      api
+        .authStatus()
+        .then(setAuth)
+        .catch(() => {});
     }
   }, [credsFilled, configured, signedIn, setAuth]);
 
@@ -351,17 +351,9 @@ function CloudSyncCard({
   );
 
   return (
-    <div
-      className={`${styles.syncCard} ${signedIn ? styles.syncCardConnected : ""}`}
-    >
+    <div className={`${styles.syncCard} ${signedIn ? styles.syncCardConnected : ""}`}>
       <div className={styles.syncHeader}>
-        <div
-          className={
-            signedIn
-              ? styles.syncIcon
-              : `${styles.syncIcon} ${styles.syncIconMuted}`
-          }
-        >
+        <div className={signedIn ? styles.syncIcon : `${styles.syncIcon} ${styles.syncIconMuted}`}>
           {signedIn ? (
             <Cloud size={20} strokeWidth={1.6} />
           ) : (
@@ -378,7 +370,7 @@ function CloudSyncCard({
             {signedIn
               ? onWebdav
                 ? webdavAccount
-                : auth?.email ?? auth?.uid ?? ""
+                : (auth?.email ?? auth?.uid ?? "")
               : onWebdav
                 ? t("devices.cloud.webdav.signedOutPrompt", {
                     account: webdavAccount,
@@ -389,10 +381,7 @@ function CloudSyncCard({
             <div className={styles.syncStats}>
               {sync.pending > 0 ? (
                 <>
-                  <span
-                    className={`${styles.syncDot} ${styles.syncDotPending}`}
-                    aria-hidden
-                  />
+                  <span className={`${styles.syncDot} ${styles.syncDotPending}`} aria-hidden />
                   <span className={styles.syncStatPending}>
                     {t("devices.cloud.stats.pending", { count: sync.pending })}
                   </span>
@@ -432,18 +421,13 @@ function CloudSyncCard({
           {auth == null ? (
             // auth 状态还没拿到——别渲染 connectBtn(蓝) 然后秒切到 smallBtn(灰)，
             // 改成同尺寸 skeleton 占位，等 authStatus resolve 完再 swap
-            <div
-              className={styles.syncActionsSkeleton}
-              aria-hidden="true"
-            />
+            <div className={styles.syncActionsSkeleton} aria-hidden="true" />
           ) : signedIn ? (
             <>
               <button
                 type="button"
                 className={styles.smallBtn}
-                onClick={() =>
-                  chooserOpen ? setChooserOpen(false) : openChooser("cards")
-                }
+                onClick={() => (chooserOpen ? setChooserOpen(false) : openChooser("cards"))}
                 disabled={busy}
                 title={t("devices.cloud.actions.changeTitle")}
               >
@@ -462,9 +446,7 @@ function CloudSyncCard({
                   strokeWidth={1.85}
                   className={syncing ? styles.spinning : ""}
                 />
-                {syncing
-                  ? t("devices.cloud.actions.syncing")
-                  : t("devices.cloud.actions.syncNow")}
+                {syncing ? t("devices.cloud.actions.syncing") : t("devices.cloud.actions.syncNow")}
               </button>
               {/* 凭证失效时同时给两个按钮：
                   - 退出登录：清掉本机 auth_state，回到未登录状态（不动云端数据 / 本机数据）
@@ -567,14 +549,8 @@ function CloudSyncCard({
       {/* ── OAuth 手动兜底:浏览器没弹出来时给用户一条活路 ── */}
       {busy && showOauthFallback && oauthUrl && (
         <div className={styles.oauthFallback}>
-          <span className={styles.oauthFallbackText}>
-            {t("devices.cloud.oauthFallback.hint")}
-          </span>
-          <button
-            type="button"
-            className={styles.smallBtn}
-            onClick={() => void onCopyOauthUrl()}
-          >
+          <span className={styles.oauthFallbackText}>{t("devices.cloud.oauthFallback.hint")}</span>
+          <button type="button" className={styles.smallBtn} onClick={() => void onCopyOauthUrl()}>
             {oauthCopied ? (
               <>
                 <Check size={13} strokeWidth={2.2} />
@@ -593,9 +569,7 @@ function CloudSyncCard({
       {/* ── 同步内容:可选上云三挡(仅登录后显示;开启前弹琥珀警告)── */}
       {signedIn && (
         <div className={styles.datasetBlock}>
-          <div className={styles.datasetHeader}>
-            {t("devices.cloud.datasets.title")}
-          </div>
+          <div className={styles.datasetHeader}>{t("devices.cloud.datasets.title")}</div>
           <p className={styles.datasetHint}>{t("devices.cloud.datasets.hint")}</p>
           {OPT_DATASETS.map(({ field, key }) => (
             <div key={field} className={styles.datasetRow}>
@@ -689,11 +663,7 @@ function SetupPanel({
         <Settings2 size={13} strokeWidth={2} />
         <span>{t("devices.setup.header")}</span>
         {collapsible && (
-          <button
-            type="button"
-            className={styles.setupClose}
-            onClick={onCollapse}
-          >
+          <button type="button" className={styles.setupClose} onClick={onCollapse}>
             {t("devices.setup.collapse")}
           </button>
         )}
@@ -702,45 +672,32 @@ function SetupPanel({
         <li>
           <span className={styles.stepNum}>1</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>
-              {t("devices.setup.step1.title")}
-            </div>
+            <div className={styles.stepTitle}>{t("devices.setup.step1.title")}</div>
             <div className={styles.stepDesc}>
               {t("devices.setup.step1.bodyPrefix")}
-              <span className={styles.cueBtn}>
-                {t("devices.setup.step1.cueEnable")}
-              </span>
+              <span className={styles.cueBtn}>{t("devices.setup.step1.cueEnable")}</span>
               {t("devices.setup.step1.bodySuffix")}
             </div>
             <button
               type="button"
               className={styles.stepBtn}
               onClick={() =>
-                open(
-                  "https://console.cloud.google.com/apis/library/drive.googleapis.com",
-                )
+                open("https://console.cloud.google.com/apis/library/drive.googleapis.com")
               }
             >
-              {t("devices.setup.step1.openLink")}{" "}
-              <ChevronRight size={13} strokeWidth={2.25} />
+              {t("devices.setup.step1.openLink")} <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
         <li>
           <span className={styles.stepNum}>2</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>
-              {t("devices.setup.step2.title")}
-            </div>
+            <div className={styles.stepTitle}>{t("devices.setup.step2.title")}</div>
             <div className={styles.stepDesc}>
               {t("devices.setup.step2.bodyPrefix")}
-              <span className={styles.cueBtn}>
-                {t("devices.setup.step2.cueStart")}
-              </span>
+              <span className={styles.cueBtn}>{t("devices.setup.step2.cueStart")}</span>
               {t("devices.setup.step2.bodyMiddle")}
-              <span className={styles.cueBtn}>
-                {t("devices.setup.step2.cueCreate")}
-              </span>
+              <span className={styles.cueBtn}>{t("devices.setup.step2.cueCreate")}</span>
               {t("devices.setup.step2.bodySuffix")}
             </div>
             <button
@@ -748,22 +705,17 @@ function SetupPanel({
               className={styles.stepBtn}
               onClick={() => open("https://console.cloud.google.com/auth/audience")}
             >
-              {t("devices.setup.step2.openLink")}{" "}
-              <ChevronRight size={13} strokeWidth={2.25} />
+              {t("devices.setup.step2.openLink")} <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
         <li>
           <span className={styles.stepNum}>3</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>
-              {t("devices.setup.step3.title")}
-            </div>
+            <div className={styles.stepTitle}>{t("devices.setup.step3.title")}</div>
             <div className={styles.stepDesc}>
               {t("devices.setup.step3.bodyPrefix")}
-              <span className={styles.cueLink}>
-                {t("devices.setup.step3.cueCreateClient")}
-              </span>
+              <span className={styles.cueLink}>{t("devices.setup.step3.cueCreateClient")}</span>
               {t("devices.setup.step3.bodySuffix")}
             </div>
             <button
@@ -771,21 +723,16 @@ function SetupPanel({
               className={styles.stepBtn}
               onClick={() => open("https://console.cloud.google.com/auth/clients")}
             >
-              {t("devices.setup.step3.openLink")}{" "}
-              <ChevronRight size={13} strokeWidth={2.25} />
+              {t("devices.setup.step3.openLink")} <ChevronRight size={13} strokeWidth={2.25} />
             </button>
           </div>
         </li>
         <li>
           <span className={styles.stepNum}>4</span>
           <div className={styles.stepBody}>
-            <div className={styles.stepTitle}>
-              {t("devices.setup.step4.title")}
-            </div>
+            <div className={styles.stepTitle}>{t("devices.setup.step4.title")}</div>
             <label className={styles.credField}>
-              <span className={styles.credLabel}>
-                {t("devices.setup.step4.clientIdLabel")}
-              </span>
+              <span className={styles.credLabel}>{t("devices.setup.step4.clientIdLabel")}</span>
               <input
                 type="text"
                 className={styles.credInput}
@@ -797,9 +744,7 @@ function SetupPanel({
               />
             </label>
             <label className={styles.credField}>
-              <span className={styles.credLabel}>
-                {t("devices.setup.step4.secretLabel")}
-              </span>
+              <span className={styles.credLabel}>{t("devices.setup.step4.secretLabel")}</span>
               <div className={styles.credInputWrap}>
                 <input
                   type={secretVisible ? "text" : "password"}
@@ -820,9 +765,7 @@ function SetupPanel({
                       : t("devices.setup.step4.showSecret")
                   }
                   title={
-                    secretVisible
-                      ? t("devices.setup.step4.hide")
-                      : t("devices.setup.step4.show")
+                    secretVisible ? t("devices.setup.step4.hide") : t("devices.setup.step4.show")
                   }
                   tabIndex={-1}
                 >
@@ -878,11 +821,7 @@ function ServiceChooser({
         <ArrowLeftRight size={13} strokeWidth={2} />
         <span>{t("devices.cloud.chooser.header")}</span>
         {view === "webdav" ? (
-          <button
-            type="button"
-            className={styles.setupClose}
-            onClick={() => onViewChange("cards")}
-          >
+          <button type="button" className={styles.setupClose} onClick={() => onViewChange("cards")}>
             {t("devices.cloud.chooser.back")}
           </button>
         ) : (
@@ -920,16 +859,10 @@ function ServiceChooser({
               onAction={() => onViewChange("webdav")}
             />
           </div>
-          {current && (
-            <div className={styles.stepDesc}>{t("devices.cloud.chooser.notice")}</div>
-          )}
+          {current && <div className={styles.stepDesc}>{t("devices.cloud.chooser.notice")}</div>}
         </>
       ) : (
-        <WebDavForm
-          initialUrl={initialUrl}
-          initialUser={initialUser}
-          onConnected={onConnected}
-        />
+        <WebDavForm initialUrl={initialUrl} initialUser={initialUser} onConnected={onConnected} />
       )}
     </div>
   );
@@ -997,8 +930,7 @@ function WebDavForm({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canConnect =
-    url.trim() !== "" && user.trim() !== "" && password !== "" && !busy;
+  const canConnect = url.trim() !== "" && user.trim() !== "" && password !== "" && !busy;
 
   const onConnect = async () => {
     setBusy(true);
@@ -1073,11 +1005,7 @@ function WebDavForm({
                 ? t("devices.cloud.webdav.hidePassword")
                 : t("devices.cloud.webdav.showPassword")
             }
-            title={
-              passwordVisible
-                ? t("devices.setup.step4.hide")
-                : t("devices.setup.step4.show")
-            }
+            title={passwordVisible ? t("devices.setup.step4.hide") : t("devices.setup.step4.show")}
             tabIndex={-1}
           >
             {passwordVisible ? (
@@ -1099,9 +1027,7 @@ function WebDavForm({
         ) : (
           <LogIn size={13} strokeWidth={2} />
         )}
-        {busy
-          ? t("devices.cloud.webdav.connecting")
-          : t("devices.cloud.webdav.connect")}
+        {busy ? t("devices.cloud.webdav.connecting") : t("devices.cloud.webdav.connect")}
       </button>
     </form>
   );
@@ -1219,13 +1145,9 @@ function SelfRow({
           <span className={styles.tag}>{t("devices.self.tag")}</span>
         </div>
         <div className={styles.metaRow}>
-          <span>
-            {t("devices.self.lastActivity", { when: lastSeen })}
-          </span>
+          <span>{t("devices.self.lastActivity", { when: lastSeen })}</span>
           <span className={styles.dotSep}>·</span>
-          <span>
-            {t("devices.self.todayCount", { count: todayCount })}
-          </span>
+          <span>{t("devices.self.todayCount", { count: todayCount })}</span>
         </div>
       </div>
 

@@ -16,11 +16,7 @@
 
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import i18next from "i18next";
-import {
-  api,
-  SUMMARY_PROGRESS_EVENT,
-  type SummaryProgress,
-} from "../api/hindsight";
+import { api, SUMMARY_PROGRESS_EVENT, type SummaryProgress } from "../api/hindsight";
 import { localizeAiError } from "../lib/aiErrors";
 import { logWarn } from "../lib/logger";
 
@@ -200,10 +196,7 @@ export function setTopError(msg: string): void {
  * invoke 前先乐观置 generating=true（让按钮立刻变"停止"，不等首个事件来）；
  * invoke 抛错时回滚并设 topError。成功就交给事件流接管 generating 复位。
  */
-export async function startDailyGenerate(
-  date: string,
-  forceRefresh: boolean,
-): Promise<void> {
+export async function startDailyGenerate(date: string, forceRefresh: boolean): Promise<void> {
   ensureListener();
   snap = Object.freeze({
     ...EMPTY_SNAP,
@@ -240,10 +233,7 @@ export async function cancelDailyGenerate(): Promise<void> {
  * 重试单段。后端 `run_one_segment_only` 不发 all_done 事件，只发 segment_started
  * / segment_done——这里需要在 await 完手动复位 generating（事件流不会替它复位）。
  */
-export async function retryDailySegment(
-  date: string,
-  segmentIdx: number,
-): Promise<void> {
+export async function retryDailySegment(date: string, segmentIdx: number): Promise<void> {
   ensureListener();
   snap = Object.freeze({
     ...EMPTY_SNAP,

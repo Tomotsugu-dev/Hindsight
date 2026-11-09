@@ -357,11 +357,7 @@ export const MODEL_DOWNLOAD_EVENT = "ai://model-download-progress";
 export const OAUTH_URL_EVENT = "sync://oauth-url";
 
 /** 下载进度阶段。`downloaded` / `total` 只在 downloading 阶段有意义。 */
-export type EngineDownloadPhase =
-  | "downloading"
-  | "verifying"
-  | "extracting"
-  | "done";
+export type EngineDownloadPhase = "downloading" | "verifying" | "extracting" | "done";
 
 /** 下载阶段：`engine` = llama.cpp binary、`runtime` = onnxruntime dylib。
  *  download_binary 命令把两阶段串联跑，前端按这个字段切换提示文字
@@ -846,20 +842,14 @@ export const api = {
   writeTextFile: (path: string, content: string) =>
     invoke<void>("write_text_file", { path, content }),
   /** 把托盘菜单文案同步成当前 UI 语言（show=显示主窗口 / quit=退出 的译文） */
-  setTrayLabels: (show: string, quit: string) =>
-    invoke<void>("set_tray_labels", { show, quit }),
+  setTrayLabels: (show: string, quit: string) => invoke<void>("set_tray_labels", { show, quit }),
   /** 加上或去掉托盘、任务栏上的红点 */
   setPluginsBadge: (show: boolean) => invoke<void>("set_plugins_badge", { show }),
   getDayHours: (dayOffset: number, deviceId?: string) =>
     invoke<HourSlot[]>("get_day_hours", { dayOffset, deviceId }),
   getDayApps: (dayOffset: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_day_apps", { dayOffset, limit, deviceId }),
-  getHourApps: (
-    dayOffset: number,
-    hour: number,
-    limit?: number,
-    deviceId?: string,
-  ) =>
+  getHourApps: (dayOffset: number, hour: number, limit?: number, deviceId?: string) =>
     invoke<AppUsage[]>("get_hour_apps", { dayOffset, hour, limit, deviceId }),
   getAppBuckets: (scope: DetailScope, offset: number, groupId: string, deviceId?: string) =>
     invoke<DetailBucket[]>("get_app_buckets", { scope, offset, groupId, deviceId }),
@@ -880,56 +870,43 @@ export const api = {
   getRangeApps: (from: string, to: string, deviceId?: string) =>
     invoke<AppUsage[]>("get_range_apps", { from, to, deviceId }),
   /** 全部历史页：一个应用在 from..to 内每天的时长 + 窗口标题用时 */
-  getAppRangeDetail: (
-    from: string,
-    to: string,
-    groupId: string,
-    deviceId?: string,
-  ) =>
+  getAppRangeDetail: (from: string, to: string, groupId: string, deviceId?: string) =>
     invoke<AppDetail>("get_app_range_detail", { from, to, groupId, deviceId }),
   listCategories: () => invoke<Category[]>("list_categories"),
-  createCategory: (input: CategoryInput) =>
-    invoke<Category>("create_category", { input }),
+  createCategory: (input: CategoryInput) => invoke<Category>("create_category", { input }),
   updateCategory: (id: string, patch: CategoryPatch) =>
     invoke<void>("update_category", { id, patch }),
   deleteCategory: (id: string) => invoke<void>("delete_category", { id }),
-  reorderCategories: (orderedIds: string[]) =>
-    invoke<void>("reorder_categories", { orderedIds }),
+  reorderCategories: (orderedIds: string[]) => invoke<void>("reorder_categories", { orderedIds }),
   assignApp: (processName: string, categoryId: string) =>
     invoke<void>("assign_app_to_category", { processName, categoryId }),
-  unassignApp: (processName: string) =>
-    invoke<void>("unassign_app", { processName }),
+  unassignApp: (processName: string) => invoke<void>("unassign_app", { processName }),
   listUnclassifiedApps: (daysBack?: number) =>
     invoke<UnclassifiedApp[]>("list_unclassified_apps", { daysBack }),
   /** 还是中文原名的默认分类、默认大类换成这些译名（id → 译名）。只换一次，见 ADR-0015 */
   translateDefaultCategoryNames: (
     categories: Record<string, string>,
     superCategories: Record<string, string>,
-  ) =>
-    invoke<void>("translate_default_category_names", { categories, superCategories }),
+  ) => invoke<void>("translate_default_category_names", { categories, superCategories }),
   // —— v28 大类（super-category）—— 本地 only，sync 暂未接入
-  listSuperCategories: () =>
-    invoke<SuperCategory[]>("list_super_categories"),
+  listSuperCategories: () => invoke<SuperCategory[]>("list_super_categories"),
   createSuperCategory: (input: SuperCategoryInput) =>
     invoke<SuperCategory>("create_super_category", { input }),
   updateSuperCategory: (id: string, patch: SuperCategoryPatch) =>
     invoke<void>("update_super_category", { id, patch }),
   reorderSuperCategories: (orderedIds: string[]) =>
     invoke<void>("reorder_super_categories", { orderedIds }),
-  deleteSuperCategory: (id: string) =>
-    invoke<void>("delete_super_category", { id }),
+  deleteSuperCategory: (id: string) => invoke<void>("delete_super_category", { id }),
   assignCategoryToSuper: (categoryId: string, superId: string | null) =>
     invoke<void>("assign_category_to_super", { categoryId, superId }),
   listAppGroups: () => invoke<AppGroup[]>("list_app_groups"),
   /** **真删**这个应用的数据：活动记录、截图文件、OCR 文字索引一并清掉，最后软删组。
    *  不可逆；不重算已生成的报表，也不传播数据删除到其它设备。
    *  详见 `repo::purge::purge`。 */
-  purgeAppGroupData: (groupId: string) =>
-    invoke<void>("purge_app_group_data", { groupId }),
+  purgeAppGroupData: (groupId: string) => invoke<void>("purge_app_group_data", { groupId }),
   mergeAppGroup: (processName: string, targetGroupId: string) =>
     invoke<void>("merge_app_group", { processName, targetGroupId }),
-  unmergeAppGroup: (processName: string) =>
-    invoke<void>("unmerge_app_group", { processName }),
+  unmergeAppGroup: (processName: string) => invoke<void>("unmerge_app_group", { processName }),
   renameAppGroup: (groupId: string, displayName: string) =>
     invoke<void>("rename_app_group", { groupId, displayName }),
   assignAppGroupCategory: (groupId: string, categoryId: string | null) =>
@@ -950,18 +927,15 @@ export const api = {
   startCapture: () => invoke<void>("start_capture"),
   stopCapture: () => invoke<void>("stop_capture"),
   getCaptureStatus: () => invoke<CaptureStatus>("get_capture_status"),
-  getGnomeExtensionStatus: () =>
-    invoke<GnomeExtensionStatus>("get_gnome_extension_status"),
+  getGnomeExtensionStatus: () => invoke<GnomeExtensionStatus>("get_gnome_extension_status"),
   /** 打开 Hindsight 的 GNOME 扩展，返回打开后的状态。 */
   enableGnomeExtension: () => invoke<GnomeExtensionStatus>("enable_gnome_extension"),
-  getAppIcon: (processName: string) =>
-    invoke<string | null>("get_app_icon", { processName }),
+  getAppIcon: (processName: string) => invoke<string | null>("get_app_icon", { processName }),
   /** 导出 HTML 报告用：图标直接返回 base64 data URL，不用再经过文件路径。 */
   getAppIconDataUrl: (processName: string) =>
     invoke<string | null>("get_app_icon_data_url", { processName }),
   getSettings: () => invoke<Settings>("get_settings"),
-  updateSettings: (patch: SettingsPatch) =>
-    invoke<Settings>("update_settings", { patch }),
+  updateSettings: (patch: SettingsPatch) => invoke<Settings>("update_settings", { patch }),
   /** 新增忽略规则（幂等：等价规则已存在时不重复添加）。titleKeyword=null = 忽略整个应用。 */
   addIgnoreRule: (processName: string, titleKeyword: string | null) =>
     invoke<IgnoreRulesResult>("add_ignore_rule", { processName, titleKeyword }),
@@ -975,8 +949,7 @@ export const api = {
    *  返回实际删除的 Drive 文件数。
    *  - `keepLocal=false`：本机也按同款 clearedAt trim 旧数据（对称语义，离职/卖机器场景）
    *  - `keepLocal=true`：本机数据完整保留（换 Google 账号场景，迁数据到新账号） */
-  purgeCloudData: (keepLocal: boolean) =>
-    invoke<number>("purge_cloud_data", { keepLocal }),
+  purgeCloudData: (keepLocal: boolean) => invoke<number>("purge_cloud_data", { keepLocal }),
   /** 从云端永久移除一台不在自己手里的远端设备：
    *  - 删 Drive 上 `device.<deviceId>.*` 全部文件
    *  - 上传 tombstone 让其它设备 pull 后也清掉这台设备的活动 + 软删 devices 行
@@ -984,17 +957,13 @@ export const api = {
    *
    *  返回 Drive 上被删除的文件数。
    *  必须已登录；deviceId == self 会被后端拒（请走 purgeCloudData）。 */
-  forgetRemoteDevice: (deviceId: string) =>
-    invoke<number>("forget_remote_device", { deviceId }),
+  forgetRemoteDevice: (deviceId: string) => invoke<number>("forget_remote_device", { deviceId }),
   openScreenshotsDir: () => invoke<void>("open_screenshots_dir"),
   getDataRoot: () => invoke<string>("get_data_root"),
   setDataRoot: (path: string) => invoke<void>("set_data_root", { path }),
   listDevices: () => invoke<DeviceRow[]>("list_devices"),
-  updateSelfDevice: (
-    name?: string,
-    color?: string,
-    icon?: string,
-  ) => invoke<DeviceRow>("update_self_device", { name, color, icon }),
+  updateSelfDevice: (name?: string, color?: string, icon?: string) =>
+    invoke<DeviceRow>("update_self_device", { name, color, icon }),
   authStatus: () => invoke<AuthState>("auth_status"),
   signInWithGoogle: () => invoke<AuthState>("sign_in_with_google"),
   signOut: () => invoke<void>("sign_out"),
@@ -1009,12 +978,7 @@ export const api = {
   testAiEndpoint: (endpoint: string, apiKey?: string) =>
     invoke<TestAiEndpointResp>("test_ai_endpoint", { endpoint, apiKey }),
   /** 真发一次 chat（max_tokens=1）验证模型 ID 可用；withImage 时带 1×1 PNG 测多模态。 */
-  testAiChat: (
-    endpoint: string,
-    apiKey: string | undefined,
-    model: string,
-    withImage: boolean,
-  ) =>
+  testAiChat: (endpoint: string, apiKey: string | undefined, model: string, withImage: boolean) =>
     invoke<TestAiEndpointResp>("test_ai_chat", {
       endpoint,
       apiKey,
@@ -1030,8 +994,7 @@ export const api = {
   /** 下载文字识别（OCR）组件——onnxruntime 运行时，屏幕记忆专用（~40MB，
    *  Windows DirectML 构建）。已装且版本匹配时幂等快速返回；force 强制重下。
    *  进度同 ENGINE_DOWNLOAD_EVENT，stage="runtime"。macOS 走系统 Vision 用不到。 */
-  downloadOcrRuntime: (force = false) =>
-    invoke<void>("download_ocr_runtime", { force }),
+  downloadOcrRuntime: (force = false) => invoke<void>("download_ocr_runtime", { force }),
   deleteOcrRuntime: () => invoke<void>("delete_ocr_runtime"),
   openEngineDir: () => invoke<void>("open_engine_dir"),
   /** 拿 llama-server 子进程最近 stderr/stdout（最多 500 行）。调试 tab 用，
@@ -1045,11 +1008,9 @@ export const api = {
    *  目录不存在或为空都返回 []，不抛错。 */
   listLocalModels: () => invoke<ModelEntry[]>("list_local_models"),
   /** 删除一个本地 GGUF。filename 必须是 basename（不含路径分隔符）。 */
-  deleteModel: (filename: string) =>
-    invoke<void>("delete_model", { filename }),
+  deleteModel: (filename: string) => invoke<void>("delete_model", { filename }),
   /** Hindsight 内置推荐表，前端拿来渲染推荐卡片。静态数据。 */
-  listRecommendedModels: () =>
-    invoke<RecommendedModel[]>("list_recommended_models"),
+  listRecommendedModels: () => invoke<RecommendedModel[]>("list_recommended_models"),
   /** 从 HuggingFace 下载一个 GGUF 文件到 settings.ai.modelsPath。
    *  进度通过 listen(MODEL_DOWNLOAD_EVENT, ...) 拿。
    *  Promise resolve = 整个文件下载完毕；reject = 任何阶段失败（含被 cancel——
@@ -1060,12 +1021,7 @@ export const api = {
    *  同名（比如 unsloth 系列都是 mmproj-F16.gguf），前端按 `<mainStem>__<hfName>` 起独立
    *  名字落盘，避免互相覆盖。不传则跟 file 一样。progress event / cancel 都按 saveAs 索引。
    *  返回值是落盘后的完整路径。 */
-  downloadModel: (
-    repo: string,
-    file: string,
-    expectedBytes: number,
-    saveAs?: string | null,
-  ) =>
+  downloadModel: (repo: string, file: string, expectedBytes: number, saveAs?: string | null) =>
     invoke<string>("download_model", {
       repo,
       file,
@@ -1075,16 +1031,13 @@ export const api = {
   /** 把用户磁盘上已有的 GGUF 文件导入模型目录（拷贝，源文件不动）。`srcPath`
    *  是系统文件选择框返回的绝对路径。进度复用 downloadModel 同一条事件（event 的
    *  file 字段 = 源文件名），前端按落盘名索引进度。返回落盘后的完整路径。 */
-  importModel: (srcPath: string) =>
-    invoke<string>("import_model", { srcPath }),
+  importModel: (srcPath: string) => invoke<string>("import_model", { srcPath }),
   /** 暂停某个进行中的下载——翻 cancel flag。`<file>.partial` 保留，下次再调
    *  downloadModel 同 file 名时会续传。文件没在下载时静默成功（idempotent）。 */
-  cancelModelDownload: (file: string) =>
-    invoke<void>("cancel_model_download", { file }),
+  cancelModelDownload: (file: string) => invoke<void>("cancel_model_download", { file }),
   /** 列扫所有 `<file>.partial` 半成品；用于渲染"继续"按钮 + 已下进度。
    *  目录不存在或没有 partial 时返回 `[]`。 */
-  listPartialDownloads: () =>
-    invoke<PartialDownload[]>("list_partial_downloads"),
+  listPartialDownloads: () => invoke<PartialDownload[]>("list_partial_downloads"),
   /** 切换 / 设置当前在用的模型（旧版 API；新代码请用 setStepModel）。写 settings 后会把
    *  在跑的 server 停掉，让用户主动点"启动引擎"按新模型重起。
    *  mmprojFile 传 null 表示没有（纯文本模型）。 */
@@ -1093,11 +1046,8 @@ export const api = {
   /** 单独设置 段总结（summary）/ 对话（chat）的模型；其它 step 不动。
    *  mainFile 空字符串 = 清掉该 step 的覆盖（summary fallback 到 activeMain，
    *  chat 回到自动路由）。同时会 stop 在跑的 server。chat 忽略 mmprojFile。 */
-  setStepModel: (
-    step: "summary" | "chat",
-    mainFile: string,
-    mmprojFile: string | null,
-  ) => invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
+  setStepModel: (step: "summary" | "chat", mainFile: string, mmprojFile: string | null) =>
+    invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；
@@ -1169,8 +1119,7 @@ export const api = {
   getWeekSummary: (weekStart: string) =>
     invoke<SegmentSummaryRow | null>("get_week_summary", { weekStart }),
   /** 删除某周已生成的周报行。weekStart 不是周一时自动对齐。 */
-  clearWeekSummary: (weekStart: string) =>
-    invoke<void>("clear_week_summary", { weekStart }),
+  clearWeekSummary: (weekStart: string) => invoke<void>("clear_week_summary", { weekStart }),
   /** 清当天所有 AI 段总结。调试 tab 的「删除」按钮调，
    *  给用户在不重跑的情况下手动清历史。 */
   clearDaySummary: (date: string, source: string = "daily") =>
@@ -1198,12 +1147,7 @@ export const api = {
     }),
   /** 重新回答当前路径上最近的提问:追加新版本落库(不删旧回答),
    *  历史沿 leafGuid(缺省=会话最新叶)回溯并截断到该提问之前。 */
-  chatRegenerate: (
-    conversationId: number,
-    locale?: string,
-    askId?: string,
-    leafGuid?: string,
-  ) =>
+  chatRegenerate: (conversationId: number, locale?: string, askId?: string, leafGuid?: string) =>
     invoke<ChatAskResult>("chat_regenerate", {
       conversationId,
       locale,
@@ -1216,8 +1160,7 @@ export const api = {
   /** 停止一次生成。找不到（已完成/已停止）返回 false，幂等。 */
   chatCancel: (askId: string) => invoke<boolean>("chat_cancel", { askId }),
   /** 会话列表（最近更新在前）。 */
-  chatListConversations: () =>
-    invoke<ChatConversationMeta[]>("chat_list_conversations"),
+  chatListConversations: () => invoke<ChatConversationMeta[]>("chat_list_conversations"),
   /** 某会话全部消息（时间正序）。 */
   chatGetMessages: (conversationId: number) =>
     invoke<ChatStoredMessage[]>("chat_get_messages", { conversationId }),
@@ -1238,8 +1181,7 @@ export const api = {
   memoryLocate: (path: string, words: string[]) =>
     invoke<[number, number, number, number][]>("memory_locate", { path, words }),
   /** 会话 OCR 全文（阅读序行级并集）。截图已清理时 lightbox 的文字降级视图用。 */
-  memorySessionText: (sessionId: number) =>
-    invoke<string>("memory_session_text", { sessionId }),
+  memorySessionText: (sessionId: number) => invoke<string>("memory_session_text", { sessionId }),
   /** 屏幕记忆回填：把主库已有截图的活动登记为待识别帧。幂等，返回登记行数。 */
   memoryBackfill: () => invoke<number>("memory_backfill"),
   /** 手动触发一次消化（OCR→折叠→索引），跑完积压才返回，可能耗时数分钟。

@@ -143,8 +143,7 @@ export default function WeeklyTab() {
   const externalEnabled = settings?.ai.externalEnabled ?? false;
   const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
   const localSummaryAvailable =
-    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
-    activeMain !== "";
+    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) || activeMain !== "";
   const hasModel = cloudRoute || localSummaryAvailable;
 
   // 全局 store 订阅——切走再回来还在跑的 weekly run 仍能保持"停止"按钮
@@ -409,10 +408,7 @@ export default function WeeklyTab() {
     const dailyDates = new Set(
       (days ?? []).filter((d) => d.hasDaily && d.date <= today).map((d) => d.date),
     );
-    const weekMax = Math.max(
-      0,
-      ...[...dailyDates].map((date) => minutesByDate?.get(date) ?? 0),
-    );
+    const weekMax = Math.max(0, ...[...dailyDates].map((date) => minutesByDate?.get(date) ?? 0));
     return Array.from({ length: 7 }, (_, i) => {
       const d = parseDateStr(monday);
       d.setDate(d.getDate() + i);

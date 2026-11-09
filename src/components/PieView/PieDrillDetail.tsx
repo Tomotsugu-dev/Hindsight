@@ -34,14 +34,7 @@ const TOP_APPS_LIMIT = 5;
  * 占比下钻视图：返回 + 缩小 Donut + 该大类的分类构成 + Top 5 应用。
  * 跟 PieView 互斥渲染（drillId 决定）。
  */
-export function PieDrillDetail({
-  slice,
-  allSlices,
-  grandTotal,
-  apps,
-  onBack,
-  cats,
-}: Props) {
+export function PieDrillDetail({ slice, allSlices, grandTotal, apps, onBack, cats }: Props) {
   void cats; // 暂用 slice.cats 的 color/name 字段，cats 留作扩展口子
   const { t } = useTranslation();
   const fmtHM = useDurationFormatter();
@@ -55,16 +48,14 @@ export function PieDrillDetail({
   const precedingMinutes = allSlices
     .slice(0, Math.max(0, sliceIdx))
     .reduce((sum, s) => sum + s.minutes, 0);
-  const startAngleOffset =
-    grandTotal > 0 ? (precedingMinutes / grandTotal) * 2 * Math.PI : 0;
+  const startAngleOffset = grandTotal > 0 ? (precedingMinutes / grandTotal) * 2 * Math.PI : 0;
 
   // 分类构成已经在 BreakdownSlice.cats 里按 minutes 降序；直接 map
   const catBreakdown = slice.cats;
 
   // Top N apps：在本 slice 的 cats 里有时间的应用，按这部分时间降序
   const topApps = useMemo(
-    () =>
-      appsInCategories(apps, new Set(slice.cats.map((c) => c.id))).slice(0, TOP_APPS_LIMIT),
+    () => appsInCategories(apps, new Set(slice.cats.map((c) => c.id))).slice(0, TOP_APPS_LIMIT),
     [apps, slice.cats],
   );
 
@@ -76,11 +67,7 @@ export function PieDrillDetail({
   // 因为后者只接 body 自身、不接 split / sections / section 各级容器的空白。
   const handleBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (
-      target.closest(
-        `button, a, input, textarea, select, h1, h2, h3, h4, li, .${styles.head}`,
-      )
-    ) {
+    if (target.closest(`button, a, input, textarea, select, h1, h2, h3, h4, li, .${styles.head}`)) {
       return;
     }
     handleBack();
@@ -96,20 +83,12 @@ export function PieDrillDetail({
       onClick={handleBodyClick}
     >
       <header className={styles.head}>
-        <button
-          type="button"
-          className={styles.backBtn}
-          onClick={handleBack}
-        >
+        <button type="button" className={styles.backBtn} onClick={handleBack}>
           <ArrowLeft size={12} strokeWidth={2.2} />
           {t("today.pie.drill.back")}
         </button>
         <span className={styles.sep} />
-        <span
-          className={styles.swatch}
-          style={{ background: slice.color }}
-          aria-hidden
-        />
+        <span className={styles.swatch} style={{ background: slice.color }} aria-hidden />
         <span className={styles.title}>{slice.name}</span>
         <div className={styles.headNumStack}>
           <span className={styles.headTime}>{fmtHM(sliceTotal)}</span>
@@ -137,9 +116,7 @@ export function PieDrillDetail({
         <div className={styles.sections}>
           <section className={styles.section}>
             <header className={styles.sectionHead}>
-              <h3 className={styles.sectionTitle}>
-                {t("today.pie.drill.categoriesTitle")}
-              </h3>
+              <h3 className={styles.sectionTitle}>{t("today.pie.drill.categoriesTitle")}</h3>
               <span className={styles.sectionCount}>{catBreakdown.length}</span>
             </header>
             <ul className={styles.drillList}>
@@ -147,10 +124,7 @@ export function PieDrillDetail({
                 const pct = sliceTotal > 0 ? Math.round((c.minutes / sliceTotal) * 100) : 0;
                 return (
                   <li key={c.id} className={styles.drillRow}>
-                    <span
-                      className={styles.drillSwatch}
-                      style={{ background: c.color }}
-                    />
+                    <span className={styles.drillSwatch} style={{ background: c.color }} />
                     <span className={styles.drillName}>{c.name}</span>
                     <span className={styles.drillBarWrap}>
                       <span
@@ -170,9 +144,7 @@ export function PieDrillDetail({
 
           <section className={styles.section}>
             <header className={styles.sectionHead}>
-              <h3 className={styles.sectionTitle}>
-                {t("today.pie.drill.appsTitle")}
-              </h3>
+              <h3 className={styles.sectionTitle}>{t("today.pie.drill.appsTitle")}</h3>
               <span className={styles.sectionCount}>
                 {t("today.pie.drill.topNCount", { count: topApps.length })}
               </span>
@@ -192,9 +164,7 @@ export function PieDrillDetail({
                           size={18}
                         />
                       </span>
-                      <span className={styles.drillName}>
-                        {displayAppName(a.displayName)}
-                      </span>
+                      <span className={styles.drillName}>{displayAppName(a.displayName)}</span>
                       <span className={styles.drillBarWrap}>
                         <span
                           className={styles.drillBarFill}

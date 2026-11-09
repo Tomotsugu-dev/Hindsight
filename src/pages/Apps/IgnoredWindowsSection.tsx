@@ -44,10 +44,7 @@ export function IgnoredWindowsSection() {
       if (busy) return;
       setBusy(true);
       try {
-        const res = await api.removeIgnoreRule(
-          rule.processName,
-          rule.titleKeyword,
-        );
+        const res = await api.removeIgnoreRule(rule.processName, rule.titleKeyword);
         setRules(res.rules);
         setNotice(t("apps.ignored.removed", { count: res.reappliedRows }));
         window.setTimeout(() => setNotice(null), 3500);
@@ -76,15 +73,8 @@ export function IgnoredWindowsSection() {
       )}
       <ul className={styles.list}>
         {rules.map((r) => (
-          <li
-            key={`${r.processName}|${r.titleKeyword ?? ""}`}
-            className={styles.row}
-          >
-            <AppIcon
-              processName={r.processName}
-              fallbackColor="#94a3b8"
-              size={20}
-            />
+          <li key={`${r.processName}|${r.titleKeyword ?? ""}`} className={styles.row}>
+            <AppIcon processName={r.processName} fallbackColor="#94a3b8" size={20} />
             <span className={styles.proc}>{displayAppName(r.processName)}</span>
             <span className={styles.kw} title={r.titleKeyword ?? undefined}>
               {r.titleKeyword ?? t("apps.ignored.wholeApp")}

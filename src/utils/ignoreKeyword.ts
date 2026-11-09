@@ -13,8 +13,6 @@
  */
 export function ignoreKeywordFromTitle(title: string): string {
   const t = title.trim();
-  const core = t
-    .replace(/^[\p{P}\p{S}\p{Z}\p{C}]+/u, "")
-    .replace(/[\p{S}\p{Z}\p{C}]+$/u, "");
+  const core = t.replace(/^[\p{P}\p{S}\p{Z}\p{C}]+/u, "").replace(/[\p{S}\p{Z}\p{C}]+$/u, "");
   return core || t;
 }

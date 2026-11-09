@@ -14,11 +14,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { listen } from "@tauri-apps/api/event";
 import { useSettings } from "../../../state/settings";
 import { useLocale, LOCALE_OPTIONS } from "../../../i18n/useLocale";
-import {
-  api,
-  ENGINE_DOWNLOAD_EVENT,
-  type EngineDownloadProgress,
-} from "../../../api/hindsight";
+import { api, ENGINE_DOWNLOAD_EVENT, type EngineDownloadProgress } from "../../../api/hindsight";
 import { ocrRuntimeReady } from "../../../lib/ocrRuntime";
 import { logError } from "../../../lib/logger";
 import styles from "./GeneralTab.module.css";
@@ -35,12 +31,13 @@ export default function GeneralTab() {
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
   // OCR 组件缺失时的就地引导:记住用户原本要做的动作,确认下载后自动继续
-  const [ocrConfirm, setOcrConfirm] = useState<null | "resident" | "backfill">(
-    null,
-  );
+  const [ocrConfirm, setOcrConfirm] = useState<null | "resident" | "backfill">(null);
 
   useEffect(() => {
-    api.getDataRoot().then(setDataRoot).catch(() => setDataRoot(""));
+    api
+      .getDataRoot()
+      .then(setDataRoot)
+      .catch(() => setDataRoot(""));
     setIsMacOS(platform() === "macos");
   }, []);
 
@@ -81,19 +78,16 @@ export default function GeneralTab() {
     setOcrConfirm(null);
     setBackfillBusy(true);
     setBackfillMsg("");
-    const unlisten = await listen<EngineDownloadProgress>(
-      ENGINE_DOWNLOAD_EVENT,
-      (ev) => {
-        if (ev.payload.stage !== "runtime") return;
-        if (ev.payload.phase === "downloading") {
-          setBackfillMsg(
-            t("settings.general.capture.ocrDownloading", {
-              mb: Math.round(ev.payload.downloaded / 1024 / 1024),
-            }),
-          );
-        }
-      },
-    );
+    const unlisten = await listen<EngineDownloadProgress>(ENGINE_DOWNLOAD_EVENT, (ev) => {
+      if (ev.payload.stage !== "runtime") return;
+      if (ev.payload.phase === "downloading") {
+        setBackfillMsg(
+          t("settings.general.capture.ocrDownloading", {
+            mb: Math.round(ev.payload.downloaded / 1024 / 1024),
+          }),
+        );
+      }
+    });
     try {
       await api.downloadOcrRuntime();
     } catch (e) {
@@ -143,9 +137,7 @@ export default function GeneralTab() {
         .memoryPendingStats()
         .then((s) => {
           if (!finished && s.total > 0) {
-            setBackfillMsg(
-              t("settings.general.capture.backfillProgress", { n: s.total }),
-            );
+            setBackfillMsg(t("settings.general.capture.backfillProgress", { n: s.total }));
           }
         })
         .catch(() => {});
@@ -197,11 +189,7 @@ export default function GeneralTab() {
           label={t("settings.general.language.label")}
           description={t("settings.general.language.description")}
         >
-          <SimplePicker
-            value={locale}
-            options={LOCALE_OPTIONS}
-            onChange={setLocale}
-          />
+          <SimplePicker value={locale} options={LOCALE_OPTIONS} onChange={setLocale} />
         </Row>
       </Section>
 
@@ -239,10 +227,7 @@ export default function GeneralTab() {
           }
           disabled={!settings.captureEnabled || !settings.screenshotEnabled}
         >
-          <Toggle
-            checked={settings.memoryOcrResident}
-            onChange={onResidentToggle}
-          />
+          <Toggle checked={settings.memoryOcrResident} onChange={onResidentToggle} />
         </Row>
         <Row
           label={t("settings.general.capture.backfillLabel")}
@@ -331,34 +316,21 @@ export default function GeneralTab() {
           disabled={!settings.workHoursEnabled}
           block
         >
-          <TimeRangeList
-            ranges={settings.workRanges}
-            onChange={(v) => update({ workRanges: v })}
-          />
+          <TimeRangeList ranges={settings.workRanges} onChange={(v) => update({ workRanges: v })} />
         </Row>
       </Section>
 
       <Section title={t("settings.general.startup.title")} icon={Rocket}>
-        <Row
-          label={t("settings.general.startup.autoStartLabel")}
-        >
-          <Toggle
-            checked={settings.autoStart}
-            onChange={(v) => update({ autoStart: v })}
-          />
+        <Row label={t("settings.general.startup.autoStartLabel")}>
+          <Toggle checked={settings.autoStart} onChange={(v) => update({ autoStart: v })} />
         </Row>
-        <Row
-          label={t("settings.general.startup.silentStartLabel")}
-          disabled={!settings.autoStart}
-        >
+        <Row label={t("settings.general.startup.silentStartLabel")} disabled={!settings.autoStart}>
           <Toggle
             checked={!settings.showWindowOnAutoStart}
             onChange={(v) => update({ showWindowOnAutoStart: !v })}
           />
         </Row>
-        <Row
-          label={t("settings.general.startup.minimizeToTrayLabel")}
-        >
+        <Row label={t("settings.general.startup.minimizeToTrayLabel")}>
           <Toggle
             checked={settings.minimizeToTray}
             onChange={(v) => update({ minimizeToTray: v })}

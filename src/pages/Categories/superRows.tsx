@@ -108,10 +108,7 @@ function SuperRow_({
     .join(" ");
 
   // 整个大类组（左卡 + 右行）作为一个单位淡化，保持视觉一致性
-  const boxClass = [
-    styles.superBox,
-    isSuperDragSource ? styles.superBoxSource : "",
-  ]
+  const boxClass = [styles.superBox, isSuperDragSource ? styles.superBoxSource : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -275,9 +272,7 @@ function OrphanRow_({
           <Folder size={24} strokeWidth={1.85} />
         </span>
         <div className={styles.superNameWrap}>
-          <span className={styles.superName}>
-            {t("categories.super.orphanLabel")}
-          </span>
+          <span className={styles.superName}>{t("categories.super.orphanLabel")}</span>
         </div>
       </div>
       <SuperBody
@@ -315,11 +310,7 @@ export function BuiltinRow({
   return (
     <section className={styles.builtinBox}>
       {cats.map((cat) => (
-        <CategoryRow
-          key={cat.id}
-          category={cat}
-          registerRowRef={registerRowRef}
-        />
+        <CategoryRow key={cat.id} category={cat} registerRowRef={registerRowRef} />
       ))}
     </section>
   );

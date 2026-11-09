@@ -15,11 +15,11 @@ export function DevicePicker() {
 
   const showAllOption = devices.length >= 2;
   const currentDevice =
-    selected === "all" ? null : devices.find((d) => d.id === selected) ?? null;
+    selected === "all" ? null : (devices.find((d) => d.id === selected) ?? null);
   const currentLabel =
     selected === "all"
       ? t("components.devicePicker.all")
-      : currentDevice?.name ?? t("components.devicePicker.thisDevice");
+      : (currentDevice?.name ?? t("components.devicePicker.thisDevice"));
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
@@ -75,13 +75,7 @@ export function DevicePicker() {
   );
 }
 
-function DeviceTile({
-  device,
-  all,
-}: {
-  device: Device | null;
-  all: boolean;
-}) {
+function DeviceTile({ device, all }: { device: Device | null; all: boolean }) {
   if (all || !device) {
     return (
       <span className={`${styles.tile} ${styles.tileMuted}`}>

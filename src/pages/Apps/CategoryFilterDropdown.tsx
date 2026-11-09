@@ -45,9 +45,7 @@ export function CategoryFilterDropdown({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(
-    null,
-  );
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
 
   // 触发器文案 + 激活态指示
   const isActive = selectedCategoryIds.length > 0 || unassignedOnly;
@@ -122,17 +120,13 @@ export function CategoryFilterDropdown({
             ref={panelRef}
             className={styles.panel}
             style={
-              panelPos
-                ? ({ top: panelPos.top, left: panelPos.left })
-                : { visibility: "hidden" } // 第一帧未测量好之前先藏，避免闪
+              panelPos ? { top: panelPos.top, left: panelPos.left } : { visibility: "hidden" } // 第一帧未测量好之前先藏，避免闪
             }
           >
             <div className={styles.panelRow}>
               <button
                 type="button"
-                className={`${styles.pseudoChip} ${
-                  !isActive ? styles.pseudoChipActive : ""
-                }`}
+                className={`${styles.pseudoChip} ${!isActive ? styles.pseudoChipActive : ""}`}
                 onClick={onReset}
                 aria-label={t("apps.filter.categoryAllAria")}
               >
@@ -140,9 +134,7 @@ export function CategoryFilterDropdown({
               </button>
               <button
                 type="button"
-                className={`${styles.pseudoChip} ${
-                  unassignedOnly ? styles.pseudoChipActive : ""
-                }`}
+                className={`${styles.pseudoChip} ${unassignedOnly ? styles.pseudoChipActive : ""}`}
                 onClick={onToggleUnassigned}
               >
                 {t("apps.filter.categoryUnassigned")}
@@ -159,9 +151,7 @@ export function CategoryFilterDropdown({
                   <button
                     key={c.id}
                     type="button"
-                    className={`${styles.catChip} ${
-                      selected ? styles.catChipSelected : ""
-                    }`}
+                    className={`${styles.catChip} ${selected ? styles.catChipSelected : ""}`}
                     style={
                       {
                         // 激活态用分类色填充，非激活态仅作为边框微提示

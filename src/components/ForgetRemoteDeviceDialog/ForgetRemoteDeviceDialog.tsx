@@ -85,11 +85,7 @@ export function ForgetRemoteDeviceDialog({ open, deviceName, onConfirm, onCancel
         />
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
-            onClick={onCancel}
-          >
+          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
             {t("settings.data.removeDeviceDialog.cancel")}
           </button>
           <button

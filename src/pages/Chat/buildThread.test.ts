@@ -64,9 +64,7 @@ describe("buildThread", () => {
     // 选回旧分支:整段下游随之切换
     const old = buildThread(rows, { "": "u1" });
     expect(old.messages[0]).toMatchObject({ text: "原问", branchIdx: 0 });
-    expect(
-      old.messages[1].role === "assistant" && old.messages[1].versions[0].text,
-    ).toBe("原答");
+    expect(old.messages[1].role === "assistant" && old.messages[1].versions[0].text).toBe("原答");
     expect(old.leafGuid).toBe("a1");
   });
 
@@ -86,19 +84,13 @@ describe("buildThread", () => {
   });
 
   it("choice 指向不存在的 guid 时回落最新分支", () => {
-    const rows = [
-      row("user", "问A", "u1", null),
-      row("user", "问B", "u2", null),
-    ];
+    const rows = [row("user", "问A", "u1", null), row("user", "问B", "u2", null)];
     const t = buildThread(rows, { "": "ghost" });
     expect(t.messages[0]).toMatchObject({ text: "问B" });
   });
 
   it("坏数据成环不死循环", () => {
-    const rows = [
-      row("user", "环1", "x1", "x2"),
-      row("user", "环2", "x2", "x1"),
-    ];
+    const rows = [row("user", "环1", "x1", "x2"), row("user", "环2", "x2", "x1")];
     // 根下没有可走的孩子(全在环里悬空)→ 空路径,函数正常返回
     const t = buildThread(rows, {});
     expect(t.messages).toEqual([]);

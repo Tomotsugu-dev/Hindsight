@@ -64,9 +64,7 @@ export default function ChatPage() {
       .listLocalModels()
       .then((all) => {
         if (stale) return;
-        const hit = all.find(
-          (m) => m.filename === name && m.supportsTools === false,
-        );
+        const hit = all.find((m) => m.filename === name && m.supportsTools === false);
         setNoToolsModel(hit ? name : null);
       })
       .catch(() => {});
@@ -151,14 +149,10 @@ export default function ChatPage() {
       </header>
 
       {noToolsModel && (
-        <p className={styles.localHint}>
-          {t("chat.localModelNoTools", { model: noToolsModel })}
-        </p>
+        <p className={styles.localHint}>{t("chat.localModelNoTools", { model: noToolsModel })}</p>
       )}
 
-      {pendingStats && (
-        <BackfillBanner stats={pendingStats} onRefresh={refreshPendingStats} />
-      )}
+      {pendingStats && <BackfillBanner stats={pendingStats} onRefresh={refreshPendingStats} />}
 
       <div className={styles.columns}>
         <ConversationList

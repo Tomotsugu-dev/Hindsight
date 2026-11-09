@@ -45,7 +45,10 @@ export function Sidebar() {
   const [auth, setAuth] = useState<AuthState | null>(null);
   useEffect(() => {
     const fetch = () => {
-      api.authStatus().then(setAuth).catch(() => {});
+      api
+        .authStatus()
+        .then(setAuth)
+        .catch(() => {});
     };
     fetch();
     const interval = window.setInterval(fetch, 60_000);
@@ -61,7 +64,7 @@ export function Sidebar() {
   // 未登录显示"未登录"
   const account = auth?.backend === "webdav" ? auth.webdavUser : auth?.email;
   const syncLabel = signedIn
-    ? account ?? t("sidebar.sync.connected")
+    ? (account ?? t("sidebar.sync.connected"))
     : t("sidebar.sync.signedOut");
 
   const captureUI: "ok" | "idle" | "error" = !status
@@ -125,13 +128,7 @@ export function Sidebar() {
   return (
     <aside className={styles.sidebar} data-part="sidebar">
       <div className={styles.brand} data-tauri-drag-region>
-        <img
-          className={styles.logoMark}
-          src={logoUrl}
-          alt=""
-          aria-hidden
-          draggable={false}
-        />
+        <img className={styles.logoMark} src={logoUrl} alt="" aria-hidden draggable={false} />
         <span className={styles.logoText}>Hindsight</span>
       </div>
 
@@ -145,22 +142,12 @@ export function Sidebar() {
       >
         <span className={styles.iconWrap} aria-hidden>
           {signedIn ? (
-            <Cloud
-              size={18}
-              strokeWidth={1.75}
-              className={`${styles.cloud} ${styles.cloudOn}`}
-            />
+            <Cloud size={18} strokeWidth={1.75} className={`${styles.cloud} ${styles.cloudOn}`} />
           ) : (
-            <CloudOff
-              size={18}
-              strokeWidth={1.75}
-              className={styles.cloud}
-            />
+            <CloudOff size={18} strokeWidth={1.75} className={styles.cloud} />
           )}
         </span>
-        <span className={`${styles.text} ${signedIn ? styles.textOn : ""}`}>
-          {syncLabel}
-        </span>
+        <span className={`${styles.text} ${signedIn ? styles.textOn : ""}`}>{syncLabel}</span>
       </button>
 
       <nav className={styles.nav} ref={navRef}>

@@ -13,9 +13,7 @@ export function diffFrames(
   next: BackgroundPlugin[],
 ): { remove: string[]; add: BackgroundPlugin[] } {
   const nextUrls = new Map(next.map((p) => [p.id, p.launcherUrl]));
-  const remove = [...running]
-    .filter(([id, url]) => nextUrls.get(id) !== url)
-    .map(([id]) => id);
+  const remove = [...running].filter(([id, url]) => nextUrls.get(id) !== url).map(([id]) => id);
   const add = next.filter((p) => running.get(p.id) !== p.launcherUrl);
   return { remove, add };
 }

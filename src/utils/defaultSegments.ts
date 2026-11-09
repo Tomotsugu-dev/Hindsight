@@ -41,8 +41,7 @@ function localeKey(lang: string): string {
 export function isDefaultSegments(segments: AiSegment[]): boolean {
   if (segments.length !== DEFAULT_RANGES.length) return false;
   const rangesMatch = segments.every(
-    (s, i) =>
-      s.startHour === DEFAULT_RANGES[i][0] && s.endHour === DEFAULT_RANGES[i][1],
+    (s, i) => s.startHour === DEFAULT_RANGES[i][0] && s.endHour === DEFAULT_RANGES[i][1],
   );
   if (!rangesMatch) return false;
   return Object.values(DEFAULT_SEGMENT_LABELS).some((set) =>
@@ -52,10 +51,7 @@ export function isDefaultSegments(segments: AiSegment[]): boolean {
 
 /** 把默认时段的标签重译成目标语言（保留区间与颜色，只换 label）。
  *  仅当 [isDefaultSegments] 为真时调用。 */
-export function retranslateDefaultSegments(
-  segments: AiSegment[],
-  lang: string,
-): AiSegment[] {
+export function retranslateDefaultSegments(segments: AiSegment[], lang: string): AiSegment[] {
   const labels = DEFAULT_SEGMENT_LABELS[localeKey(lang)] ?? DEFAULT_SEGMENT_LABELS.en;
   return segments.map((s, i) => ({ ...s, label: labels[i] ?? s.label }));
 }

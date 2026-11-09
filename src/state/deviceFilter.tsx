@@ -70,10 +70,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  const self = useMemo<Device | null>(
-    () => devices.find((d) => d.current) ?? null,
-    [devices],
-  );
+  const self = useMemo<Device | null>(() => devices.find((d) => d.current) ?? null, [devices]);
   const selfId = self?.id ?? null;
 
   const setSelected = useCallback((id: DeviceFilterValue) => {
@@ -104,29 +101,22 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
     return selected;
   }, [selected, selfId]);
 
-  const renameSelf = useCallback(
-    (newName: string) => {
-      const trimmed = newName.trim();
-      if (!trimmed) return;
-      void api
-        .updateSelfDevice(trimmed, undefined, undefined)
-        .then((row) => {
-          setDevices((prev) =>
-            prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)),
-          );
-        })
-        .catch((e) => logError("devices.renameSelf", e));
-    },
-    [],
-  );
+  const renameSelf = useCallback((newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    void api
+      .updateSelfDevice(trimmed, undefined, undefined)
+      .then((row) => {
+        setDevices((prev) => prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)));
+      })
+      .catch((e) => logError("devices.renameSelf", e));
+  }, []);
 
   const recolorSelf = useCallback((color: string) => {
     void api
       .updateSelfDevice(undefined, color, undefined)
       .then((row) => {
-        setDevices((prev) =>
-          prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)),
-        );
+        setDevices((prev) => prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)));
       })
       .catch((e) => logError("devices.recolorSelf", e));
   }, []);
@@ -135,9 +125,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
     void api
       .updateSelfDevice(undefined, undefined, icon)
       .then((row) => {
-        setDevices((prev) =>
-          prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)),
-        );
+        setDevices((prev) => prev.map((d) => (d.id === row.deviceId ? rowToDevice(row) : d)));
       })
       .catch((e) => logError("devices.reiconSelf", e));
   }, []);
@@ -171,11 +159,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return (
-    <DeviceFilterContext.Provider value={value}>
-      {children}
-    </DeviceFilterContext.Provider>
-  );
+  return <DeviceFilterContext.Provider value={value}>{children}</DeviceFilterContext.Provider>;
 }
 
 // hook 跟 Provider 同文件是有意为之——消费方一次 import 解决，dev 期 fast refresh

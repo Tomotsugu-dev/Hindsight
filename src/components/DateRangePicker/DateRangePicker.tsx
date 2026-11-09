@@ -46,9 +46,7 @@ function calendarCells(viewMonth: Date): Date[] {
   const mondayOffset = day === 0 ? 6 : day - 1;
   const cells: Date[] = [];
   for (let i = 0; i < 42; i++) {
-    cells.push(
-      new Date(first.getFullYear(), first.getMonth(), first.getDate() - mondayOffset + i),
-    );
+    cells.push(new Date(first.getFullYear(), first.getMonth(), first.getDate() - mondayOffset + i));
   }
   return cells;
 }

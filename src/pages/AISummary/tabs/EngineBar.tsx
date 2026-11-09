@@ -24,7 +24,7 @@ export function EngineBar({ engine }: { engine: EngineStatus | null }) {
           ? styles.engineDotError
           : "";
   const versionStr = engine.installed
-    ? engine.installedVersion ?? engine.currentPin
+    ? (engine.installedVersion ?? engine.currentPin)
     : t("aiSummary.debug.engineBar.notInstalled");
   return (
     <div className={styles.engineBar}>

@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -41,10 +35,7 @@ type ProviderKey =
   | "groq"
   | "custom";
 
-const EXTERNAL_PROVIDER_PRESETS: Record<
-  ProviderKey,
-  { baseUrl: string; modelHint: string }
-> = {
+const EXTERNAL_PROVIDER_PRESETS: Record<ProviderKey, { baseUrl: string; modelHint: string }> = {
   openai: {
     baseUrl: "https://api.openai.com/v1",
     modelHint: "gpt-4o-mini",
@@ -132,15 +123,7 @@ interface ExternalApiSectionProps {
  * Toggle 一行，省得把空 / 用户填了一半的字段也露出来。
  */
 /** 测试步骤行：转圈/✓/✗ 图标 + 标签；失败时把服务端错误拼在标签后。 */
-function TestStepRow({
-  status,
-  label,
-  msg,
-}: {
-  status: StepStatus;
-  label: string;
-  msg: string;
-}) {
+function TestStepRow({ status, label, msg }: { status: StepStatus; label: string; msg: string }) {
   if (status === "idle") return null;
   const cls =
     status === "ok"
@@ -201,9 +184,7 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
       width: r.width,
       maxHeight: Math.max(120, Math.min(280, down ? below : above)),
       // 向上弹用 bottom 锚定:打字过滤让条数变化时,菜单不会离开输入框
-      ...(down
-        ? { top: r.bottom + gap }
-        : { bottom: window.innerHeight - r.top + gap }),
+      ...(down ? { top: r.bottom + gap } : { bottom: window.innerHeight - r.top + gap }),
     });
   }, [modelMenuOpen]);
 
@@ -302,9 +283,7 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
       setModelList(usable);
       setModelMenuOpen(usable.length > 0);
       setModelFetch("ok");
-      setModelFetchMsg(
-        t("aiSettings.external.modelsFetched", { count: usable.length }),
-      );
+      setModelFetchMsg(t("aiSettings.external.modelsFetched", { count: usable.length }));
     } catch (e) {
       setModelFetch("fail");
       setModelFetchMsg(e instanceof Error ? e.message : String(e));
@@ -433,120 +412,72 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
             icon={Type}
             description={t("aiSettings.external.groupTextHint")}
           >
-          {ai.externalProfiles.length > 0 && (
-            <Row label={t("aiSettings.external.profilesLabel")} block>
-              <div className={styles.profileChipRow}>
-                {ai.externalProfiles.map((p, i) => (
-                  <span key={`${p.endpoint}-${i}`} className={styles.profileChip}>
-                    <button
-                      type="button"
-                      className={styles.profileChipBody}
-                      onClick={() => applyProfile(p)}
-                      title={p.endpoint}
-                    >
-                      {profileLabel(p)}
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.profileChipDel}
-                      onClick={() => deleteProfile(i)}
-                      aria-label={t("aiSettings.external.deleteProfileAria", {
-                        name: profileLabel(p),
-                      })}
-                    >
-                      <X size={10} strokeWidth={2.5} />
-                    </button>
-                  </span>
-                ))}
-              </div>
+            {ai.externalProfiles.length > 0 && (
+              <Row label={t("aiSettings.external.profilesLabel")} block>
+                <div className={styles.profileChipRow}>
+                  {ai.externalProfiles.map((p, i) => (
+                    <span key={`${p.endpoint}-${i}`} className={styles.profileChip}>
+                      <button
+                        type="button"
+                        className={styles.profileChipBody}
+                        onClick={() => applyProfile(p)}
+                        title={p.endpoint}
+                      >
+                        {profileLabel(p)}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.profileChipDel}
+                        onClick={() => deleteProfile(i)}
+                        aria-label={t("aiSettings.external.deleteProfileAria", {
+                          name: profileLabel(p),
+                        })}
+                      >
+                        <X size={10} strokeWidth={2.5} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </Row>
+            )}
+
+            <Row label={t("aiSettings.external.providerLabel")}>
+              <SimplePicker<ProviderKey>
+                value={provider}
+                options={providerOptions}
+                onChange={onProviderChange}
+              />
             </Row>
-          )}
 
-          <Row label={t("aiSettings.external.providerLabel")}>
-            <SimplePicker<ProviderKey>
-              value={provider}
-              options={providerOptions}
-              onChange={onProviderChange}
-            />
-          </Row>
-
-          <Row
-            label={t("aiSettings.external.baseUrlLabel")}
-            description={
-              provider === "kimi" || provider === "kimi-cn"
-                ? t("aiSettings.external.kimiBaseUrlNote")
-                : undefined
-            }
-            block
-          >
-            <input
-              type="text"
-              className={styles.externalInput}
-              value={ai.endpoint}
-              onChange={(e) => updateAi({ endpoint: e.target.value })}
-              placeholder={t("aiSettings.external.baseUrlPlaceholder")}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoCorrect="off"
-            />
-          </Row>
-
-          <Row label={t("aiSettings.external.apiKeyLabel")} block>
-            <div className={styles.externalKeyRow}>
+            <Row
+              label={t("aiSettings.external.baseUrlLabel")}
+              description={
+                provider === "kimi" || provider === "kimi-cn"
+                  ? t("aiSettings.external.kimiBaseUrlNote")
+                  : undefined
+              }
+              block
+            >
               <input
-                type={showKey ? "text" : "password"}
+                type="text"
                 className={styles.externalInput}
-                value={ai.apiKey}
-                onChange={(e) => updateAi({ apiKey: e.target.value })}
-                placeholder={t("aiSettings.external.apiKeyPlaceholder")}
+                value={ai.endpoint}
+                onChange={(e) => updateAi({ endpoint: e.target.value })}
+                placeholder={t("aiSettings.external.baseUrlPlaceholder")}
                 spellCheck={false}
                 autoCapitalize="off"
                 autoCorrect="off"
               />
-              <button
-                type="button"
-                className={styles.externalEyeBtn}
-                onClick={() => setShowKey((v) => !v)}
-                aria-label={
-                  showKey
-                    ? t("aiSettings.external.apiKeyHide")
-                    : t("aiSettings.external.apiKeyShow")
-                }
-                title={
-                  showKey
-                    ? t("aiSettings.external.apiKeyHide")
-                    : t("aiSettings.external.apiKeyShow")
-                }
-              >
-                {showKey ? (
-                  <EyeOff size={14} strokeWidth={1.85} />
-                ) : (
-                  <Eye size={14} strokeWidth={1.85} />
-                )}
-              </button>
-            </div>
-          </Row>
+            </Row>
 
-          <Row label={t("aiSettings.external.modelLabel")} block>
-            <div className={styles.modelComboWrap}>
+            <Row label={t("aiSettings.external.apiKeyLabel")} block>
               <div className={styles.externalKeyRow}>
                 <input
-                  ref={modelInputRef}
-                  type="text"
+                  type={showKey ? "text" : "password"}
                   className={styles.externalInput}
-                  value={ai.model}
-                  onChange={(e) => {
-                    updateAi({ model: e.target.value });
-                    if (modelList.length > 0) setModelMenuOpen(true);
-                  }}
-                  onFocus={() => {
-                    if (modelList.length > 0) setModelMenuOpen(true);
-                  }}
-                  onBlur={() => setModelMenuOpen(false)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setModelMenuOpen(false);
-                  }}
-                  placeholder={modelHint}
+                  value={ai.apiKey}
+                  onChange={(e) => updateAi({ apiKey: e.target.value })}
+                  placeholder={t("aiSettings.external.apiKeyPlaceholder")}
                   spellCheck={false}
                   autoCapitalize="off"
                   autoCorrect="off"
@@ -554,126 +485,169 @@ function ExternalApiSection({ ai, updateAi }: ExternalApiSectionProps) {
                 <button
                   type="button"
                   className={styles.externalEyeBtn}
-                  onClick={() => void fetchModels()}
-                  disabled={modelFetch === "running"}
-                  aria-label={t("aiSettings.external.fetchModels")}
-                  title={t("aiSettings.external.fetchModels")}
+                  onClick={() => setShowKey((v) => !v)}
+                  aria-label={
+                    showKey
+                      ? t("aiSettings.external.apiKeyHide")
+                      : t("aiSettings.external.apiKeyShow")
+                  }
+                  title={
+                    showKey
+                      ? t("aiSettings.external.apiKeyHide")
+                      : t("aiSettings.external.apiKeyShow")
+                  }
                 >
-                  {modelFetch === "running" ? (
-                    <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
+                  {showKey ? (
+                    <EyeOff size={14} strokeWidth={1.85} />
                   ) : (
-                    <Download size={14} strokeWidth={1.85} />
+                    <Eye size={14} strokeWidth={1.85} />
                   )}
                 </button>
               </div>
-              {modelMenuOpen &&
-                (() => {
-                  const q = ai.model.trim().toLowerCase();
-                  // 前缀命中排前面:输入 gpt-4o-mini 时精确那条必须在第一行,
-                  // 而不是被 gpt-4o-mini-xxx-2025-12-15 挤下去
-                  const hits = q
-                    ? modelList
-                        .filter((m) => m.toLowerCase().includes(q))
-                        .sort((a, b) => {
-                          const rank = (s: string) =>
-                            s.toLowerCase() === q ? 0 : s.toLowerCase().startsWith(q) ? 1 : 2;
-                          return rank(a) - rank(b) || a.localeCompare(b);
-                        })
-                    : modelList;
-                  if (hits.length === 0) return null;
-                  return createPortal(
-                    <div
-                      ref={modelMenuRef}
-                      className={styles.modelSuggestMenu}
-                      role="listbox"
-                      // 首帧未测量前先藏,避免定位跳一下
-                      style={modelMenuStyle ?? { visibility: "hidden" }}
-                    >
-                      {hits.slice(0, 100).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          role="option"
-                          aria-selected={m === ai.model}
-                          className={styles.modelSuggestOption}
-                          // mousedown + preventDefault:抢在输入框 blur 之前落点
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            updateAi({ model: m });
-                            setModelMenuOpen(false);
-                          }}
-                        >
-                          {m}
-                        </button>
-                      ))}
-                    </div>,
-                    document.body,
-                  );
-                })()}
-            </div>
-            {modelFetch === "ok" && (
-              <span className={styles.externalTestOk}>{modelFetchMsg}</span>
-            )}
-            {modelFetch === "fail" && (
-              <span className={styles.externalTestFail}>
-                <XCircle size={13} strokeWidth={2} />
-                {modelFetchMsg}
-              </span>
-            )}
-          </Row>
+            </Row>
 
-          <div className={styles.externalActionRow}>
-            <button
-              type="button"
-              className={styles.externalTestBtn}
-              onClick={saveCurrentProfile}
-              disabled={
-                !ai.endpoint.trim() ||
-                ai.externalProfiles.length >= 10 ||
-                ai.externalProfiles.some(profileMatches)
-              }
-              title={t("aiSettings.external.saveProfileHint")}
-            >
-              <Plus size={13} strokeWidth={2.25} />
-              {t("aiSettings.external.saveProfile")}
-            </button>
-            <button
-              type="button"
-              className={styles.externalTestBtn}
-              onClick={() => void runApiTest()}
-              disabled={textTest.running}
-            >
-              {textTest.running ? (
-                <>
-                  <Loader2
-                    size={13}
-                    strokeWidth={2}
-                    className={styles.testSpin}
+            <Row label={t("aiSettings.external.modelLabel")} block>
+              <div className={styles.modelComboWrap}>
+                <div className={styles.externalKeyRow}>
+                  <input
+                    ref={modelInputRef}
+                    type="text"
+                    className={styles.externalInput}
+                    value={ai.model}
+                    onChange={(e) => {
+                      updateAi({ model: e.target.value });
+                      if (modelList.length > 0) setModelMenuOpen(true);
+                    }}
+                    onFocus={() => {
+                      if (modelList.length > 0) setModelMenuOpen(true);
+                    }}
+                    onBlur={() => setModelMenuOpen(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setModelMenuOpen(false);
+                    }}
+                    placeholder={modelHint}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
                   />
-                  {t("aiSettings.external.testRunning")}
-                </>
-              ) : (
-                t("aiSettings.external.testTextButton")
+                  <button
+                    type="button"
+                    className={styles.externalEyeBtn}
+                    onClick={() => void fetchModels()}
+                    disabled={modelFetch === "running"}
+                    aria-label={t("aiSettings.external.fetchModels")}
+                    title={t("aiSettings.external.fetchModels")}
+                  >
+                    {modelFetch === "running" ? (
+                      <Loader2 size={14} strokeWidth={2} className={styles.testSpin} />
+                    ) : (
+                      <Download size={14} strokeWidth={1.85} />
+                    )}
+                  </button>
+                </div>
+                {modelMenuOpen &&
+                  (() => {
+                    const q = ai.model.trim().toLowerCase();
+                    // 前缀命中排前面:输入 gpt-4o-mini 时精确那条必须在第一行,
+                    // 而不是被 gpt-4o-mini-xxx-2025-12-15 挤下去
+                    const hits = q
+                      ? modelList
+                          .filter((m) => m.toLowerCase().includes(q))
+                          .sort((a, b) => {
+                            const rank = (s: string) =>
+                              s.toLowerCase() === q ? 0 : s.toLowerCase().startsWith(q) ? 1 : 2;
+                            return rank(a) - rank(b) || a.localeCompare(b);
+                          })
+                      : modelList;
+                    if (hits.length === 0) return null;
+                    return createPortal(
+                      <div
+                        ref={modelMenuRef}
+                        className={styles.modelSuggestMenu}
+                        role="listbox"
+                        // 首帧未测量前先藏,避免定位跳一下
+                        style={modelMenuStyle ?? { visibility: "hidden" }}
+                      >
+                        {hits.slice(0, 100).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            role="option"
+                            aria-selected={m === ai.model}
+                            className={styles.modelSuggestOption}
+                            // mousedown + preventDefault:抢在输入框 blur 之前落点
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              updateAi({ model: m });
+                              setModelMenuOpen(false);
+                            }}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>,
+                      document.body,
+                    );
+                  })()}
+              </div>
+              {modelFetch === "ok" && (
+                <span className={styles.externalTestOk}>{modelFetchMsg}</span>
               )}
-            </button>
-          </div>
-          {textTest.conn !== "idle" ? (
-            <div className={styles.externalTestSteps}>
-              <TestStepRow
-                status={textTest.conn}
-                label={t("aiSettings.external.testStepConn")}
-                msg={textTest.connMsg}
-              />
-              <TestStepRow
-                status={textTest.chat}
-                label={t("aiSettings.external.testStepChat", {
-                  model: ai.model.trim() || "?",
-                })}
-                msg={textTest.chatMsg}
-              />
-            </div>
-          ) : null}
+              {modelFetch === "fail" && (
+                <span className={styles.externalTestFail}>
+                  <XCircle size={13} strokeWidth={2} />
+                  {modelFetchMsg}
+                </span>
+              )}
+            </Row>
 
+            <div className={styles.externalActionRow}>
+              <button
+                type="button"
+                className={styles.externalTestBtn}
+                onClick={saveCurrentProfile}
+                disabled={
+                  !ai.endpoint.trim() ||
+                  ai.externalProfiles.length >= 10 ||
+                  ai.externalProfiles.some(profileMatches)
+                }
+                title={t("aiSettings.external.saveProfileHint")}
+              >
+                <Plus size={13} strokeWidth={2.25} />
+                {t("aiSettings.external.saveProfile")}
+              </button>
+              <button
+                type="button"
+                className={styles.externalTestBtn}
+                onClick={() => void runApiTest()}
+                disabled={textTest.running}
+              >
+                {textTest.running ? (
+                  <>
+                    <Loader2 size={13} strokeWidth={2} className={styles.testSpin} />
+                    {t("aiSettings.external.testRunning")}
+                  </>
+                ) : (
+                  t("aiSettings.external.testTextButton")
+                )}
+              </button>
+            </div>
+            {textTest.conn !== "idle" ? (
+              <div className={styles.externalTestSteps}>
+                <TestStepRow
+                  status={textTest.conn}
+                  label={t("aiSettings.external.testStepConn")}
+                  msg={textTest.connMsg}
+                />
+                <TestStepRow
+                  status={textTest.chat}
+                  label={t("aiSettings.external.testStepChat", {
+                    model: ai.model.trim() || "?",
+                  })}
+                  msg={textTest.chatMsg}
+                />
+              </div>
+            ) : null}
           </Section>
 
           <p className={styles.externalPrivacyNote}>

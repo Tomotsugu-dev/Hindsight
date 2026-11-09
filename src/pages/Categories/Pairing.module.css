@@ -77,7 +77,7 @@
 
 /* 未分类行：淡黄橙色背景提醒去指派。优先级压过 .rowEven / .rowOdd 的灰色斑马纹 */
 .row.unassigned {
-  background: rgba(251, 191, 36, 0.10);
+  background: rgba(251, 191, 36, 0.1);
 }
 
 .row.unassigned:hover {
@@ -197,7 +197,9 @@
   border-radius: var(--radius-xs);
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 120ms ease-out, background-color 120ms ease-out;
+  transition:
+    opacity 120ms ease-out,
+    background-color 120ms ease-out;
 }
 
 .chip:hover .chipUnmerge {
@@ -227,7 +229,9 @@
   color: var(--text-strong);
   outline: none;
   text-align: center;
-  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
 }
 
 /* 鼠标靠近本行（不必精准悬停在 input 上）就显出文本框形状，告诉用户「这里能改名」。

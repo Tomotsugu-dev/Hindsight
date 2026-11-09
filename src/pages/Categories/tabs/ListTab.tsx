@@ -3,10 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2, Plus } from "lucide-react";
 import { useCategories } from "../../../state/categories";
 import { useSuperCategories } from "../../../state/superCategories";
-import {
-  CATEGORY_PALETTE,
-  ICON_NAMES,
-} from "../../../config/categoryIcons";
+import { CATEGORY_PALETTE, ICON_NAMES } from "../../../config/categoryIcons";
 import { SuperCategoriesTable } from "../SuperCategoriesTable";
 import styles from "../Categories.module.css";
 
@@ -41,9 +38,7 @@ export default function ListTab() {
   // 不设定时清除——CSS 动画本身会跑完就停,留着这个 id 只影响下一次新建时被替换,
   // 少一个 timer 就少一类竞态(用户正在改名时被清掉 class 会打断动画)。
   const [justCreatedCatId, setJustCreatedCatId] = useState<string | null>(null);
-  const [justCreatedSuperId, setJustCreatedSuperId] = useState<string | null>(
-    null,
-  );
+  const [justCreatedSuperId, setJustCreatedSuperId] = useState<string | null>(null);
   // 新建期间禁用按钮:create 要等一次全量 refresh,连点会闷声建出好几个「新分类」
   const [creating, setCreating] = useState<"cat" | "super" | null>(null);
 

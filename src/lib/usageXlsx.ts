@@ -108,7 +108,9 @@ function categoryColumns(data: UsageExportData): CatCol[] {
 }
 
 /** 应用累计(最细粒度):name+分类 → 分钟。 */
-function appTotals(data: UsageExportData): { name: string; categoryName: string; minutes: number }[] {
+function appTotals(
+  data: UsageExportData,
+): { name: string; categoryName: string; minutes: number }[] {
   const totals = new Map<string, { name: string; categoryName: string; minutes: number }>();
   for (const p of finestPeriods(data)) {
     for (const a of p.apps) {
@@ -206,10 +208,7 @@ export function buildUsageWorkbook(
       const top = appTotals(data);
       if (top.length > 0) {
         const totalMin = totalSecs / 60;
-        rows.push(
-          [],
-          [B(k("rawApp")), B(k("rawCategory")), B(k("colDuration")), B(k("colShare"))],
-        );
+        rows.push([], [B(k("rawApp")), B(k("rawCategory")), B(k("colDuration")), B(k("colShare"))]);
         for (const a of top.slice(0, OVERVIEW_TOP_APPS)) {
           rows.push([
             S(a.name),

@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import styles from "./ScrollBox.module.css";
 
 interface ScrollBoxProps {

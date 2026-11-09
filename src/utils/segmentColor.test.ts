@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  isLightHex,
-  resolveSegmentChip,
-  resolveSegmentDotColor,
-} from "./segmentColor";
+import { isLightHex, resolveSegmentChip, resolveSegmentDotColor } from "./segmentColor";
 
 describe("isLightHex", () => {
   it("纯白判为浅色", () => {
@@ -68,9 +64,7 @@ describe("resolveSegmentChip", () => {
 
 describe("resolveSegmentDotColor", () => {
   it("用户配了 hex 原样返回", () => {
-    expect(
-      resolveSegmentDotColor({ startHour: 9, endHour: 12, color: "#ff8800" }),
-    ).toBe("#ff8800");
+    expect(resolveSegmentDotColor({ startHour: 9, endHour: 12, color: "#ff8800" })).toBe("#ff8800");
   });
 
   it("自动色压暗到 l=58%（粉彩底色调直接当 8px 色点会看不清）", () => {

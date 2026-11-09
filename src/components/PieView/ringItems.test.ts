@@ -46,9 +46,7 @@ describe("ringWindow", () => {
   });
 
   it("没有时间的小类不算", () => {
-    expect(ringWindow([item("a", 0), item("b", 5)], 4, 0).visible.map((r) => r.id)).toEqual([
-      "b",
-    ]);
+    expect(ringWindow([item("a", 0), item("b", 5)], 4, 0).visible.map((r) => r.id)).toEqual(["b"]);
   });
 });
 
@@ -71,7 +69,7 @@ describe("offsetToShow", () => {
   });
 });
 
-const seg =(id: string, minutes: number): RingSegment => ({
+const seg = (id: string, minutes: number): RingSegment => ({
   id,
   name: id,
   color: "#000",

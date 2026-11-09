@@ -62,11 +62,7 @@ export function SyncOptInDialog({
         <p className={styles.body}>{body}</p>
         <p className={styles.note}>{t("devices.cloud.datasets.confirmNote")}</p>
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
-            onClick={onCancel}
-          >
+          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
             {t("common.cancel")}
           </button>
           <button

@@ -47,9 +47,7 @@ export function NavItem({
     isActive = false;
   } else if (excludePaths && excludePaths.length > 0) {
     const isPrefix = path === to || path.startsWith(to + "/");
-    const inExclude = excludePaths.some(
-      (e) => path === e || path.startsWith(e + "/"),
-    );
+    const inExclude = excludePaths.some((e) => path === e || path.startsWith(e + "/"));
     isActive = isPrefix && !inExclude;
   } else if (end) {
     isActive = path === to;
