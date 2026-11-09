@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
-import { useMouseGlow } from "../../hooks/useMouseGlow";
+import { PeriodNav } from "../../components/PeriodNav/PeriodNav";
 import styles from "./HistoryChartCard.module.css";
 
 export type ChartTab = "year" | "month";
@@ -44,9 +43,6 @@ export function HistoryChartCard({
   children,
 }: HistoryChartCardProps) {
   const { t } = useTranslation();
-  const { ref: prevRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: pillRef } = useMouseGlow<HTMLButtonElement>();
-  const { ref: nextRef } = useMouseGlow<HTMLButtonElement>();
 
   return (
     <section className={styles.card} data-part="card">
@@ -78,40 +74,18 @@ export function HistoryChartCard({
 
           <div className={styles.right}>
             <DevicePicker />
-            <div className={styles.nav}>
-              <button
-                ref={prevRef}
-                type="button"
-                className={`${styles.navBtn} glow`}
-                onClick={nav.onPrev}
-                disabled={!nav.canPrev}
-                aria-label={nav.prevLabel}
-                title={nav.prevLabel}
-              >
-                <ChevronLeft size={14} strokeWidth={1.75} />
-              </button>
-              <button
-                ref={pillRef}
-                type="button"
-                className={`${styles.pill} ${nav.isCurrent ? "" : styles.pillClickable} glow`}
-                onClick={nav.onCurrent}
-                disabled={nav.isCurrent}
-                title={nav.isCurrent ? undefined : nav.currentTooltip}
-              >
-                {nav.label}
-              </button>
-              <button
-                ref={nextRef}
-                type="button"
-                className={`${styles.navBtn} glow`}
-                onClick={nav.onNext}
-                disabled={!nav.canNext}
-                aria-label={nav.nextLabel}
-                title={nav.nextLabel}
-              >
-                <ChevronRight size={14} strokeWidth={1.75} />
-              </button>
-            </div>
+            <PeriodNav
+              label={nav.label}
+              currentTitle={nav.currentTooltip}
+              prevLabel={nav.prevLabel}
+              nextLabel={nav.nextLabel}
+              isCurrent={nav.isCurrent}
+              canPrev={nav.canPrev}
+              canNext={nav.canNext}
+              onPrev={nav.onPrev}
+              onNext={nav.onNext}
+              onCurrent={nav.onCurrent}
+            />
           </div>
         </div>
       </header>

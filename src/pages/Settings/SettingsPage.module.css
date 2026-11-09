@@ -1,14 +1,14 @@
 .page {
-  padding: 32px 32px 48px;
+  padding: calc(32px * var(--density)) calc(32px * var(--density)) calc(48px * var(--density));
   max-width: 720px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: calc(24px * var(--density));
 }
 
 .tabContent {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: calc(24px * var(--density));
 }
