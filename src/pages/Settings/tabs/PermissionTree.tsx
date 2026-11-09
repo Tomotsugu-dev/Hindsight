@@ -50,7 +50,10 @@ export function PermissionTree({
     const risky = [node.name, ...(isOpen ? [] : under)].some((p) => HIGH_RISK.has(p));
     return (
       <li key={node.name}>
-        <div className={styles.treeRow} style={{ paddingLeft: 6 + depth * 20 }}>
+        <div
+          className={styles.treeRow}
+          style={{ paddingLeft: `calc(${6 + depth * 20}px * var(--density))` }}
+        >
           {hasChildren ? (
             <button
               type="button"
@@ -102,7 +105,7 @@ export function PermissionTree({
       {permissionTree(asked, dependsOn).map((node) => row(node, 0))}
       {fixed.map((label) => (
         <li key={label}>
-          <div className={styles.treeRow} style={{ paddingLeft: 6 }}>
+          <div className={styles.treeRow} style={{ paddingLeft: "calc(6px * var(--density))" }}>
             <span className={styles.twistie} aria-hidden />
             <label className={styles.treeLabel}>
               <input type="checkbox" checked disabled readOnly />
