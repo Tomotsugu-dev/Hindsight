@@ -19,6 +19,8 @@
      because its accent is light. */
   --accent-fill: var(--color-accent);
   --accent-fill-hover: color-mix(in oklab, var(--accent-fill) 88%, white);
+  /* Text and icons on --accent-fill and on the status colors */
+  --text-on-accent: #ffffff;
 
   /* Sidebar — soft lavender → pink gradient (Arc-esque) */
   --sidebar-gradient: radial-gradient(120% 80% at 0% 0%, #efe7ff 0%, #ffe9f0 60%, #fff4e6 100%);
@@ -63,6 +65,18 @@
   --status-ok-soft: rgba(34, 197, 94, 0.12);
   --status-error-soft: rgba(239, 68, 68, 0.12);
   --status-pending-soft: rgba(245, 158, 11, 0.12);
+  /* Darker status colors, for text on the soft backgrounds and for solid buttons */
+  --status-ok-strong: #16a34a;
+  --status-error-strong: #dc2626;
+  --status-pending-strong: #b45309;
+  /* Information: neither good nor bad, such as a note or a step in progress */
+  --status-info: #3b82f6;
+  --status-info-strong: #1d4ed8;
+  --status-info-soft: rgba(59, 130, 246, 0.12);
+
+  /* Dark tooltips on hover. They stay dark in both modes */
+  --surface-tooltip: rgba(28, 28, 36, 0.94);
+  --text-on-tooltip: #ffffff;
 
   /* —— Borders / overlays（统一 rgba(0,0,0,X) 写法的级别） —— */
   --alpha-border-subtle: 0.04;
@@ -103,6 +117,9 @@
   /* 阴影强度：组件和下面几档阴影里，深色投影的透明度都乘它。0 去掉投影，2 加深一倍；
      白色高光和 0 偏移 0 模糊的描边环不乘 */
   --shadow-strength: 1;
+  /* The color of dark shadows as r, g, b, for a shadow that none of the levels below fits:
+     box-shadow: 0 2px 8px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength))); */
+  --shadow-rgb: 20, 20, 40;
   --shadow-sm: 0 1px 2px rgba(20, 20, 40, calc(0.08 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
@@ -332,6 +349,7 @@
   --status-pending-soft: rgba(245, 158, 11, 0.18);
 
   /* 阴影改深黑，深背景上才有立体感 */
+  --shadow-rgb: 0, 0, 0;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shadow-strength)));
   --shadow-md:
     0 1px 0 rgba(255, 255, 255, 0) inset,
