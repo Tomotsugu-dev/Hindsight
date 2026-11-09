@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ZoomOut } from "lucide-react";
+import { Button } from "../../components/Button/Button";
 import { useDurationFormatter } from "../../utils/duration";
 import {
   buildHeatmap,
@@ -213,10 +214,9 @@ export function Heatmap({
 
       <div className={styles.footer}>
         {zoomed ? (
-          <button type="button" className={styles.resetBtn} onClick={onResetZoom}>
-            <ZoomOut size={13} strokeWidth={2} aria-hidden />
+          <Button size="sm" variant="outline" icon={ZoomOut} onClick={onResetZoom}>
             {t("history.chart.resetZoom")}
-          </button>
+          </Button>
         ) : (
           <span>{t("history.chart.hint")}</span>
         )}

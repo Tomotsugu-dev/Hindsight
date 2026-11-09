@@ -1,52 +1,7 @@
-.page {
-  padding: 32px 32px 48px;
-  max-width: 720px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  margin-bottom: 24px;
-}
-
-.title {
-  font-size: 24px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
-}
-
 .content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-}
-
-/* —— 文本输入 —— */
-.textInput {
-  width: 280px;
-  height: 32px;
-  padding: 0 10px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  color: var(--text-strong);
-  outline: none;
-  transition:
-    border-color 160ms ease-out,
-    box-shadow 160ms ease-out;
-}
-
-.textInput:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-
-.textInput::placeholder {
-  color: var(--text-faint);
+  gap: calc(24px * var(--density));
 }
 
 /* —— textarea —— */
@@ -56,11 +11,11 @@
   /* 内容超过这个高度后内部滚动，不让 Section 越拉越长。用户仍可以拖右下角
      resize 自己拉高（resize: vertical 仍生效）。 */
   max-height: 280px;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-family: inherit;
   line-height: 1.55;
   color: var(--text-strong);
@@ -96,7 +51,7 @@
 .promptWrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 /* Row.control 默认 row flex 会把 textarea 和按钮挤同一行；
@@ -104,7 +59,7 @@
 .promptStack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
 }
 
@@ -114,11 +69,11 @@
   min-height: 220px;
   /* 内容超出后内部滚动，避免 Section 越拉越长。用户仍能拖右下角自己加高。 */
   max-height: 420px;
-  padding: 12px 14px;
+  padding: calc(12px * var(--density)) calc(14px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-family: var(--font-mono);
   line-height: 1.6;
   color: var(--text-strong);
@@ -138,138 +93,16 @@
 .promptActions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: calc(8px * var(--density));
+  margin-top: calc(4px * var(--density));
 }
 
 .promptHint {
   flex: 1;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   letter-spacing: -0.005em;
-}
-
-/* 重置 = 灰色虚线 ghost；不抢主操作 */
-.promptResetBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  background: transparent;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.promptResetBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
-  color: var(--color-accent);
-}
-
-.promptResetBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 保存 = 蓝色实心，主操作 */
-.promptSaveBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 14px;
-  background: var(--accent-fill);
-  border: 1px solid var(--accent-fill);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: var(--font-weight-600);
-  color: #fff;
-  cursor: pointer;
-  transition: background-color 140ms ease-out;
-}
-
-.promptSaveBtn:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.promptSaveBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* —— 测试连接 —— */
-.testRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.testBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 24px;
-  background: var(--accent-fill);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.testBtn:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.testBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.testBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.testHint {
-  font-size: 12px;
-  color: var(--text-faint);
-}
-
-/* —— 测试连接状态行 —— */
-.testStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  /* 失败可能比较长，超出宽度自然换行不溢出 */
-  max-width: 100%;
-  word-break: break-word;
-}
-
-.testStatusOk {
-  color: #16a34a; /* green-600 */
-}
-
-.testStatusFail {
-  color: #dc2626; /* red-600 */
 }
 
 .testSpin {
@@ -288,21 +121,21 @@
 .engineCard {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 20px;
+  gap: calc(10px * var(--density));
+  padding: calc(16px * var(--density)) calc(20px * var(--density));
 }
 
 /* 第 1 行：llama.cpp 名 + ⓘ + size + 状态 badge，全 inline 一行 */
 .engineInfoRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-wrap: wrap;
 }
 
 .engineName {
-  font-size: 15px;
-  font-weight: var(--font-weight-600);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.01em;
 }
@@ -310,14 +143,14 @@
 /* CJK 标题变体:中文方块字占满 em,同字号下视觉比拉丁名(llama.cpp,只有
    x-height)大一圈;降 1px 让两张卡标题视觉等大 */
 .engineNameCjk {
-  font-size: 14px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
 }
 
 /* 第 3 行：5 个按钮平铺一行（下载 / 测试 / 释放显存 / 打开 / 卸载） */
 .engineActionsFlat {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-wrap: wrap;
 }
 
@@ -327,181 +160,36 @@
   min-width: 0;
 }
 
-/* 维护类按钮的 ghost 风：跟 .engineDownloadOutline / .engineUninstallOutline 同尺寸，
-   但视觉更轻——透明底 + 浅灰边 + 灰字，"中性维护"语义。hover 时背景轻 wash 给可点反馈。 */
-.engineSecondaryGhost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid var(--border-strong);
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.engineSecondaryGhost:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.engineSecondaryGhost:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.engineSecondaryGhost:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* 第 3 行：检测到的加速后端，整行灰字（size 已移到第 1 行右侧） */
 .engineDetectedRow {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
-/* 主操作 + 维护操作：竖分割两栏
-   - 左栈：下载 AI 引擎 + 测试连接（垂直堆叠，左对齐）
-   - 中：1px 竖分割
-   - 右栈：大小 + 打开 + 卸载（+ 释放显存）右对齐
-   align-items: stretch 让左右两栈等高，分割线自然贯穿到底。 */
-.engineSplit {
-  display: flex;
-  align-items: stretch;
-  gap: 16px;
-  margin-top: 4px;
-}
-
-.engineLeftCol {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  /* flex-start 让按钮各自按内容宽度自适应；下面的 .engineDownloadOutline
-     设了 min-width 让两个按钮自然等宽（取较长那个为基准），不会拉到栈满宽。 */
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.engineRightCol {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.engineVerticalDivider {
-  /* absolute 定位到 body 容器 50%（横向居中于 split 行的两栈之间）；
-     top/bottom 0 让它横跨整个 body 高度（name / status / device / split 所有行）。
-     transform: translateX(-50%) 把 2px 宽度本身的中点对齐到 50%。 */
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1px;
-  background: var(--border-strong);
-  pointer-events: none;
-}
-
-/* 「下载 llama 引擎」按钮：outline 紫色，跟 AISummary tabs 的 .startBtn 同款风格。
-   主操作但属于"发现 / 浏览"语义而非支付级 CTA，所以走 outline 不是 solid。
-   尺寸跟 .testBtn 对齐（h36 / pad 24）让 busy 状态宽度变化时不抖。 */
-.engineDownloadOutline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.engineDownloadOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.engineDownloadOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.engineDownloadOutline:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 旧 .engineHead 留着兼容（如别处仍用），但本 tab 已不引用 */
-.engineHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .engineBadge {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
-  padding: 3px 9px;
+  padding: 3px calc(9px * var(--density));
   border-radius: var(--radius-md);
   letter-spacing: -0.005em;
   flex-shrink: 0;
 }
 
 .engineBadgeOk {
-  background: color-mix(in oklab, #16a34a 18%, transparent);
-  color: #15803d;
-}
-
-.engineBadgeOff {
-  background: var(--surface-2);
-  color: var(--text-muted);
+  background: color-mix(in oklab, var(--status-ok-strong) 18%, transparent);
+  color: var(--status-ok-strong);
 }
 
 /* 未安装 / starting：琥珀色，"需要操作" 的视觉提示 */
 .engineBadgeWarn {
-  background: color-mix(in oklab, #f59e0b 22%, transparent);
-  color: #b45309;
+  background: color-mix(in oklab, var(--status-pending) 22%, transparent);
+  color: var(--status-pending-strong);
 }
 
 /* 出错：红色 */
 .engineBadgeFail {
-  background: color-mix(in oklab, #dc2626 18%, transparent);
-  color: #991b1b;
-}
-
-.engineMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: var(--font-weight-500);
-  color: var(--text-strong);
-  letter-spacing: -0.005em;
-}
-
-.engineMetaSep {
-  color: var(--text-faint);
-  margin: 0 2px;
+  background: color-mix(in oklab, var(--status-error-strong) 18%, transparent);
+  color: var(--status-error-strong);
 }
 
 /* 版本号 hover info（学 Section.module.css 的 infoTip 模式） */
@@ -533,21 +221,21 @@
 .engineInfoTip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 6px * var(--density));
   transform: translateX(-50%) translateY(4px);
   z-index: 10;
   width: max-content;
-  max-width: 240px;
-  padding: 6px 10px;
-  font-size: 11px;
+  max-width: calc(240px * var(--font-scale));
+  padding: calc(6px * var(--density)) calc(10px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-500);
   line-height: 1.5;
-  color: #fff;
-  background: rgba(28, 28, 36, 0.94);
+  color: var(--text-on-tooltip);
+  background: var(--surface-tooltip);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength))),
-    0 2px 4px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+    0 4px 12px -2px rgba(var(--shadow-rgb), calc(0.2 * var(--shadow-strength))),
+    0 2px 4px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
@@ -566,7 +254,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(28, 28, 36, 0.94);
+  border-top-color: var(--surface-tooltip);
 }
 
 .engineInfoWrap:hover .engineInfoTip,
@@ -578,31 +266,24 @@
 /* CUDA 缺失警告条 */
 .engineWarning {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  background: color-mix(in oklab, #f59e0b 10%, transparent);
-  border: 1px solid color-mix(in oklab, #f59e0b 30%, transparent);
+  gap: calc(10px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
+  background: color-mix(in oklab, var(--status-pending) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-pending) 30%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: #92400e;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--status-pending-strong);
   line-height: 1.5;
 }
 
 .engineWarning > svg {
   flex-shrink: 0;
   margin-top: 2px;
-  color: #d97706;
+  color: var(--status-pending-strong);
 }
 
 .engineWarningBody {
   flex: 1;
-}
-
-/* 标题 + 正文分两行的警示变体(runtime 更新提示用;
-   noCuda 那块是刻意连排的一句话,不套这个) */
-.engineWarningStacked strong {
-  display: block;
-  margin-bottom: 2px;
 }
 
 .engineWarningLink {
@@ -610,31 +291,24 @@
   border: 0;
   background: transparent;
   font: inherit;
-  color: #b45309;
+  color: var(--status-pending-strong);
   text-decoration: underline;
   cursor: pointer;
   font-weight: var(--font-weight-600);
 }
 
 .engineWarningLink:hover {
-  color: #92400e;
+  color: color-mix(in oklab, var(--status-pending-strong) 80%, black);
 }
 
 .engineError {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
-  color: #dc2626;
+  color: var(--status-error-strong);
   word-break: break-word;
-  background: color-mix(in oklab, #dc2626 8%, transparent);
+  background: color-mix(in oklab, var(--status-error-strong) 8%, transparent);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-}
-
-.engineActions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* 下载按钮左对齐"未安装"badge，跟 engineHead 同一垂直线 */
+  padding: calc(8px * var(--density)) calc(10px * var(--density));
 }
 
 /* picker 行下面的 VRAM 估算块——两行布局：
@@ -643,9 +317,9 @@
 .vramEst {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 20px 14px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  padding: calc(8px * var(--density)) calc(20px * var(--density)) calc(14px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-variant-numeric: tabular-nums;
 }
 
@@ -653,64 +327,16 @@
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: calc(6px * var(--density)) calc(10px * var(--density));
 }
 
 .vramSystemSource {
   color: var(--text-muted);
 }
 
-/* "应用推荐" 按钮——挂在第一行右端（margin-left: auto 推到最右）。
-   accent 色胶囊 + Sparkles，悬停时柔和渐变阴影；推荐细节（slots/ctx/batch）
-   走 native title，不再单独占一行避免视觉噪声。 */
+/* Pushes the button to the end of the first row */
 .vramRecommendBtn {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 12px 0 10px;
-  font-size: 11.5px;
-  font-weight: var(--font-weight-600);
-  letter-spacing: -0.005em;
-  color: var(--color-accent);
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, transparent);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  box-shadow:
-    0 1px 0 var(--hairline-hi) inset,
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
-  transition:
-    background 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    box-shadow 160ms var(--ease-out),
-    transform 80ms var(--ease-out);
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
-.vramRecommendBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 32%, transparent);
-  box-shadow:
-    0 1px 0 var(--hairline-hi) inset,
-    0 2px 6px color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-
-.vramRecommendBtn:active:not(:disabled) {
-  transform: scale(0.97);
-  box-shadow:
-    0 1px 0 var(--hairline-hi) inset,
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
-}
-
-.vramRecommendBtn:disabled {
-  cursor: default;
-  color: var(--text-faint);
-  background: var(--fill-subtle);
-  border-color: var(--border-default);
-  box-shadow: none;
 }
 
 .vramEstLabel {
@@ -720,12 +346,7 @@
 
 .vramEstValue {
   font-weight: var(--font-weight-700);
-  font-size: 13px;
-}
-
-.vramEstBreakdown {
-  color: var(--text-faint);
-  font-weight: var(--font-weight-400);
+  font-size: calc(var(--font-size-body) * var(--font-scale));
 }
 
 /* Info icon —— 把权重 / KV / ctx / slots 拆分细节折进 native title tooltip
@@ -759,83 +380,44 @@
 
 /* 三档颜色：< 16 GB 绿、16-24 GB 橙警告、> 24 GB 红危险（跟 DebugTab 一致）*/
 .vramEstOk .vramEstValue {
-  color: #16a34a;
+  color: var(--status-ok-strong);
 }
 
 .vramEstWarn .vramEstValue {
-  color: #b45309;
+  color: var(--status-pending-strong);
 }
 
 .vramEstDanger .vramEstValue {
-  color: #dc2626;
+  color: var(--status-error-strong);
 }
 
-/* 包大小提示：第 1 行右端，跟 llama.cpp 名同行。font 15px 半粗让用户一眼看到，
-   但仍是灰字（不抢主要标题 16px 黑）。margin-left:auto 推到行尾，
-   margin-right 留点缝隙不贴卡片右内边距。 */
+/* Package size: at the end of the first row, on the same line as the engine name. */
 .engineSize {
   margin-left: auto;
-  margin-right: 16px;
-  font-size: 12px;
+  margin-right: calc(16px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
 
-/* 「卸载」按钮 outline 风：跟 AISummary tabs 的 .deleteBtn / AISettings 卡片的
-   .uninstallOutline 同一族——透明底 + 1.5px 红边 + 红字。height 36 跟左栈下载/测试
-   等高，padding 14 对齐。颜色编码统一：红 = 破坏性操作。 */
-.engineUninstallOutline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
-  color: #b91c1c;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.engineUninstallOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: var(--status-error);
-}
-
-.engineUninstallOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.engineUninstallOutline:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
 /* —— 模型管理 Section（Phase 1B-β） —— */
 .modelsSection {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 20px;
+  gap: calc(14px * var(--density));
+  padding: calc(16px * var(--density)) calc(20px * var(--density));
 }
 
 /* 模型 tab 顶部 toolbar：3 个筛选 picker 左对齐 + 1 个排序 picker 右对齐。
-   gap: 8px 跟 .engineActions 同；wrap 让窄屏自动换行；spacer 用 flex:1 把排序推到右边 */
+   wrap 让窄屏自动换行；spacer 用 flex:1 把排序推到右边 */
 .modelsToolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--density));
 }
 
 .modelsToolbarSpacer {
@@ -848,32 +430,32 @@
 .modelsToolbarItem {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 /* 云端模型卡——external_enabled 时模型列表第一行的特殊卡片，跟普通推荐卡同一容器，
    但用偏蓝调底色 + 蓝描边把它跟"本地"区分开。不可点、不参与筛选/排序。 */
 .modelCardCloud {
-  background: color-mix(in oklab, #3b82f6 6%, rgba(0, 0, 0, 0.02));
-  border-color: color-mix(in oklab, #3b82f6 26%, var(--border-default));
+  background: color-mix(in oklab, var(--status-info) 6%, var(--fill-subtle));
+  border-color: color-mix(in oklab, var(--status-info) 26%, var(--border-default));
 }
 
 .modelCardCloudIcon {
-  color: #1d4ed8;
+  color: var(--status-info-strong);
   flex-shrink: 0;
 }
 
 .modelList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 .modelCard {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: calc(8px * var(--density));
+  padding: calc(10px * var(--density)) calc(14px * var(--density));
   background: var(--fill-subtle);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -884,7 +466,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 .modelCardLeft {
@@ -892,7 +474,7 @@
   /* 上下两行布局：name 在第 1 行、caps 在第 2 行。logo 用 flex-start 顶部对齐，
      视觉上"占满两行高度"是因为 .modelCardLogo 自身高度做大到 ~40px。 */
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   min-width: 0;
   flex: 1;
 }
@@ -913,7 +495,7 @@
 .modelCardIdentity {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--density));
   min-width: 0;
   flex: 1;
 }
@@ -921,7 +503,7 @@
 .modelCardNameRow {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   min-width: 0;
 }
 
@@ -929,186 +511,13 @@
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: calc(5px * var(--density));
 }
 
 .modelCardRight {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* "使用" 状态徽章——跟 .testBtn 等宽等高，
-   颜色跟 .engineBadgeOk（"已安装"）同步：半透明绿底 + 深绿字。
-   状态而非动作，所以不用 testBtn 那种纯色实心强调。 */
-/* "使用" 状态徽章——尺寸跟 .testBtn 等大，颜色 + 描边跟 .engineStart
-   ("启动引擎" 按钮) 同一族绿色，视觉上是 "ghost tint" 而不是实心强调 */
-.modelActivePill {
-  display: inline-flex;
-  align-items: center;
-  /* 不要 justify-content: center —— testBtn 默认 flex-start，icon 贴左 padding 内沿。
-     这里也得 flex-start，stacked 卡片间 icon 才能纵向对齐 */
-  gap: 8px;
-  height: 36px;
-  padding: 0 24px;
-  background: color-mix(in oklab, #16a34a 12%, transparent);
-  border: 1px solid color-mix(in oklab, #16a34a 26%, transparent);
-  color: #15803d; /* green-700 */
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  user-select: none;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-
-/* hover：颜色加深一档，提示"点击可取消激活，切回已下载" */
-.modelActivePill:hover {
-  background: color-mix(in oklab, #16a34a 20%, transparent);
-  border-color: color-mix(in oklab, #16a34a 40%, transparent);
-}
-
-.modelActivePill:active {
-  background: color-mix(in oklab, #16a34a 26%, transparent);
-}
-
-/* "已下载" 状态按钮——灰色 outline，可点击切到"使用中"。
-   视觉：与 testBtn (蓝实心) / modelActivePill (绿实心) 都拉开差距，
-   保留可点感（hover 微微抬一下 + accent 描边），但不抢"使用中"的高亮。 */
-.modelReadyBtn {
-  display: inline-flex;
-  align-items: center;
-  /* 跟 testBtn / modelActivePill 一样 flex-start，icon 贴左 padding 内沿 */
-  gap: 8px;
-  height: 36px;
-  padding: 0 24px;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.modelReadyBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
-  color: var(--color-accent);
-}
-
-.modelReadyBtn:active {
-  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-}
-
-/* 模型卡右侧的下载按钮收窄：默认 .testBtn 是引擎下载用的大按钮 (min-width 110/padding 24)，
-   推荐卡列表里同时挤了 [下载] [Text] [卸载] 多枚按钮，下载按钮收紧到刚好包住
-   "下载中…" 文字，给 step toggle 留位 */
-.modelCardRight .testBtn {
-  min-width: 0;
-  padding: 0 12px;
-}
-
-/* 下载 CTA outline 风：紫色描边 + 紫色字 / icon + 透明底。设计稿里推荐卡列表的"下载"
-   是发现 / 浏览态，不是支付级 CTA —— 用 outline 让强调比 .testBtn solid 弱一档，
-   不喧宾夺主（用户在选模型不是在结账）。hover 时背景轻微着色暗示可点。
-   推荐卡列表专用，覆盖 .modelCardRight .testBtn 的 solid 风。 */
-.modelCardRight .downloadOutline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  min-width: 0;
-  background: transparent;
-  color: var(--color-accent);
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.modelCardRight .downloadOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.modelCardRight .downloadOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.modelCardRight .downloadOutline:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 卸载按钮 outline 风：红边 + 红字 + 透明底。跟同行的 .downloadOutline 是同一族
-   "outline 描边"风格，仅颜色换成红色保留破坏性 affordance。hover 时背景轻微着色。
-   推荐卡列表专用。 */
-.modelCardRight .uninstallOutline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  min-width: 0;
-  background: transparent;
-  color: #b91c1c;
-  border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.modelCardRight .uninstallOutline:hover:not(:disabled) {
-  background: color-mix(in oklab, #ef4444 8%, transparent);
-  border-color: var(--status-error);
-}
-
-.modelCardRight .uninstallOutline:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.modelCardRight .uninstallOutline:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* 「已下载」状态徽章：同款 outline 风（紫边 + 紫字 + ✓ icon），跟未下载的"下载"按钮
-   视觉等大 + 等强度，让两态切换一目了然。显示用，不可点；卸载走右边的 trash icon。 */
-.installedBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  background: transparent;
-  color: var(--color-accent);
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  user-select: none;
+  gap: calc(8px * var(--density));
   flex-shrink: 0;
 }
 
@@ -1122,9 +531,9 @@
   align-items: center;
   justify-content: center;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 calc(6px * var(--density));
   border-radius: var(--radius-xs);
-  font-size: 9.5px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-600);
   letter-spacing: 0.04em;
   user-select: none;
@@ -1140,22 +549,22 @@
 .capBadgeTip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 6px * var(--density));
   transform: translateX(-50%) translateY(4px);
   z-index: 10;
   width: max-content;
-  max-width: 240px;
-  padding: 6px 10px;
-  font-size: 11px;
+  max-width: calc(240px * var(--font-scale));
+  padding: calc(6px * var(--density)) calc(10px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-500);
   line-height: 1.5;
   letter-spacing: 0.01em;
-  color: #fff;
-  background: rgba(28, 28, 36, 0.94);
+  color: var(--text-on-tooltip);
+  background: var(--surface-tooltip);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength))),
-    0 2px 4px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+    0 4px 12px -2px rgba(var(--shadow-rgb), calc(0.2 * var(--shadow-strength))),
+    0 2px 4px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   white-space: normal;
@@ -1172,7 +581,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(28, 28, 36, 0.94);
+  border-top-color: var(--surface-tooltip);
 }
 
 .capBadge:hover .capBadgeTip {
@@ -1196,7 +605,7 @@
 
 /* 图标形态的 chip:方形匀称内边距,图标居中(文字形态保持原 padding) */
 .capBadgeIconOnly {
-  padding: 2px 5px;
+  padding: 2px calc(5px * var(--density));
 }
 
 .capBadgeIconOnly svg {
@@ -1256,14 +665,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 10px;
+  gap: calc(4px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: transparent;
   border: 1px solid var(--border-strong);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -1280,15 +689,15 @@
 }
 
 .modelStepToggleActive {
-  background: color-mix(in oklab, #16a34a 14%, transparent);
-  border-color: color-mix(in oklab, #16a34a 42%, transparent);
-  color: #15803d;
+  background: color-mix(in oklab, var(--status-ok-strong) 14%, transparent);
+  border-color: color-mix(in oklab, var(--status-ok-strong) 42%, transparent);
+  color: var(--status-ok-strong);
 }
 
 .modelStepToggleActive:hover:not(:disabled) {
-  background: color-mix(in oklab, #16a34a 20%, transparent);
-  border-color: color-mix(in oklab, #16a34a 56%, transparent);
-  color: #15803d;
+  background: color-mix(in oklab, var(--status-ok-strong) 20%, transparent);
+  border-color: color-mix(in oklab, var(--status-ok-strong) 56%, transparent);
+  color: var(--status-ok-strong);
 }
 
 .modelStepToggle:disabled {
@@ -1297,14 +706,14 @@
 }
 
 .modelCardName {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
 }
 
 .modelCardSize {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -1326,7 +735,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   /* 配合主动画做内容淡入淡出，闭合时不至于"突然消失" */
   opacity: 0;
   transition: opacity 200ms ease-out;
@@ -1341,14 +750,14 @@
 .modelExpandBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   align-self: center;
-  margin-top: 4px;
-  padding: 6px 14px;
+  margin-top: calc(4px * var(--density));
+  padding: calc(6px * var(--density)) calc(14px * var(--density));
   background: transparent;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
@@ -1386,15 +795,15 @@
 .modelCustomCard {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: calc(10px * var(--density));
+  padding: calc(12px * var(--density)) calc(14px * var(--density));
   background: var(--fill-subtle);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }
 
 .modelCustomHint {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   line-height: 1.55;
@@ -1404,11 +813,11 @@
 .modelCustomField {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
 }
 
 .modelCustomLabel {
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   letter-spacing: 0.01em;
@@ -1418,20 +827,20 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 /* —— 引擎运行时控制行（Phase 1B-α） —— */
 .engineRuntime {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .engineRuntimeRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   flex-wrap: wrap;
 }
 
@@ -1443,7 +852,7 @@
 /* idle 倒计时小提示——比 badge 弱化的灰字，紧贴 badge 左侧 */
 .engineIdleHint {
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -1453,98 +862,35 @@
   margin-left: 0;
 }
 
-/* —— 三个运行时控制按钮：共用尺寸结构 + 各自语义色 —— */
-.engineStart,
-.engineStop,
-.engineTest {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 18px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    color 160ms ease-out;
-}
-
-/* 启动引擎：绿色 = "go" */
-.engineStart {
-  background: color-mix(in oklab, #16a34a 12%, transparent);
-  border: 1px solid color-mix(in oklab, #16a34a 26%, transparent);
-  color: #15803d;
-}
-
-.engineStart:hover:not(:disabled) {
-  background: color-mix(in oklab, #16a34a 20%, transparent);
-  border-color: color-mix(in oklab, #16a34a 42%, transparent);
-}
-
-/* 停止：琥珀 = "caution"（reversible，比 destructive 卸载弱一档） */
-.engineStop {
-  background: color-mix(in oklab, #f59e0b 14%, transparent);
-  border: 1px solid color-mix(in oklab, #f59e0b 30%, transparent);
-  color: #b45309;
-}
-
-.engineStop:hover:not(:disabled) {
-  background: color-mix(in oklab, #f59e0b 22%, transparent);
-  border-color: color-mix(in oklab, #f59e0b 46%, transparent);
-}
-
-/* 测试连接：蓝色 = "info / diagnostic" */
-.engineTest {
-  background: color-mix(in oklab, #3b82f6 11%, transparent);
-  border: 1px solid color-mix(in oklab, #3b82f6 26%, transparent);
-  color: #1d4ed8;
-}
-
-.engineTest:hover:not(:disabled) {
-  background: color-mix(in oklab, #3b82f6 18%, transparent);
-  border-color: color-mix(in oklab, #3b82f6 40%, transparent);
-}
-
-.engineStart:disabled,
-.engineStop:disabled,
-.engineTest:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
 /* 测试连接结果 inline 展示 */
 .engineRuntimeStatus {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   letter-spacing: -0.005em;
   word-break: break-word;
 }
 
 .engineRuntimeStatusOk {
-  color: #16a34a;
+  color: var(--status-ok-strong);
 }
 
 .engineRuntimeStatusFail {
-  color: #dc2626;
+  color: var(--status-error-strong);
 }
 
 /* 启动失败时的 stderr 详情：浅红框包起来，等宽字便于看 */
 .engineRuntimeError {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-family: var(--font-mono);
   line-height: 1.5;
-  color: #7f1d1d;
-  background: color-mix(in oklab, #dc2626 6%, transparent);
-  border: 1px solid color-mix(in oklab, #dc2626 20%, transparent);
+  color: var(--status-error-strong);
+  background: color-mix(in oklab, var(--status-error-strong) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-error-strong) 20%, transparent);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: calc(8px * var(--density)) calc(10px * var(--density));
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 120px;
@@ -1555,7 +901,7 @@
 .engineProgressWrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--density));
 }
 
 .engineProgressBar {
@@ -1581,7 +927,7 @@
 }
 
 .engineProgressText {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -1627,18 +973,19 @@
   display: flex;
   flex-direction: column;
   /* 跟 .content 的 Section 间距一致，让展开后的两个 Section 融入页面节奏 */
-  gap: 24px;
+  gap: calc(24px * var(--density));
 }
 
-/* 文本输入框：跟 PathField 同款配色，让 base URL / API key / model 输入感观一致 */
+/* Model name box of the combobox. It stays a plain input because the menu is placed from the
+   input's own rectangle. */
 .externalInput {
   width: 100%;
-  height: 32px;
-  padding: 0 12px;
-  background: var(--surface-2);
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
+  background: var(--fill-default);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   font-family: var(--font-mono);
   outline: none;
@@ -1646,6 +993,10 @@
     border-color 200ms ease-out,
     background-color 200ms ease-out,
     box-shadow 200ms ease-out;
+}
+
+.externalInput:hover {
+  border-color: var(--border-strong);
 }
 
 .externalInput:focus {
@@ -1662,90 +1013,43 @@
 .externalKeyRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   width: 100%;
 }
 
-.externalEyeBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  background: var(--surface-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 160ms ease-out,
-    background-color 160ms ease-out;
-}
-
-.externalEyeBtn:hover {
-  color: var(--text-strong);
-  background: var(--fill-strong);
+/* TextInput: the box takes the width, and the input inside takes the mono font from it */
+.externalField {
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-mono);
 }
 
 /* 测试连接行：按钮 + 状态文字横排 */
 .externalActionRow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--density));
   flex-wrap: wrap;
-  margin-top: 4px;
-  padding: 0 20px 14px;
-}
-
-/* 蓝色实心：跟 .testBtn 同款，但稍微低调一点（高度短点、padding 小点） */
-.externalTestBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 14px;
-  background: var(--accent-fill);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    transform 120ms ease-out;
-}
-
-.externalTestBtn:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.externalTestBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.externalTestBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  margin-top: calc(4px * var(--density));
+  padding: 0 calc(20px * var(--density)) calc(14px * var(--density));
 }
 
 .externalTestOk {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
-  color: #15803d; /* green-700 */
+  color: var(--status-ok-strong);
 }
 
 .externalTestFail {
   display: inline-flex;
   align-items: flex-start;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
-  color: #991b1b; /* red-800 */
+  color: var(--status-error-strong);
   max-width: 100%;
   word-break: break-word;
 }
@@ -1754,14 +1058,14 @@
 .externalPrivacyNote {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: calc(6px * var(--density));
   /* 下边距跟上边距对称（12px），别贴到 Section 底——之前 0 让提示框紧挨容器边 */
-  margin: 12px 16px;
-  padding: 10px 12px;
+  margin: calc(12px * var(--density)) calc(16px * var(--density));
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: color-mix(in oklab, var(--color-accent) 5%, transparent);
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -1776,62 +1080,32 @@
 .externalTestSteps {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--density));
   /* 对齐 Section 卡内 Row 的水平内边距；按钮行已带 14px 底距 */
-  padding: 0 20px 14px;
+  padding: 0 calc(20px * var(--density)) calc(14px * var(--density));
 }
 
 /* 步骤进行中（转圈）的中性色行；成功/失败沿用 externalTestOk / externalTestFail */
 .externalTestPending {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
-}
-
-/* 定时计划:时间点 +/− 小按钮(贴在「指定处理时间」标题行尾) */
-.timeDotBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 120ms ease-out,
-    border-color 120ms ease-out,
-    background-color 120ms ease-out;
-}
-
-.timeDotBtn:hover:not(:disabled) {
-  color: var(--color-accent);
-  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-}
-
-.timeDotBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* 云端 API:已保存配置 chips */
 .profileChipRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .profileChip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: transparent;
   overflow: hidden;
@@ -1843,12 +1117,12 @@
 .profileChipBody {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 4px 0 10px;
+  gap: calc(4px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(4px * var(--density)) 0 calc(10px * var(--density));
   border: none;
   background: transparent;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
@@ -1858,8 +1132,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 26px;
+  width: calc(22px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   padding: 0;
   border: none;
   background: transparent;
@@ -1869,7 +1143,7 @@
 }
 
 .profileChipDel:hover {
-  color: #d92d20;
+  color: var(--status-error-strong);
 }
 
 /* 模型建议下拉(自绘 combobox;datalist 在 WKWebView 不可用) */
@@ -1885,13 +1159,13 @@
   z-index: var(--z-dropdown);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px;
+  padding: calc(4px * var(--density));
   background: var(--surface-card);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 6px 18px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength))),
-    0 1px 2px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 6px 18px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength))),
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1901,13 +1175,13 @@
   flex: none;
   display: block;
   width: 100%;
-  height: 30px;
-  line-height: 30px;
-  padding: 0 10px;
+  height: calc(var(--control-height-md) * var(--density));
+  line-height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-family: var(--font-mono);
   color: var(--text-strong);
   cursor: pointer;
@@ -1925,5 +1199,5 @@
 }
 
 :global([data-layout="flat"]) .content {
-  gap: 32px;
+  gap: calc(32px * var(--density));
 }
