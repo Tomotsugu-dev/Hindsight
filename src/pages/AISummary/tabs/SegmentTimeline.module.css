@@ -1,5 +1,5 @@
 /* 日报页和周报面板共用的时间轴。外面套不套卡片由用的地方决定。
-   文字分三级：段名 16 → 正文 14 → 时间等辅助信息 12–13 */
+   文字分三级：段名 → 正文 → 时间等辅助信息 */
 
 .timeline {
   /* 圆点外圈用底色描一圈，盖住穿过它的竖线；放在别的底色上时覆盖它 */
@@ -10,27 +10,27 @@
 
 .row {
   display: grid;
-  grid-template-columns: 52px 20px minmax(0, 1fr);
-  column-gap: 14px;
+  grid-template-columns: calc(52px * var(--font-scale)) 20px minmax(0, 1fr);
+  column-gap: calc(14px * var(--density));
 }
 
 .time {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  padding-top: 18px;
+  padding-top: calc(18px * var(--density));
   font-variant-numeric: tabular-nums;
 }
 
 .timeStart {
-  font-size: 13px;
-  line-height: 28px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  line-height: calc(28px * var(--density));
   font-weight: var(--font-weight-600);
   color: var(--text-regular);
 }
 
 .timeEnd {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -50,12 +50,12 @@
 
 /* 竖线从第一个点开始，到最后一个点结束 */
 .row:first-child .rail::before {
-  top: var(--dot-center);
+  top: calc(var(--dot-center) * var(--density));
 }
 
 .row:last-child .rail::before {
   bottom: auto;
-  height: var(--dot-center);
+  height: calc(var(--dot-center) * var(--density));
 }
 
 .row:only-child .rail::before {
@@ -65,7 +65,7 @@
 .dot {
   position: absolute;
   left: 4px;
-  top: calc(var(--dot-center) - 6px);
+  top: calc(var(--dot-center) * var(--density) - 6px);
   width: 12px;
   height: 12px;
   box-sizing: border-box;
@@ -76,33 +76,33 @@
 
 .content {
   min-width: 0;
-  padding: 18px 0 20px;
+  padding: calc(18px * var(--density)) 0 calc(20px * var(--density));
 }
 
 .rowHead {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
+  gap: calc(8px * var(--density));
+  min-height: calc(28px * var(--density));
 }
 
 .label {
   margin: 0;
-  font-size: 16px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
 }
 
 .bodyText {
-  margin-top: 6px;
-  font-size: 14px;
+  margin-top: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   line-height: 1.75;
   color: var(--text-regular);
 }
 
 .bodyMuted {
-  margin: 4px 0 0;
-  font-size: 13px;
+  margin: calc(4px * var(--density)) 0 0;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.6;
   color: var(--text-muted);
 }

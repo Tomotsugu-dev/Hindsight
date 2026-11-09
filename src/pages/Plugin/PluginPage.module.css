@@ -9,8 +9,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: 40px var(--space-6) var(--space-2);
+  gap: calc(var(--space-3) * var(--density));
+  padding: 40px calc(var(--space-6) * var(--density)) calc(var(--space-2) * var(--density));
   border-bottom: 1px solid var(--border-subtle);
   font-size: calc(var(--font-size-body) * var(--font-scale));
 }

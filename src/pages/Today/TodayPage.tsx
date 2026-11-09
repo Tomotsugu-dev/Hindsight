@@ -410,6 +410,7 @@ export default function TodayPage() {
             {selectionLabel && <span className={styles.selectionLabel}>{selectionLabel}</span>}
           </header>
           {displayedCategoryRanks.length > 0 ? (
+            // TODO: no style file defines rankBody, so this div has no style.
             <div className={styles.rankBody}>
               <RankedList items={displayedCategoryRanks} />
             </div>

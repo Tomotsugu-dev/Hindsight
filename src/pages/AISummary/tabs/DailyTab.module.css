@@ -4,29 +4,30 @@
    外壳样式（.page / .title / .tabs）在 AISummaryPage.module.css。 */
 
 .card {
-  padding: 6px 24px 6px 12px;
+  padding: calc(6px * var(--density)) calc(24px * var(--density)) calc(6px * var(--density))
+    calc(12px * var(--density));
   background: var(--surface-card-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 .runningChip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
+  gap: calc(5px * var(--density));
+  padding: 2px calc(8px * var(--density));
   border-radius: var(--radius-pill);
   background: var(--color-accent-soft);
   color: var(--color-accent);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
 }
 
 .mutedTag {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
