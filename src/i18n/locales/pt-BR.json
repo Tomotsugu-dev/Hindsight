@@ -12,6 +12,8 @@
     "close": "Fechar",
     "empty": "Nenhum dado ainda",
     "open": "Abrir",
+    "clear": "Limpar",
+    "remove": "Remover",
     "errorBoundary": {
       "title": "Algo deu errado",
       "message": "Esta tela encontrou um erro inesperado. Você pode recarregar para continuar.",
@@ -386,19 +388,24 @@
       },
       "app": {
         "title": "Filtro de aplicativos",
-        "info": "Ignorar capturas de tela quando o nome do aplicativo ou o título da janela contém qualquer um destes (não diferencia maiúsculas de minúsculas). Para não registrar nada de um aplicativo, coloque-o na categoria “Privado”.",
+        "info": "Ignorar capturas de tela quando o nome do aplicativo ou o título da janela contém qualquer um destes (não diferencia maiúsculas de minúsculas).",
         "rowLabel": "Palavras-chave de título / aplicativo",
         "addLabel": "Adicionar nome de aplicativo",
         "placeholder": "ex.: WeChat"
       },
-      "scope": {
-        "title": "Escopo",
-        "info": "Quando há correspondência, apenas as capturas de tela são ignoradas",
-        "noticePrefix": "A filtragem de capturas de tela é um comportamento apenas local, ",
-        "noticeEmph": "não afeta as capturas de tela já salvas",
-        "noticeMiddle": ". Para limpar capturas de tela do histórico, vá em ",
-        "noticeKbd": "Configurações · Dados · Limpar capturas de tela",
-        "noticeSuffix": "."
+      "private": {
+        "title": "Não registrar nada",
+        "description": "Nem tempo, nem capturas, nem títulos. Mover algo para Privado apaga os registros que já existem.",
+        "appsLabel": "Apps",
+        "appsHint": "Coloque-o em “Privado” em Categorias · Atribuir apps",
+        "sitesLabel": "Sites",
+        "sitesHint": "Coloque-o em “Privado” em Categorias · Atribuir sites",
+        "open": "Abrir"
+      },
+      "screenshot": {
+        "title": "Só pular capturas",
+        "description": "Quando uma palavra-chave abaixo coincide, a captura não é feita. O tempo e os títulos continuam sendo registrados.",
+        "footnote": "As capturas já salvas ficam. Para limpá-las, vá em <path>Configurações · Dados · Limpar capturas de tela</path>."
       },
       "keywordEditor": {
         "removeAria": "Remover {{keyword}}",

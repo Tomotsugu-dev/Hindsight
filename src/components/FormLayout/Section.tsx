@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import styles from "./Section.module.css";
 
 interface SectionProps {
-  title: string;
+  /** Without a title, only the card is shown */
+  title?: string;
   description?: string;
   icon?: LucideIcon;
   tone?: "primary" | "danger";
@@ -38,28 +39,30 @@ export function Section({
       className={`${styles.section} ${collapsible ? styles.collapsible : ""}`}
       data-part="section"
     >
-      <header className={styles.header}>
-        {Icon ? (
-          <div className={`${styles.icon} ${styles[`tone_${tone}`]}`}>
-            <Icon size={20} strokeWidth={1.85} />
+      {title ? (
+        <header className={styles.header}>
+          {Icon ? (
+            <div className={`${styles.icon} ${styles[`tone_${tone}`]}`}>
+              <Icon size={20} strokeWidth={1.85} />
+            </div>
+          ) : null}
+          <div className={styles.headText}>
+            <div className={styles.titleRow}>
+              <h2 className={styles.title}>{title}</h2>
+              {info ? (
+                <button type="button" className={styles.infoWrap} aria-label={info}>
+                  <Info size={14} strokeWidth={1.85} className={styles.infoIcon} />
+                  <span className={styles.infoTip} role="tooltip">
+                    {info}
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            {description ? <p className={styles.description}>{description}</p> : null}
           </div>
-        ) : null}
-        <div className={styles.headText}>
-          <div className={styles.titleRow}>
-            <h2 className={styles.title}>{title}</h2>
-            {info ? (
-              <button type="button" className={styles.infoWrap} aria-label={info}>
-                <Info size={14} strokeWidth={1.85} className={styles.infoIcon} />
-                <span className={styles.infoTip} role="tooltip">
-                  {info}
-                </span>
-              </button>
-            ) : null}
-          </div>
-          {description ? <p className={styles.description}>{description}</p> : null}
-        </div>
-        {headerAction ? <div className={styles.headerAction}>{headerAction}</div> : null}
-      </header>
+          {headerAction ? <div className={styles.headerAction}>{headerAction}</div> : null}
+        </header>
+      ) : null}
       {/* collapsible 时外层 cardWrap 走 grid-rows trick；非 collapsible 直接渲 card */}
       {bare ? (
         children

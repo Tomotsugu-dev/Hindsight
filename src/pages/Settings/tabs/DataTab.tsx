@@ -251,7 +251,7 @@ export default function DataTab() {
             variant="neutral"
             busyTarget={busyTarget}
             busyLabel={t("settings.data.cleanup.purgeShotsBusy")}
-            idleLabel={t("settings.data.cleanup.purgeShotsLabel")}
+            idleLabel={t("common.clear")}
             onClick={() => setSimpleConfirm("shots")}
           />
         </Row>
@@ -274,7 +274,7 @@ export default function DataTab() {
             variant="neutral"
             busyTarget={busyTarget}
             busyLabel={t("settings.data.cleanup.purgeDbBusy")}
-            idleLabel={t("settings.data.cleanup.purgeDbLabel")}
+            idleLabel={t("common.clear")}
             onClick={() => setSimpleConfirm("db")}
           />
         </Row>
@@ -304,7 +304,7 @@ export default function DataTab() {
             variant="danger"
             busyTarget={busyTarget}
             busyLabel={t("settings.data.danger.removeDeviceBusy")}
-            idleLabel={t("settings.data.danger.removeDeviceLabel")}
+            idleLabel={t("common.remove")}
             disabled={!canRemove}
             onClick={() => setRemoveOpen(true)}
           />

@@ -12,6 +12,8 @@
     "close": "Cerrar",
     "empty": "Aún no hay datos",
     "open": "Abrir",
+    "clear": "Borrar",
+    "remove": "Quitar",
     "errorBoundary": {
       "title": "Algo salió mal",
       "message": "Esta pantalla encontró un error inesperado. Puedes recargar para continuar.",
@@ -386,19 +388,24 @@
       },
       "app": {
         "title": "Filtro de aplicaciones",
-        "info": "Omitir las capturas de pantalla cuando el nombre de la aplicación o el título de la ventana contenga alguno de estos términos (no distingue mayúsculas de minúsculas). Para no registrar nada de una aplicación, ponla en la categoría «Privado».",
+        "info": "Omitir las capturas de pantalla cuando el nombre de la aplicación o el título de la ventana contenga alguno de estos términos (no distingue mayúsculas de minúsculas).",
         "rowLabel": "Palabras clave de título / aplicación",
         "addLabel": "Añadir nombre de aplicación",
         "placeholder": "p. ej. WeChat"
       },
-      "scope": {
-        "title": "Alcance",
-        "info": "Cuando hay coincidencia, solo se omiten las capturas de pantalla",
-        "noticePrefix": "El filtrado de capturas es un comportamiento solo local, ",
-        "noticeEmph": "no afecta a las capturas ya guardadas",
-        "noticeMiddle": ". Para borrar las capturas del historial, ve a ",
-        "noticeKbd": "Ajustes · Datos · Borrar las capturas de pantalla",
-        "noticeSuffix": "."
+      "private": {
+        "title": "No registrar nada",
+        "description": "Ni tiempo, ni capturas, ni títulos. Al pasar algo a Privado se borran sus registros existentes.",
+        "appsLabel": "Apps",
+        "appsHint": "Ponla en «Privado» en Categorías · Asignar apps",
+        "sitesLabel": "Sitios",
+        "sitesHint": "Ponlo en «Privado» en Categorías · Asignar sitios",
+        "open": "Abrir"
+      },
+      "screenshot": {
+        "title": "Solo omitir capturas",
+        "description": "Si coincide una palabra clave de abajo, no se toma captura. El tiempo y los títulos se registran igual.",
+        "footnote": "Las capturas ya guardadas se quedan. Para borrarlas, ve a <path>Ajustes · Datos · Borrar las capturas de pantalla</path>."
       },
       "keywordEditor": {
         "removeAria": "Quitar {{keyword}}",
