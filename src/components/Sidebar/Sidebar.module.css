@@ -3,7 +3,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-3);
+  padding: calc(var(--space-3) * var(--density));
   background: var(--sidebar-gradient);
   border-right: 1px solid var(--sidebar-border);
   box-shadow: inset -1px 0 0 var(--hairline-hi);
@@ -12,10 +12,10 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--space-2) * var(--density));
   height: 44px;
-  padding: 0 var(--space-2);
-  margin-bottom: var(--space-1);
+  padding: 0 calc(var(--space-2) * var(--density));
+  margin-bottom: calc(var(--space-1) * var(--density));
   /* 拖动热区：双保险 */
   -webkit-app-region: drag;
   app-region: drag;
@@ -57,9 +57,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: calc(var(--space-4) * var(--density));
   overflow-y: auto;
-  padding-bottom: var(--space-3);
+  padding-bottom: calc(var(--space-3) * var(--density));
   /* 隐藏滚动条（功能保留） */
   scrollbar-width: none;
 }
@@ -70,15 +70,15 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: calc(var(--space-1) * var(--density));
 }
 
 .sectionTitle {
-  padding: 0 var(--space-3);
-  height: 16px;
+  padding: 0 calc(var(--space-3) * var(--density));
+  height: calc(16px * var(--density));
   display: flex;
   align-items: center;
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-faint);
   letter-spacing: 0;
@@ -129,11 +129,11 @@
 .accountRow {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
   width: 100%;
-  height: 28px;
-  padding: 0 var(--space-3);
-  margin-bottom: var(--space-3);
+  height: calc(28px * var(--density));
+  padding: 0 calc(var(--space-3) * var(--density));
+  margin-bottom: calc(var(--space-3) * var(--density));
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: calc(var(--font-size-caption) * var(--font-scale));
