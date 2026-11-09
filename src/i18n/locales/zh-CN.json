@@ -386,19 +386,24 @@
       },
       "app": {
         "title": "应用过滤",
-        "info": "应用名或窗口标题包含其中任意一条（忽略大小写）时跳过截图。要完全不记录某个应用，把它归到「隐私」分类。",
+        "info": "应用名或窗口标题包含其中任意一条（忽略大小写）时跳过截图。",
         "rowLabel": "标题 / 应用关键词",
         "addLabel": "添加应用名",
         "placeholder": "如 微信"
       },
-      "scope": {
-        "title": "作用范围",
-        "info": "命中过滤条件时只跳过截图",
-        "noticePrefix": "截图过滤是本地行为，",
-        "noticeEmph": "对已经存下来的历史截图无效",
-        "noticeMiddle": "；要清空历史截图请去 ",
-        "noticeKbd": "设置 · 数据 · 清空截图",
-        "noticeSuffix": "。"
+      "private": {
+        "title": "完全不记录",
+        "description": "不记时间、不截图、不存标题。设为隐私时会删掉已有的记录。",
+        "appsLabel": "应用",
+        "appsHint": "在「分类 · 归类应用」里把它归到「隐私」",
+        "sitesLabel": "网站",
+        "sitesHint": "在「分类 · 归类网站」里把它归到「隐私」",
+        "open": "前往"
+      },
+      "screenshot": {
+        "title": "只跳过截图",
+        "description": "命中下面的关键词时不截图，时间和标题照常记录。",
+        "footnote": "已存的截图不受影响；要清空，去 <path>设置 · 数据 · 清空截图</path>。"
       },
       "keywordEditor": {
         "removeAria": "移除 {{keyword}}",

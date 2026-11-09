@@ -386,19 +386,24 @@
       },
       "app": {
         "title": "應用程式過濾",
-        "info": "應用程式名或視窗標題包含其中任意一條（忽略大小寫）時跳過截圖。要完全不記錄某個應用程式，把它歸到「隱私」分類。",
+        "info": "應用程式名或視窗標題包含其中任意一條（忽略大小寫）時跳過截圖。",
         "rowLabel": "標題 / 應用程式關鍵詞",
         "addLabel": "新增應用程式名",
         "placeholder": "如 微信"
       },
-      "scope": {
-        "title": "作用範圍",
-        "info": "命中過濾條件時只跳過截圖",
-        "noticePrefix": "截圖過濾是本地行為，",
-        "noticeEmph": "對已經存下來的歷史截圖無效",
-        "noticeMiddle": "；要清空歷史截圖請去 ",
-        "noticeKbd": "設定 · 資料 · 清空截圖",
-        "noticeSuffix": "。"
+      "private": {
+        "title": "完全不記錄",
+        "description": "不記時間、不截圖、不存標題。設為隱私時會刪掉已有的記錄。",
+        "appsLabel": "應用程式",
+        "appsHint": "在「分類 · 歸類應用」裡把它歸到「隱私」",
+        "sitesLabel": "網站",
+        "sitesHint": "在「分類 · 歸類網站」裡把它歸到「隱私」",
+        "open": "前往"
+      },
+      "screenshot": {
+        "title": "只跳過截圖",
+        "description": "命中下面的關鍵詞時不截圖，時間和標題照常記錄。",
+        "footnote": "已存的截圖不受影響；要清空，去 <path>設定 · 資料 · 清空截圖</path>。"
       },
       "keywordEditor": {
         "removeAria": "移除 {{keyword}}",

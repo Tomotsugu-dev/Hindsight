@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
-import { AppWindow, EyeOff, Globe, Plus, X } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { ArrowRight, EyeOff, ImageOff, Plus, X, type LucideIcon } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
 import { AppIcon } from "../../../components/AppIcon/AppIcon";
+import { ROUTES } from "../../../config/nav";
 import { useSettings } from "../../../state/settings";
 import { api, type AppGroup } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
@@ -202,6 +204,31 @@ function KeywordEditor({
   );
 }
 
+interface TierProps {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  children: ReactNode;
+}
+
+/** One tier of the privacy page. Its content is indented to line up with the title text */
+function Tier({ icon: Icon, title, description, children }: TierProps) {
+  return (
+    <section className={styles.tier}>
+      <header className={styles.tierHeader}>
+        <div className={styles.tierIcon}>
+          <Icon size={20} strokeWidth={1.85} />
+        </div>
+        <div className={styles.tierText}>
+          <h2 className={styles.tierTitle}>{title}</h2>
+          <p className={styles.tierDescription}>{description}</p>
+        </div>
+      </header>
+      <div className={styles.tierBody}>{children}</div>
+    </section>
+  );
+}
+
 export default function PrivacyTab() {
   const { t } = useTranslation();
   const { settings, update } = useSettings();
@@ -212,59 +239,82 @@ export default function PrivacyTab() {
 
   return (
     <>
-      <Section
-        title={t("settings.privacy.browser.title")}
-        info={t("settings.privacy.browser.info")}
-        icon={Globe}
-      >
-        <Row label={t("settings.privacy.browser.rowLabel")} block>
-          <KeywordEditor
-            value={urlList}
-            onChange={(next) => update({ privacyUrlKeywords: next })}
-            addLabel={t("settings.privacy.browser.addLabel")}
-            placeholder={t("settings.privacy.browser.placeholder")}
-          />
-        </Row>
-        <Row
-          label={t("settings.privacy.browser.hostLabel")}
-          description={t("settings.privacy.browser.hostInfo")}
-        >
-          <Toggle
-            checked={settings.recordBrowserHost}
-            onChange={(v) => update({ recordBrowserHost: v })}
-          />
-        </Row>
-      </Section>
-
-      <Section
-        title={t("settings.privacy.app.title")}
-        info={t("settings.privacy.app.info")}
-        icon={AppWindow}
-      >
-        <Row label={t("settings.privacy.app.rowLabel")} block>
-          <KeywordEditor
-            value={appList}
-            onChange={(next) => update({ privacyAppKeywords: next })}
-            addLabel={t("settings.privacy.app.addLabel")}
-            placeholder={t("settings.privacy.app.placeholder")}
-            suggestApps
-          />
-        </Row>
-      </Section>
-
-      <Section
-        title={t("settings.privacy.scope.title")}
-        info={t("settings.privacy.scope.info")}
+      <Tier
         icon={EyeOff}
+        title={t("settings.privacy.private.title")}
+        description={t("settings.privacy.private.description")}
       >
-        <p className={styles.notice}>
-          {t("settings.privacy.scope.noticePrefix")}
-          <strong className={styles.attention}>{t("settings.privacy.scope.noticeEmph")}</strong>
-          {t("settings.privacy.scope.noticeMiddle")}
-          <span className={styles.kbd}>{t("settings.privacy.scope.noticeKbd")}</span>
-          {t("settings.privacy.scope.noticeSuffix")}
+        <Section>
+          <Row
+            label={t("settings.privacy.private.appsLabel")}
+            description={t("settings.privacy.private.appsHint")}
+          >
+            <Link to={`${ROUTES.categories}/apps`} className={styles.openLink}>
+              {t("settings.privacy.private.open")}
+              <ArrowRight size={14} strokeWidth={1.85} />
+            </Link>
+          </Row>
+          <Row
+            label={t("settings.privacy.private.sitesLabel")}
+            description={t("settings.privacy.private.sitesHint")}
+          >
+            <Link to={`${ROUTES.categories}/sites`} className={styles.openLink}>
+              {t("settings.privacy.private.open")}
+              <ArrowRight size={14} strokeWidth={1.85} />
+            </Link>
+          </Row>
+        </Section>
+      </Tier>
+
+      <Tier
+        icon={ImageOff}
+        title={t("settings.privacy.screenshot.title")}
+        description={t("settings.privacy.screenshot.description")}
+      >
+        <Section
+          title={t("settings.privacy.browser.title")}
+          info={t("settings.privacy.browser.info")}
+        >
+          <Row label={t("settings.privacy.browser.rowLabel")} block>
+            <KeywordEditor
+              value={urlList}
+              onChange={(next) => update({ privacyUrlKeywords: next })}
+              addLabel={t("settings.privacy.browser.addLabel")}
+              placeholder={t("settings.privacy.browser.placeholder")}
+            />
+          </Row>
+          <Row
+            label={t("settings.privacy.browser.hostLabel")}
+            description={t("settings.privacy.browser.hostInfo")}
+          >
+            <Toggle
+              checked={settings.recordBrowserHost}
+              onChange={(v) => update({ recordBrowserHost: v })}
+            />
+          </Row>
+        </Section>
+
+        <Section title={t("settings.privacy.app.title")} info={t("settings.privacy.app.info")}>
+          <Row label={t("settings.privacy.app.rowLabel")} block>
+            <KeywordEditor
+              value={appList}
+              onChange={(next) => update({ privacyAppKeywords: next })}
+              addLabel={t("settings.privacy.app.addLabel")}
+              placeholder={t("settings.privacy.app.placeholder")}
+              suggestApps
+            />
+          </Row>
+        </Section>
+
+        <p className={styles.footnote}>
+          <Trans
+            i18nKey="settings.privacy.screenshot.footnote"
+            components={{
+              path: <Link to={`${ROUTES.settings}/data`} className={styles.footnoteLink} />,
+            }}
+          />
         </p>
-      </Section>
+      </Tier>
     </>
   );
 }

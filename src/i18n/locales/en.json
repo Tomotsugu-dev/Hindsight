@@ -386,19 +386,24 @@
       },
       "app": {
         "title": "App filter",
-        "info": "Skip screenshots when the app name or window title contains any of these (case-insensitive). To record nothing at all for an app, put it in the “Private” category.",
+        "info": "Skip screenshots when the app name or window title contains any of these (case-insensitive).",
         "rowLabel": "Title / app keywords",
         "addLabel": "Add app name",
         "placeholder": "e.g. WeChat"
       },
-      "scope": {
-        "title": "Scope",
-        "info": "When matched, only screenshots are skipped",
-        "noticePrefix": "Screenshot filtering is a local-only behavior, ",
-        "noticeEmph": "it does not affect screenshots already saved",
-        "noticeMiddle": ". To clear historical screenshots, go to ",
-        "noticeKbd": "Settings · Data · Clear screenshots",
-        "noticeSuffix": "."
+      "private": {
+        "title": "Record nothing",
+        "description": "No time, no screenshots, no titles. Making something private deletes its existing records.",
+        "appsLabel": "Apps",
+        "appsHint": "Put it in “Private” under Categories · Assign apps",
+        "sitesLabel": "Websites",
+        "sitesHint": "Put it in “Private” under Categories · Assign websites",
+        "open": "Open"
+      },
+      "screenshot": {
+        "title": "Skip screenshots only",
+        "description": "When a keyword below matches, no screenshot is taken. Time and titles are still recorded.",
+        "footnote": "Screenshots already saved stay. To clear them, go to <path>Settings · Data · Clear screenshots</path>."
       },
       "keywordEditor": {
         "removeAria": "Remove {{keyword}}",
