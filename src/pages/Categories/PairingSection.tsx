@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Plus, Trash2, X } from "lucide-react";
 import { api, type AppGroup, type AppGroupMember } from "../../api/hindsight";
 import { AppIcon } from "../../components/AppIcon/AppIcon";
+import { IconButton } from "../../components/Button/IconButton";
 import { useCategories } from "../../state/categories";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { logError } from "../../lib/logger";
@@ -473,18 +474,17 @@ export function PairingSection({
                   只是其中一种。图标用垃圾桶——用户点这里的意图就是"删掉这行",
                   换成 EyeOff 反而认不出是干什么的;隐藏只是我们推荐的处理方式,
                   在弹窗里讲(见 RemoveAppDialog),不占入口的语义。 */}
-              <button
-                type="button"
-                className={styles.deleteRowBtn}
+              <IconButton
+                icon={Trash2}
+                variant="outline"
+                size="sm"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => onRemoveClick(group.id, group.displayName)}
                 title={t("categories.pairing.row.removeTooltip")}
-                aria-label={t("categories.pairing.row.removeAria", {
+                label={t("categories.pairing.row.removeAria", {
                   name: group.displayName,
                 })}
-              >
-                <Trash2 size={12} strokeWidth={2.25} />
-              </button>
+              />
             </div>
           </div>
         );

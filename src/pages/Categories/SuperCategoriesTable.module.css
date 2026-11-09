@@ -154,12 +154,6 @@
   cursor: default;
 }
 
-.superCount {
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  color: var(--text-muted);
-  font-weight: var(--font-weight-500);
-}
-
 /* —— 右上角小 × 关闭按钮（macOS close button 风）——
    18px 圆形，挂在卡片右上角外侧（top/right: -6px）。hover 卡时 fade + scale 出现。
    不占卡内空间、不压 icon / name；卡身 overflow 不裁（祖先无 overflow:hidden）。 */

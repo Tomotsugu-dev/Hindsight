@@ -358,28 +358,3 @@
   font-size: calc(var(--font-size-micro) * var(--font-scale));
   color: var(--text-muted);
 }
-
-/* 空行末尾的删除按钮：低饱和度，hover 时变红色提示破坏性操作 */
-.deleteRowBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(var(--control-height-sm) * var(--density));
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
-}
-
-.deleteRowBtn:hover {
-  background: color-mix(in oklab, var(--status-error) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-error) 35%, transparent);
-  color: var(--status-error);
-}

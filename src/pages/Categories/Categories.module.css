@@ -24,12 +24,6 @@
   box-shadow: none;
 }
 
-:global([data-layout="flat"]) .catRowHot {
-  background: color-mix(in oklab, var(--color-accent) 8%, var(--surface-card));
-  border-bottom-color: var(--color-accent);
-  outline: 1px solid var(--color-accent);
-}
-
 .header {
   display: flex;
   align-items: flex-start;
@@ -50,14 +44,6 @@
   display: flex;
   flex-direction: column;
   gap: calc(4px * var(--density));
-}
-
-.title {
-  font-size: calc(var(--font-size-display) * var(--font-scale));
-  font-weight: var(--font-weight-display);
-  color: var(--text-strong);
-  letter-spacing: -0.015em;
-  margin: 0;
 }
 
 .meta {
@@ -177,17 +163,6 @@
   opacity: 0.45;
 }
 
-/* 拖拽悬停目标行：抬升 + accent 描边 + 阴影 + 微缩放 = 物理碰撞抬起感
-   （跟 PairingSection 的 .row.hot 完全同款的视觉语言）*/
-.catRowHot {
-  background: color-mix(in oklab, var(--color-accent) 8%, var(--surface-card));
-  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-  box-shadow:
-    0 6px 16px color-mix(in oklab, var(--color-accent) 18%, transparent),
-    0 0 0 2px color-mix(in oklab, var(--color-accent) 22%, transparent);
-  transform: translateY(-1px) scale(1.005);
-}
-
 /* 落地撞击：源行刚 reorder 到位时短暂"啪嗒"一下（squish + restore），
    配合 FLIP 的 back-ease 给一个有重量感的着陆 */
 @keyframes catLand {
@@ -204,10 +179,6 @@
   100% {
     transform: translateY(0) scaleY(1);
   }
-}
-
-.catRowLanded {
-  animation: catLand 320ms var(--ease-out);
 }
 
 /* 新建的分类：着陆撞击 + 一圈渐隐的 accent 描边。
@@ -413,43 +384,6 @@
   flex-shrink: 0;
 }
 
-/* 编辑 / 删除按钮：中性灰底 + 中性灰 icon，避免跟用户自选的分类色撞色。
-   意图通过 hover 传达：
-     - 编辑 hover → 紫色（accent，主操作）
-     - 删除 hover → 红色（destructive 警示）
-   两个按钮**默认看起来一样**——把"危险性"留给鼠标交互那一刻 */
-.actionBtn {
-  width: calc(34px * var(--density));
-  height: calc(34px * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  background: var(--fill-default);
-  color: var(--text-muted);
-  border: none;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out,
-    transform 100ms ease-out;
-}
-
-.actionBtn:hover {
-  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-  color: var(--color-accent);
-}
-
-.actionBtn:active {
-  transform: scale(0.94);
-}
-
-/* delete 按钮 hover 时**覆盖**普通 actionBtn 的紫色 hover，改为红色 danger 警示 */
-.actionBtnDanger:hover {
-  background: var(--status-error-soft);
-  color: var(--status-error);
-}
-
 /* —— App chips 的"两行夹片" —— 默认 height 锁到 2 行 + 底部渐隐 mask；
    hover 时展开到内容真实高度，平滑动画。
 
@@ -565,146 +499,6 @@
   color: var(--text-faint);
   font-style: italic;
   padding: calc(16px * var(--density));
-}
-
-/* 主创建按钮——outline 紫边风，跟 AI 总结 .startBtn 同款。
-   蓝紫 = 主操作的视觉编码统一；outline 比 solid 克制，
-   跟 AI 设置 .downloadOutline 等同族对齐。 */
-.createBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(32px * var(--density));
-  padding: 0 calc(14px * var(--density));
-  background: transparent;
-  border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    transform 120ms ease-out;
-  flex-shrink: 0;
-}
-
-.createBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  border-color: var(--color-accent);
-}
-
-.createBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.createBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 新建进行中:create 要等一次全量 refresh,给个转圈别让按钮看着像没反应 */
-@keyframes createSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.createSpin {
-  animation: createSpin 900ms linear infinite;
-}
-
-.createForm {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--density));
-  padding: calc(16px * var(--density)) calc(18px * var(--density)) calc(16px * var(--density))
-    calc(28px * var(--density));
-  background: var(--surface-card);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 25%, var(--border-subtle));
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 0 0 3px color-mix(in oklab, var(--color-accent) 10%, transparent),
-    0 6px 16px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
-}
-
-.createForm::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: calc(12px * var(--density));
-  bottom: calc(12px * var(--density));
-  width: 4px;
-  border-radius: 0 3px 3px 0;
-  background: var(--cat-color);
-}
-
-.iconBtn {
-  width: calc(28px * var(--density));
-  height: calc(28px * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-faint);
-  background: var(--fill-default);
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out,
-    transform 100ms ease-out;
-  border: none;
-  cursor: pointer;
-}
-
-.iconBtn:hover {
-  background: var(--fill-strong);
-  color: var(--text-strong);
-}
-
-.iconBtn:active {
-  transform: scale(0.92);
-}
-
-.iconBtnPrimary {
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-}
-
-.iconBtnPrimary:hover {
-  background: var(--accent-fill-hover);
-  color: var(--text-on-accent);
-}
-
-.unclassRow {
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--density));
-  padding: calc(10px * var(--density)) calc(16px * var(--density));
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.unclassRow:last-child {
-  border-bottom: none;
-}
-
-.unclassName {
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  color: var(--text-strong);
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.unclassMeta {
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  color: var(--text-muted);
-  flex: 1;
-  font-variant-numeric: tabular-nums;
 }
 
 .assignBtn {
