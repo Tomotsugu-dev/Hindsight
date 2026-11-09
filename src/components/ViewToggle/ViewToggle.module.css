@@ -14,12 +14,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-width: 60px;
-  padding: 6px 14px 8px;
+  gap: calc(5px * var(--density));
+  min-width: calc(60px * var(--font-scale));
+  padding: calc(6px * var(--density)) calc(14px * var(--density)) calc(8px * var(--density));
   border: none;
   background: transparent;
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-muted);
   letter-spacing: 0.01em;

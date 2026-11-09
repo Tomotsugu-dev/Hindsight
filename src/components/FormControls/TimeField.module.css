@@ -3,10 +3,10 @@
   display: inline-flex;
   align-items: center;
   gap: 1px;
-  height: 30px;
-  padding: 0 4px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(4px * var(--density));
   background: var(--fill-default);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   -webkit-app-region: no-drag;
   app-region: no-drag;
@@ -19,18 +19,18 @@
 /* —— 悬浮提示（右侧） —— */
 .tooltip {
   position: absolute;
-  left: calc(100% + 8px);
+  left: calc(100% + 8px * var(--density));
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
-  padding: 5px 10px;
-  background: #1a1a1f;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 11px;
+  padding: calc(5px * var(--density)) calc(10px * var(--density));
+  background: var(--surface-tooltip);
+  color: var(--text-on-tooltip);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-500);
   letter-spacing: 0.005em;
   white-space: nowrap;
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 14px rgba(20, 20, 40, calc(0.18 * var(--shadow-strength)));
+  box-shadow: 0 4px 14px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   z-index: 20;
@@ -48,7 +48,7 @@
   top: 50%;
   transform: translateY(-50%);
   border: 4px solid transparent;
-  border-right-color: #1a1a1f;
+  border-right-color: var(--surface-tooltip);
 }
 
 /* hover 500ms 才浮现 — 防误触 */
@@ -69,10 +69,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 22px;
-  padding: 0 6px;
+  height: calc(22px * var(--density));
+  padding: 0 calc(6px * var(--density));
   border-radius: var(--radius-xs);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   line-height: 1;
   color: var(--text-strong);
@@ -135,7 +135,7 @@
 }
 
 .colon {
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-muted);
   line-height: 1;
