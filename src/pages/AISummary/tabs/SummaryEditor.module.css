@@ -1,18 +1,18 @@
 .editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .textarea {
   width: 100%;
   max-height: 520px;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   line-height: 1.6;
   color: var(--text-strong);
   resize: vertical;
@@ -34,18 +34,18 @@
 .footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 /* 提示靠左，两个按钮靠右 */
 .note {
   margin: 0 auto 0 0;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
 /* 比 .btn 小一号；加上 .editor 让它不受两份样式表加载先后影响 */
 .editor .saveBtn {
-  height: 30px;
-  padding: 0 12px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
 }

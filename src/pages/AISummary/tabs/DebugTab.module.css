@@ -5,7 +5,7 @@
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--density));
 }
 
 /* DebugTab 内部 sub-tab：调试视图 / 调试设置。视觉上轻量，跟顶部 TabNav
@@ -13,7 +13,7 @@
 .subTabNav {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--density));
   padding: 3px;
   background: color-mix(in oklab, var(--text-muted) 8%, transparent);
   border-radius: var(--radius-sm);
@@ -22,12 +22,12 @@
 .subTab {
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 12px;
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-muted);
   cursor: pointer;
@@ -41,7 +41,7 @@
 .subTabActive {
   background: var(--surface);
   color: var(--text-strong);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.06 * var(--shadow-strength)));
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 /* —— 顶部控件行：日期 / 段下拉 / 开始按钮 / 导出 —— */
@@ -49,7 +49,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 /* 顶部次行：参数 + 次要按钮（删除 / 导出）。跟 .header 同一族视觉，间距略小，
@@ -58,8 +58,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
+  gap: calc(10px * var(--density));
+  margin-top: calc(8px * var(--density));
 }
 
 /* dayNav / navBtn / dayPill 跟 Today 页 [TodayPage.module.css:66-128] 完全一致——
@@ -67,12 +67,12 @@
 .dateNav {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .navBtn {
-  width: 26px;
-  height: 26px;
+  width: calc(var(--control-height-sm) * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -97,16 +97,16 @@
 }
 
 .dayPill {
-  min-width: 64px;
-  height: 26px;
-  padding: 0 10px;
+  min-width: calc(64px * var(--font-scale));
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
   background: var(--control-bg);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
@@ -128,12 +128,12 @@
 
 /* 段选择 native select：不抢风头，默认外观 */
 .segSelect {
-  height: 30px;
-  padding: 0 10px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
@@ -157,14 +157,14 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: transparent;
   border: 1.5px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
   color: var(--color-accent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   cursor: pointer;
   transition:
@@ -192,21 +192,21 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  background: color-mix(in oklab, #f59e0b 14%, transparent);
-  border: 1px solid color-mix(in oklab, #f59e0b 38%, transparent);
-  color: #b45309;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
+  background: color-mix(in oklab, var(--status-pending) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-pending) 38%, transparent);
+  color: var(--status-pending-strong);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   cursor: pointer;
   transition: background-color 140ms ease-out;
 }
 
 .stopBtn:hover {
-  background: color-mix(in oklab, #f59e0b 22%, transparent);
+  background: color-mix(in oklab, var(--status-pending) 22%, transparent);
 }
 
 /* 引擎参数 Section 内：3 个 picker 横向 inline 排，跟顶部 header 那排视觉一致；
@@ -215,8 +215,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 14px 20px 8px;
+  gap: calc(10px * var(--density));
+  padding: calc(14px * var(--density)) calc(20px * var(--density)) calc(8px * var(--density));
 }
 
 /* picker 行下面的 VRAM 估算条 —— 提示用户当前组合大概要多少显存 */
@@ -224,9 +224,9 @@
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  padding: 8px 20px 14px;
-  font-size: 12px;
+  gap: calc(6px * var(--density)) calc(10px * var(--density));
+  padding: calc(8px * var(--density)) calc(20px * var(--density)) calc(14px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-variant-numeric: tabular-nums;
 }
 
@@ -237,7 +237,7 @@
 
 .vramEstValue {
   font-weight: var(--font-weight-700);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
 }
 
 .vramEstBreakdown {
@@ -247,15 +247,15 @@
 
 /* 三档颜色：< 16 GB 中性绿、16-24 GB 橙警告、> 24 GB 红危险 */
 .vramEstOk .vramEstValue {
-  color: #16a34a;
+  color: var(--status-ok-strong);
 }
 
 .vramEstWarn .vramEstValue {
-  color: #b45309;
+  color: var(--status-pending-strong);
 }
 
 .vramEstDanger .vramEstValue {
-  color: #dc2626;
+  color: var(--status-error-strong);
 }
 
 .infoIconWrap {
@@ -287,14 +287,14 @@
 .deleteBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: transparent;
-  border: 1.5px solid color-mix(in oklab, #ef4444 50%, transparent);
-  color: #b91c1c;
+  border: 1.5px solid color-mix(in oklab, var(--status-error) 50%, transparent);
+  color: var(--status-error-strong);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   cursor: pointer;
   transition:
@@ -304,7 +304,7 @@
 }
 
 .deleteBtn:hover:not(:disabled) {
-  background: color-mix(in oklab, #ef4444 8%, transparent);
+  background: color-mix(in oklab, var(--status-error) 8%, transparent);
   border-color: var(--status-error);
 }
 
@@ -323,14 +323,14 @@
 .exportBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
+  gap: calc(6px * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(12px * var(--density));
   background: transparent;
   border: 1px solid var(--border-strong);
   color: var(--text-strong);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   cursor: pointer;
   transition:
@@ -352,12 +352,12 @@
 .engineBar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: calc(10px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
   background: var(--fill-subtle);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -366,12 +366,12 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--status-idle);
 }
 
 .engineDotRunning {
-  background: #16a34a;
-  box-shadow: 0 0 0 2px color-mix(in oklab, #16a34a 18%, transparent);
+  background: var(--status-ok-strong);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--status-ok-strong) 18%, transparent);
 }
 
 .engineDotStarting {
@@ -379,7 +379,7 @@
 }
 
 .engineDotError {
-  background: #dc2626;
+  background: var(--status-error-strong);
 }
 
 .engineSep {
@@ -397,11 +397,11 @@
   width: 100%;
   min-height: 160px;
   max-height: 360px;
-  padding: 12px 14px;
+  padding: calc(12px * var(--density)) calc(14px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-family: var(--font-mono);
   line-height: 1.6;
   color: var(--text-strong);
@@ -432,8 +432,9 @@
 }
 
 .collapsibleTextarea {
-  /* 折叠态：max-height = 单行高度（line-height 1.6 × 12.5px ≈ 20 + padding 12*2 = 44） */
-  max-height: 44px;
+  /* Collapsed height is one line of text plus the vertical padding: about 20px of line
+     height, which follows the font scale, and 12px * 2 of padding, which follows density */
+  max-height: calc(20px * var(--font-scale) + 24px * var(--density));
   min-height: 0;
   /* 折叠态不让 textarea 自己 resize / 接受光标，避免点到改不了内容 */
   resize: none;
@@ -480,14 +481,14 @@
 .errorBar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: color-mix(in oklab, #dc2626 8%, transparent);
-  border: 1px solid color-mix(in oklab, #dc2626 25%, transparent);
+  gap: calc(8px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
+  background: color-mix(in oklab, var(--status-error-strong) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-error-strong) 25%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
-  color: #991b1b;
+  color: var(--status-error-strong);
   word-break: break-word;
 }
 
@@ -495,14 +496,14 @@
 .successBar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: color-mix(in oklab, #16a34a 10%, transparent);
-  border: 1px solid color-mix(in oklab, #16a34a 28%, transparent);
+  gap: calc(8px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
+  background: color-mix(in oklab, var(--status-ok-strong) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-ok-strong) 28%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
-  color: #15803d;
+  color: var(--status-ok-strong);
   word-break: break-word;
   animation: debugSuccessFadeIn 200ms var(--ease-out);
 }
@@ -520,12 +521,12 @@
 .engineHint {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: calc(8px * var(--density));
+  padding: calc(8px * var(--density)) calc(12px * var(--density));
   background: color-mix(in oklab, var(--color-accent) 6%, transparent);
   border: 1px solid color-mix(in oklab, var(--color-accent) 22%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
 }
@@ -536,11 +537,11 @@
 .panelWrap {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .panelLabel {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-muted);
   letter-spacing: 0.02em;
@@ -549,7 +550,7 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
   max-height: 0;
   opacity: 0;
@@ -573,16 +574,16 @@
 .panelOpen {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
   max-height: 480px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: calc(4px * var(--density));
 }
 
 /* —— Prompt 预览的小子标题 + 等宽 pre 块 —— */
 .promptSubLabel {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
@@ -591,11 +592,11 @@
 
 .promptPre {
   margin: 0;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--fill-subtle);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1.55;
   color: var(--text-strong);
   white-space: pre-wrap;
@@ -604,10 +605,10 @@
 }
 
 .placeholder {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   font-style: italic;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--fill-subtle);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
@@ -629,25 +630,25 @@
   gap: 0;
   max-height: 240px;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
   background: var(--fill-subtle);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1.6;
   color: var(--text-muted);
 }
 
 .logEmpty {
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   color: var(--text-faint);
   font-style: italic;
 }
 
 .logLine {
   display: flex;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -661,15 +662,15 @@
   color: var(--color-accent);
   font-weight: var(--font-weight-600);
   flex-shrink: 0;
-  width: 110px;
+  width: calc(110px * var(--font-scale));
 }
 
 .logPhaseError {
-  color: #dc2626;
+  color: var(--status-error-strong);
 }
 
 .logPhaseDone {
-  color: #16a34a;
+  color: var(--status-ok-strong);
 }
 
 .logBody {
@@ -682,8 +683,8 @@
 .summaryBox {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: calc(8px * var(--density));
+  padding: calc(12px * var(--density)) calc(14px * var(--density));
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -692,7 +693,7 @@
 .summaryHead {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   flex-wrap: wrap;
 }
 
@@ -701,9 +702,9 @@
 .summaryChip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 22px;
-  font-size: 12px;
+  gap: calc(6px * var(--density));
+  height: calc(22px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   letter-spacing: -0.005em;
@@ -712,8 +713,8 @@
 .summaryTimeRange {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -724,22 +725,22 @@
 .summaryStatus {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: calc(4px * var(--density));
+  padding: 2px calc(8px * var(--density));
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   font-weight: var(--font-weight-600);
   letter-spacing: -0.005em;
 }
 
 .summaryStatusOk {
-  background: color-mix(in oklab, #16a34a 16%, transparent);
-  color: #15803d;
+  background: color-mix(in oklab, var(--status-ok-strong) 16%, transparent);
+  color: var(--status-ok-strong);
 }
 
 .summaryStatusError {
-  background: color-mix(in oklab, #dc2626 14%, transparent);
-  color: #991b1b;
+  background: color-mix(in oklab, var(--status-error-strong) 14%, transparent);
+  color: var(--status-error-strong);
 }
 
 .summaryStatusSkipped {
@@ -748,7 +749,7 @@
 }
 
 .summaryText {
-  font-size: 13.5px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   line-height: 1.65;
   color: var(--text-strong);
   white-space: pre-wrap;
@@ -757,10 +758,10 @@
 
 /* 空状态：虚线框 + 居中提示，不再裸露文字 */
 .summaryEmpty {
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
   font-style: italic;
-  padding: 18px 12px;
+  padding: calc(18px * var(--density)) calc(12px * var(--density));
   text-align: center;
   background: var(--fill-subtle);
   border: 1px dashed var(--border-strong);
@@ -769,13 +770,13 @@
 
 /* 引擎日志面板的"刷新"小按钮，跟在 label 后 */
 .engineLogsRefreshBtn {
-  margin-left: 8px;
-  height: 18px;
-  padding: 0 8px;
+  margin-left: calc(8px * var(--density));
+  height: calc(18px * var(--density));
+  padding: 0 calc(8px * var(--density));
   background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
   cursor: pointer;
