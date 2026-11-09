@@ -26,8 +26,8 @@
 /* ── 搜索框 ── */
 
 .searchBox {
-  /* 吸顶:长结果列表滚动时停在悬浮 tab pill(fixed, top 16 + 高度)下方,
-     随时可改词。pill z-index 6(--z-chrome-floattab),这里压低一档。 */
+  /* Sticks below the floating tab pill (fixed, top 16 plus its height) while a long result
+     list scrolls, so the query can always be changed. Its z-index is below the pill's. */
   position: sticky;
   top: 60px;
   z-index: 5;
