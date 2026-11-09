@@ -1,9 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "../../components/Button/Button";
-import { IconButton } from "../../components/Button/IconButton";
 import { DevicePicker } from "../../components/DevicePicker/DevicePicker";
+import { PeriodNav } from "../../components/PeriodNav/PeriodNav";
 import styles from "./HistoryChartCard.module.css";
 
 export type ChartTab = "year" | "month";
@@ -76,36 +74,18 @@ export function HistoryChartCard({
 
           <div className={styles.right}>
             <DevicePicker />
-            <div className={styles.nav}>
-              <IconButton
-                icon={ChevronLeft}
-                label={nav.prevLabel}
-                variant="soft"
-                size="sm"
-                glow
-                onClick={nav.onPrev}
-                disabled={!nav.canPrev}
-              />
-              <Button
-                size="sm"
-                glow
-                className={styles.pill}
-                onClick={nav.onCurrent}
-                disabled={nav.isCurrent}
-                title={nav.isCurrent ? undefined : nav.currentTooltip}
-              >
-                {nav.label}
-              </Button>
-              <IconButton
-                icon={ChevronRight}
-                label={nav.nextLabel}
-                variant="soft"
-                size="sm"
-                glow
-                onClick={nav.onNext}
-                disabled={!nav.canNext}
-              />
-            </div>
+            <PeriodNav
+              label={nav.label}
+              currentTitle={nav.currentTooltip}
+              prevLabel={nav.prevLabel}
+              nextLabel={nav.nextLabel}
+              isCurrent={nav.isCurrent}
+              canPrev={nav.canPrev}
+              canNext={nav.canNext}
+              onPrev={nav.onPrev}
+              onNext={nav.onNext}
+              onCurrent={nav.onCurrent}
+            />
           </div>
         </div>
       </header>
