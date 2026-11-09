@@ -40,7 +40,7 @@
   border-radius: var(--radius-xs);
   cursor: pointer;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    inset 0 0 0 1px var(--swatch-highlight),
     0 1px 2px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
   transition: transform 120ms ease-out;
 }
