@@ -143,6 +143,23 @@ pub async fn set_enabled(pool: &DbPool, id: &str, enabled: bool) -> Result<()> {
     Ok(())
 }
 
+/// Replaces the permissions of a plugin.
+pub async fn set_permissions(pool: &DbPool, id: &str, permissions: Vec<String>) -> Result<()> {
+    let id = id.to_string();
+    let permissions = serde_json::to_string(&permissions)?;
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE plugins SET permissions = ?2 WHERE id = ?1",
+                rusqlite::params![id, permissions],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 /// Changes where the plugin page opens.
 pub async fn set_opens_in(pool: &DbPool, id: &str, opens_in: Option<String>) -> Result<()> {
     let id = id.to_string();

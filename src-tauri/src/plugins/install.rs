@@ -44,8 +44,8 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 /// - `approved`: the permissions the user approved
 /// - `storage_mb`: the disk space the user approved, in MB. `None` if the user approved none
 ///
-/// Both are stored in the table as they are. They are not compared with what the manifest asks
-/// for.
+/// Each permission in `approved` must be one the manifest asks for, and the permission it depends
+/// on must be approved too. See [`manifest::check_approved`].
 ///
 /// Deletes the zip after a successful install. If the install fails, the zip is kept.
 ///
@@ -58,6 +58,8 @@ pub fn read_manifest(zip_path: &Path) -> Result<Manifest> {
 ///   larger than 100 MB unpacked: [`Error::PluginPackage`]
 /// - icon.png is larger than 256 KB or is not a PNG file: [`Error::PluginPackage`]
 /// - `storage_mb` is not between 1 MB and 10 GB: [`Error::PluginManifest`]
+/// - `approved` has a permission the manifest does not ask for, or one whose dependency is not
+///   approved: [`Error::PluginManifest`]
 pub async fn install(
     pool: &DbPool,
     plugins_dir: &Path,
@@ -72,6 +74,7 @@ pub async fn install(
     let _lock = LOCK.lock().await;
     let mut archive = open(zip_path)?;
     let manifest = read_checked_manifest(&mut archive)?;
+    manifest::check_approved(&approved, &manifest.permissions)?;
     let has_page = archive.file_names().any(|n| n == "ui/index.html");
     let old = repo::get(pool, &manifest.id).await?;
     if old.as_ref().is_some_and(|p| p.version == manifest.version) {
@@ -172,6 +175,39 @@ pub async fn uninstall(
         log::warn!("plugin {}: cannot delete its files: {e}", plugin.id);
     }
     Ok(())
+}
+
+/// Returns the permissions the manifest of the installed version asks for.
+///
+/// Reads manifest.json in the folder of this version in the plugin library.
+pub fn asked_permissions(plugins_dir: &Path, plugin: &Plugin) -> Result<Vec<String>> {
+    let path = plugins_dir
+        .join(&plugin.id)
+        .join(&plugin.version)
+        .join("manifest.json");
+    Ok(manifest::parse(&fs::read(path)?)?.permissions)
+}
+
+/// Replaces the permissions of a plugin, for example to take one back, or to give one the user
+/// said no to at install.
+///
+/// # Errors
+///
+/// - The plugin is not installed: [`Error::PluginNotEnabled`]
+/// - `approved` has a permission the manifest does not ask for, or one whose dependency is not
+///   approved: [`Error::PluginManifest`]
+pub async fn set_permissions(
+    pool: &DbPool,
+    plugins_dir: &Path,
+    id: &str,
+    approved: Vec<String>,
+) -> Result<()> {
+    let _lock = LOCK.lock().await;
+    let plugin = repo::get(pool, id)
+        .await?
+        .ok_or_else(|| Error::PluginNotEnabled(id.into()))?;
+    manifest::check_approved(&approved, &asked_permissions(plugins_dir, &plugin)?)?;
+    repo::set_permissions(pool, id, approved).await
 }
 
 /// Deletes what a crash in the middle of an install, update or uninstall left behind.
@@ -332,7 +368,7 @@ mod tests {
             &pool,
             &dir.plugins(),
             &zip,
-            vec!["stats.read".into()],
+            vec!["stats.read".into(), "stats.today".into()],
             Some(200),
         )
         .await
@@ -349,8 +385,53 @@ mod tests {
         assert_eq!(names(&dir.plugins()), ["hindsight-focus"]);
         let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
         assert_eq!(row.version, "0.1.0");
-        assert_eq!(row.permissions, ["stats.read"]);
+        assert_eq!(row.permissions, ["stats.read", "stats.today"]);
         assert_eq!(row.storage_mb, Some(200));
+    }
+
+    /// 同意了清单没申请的权限，或者依赖没同意，就不装：表里没有，zip 留着。
+    #[tokio::test]
+    async fn install_rejects_permissions_that_do_not_fit_the_manifest() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        let zip = focus_zip(&dir, "0.1.0");
+
+        for approved in [vec!["notifications"], vec!["focus.category"]] {
+            let approved = approved.into_iter().map(String::from).collect();
+            let err = install(&pool, &dir.plugins(), &zip, approved, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, Error::PluginManifest(_)), "{err}");
+        }
+
+        assert!(repo::get(&pool, "hindsight-focus").await.unwrap().is_none());
+        assert!(zip.exists());
+    }
+
+    /// 装好后能换权限，按已装版本的清单检查；不合清单就不改；没装的插件报错。
+    #[tokio::test]
+    async fn set_permissions_checks_the_installed_manifest() {
+        let dir = TempDir::new();
+        let pool = fresh_test_pool().await;
+        install_focus(&pool, &dir, "0.1.0").await;
+        let plugins = dir.plugins();
+        let set = |approved: &[&str]| {
+            let approved = approved.iter().map(|p| p.to_string()).collect();
+            set_permissions(&pool, &plugins, "hindsight-focus", approved)
+        };
+
+        set(&["focus.changed", "focus.category"]).await.unwrap();
+        for approved in [&["notifications"][..], &["focus.category"]] {
+            let err = set(approved).await.unwrap_err();
+            assert!(matches!(err, Error::PluginManifest(_)), "{err}");
+        }
+
+        let row = repo::get(&pool, "hindsight-focus").await.unwrap().unwrap();
+        assert_eq!(row.permissions, ["focus.changed", "focus.category"]);
+        let err = set_permissions(&pool, &plugins, "not-installed", vec![])
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::PluginNotEnabled(_)), "{err}");
     }
 
     /// 有没有页面看包里有没有 ui/index.html，更新时按新包重写。打开方式和窗口大小用清单里的；

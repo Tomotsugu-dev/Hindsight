@@ -426,6 +426,7 @@ pub fn run() {
             commands::plugins::plugin_install_online,
             commands::plugins::plugin_uninstall,
             commands::plugins::plugin_set_enabled,
+            commands::plugins::plugin_set_permissions,
             commands::plugins::plugin_open_zips_folder,
             commands::plugins::plugin_background_list,
             commands::plugins::plugin_pages,

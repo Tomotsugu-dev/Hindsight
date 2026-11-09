@@ -78,6 +78,7 @@ pub async fn call(
         Method::WriteAppCategory => apps::write(pool, params).await?,
         Method::ListSiteCategories => serde_json::to_value(sites::list(pool).await?)?,
         Method::WriteSiteCategory => sites::write(pool, params).await?,
+        Method::ListPermissions => serde_json::to_value(&plugin.permissions)?,
         Method::SendNotification => notifications::send(&plugin, params, notify)?,
         Method::ShowIsland => island::show(&plugin, params, island)?,
         Method::HideIsland => island::hide(island)?,
@@ -105,6 +106,8 @@ enum Method {
     ListSiteCategories,
     /// `categories.site.write`
     WriteSiteCategory,
+    /// `permissions.list`
+    ListPermissions,
     /// `notifications.send`
     SendNotification,
     /// `island.show`
@@ -132,6 +135,7 @@ impl Method {
             "categories.app.write" => Ok(Self::WriteAppCategory),
             "categories.site.list" => Ok(Self::ListSiteCategories),
             "categories.site.write" => Ok(Self::WriteSiteCategory),
+            "permissions.list" => Ok(Self::ListPermissions),
             "notifications.send" => Ok(Self::SendNotification),
             "island.show" => Ok(Self::ShowIsland),
             "island.hide" => Ok(Self::HideIsland),
@@ -142,7 +146,7 @@ impl Method {
     }
 
     /// The permission this method needs. Reading and writing the plugin's own database needs
-    /// none, so it is `None`.
+    /// none, so it is `None`. Listing its own permissions needs none either.
     fn permission(&self) -> Option<&'static str> {
         match self {
             Self::DayByCategory => Some("stats.read"),
@@ -154,7 +158,7 @@ impl Method {
             Self::WriteSiteCategory => Some("categories.site.write"),
             Self::SendNotification => Some("notifications"),
             Self::ShowIsland | Self::HideIsland => Some("island"),
-            Self::DbExecute | Self::DbQuery => None,
+            Self::ListPermissions | Self::DbExecute | Self::DbQuery => None,
         }
     }
 }
@@ -285,5 +289,27 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rows, serde_json::json!([{ "n": 0 }]));
+    }
+
+    /// 查自己有哪些权限不要权限，返回的是表里存的、用户同意了的那些。
+    #[tokio::test]
+    async fn permissions_list_returns_the_approved_ones() {
+        let pool = fresh_test_pool().await;
+        let approved = ["focus.changed", "focus.app"];
+        repo::save(&pool, plugin_with_permissions("some", &approved))
+            .await
+            .unwrap();
+        repo::save(&pool, plugin_with_permissions("none", &[]))
+            .await
+            .unwrap();
+
+        let got = call_simple(&pool, "some", "permissions.list", Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(got, serde_json::json!(approved));
+        let got = call_simple(&pool, "none", "permissions.list", Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(got, serde_json::json!([]));
     }
 }

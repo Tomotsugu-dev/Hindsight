@@ -1,6 +1,8 @@
 //! manifest.json in a plugin package. It is read once at install, and the checked values are
 //! copied into the plugins table.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
@@ -168,6 +170,33 @@ pub fn check_version(version: &str) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+/// Checks the permissions the user approved.
+///
+/// Each one must be asked for by the manifest, and the permission it depends on must be approved
+/// too.
+///
+/// # Errors
+///
+/// - One is not asked for by the manifest, or the permission it depends on is not approved:
+///   [`Error::PluginManifest`]
+pub fn check_approved(approved: &[String], asked: &[String]) -> Result<()> {
+    if let Some(p) = approved.iter().find(|p| !asked.contains(p)) {
+        return Err(Error::PluginManifest(format!("{p} is not asked for")));
+    }
+    check_permissions(approved)
+}
+
+/// Returns the permission each permission depends on.
+///
+/// A manifest that asks for a permission must also ask for the one it depends on. The frontend
+/// uses this to check and uncheck the boxes together.
+pub fn permission_depends_on() -> BTreeMap<&'static str, &'static str> {
+    PERMISSIONS
+        .iter()
+        .filter_map(|(name, needs)| needs.map(|needs| (*name, needs)))
+        .collect()
 }
 
 fn check_permissions(permissions: &[String]) -> Result<()> {
@@ -348,6 +377,40 @@ mod tests {
             "categories.site.write",
         ]);
         assert!(parse_value(&v).is_ok());
+    }
+
+    /// 同意的权限可以少于申请的，也可以一个都不同意；不能多出清单没申请的，依赖也要同意，
+    /// 读统计至少留一档。
+    #[test]
+    fn approved_permissions_are_a_valid_part_of_the_asked() {
+        let asked: Vec<String> = ["stats.read", "stats.today", "stats.week", "focus.changed"]
+            .map(String::from)
+            .to_vec();
+        let check = |approved: &[&str]| {
+            let approved: Vec<String> = approved.iter().map(|p| p.to_string()).collect();
+            check_approved(&approved, &asked)
+        };
+
+        assert!(check(&[]).is_ok());
+        assert!(check(&["stats.read", "stats.today", "focus.changed"]).is_ok());
+        for approved in [&["notifications"][..], &["stats.today"], &["stats.read"]] {
+            assert!(
+                matches!(check(approved), Err(Error::PluginManifest(_))),
+                "{approved:?}"
+            );
+        }
+    }
+
+    /// 依赖表里是每个要和别的一起申请的权限，不带不需要依赖的。
+    #[test]
+    fn permission_depends_on_lists_each_dependency() {
+        let depends_on = permission_depends_on();
+        assert_eq!(depends_on.get("focus.app"), Some(&"focus.changed"));
+        assert_eq!(
+            depends_on.get("categories.app.write"),
+            Some(&"categories.app.read")
+        );
+        assert_eq!(depends_on.get("stats.read"), None);
     }
 
     /// 不在后台运行的插件收不到事件，申请 focus.changed 就拒绝。

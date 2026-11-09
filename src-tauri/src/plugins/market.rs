@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::plugins::install;
-use crate::plugins::manifest::{check_id, check_version, Manifest};
+use crate::plugins::manifest::{check_id, check_version, permission_depends_on, Manifest};
 use crate::repo::plugins::{self as repo, Plugin};
 use crate::storage::DbPool;
 
@@ -58,6 +58,11 @@ static DOWNLOADING: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
 #[serde(rename_all = "camelCase")]
 pub struct Market {
     pub installed: Vec<Plugin>,
+    /// The permissions the manifest of each installed plugin asks for, by plugin id. A plugin
+    /// whose manifest cannot be read is not in it
+    pub asked_permissions: BTreeMap<String, Vec<String>>,
+    /// The permission each permission depends on. See [`permission_depends_on`]
+    pub permission_depends_on: BTreeMap<&'static str, &'static str>,
     /// Online versions of the installed plugins
     pub installed_online: Vec<OnlinePlugin>,
     /// Online plugins that are not installed. An installed plugin is never here, whatever its
@@ -87,6 +92,7 @@ pub enum InstallKind {
 /// plugin from [`fetch_download_counts`], or empty if they cannot be read.
 pub async fn list(
     pool: &DbPool,
+    plugins_dir: &Path,
     zips_dir: &Path,
     online: Result<Vec<OnlinePlugin>>,
     download_counts: &BTreeMap<String, u64>,
@@ -114,8 +120,20 @@ pub async fn list(
         .partition(|o| installed.iter().any(|p| p.id == o.id));
     // A stable sort: plugins with the same count keep their order in the online list
     downloadable.sort_by_key(|p| Reverse(p.download_count.unwrap_or(0)));
+    let asked_permissions = installed
+        .iter()
+        .filter_map(|p| match install::asked_permissions(plugins_dir, p) {
+            Ok(asked) => Some((p.id.clone(), asked)),
+            Err(e) => {
+                log::warn!("plugin {}: cannot read its manifest: {e}", p.id);
+                None
+            }
+        })
+        .collect();
     Ok(Market {
         installed,
+        asked_permissions,
+        permission_depends_on: permission_depends_on(),
         installed_online,
         downloadable,
         local_zips,
@@ -663,7 +681,8 @@ mod tests {
         assert_eq!(names(&dir.0), ["focus-0.1.0.zip"]);
     }
 
-    /// 已安装的全列；本地 zip 全列，标上装它是什么；同一个版本已经装了的带上安装时会报的错。
+    /// 已安装的全列，带上清单申请的权限；本地 zip 全列，标上装它是什么；同一个版本已经装了的
+    /// 带上安装时会报的错。
     #[tokio::test]
     async fn list_marks_local_zips() {
         let dir = TempDir::new();
@@ -673,7 +692,7 @@ mod tests {
         focus_zip(&dir, "0.1.0");
         focus_zip(&dir, "0.2.0");
 
-        let market = list(&pool, &dir.0, Ok(vec![]), &BTreeMap::new())
+        let market = list(&pool, &dir.plugins(), &dir.0, Ok(vec![]), &BTreeMap::new())
             .await
             .unwrap();
 
@@ -683,6 +702,19 @@ mod tests {
             .map(|p| p.version.as_str())
             .collect();
         assert_eq!(installed, ["0.1.0"]);
+        assert_eq!(
+            market.asked_permissions["hindsight-focus"],
+            [
+                "stats.read",
+                "stats.today",
+                "focus.changed",
+                "focus.category"
+            ]
+        );
+        assert_eq!(
+            market.permission_depends_on.get("focus.category"),
+            Some(&"focus.changed")
+        );
         let already = Error::PluginAlreadyInstalled("0.1.0".into()).to_string();
         let listed: Vec<(&str, Option<InstallKind>, Option<&str>)> = market
             .local_zips
@@ -709,7 +741,7 @@ mod tests {
     async fn list_splits_online_by_id() {
         let dir = TempDir::new();
         let pool = fresh_test_pool().await;
-        // list 只读表，不看插件库里的文件
+        // 只写表、不放文件：读不到清单，只是 asked_permissions 里没有它们
         for (id, version) in [("focus", "0.2.0"), ("pomodoro", "1.0.0")] {
             repo::save(
                 &pool,
@@ -728,7 +760,7 @@ mod tests {
             online_plugin("broken", &["1.0"]),
         ];
 
-        let market = list(&pool, &dir.0, Ok(online), &BTreeMap::new())
+        let market = list(&pool, &dir.plugins(), &dir.0, Ok(online), &BTreeMap::new())
             .await
             .unwrap();
 
@@ -771,6 +803,7 @@ mod tests {
 
         let market = list(
             &pool,
+            &dir.plugins(),
             &dir.0,
             Err(Error::PluginsJsonFormatVersion(3)),
             &BTreeMap::new(),
@@ -803,7 +836,7 @@ mod tests {
             ("e".to_string(), 0),
         ]);
 
-        let market = list(&pool, &dir.0, Ok(online), &download_counts)
+        let market = list(&pool, &dir.plugins(), &dir.0, Ok(online), &download_counts)
             .await
             .unwrap();
 
@@ -833,7 +866,7 @@ mod tests {
             .map(|id| online_plugin(id, &["0.1.0"]))
             .to_vec();
 
-        let market = list(&pool, &dir.0, Ok(online), &BTreeMap::new())
+        let market = list(&pool, &dir.plugins(), &dir.0, Ok(online), &BTreeMap::new())
             .await
             .unwrap();
 
