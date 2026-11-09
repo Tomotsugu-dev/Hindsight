@@ -78,6 +78,19 @@
   --surface-tooltip: rgba(28, 28, 36, 0.94);
   --text-on-tooltip: #ffffff;
 
+  /* Dims the page behind a dialog */
+  --surface-backdrop: rgba(20, 20, 40, 0.32);
+
+  /* Selected text */
+  --selection-bg: var(--color-accent-soft);
+  --selection-fg: var(--text-strong);
+
+  /* Category and chart colors come from data. These go on top of them: text, the light edge of a
+     swatch or bar, and the line between the stacked parts of a bar. */
+  --text-on-color: #ffffff;
+  --swatch-highlight: rgba(255, 255, 255, 0.4);
+  --segment-seam: rgba(255, 255, 255, 0.55);
+
   /* —— Borders / overlays（统一 rgba(0,0,0,X) 写法的级别） —— */
   --alpha-border-subtle: 0.04;
   --alpha-border: 0.07;
@@ -91,12 +104,19 @@
   --border-subtle: rgba(0, 0, 0, 0.05);
   --border-default: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.12);
+  /* Dashed edge of an empty slot or an "add" button */
+  --border-dashed: rgba(0, 0, 0, 0.18);
 
   /* Gray fills: tracks, inputs, quiet buttons and their hover. Three steps like the borders:
      faint black here, faint white in dark mode. */
   --fill-subtle: rgba(0, 0, 0, 0.025);
   --fill-default: rgba(0, 0, 0, 0.045);
   --fill-strong: rgba(0, 0, 0, 0.075);
+
+  /* The on/off switch while off: its track, the track on hover, and the knob */
+  --toggle-track: rgba(0, 0, 0, 0.12);
+  --toggle-track-hover: rgba(0, 0, 0, 0.18);
+  --toggle-thumb: var(--surface-card);
 
   /* Backing behind app and site icons that are hard to see on the card. Only dark mode needs it. */
   --icon-backing: transparent;
@@ -311,10 +331,22 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.16);
+  --border-dashed: rgba(255, 255, 255, 0.2);
 
   --fill-subtle: rgba(255, 255, 255, 0.04);
   --fill-default: rgba(255, 255, 255, 0.06);
   --fill-strong: rgba(255, 255, 255, 0.1);
+
+  --toggle-track: rgba(255, 255, 255, 0.18);
+  --toggle-track-hover: rgba(255, 255, 255, 0.26);
+  --toggle-thumb: #e9e9ec;
+
+  /* A white highlight is too bright on a dark page, so the selection is accent with white text */
+  --selection-bg: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  --selection-fg: var(--text-on-accent);
+
+  /* A dark seam between the parts of a bar, where a white one would glare */
+  --segment-seam: rgba(0, 0, 0, calc(0.32 * var(--shadow-strength)));
 
   --icon-backing: #ececf0;
 
