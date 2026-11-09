@@ -28,6 +28,7 @@
     background-color var(--duration-base) var(--ease-out),
     border-color var(--duration-base) var(--ease-out),
     color var(--duration-base) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
 }
 
