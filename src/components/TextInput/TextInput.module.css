@@ -1,0 +1,68 @@
+.box {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+  min-width: 0;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-strong);
+  cursor: text;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.box:hover {
+  background: var(--fill-default);
+}
+
+.box:focus-within {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+.box[data-size="sm"] {
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(8px * var(--density));
+}
+
+.box[data-size="lg"] {
+  height: calc(var(--control-height-lg) * var(--density));
+  padding: 0 calc(12px * var(--density));
+}
+
+.icon {
+  flex: none;
+  width: calc(var(--control-icon-size) * var(--font-scale));
+  height: calc(var(--control-icon-size) * var(--font-scale));
+  color: var(--text-faint);
+}
+
+/* The box shows the focus, so the input itself has no outline */
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  color: inherit;
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.box:has(.input:disabled) {
+  opacity: 0.5;
+}
