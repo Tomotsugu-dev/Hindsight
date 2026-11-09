@@ -46,7 +46,7 @@
 .button[data-tone="warning"] {
   --button-fg: var(--status-pending-strong);
   --button-solid-bg: var(--status-pending);
-  --button-solid-bg-hover: var(--status-pending-strong);
+  --button-solid-bg-hover: color-mix(in oklab, var(--status-pending) 88%, black);
   --button-on-solid: var(--text-on-accent);
   --button-soft-bg: var(--status-pending-soft);
   --button-soft-bg-hover: color-mix(in oklab, var(--status-pending) 18%, transparent);
@@ -58,7 +58,7 @@
 .button[data-tone="danger"] {
   --button-fg: var(--status-error-strong);
   --button-solid-bg: var(--status-error);
-  --button-solid-bg-hover: var(--status-error-strong);
+  --button-solid-bg-hover: color-mix(in oklab, var(--status-error) 88%, black);
   --button-on-solid: var(--text-on-accent);
   --button-soft-bg: var(--status-error-soft);
   --button-soft-bg-hover: color-mix(in oklab, var(--status-error) 18%, transparent);
