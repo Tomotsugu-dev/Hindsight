@@ -106,11 +106,7 @@ export function SuperCategoriesTable({
   justCreatedSuperId = null,
 }: SuperCategoriesTableProps = {}) {
   const { categories, reorder: reorderCategories } = useCategories();
-  const {
-    supers,
-    reorder: reorderSupers,
-    moveCategoryToSuper,
-  } = useSuperCategories();
+  const { supers, reorder: reorderSupers, moveCategoryToSuper } = useSuperCategories();
 
   // super-card / orphan-card 的 DOM ref —— 拍 Y 范围快照判断 cursor 落在哪个 super 区
   const superRowRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -124,13 +120,10 @@ export function SuperCategoriesTable({
 
   // 每行 CategoryRow 的 DOM ref —— 同大类内 reorder 时拍 Y 范围做行命中
   const catRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const registerCatRowRef = useCallback(
-    (id: string, el: HTMLDivElement | null) => {
-      if (el) catRowRefs.current.set(id, el);
-      else catRowRefs.current.delete(id);
-    },
-    [],
-  );
+  const registerCatRowRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) catRowRefs.current.set(id, el);
+    else catRowRefs.current.delete(id);
+  }, []);
 
   // 新建后滚到它：新建按钮在页头，新分类落在下方的「未归入」行、新大类落在表格末尾，
   // 不滚过去的话用户点完看不到任何变化。
@@ -150,9 +143,7 @@ export function SuperCategoriesTable({
         : superRowRefs.current.get(target.key);
     if (!el) return;
     scrolledForRef.current = target.key;
-    const reduced = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
       block: "center",
@@ -190,16 +181,12 @@ export function SuperCategoriesTable({
   // 大类拖动 reorder 的独立 state（跟上面 cat drag 互斥）
   const [superDrag, setSuperDrag] = useState<SuperDragState | null>(null);
   /** 大类拖动期间，cursor Y 命中哪个 super 作 insertion target（≠ sourceSuper 时表示要换位） */
-  const [hoverSuperReorderId, setHoverSuperReorderId] = useState<string | null>(
-    null,
-  );
+  const [hoverSuperReorderId, setHoverSuperReorderId] = useState<string | null>(null);
   /** 大类松手后 fly-box 平滑"吸"到落地位置的目标坐标。
    *  非 null 时 fly-box 走 CSS transition 从 cursor → target，over ~200ms。
    *  动画期间 superDrag / hoverSuperReorderId 都保留——保持源 superBox 处在投机重排位置
    *  （opacity 0.3 占位），fly-box 滑到与它重叠的位置时再统一清掉 + commit reorder。 */
-  const [superSnap, setSuperSnap] = useState<{ left: number; top: number } | null>(
-    null,
-  );
+  const [superSnap, setSuperSnap] = useState<{ left: number; top: number } | null>(null);
 
   // 把 categories 按 super_category_id 分组。
   // 三档：
@@ -243,9 +230,7 @@ export function SuperCategoriesTable({
       const next = moveBeforeOrAfter(ids, dragCatId, hoverRowId, hoverAfter);
       if (sameOrder(ids, next)) return arr;
       const byId = new Map(arr.map((c) => [c.id, c]));
-      return next
-        .map((id) => byId.get(id))
-        .filter((c): c is Category => c !== undefined);
+      return next.map((id) => byId.get(id)).filter((c): c is Category => c !== undefined);
     };
     if (dragSourceSuperKey === ORPHAN_KEY) {
       return { effectiveCatsBySuper: catsBySuper, effectiveOrphans: reorder(orphans) };
@@ -260,14 +245,7 @@ export function SuperCategoriesTable({
     const nextMap = new Map(catsBySuper);
     nextMap.set(dragSourceSuperKey, reorder(sourceCats));
     return { effectiveCatsBySuper: nextMap, effectiveOrphans: orphans };
-  }, [
-    catsBySuper,
-    orphans,
-    dragCatId,
-    dragSourceSuperKey,
-    hoverRowId,
-    hoverAfter,
-  ]);
+  }, [catsBySuper, orphans, dragCatId, dragSourceSuperKey, hoverRowId, hoverAfter]);
 
   // 大类拖动时的"投机重排"：当 cursor 命中其他 super，supers 数组实时按"会落在哪"
   // 的顺序渲染。手写 FLIP（见 prevSuperTops 那段）据此把整个 superBox（左卡 + 右行）
@@ -362,10 +340,7 @@ export function SuperCategoriesTable({
       nextRow = rows[0].id;
       nextAfter = false;
       nextSuper = rows[0].superKey;
-    } else if (
-      rows.length > 0 &&
-      clientY >= containerBottom - DRAG_AUTO_SCROLL_EDGE
-    ) {
+    } else if (rows.length > 0 && clientY >= containerBottom - DRAG_AUTO_SCROLL_EDGE) {
       // 拖到窗口下沿：全列表最后一行
       const last = rows[rows.length - 1];
       nextRow = last.id;
@@ -446,8 +421,7 @@ export function SuperCategoriesTable({
   }, []);
 
   const updateSuperHits = useCallback((clientY: number) => {
-    const y =
-      clientY - containerTopRef.current + (scrollRef.current?.scrollTop ?? 0);
+    const y = clientY - containerTopRef.current + (scrollRef.current?.scrollTop ?? 0);
 
     let hit: string | null = null;
     for (const [key, r] of snapshotYRanges.current) {
@@ -570,12 +544,7 @@ export function SuperCategoriesTable({
 
       // 命中具体行：按上半区/下半区精确插到该行前/后
       if (targetRow && targetRow !== cur.catId && targetSuperKey) {
-        const newOrder = moveBeforeOrAfter(
-          allIds,
-          cur.catId,
-          targetRow,
-          targetAfter,
-        );
+        const newOrder = moveBeforeOrAfter(allIds, cur.catId, targetRow, targetAfter);
         if (targetSuperKey === cur.sourceSuperKey) {
           if (!sameOrder(newOrder, allIds)) void reorderCategories(newOrder);
         } else {
@@ -631,11 +600,7 @@ export function SuperCategoriesTable({
   // 注意：传入的是**整个 .superBox section**，不是 .superCard，
   // 这样测出来的 width 才包含右侧 CategoryRow 区域，fly-box 1:1 复刻整组。
   const handleSuperMouseDown = useCallback(
-    (
-      sup: SuperCategory,
-      e: ReactMouseEvent<HTMLDivElement>,
-      boxEl: HTMLElement,
-    ) => {
+    (sup: SuperCategory, e: ReactMouseEvent<HTMLDivElement>, boxEl: HTMLElement) => {
       if (e.button !== 0) return;
       // mousedown 落在按钮 / input / role=button 元素上则不当 drag（让它们自己 click / dblclick）
       // role=button 用于排除 superName span（双击改名）等"语义按钮但非 <button> tag"的节点
@@ -645,9 +610,7 @@ export function SuperCategoriesTable({
       const rect = boxEl.getBoundingClientRect();
       const scrollEl = findScrollContainer(boxEl);
       scrollRef.current = scrollEl;
-      containerTopRef.current = scrollEl
-        ? scrollEl.getBoundingClientRect().top
-        : 0;
+      containerTopRef.current = scrollEl ? scrollEl.getBoundingClientRect().top : 0;
       cursorYRef.current = e.clientY;
       hoverSuperReorderRef.current = null;
       measureSuperBands();
@@ -785,43 +748,39 @@ export function SuperCategoriesTable({
 
   return (
     <>
-    <div className={styles.table}>
-      {effectiveSupers.map((sup) => (
-        <SuperRow
-          key={sup.id}
-          ref={setSuperRowRef(sup.id)}
-          sup={sup}
-          cats={effectiveCatsBySuper.get(sup.id) ?? []}
+      <div className={styles.table}>
+        {effectiveSupers.map((sup) => (
+          <SuperRow
+            key={sup.id}
+            ref={setSuperRowRef(sup.id)}
+            sup={sup}
+            cats={effectiveCatsBySuper.get(sup.id) ?? []}
+            dragging={drag !== null}
+            isHot={hotSuperKey === sup.id && drag?.sourceSuperKey !== sup.id}
+            draggingCatId={drag?.catId ?? null}
+            justCreatedCatId={justCreatedCatId}
+            justCreated={justCreatedSuperId === sup.id}
+            onGripMouseDown={handleGripMouseDown}
+            registerRowRef={registerCatRowRef}
+            onSuperMouseDown={handleSuperMouseDown}
+            isSuperDragSource={superDrag?.superId === sup.id}
+            isSuperDragTarget={hoverSuperReorderId === sup.id && superDrag?.superId !== sup.id}
+          />
+        ))}
+        <OrphanRow
+          ref={setSuperRowRef(ORPHAN_KEY)}
+          cats={effectiveOrphans}
           dragging={drag !== null}
-          isHot={hotSuperKey === sup.id && drag?.sourceSuperKey !== sup.id}
+          isHot={hotSuperKey === ORPHAN_KEY && drag?.sourceSuperKey !== ORPHAN_KEY}
           draggingCatId={drag?.catId ?? null}
           justCreatedCatId={justCreatedCatId}
-          justCreated={justCreatedSuperId === sup.id}
           onGripMouseDown={handleGripMouseDown}
           registerRowRef={registerCatRowRef}
-          onSuperMouseDown={handleSuperMouseDown}
-          isSuperDragSource={superDrag?.superId === sup.id}
-          isSuperDragTarget={
-            hoverSuperReorderId === sup.id && superDrag?.superId !== sup.id
-          }
         />
-      ))}
-      <OrphanRow
-        ref={setSuperRowRef(ORPHAN_KEY)}
-        cats={effectiveOrphans}
-        dragging={drag !== null}
-        isHot={hotSuperKey === ORPHAN_KEY && drag?.sourceSuperKey !== ORPHAN_KEY}
-        draggingCatId={drag?.catId ?? null}
-        justCreatedCatId={justCreatedCatId}
-        onGripMouseDown={handleGripMouseDown}
-        registerRowRef={registerCatRowRef}
-      />
-      {/* 隐藏 builtin 独立成行——不参与拖拽 drop（不入 superRowRefs Y-band 快照）；
+        {/* 隐藏 builtin 独立成行——不参与拖拽 drop（不入 superRowRefs Y-band 快照）；
           hidden cat 的 grip mousedown 也被 CategoryRow 内部 return 拦掉 */}
-      {builtins.length > 0 && (
-        <BuiltinRow cats={builtins} registerRowRef={registerCatRowRef} />
-      )}
-    </div>
+        {builtins.length > 0 && <BuiltinRow cats={builtins} registerRowRef={registerCatRowRef} />}
+      </div>
 
       {/* —— 跨大类拖拽插入线：只在跨组且命中具体行时出现，位置就是松手后的落点 —— */}
       {dropLine &&
@@ -860,9 +819,7 @@ export function SuperCategoriesTable({
             <span className={catStyles.catFlyIcon}>
               <FlyIcon size={20} strokeWidth={1.85} />
             </span>
-            <span className={catStyles.catFlyName}>
-              {drag.displayName}
-            </span>
+            <span className={catStyles.catFlyName}>{drag.displayName}</span>
           </div>,
           document.body,
         )}
@@ -886,9 +843,7 @@ export function SuperCategoriesTable({
                 pointerEvents: "none",
                 // snap 阶段：left/top 切到落地位置 + 加 transition；正常拖动期间用 cursor
                 left: superSnap ? superSnap.left : superDrag.lockedX,
-                top: superSnap
-                  ? superSnap.top
-                  : superDrag.cursorY - superDrag.height / 2,
+                top: superSnap ? superSnap.top : superDrag.cursorY - superDrag.height / 2,
                 width: superDrag.width,
                 filter: "drop-shadow(0 12px 28px rgba(20, 20, 40, 0.18))",
                 transition: superSnap
@@ -903,9 +858,7 @@ export function SuperCategoriesTable({
                 <SuperFlyIcon size={24} strokeWidth={1.85} />
               </span>
               <div className={styles.superNameWrap}>
-                <span className={styles.superName}>
-                  {superDrag.displayName}
-                </span>
+                <span className={styles.superName}>{superDrag.displayName}</span>
               </div>
             </div>
             <div className={styles.superBody}>

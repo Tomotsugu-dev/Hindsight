@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Upload } from "lucide-react";
-import {
-  ExportUsageDialog,
-  type QuickKey,
-} from "../ExportUsageDialog/ExportUsageDialog";
+import { ExportUsageDialog, type QuickKey } from "../ExportUsageDialog/ExportUsageDialog";
 import styles from "./ExportUsageButton.module.css";
 
 interface Props {
@@ -37,11 +34,7 @@ export function ExportUsageButton({ defaultQuick }: Props) {
       >
         <Upload size={14} strokeWidth={2} />
       </button>
-      <ExportUsageDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        defaultQuick={defaultQuick}
-      />
+      <ExportUsageDialog open={open} onClose={() => setOpen(false)} defaultQuick={defaultQuick} />
     </>
   );
 }

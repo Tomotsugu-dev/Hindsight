@@ -144,8 +144,14 @@
 }
 
 @keyframes blink {
-  0%, 60%, 100% { opacity: 1; }
-  80% { opacity: 0.35; }
+  0%,
+  60%,
+  100% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.35;
+  }
 }
 
 /* —— 数字滚轴 ——
@@ -177,6 +183,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .strip { transition: none; }
-  .colon { animation: none; }
+  .strip {
+    transition: none;
+  }
+  .colon {
+    animation: none;
+  }
 }

@@ -68,8 +68,7 @@ export default function DebugTab() {
   const externalEnabled = settings?.ai.externalEnabled ?? false;
   const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
   const localSummaryAvailable =
-    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
-    activeMain !== "";
+    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) || activeMain !== "";
   const hasModel = cloudRoute || localSummaryAvailable;
 
   // Picker 选项随语言变化而重建——i18next 切语言会让 t 引用变更，触发 useMemo 重算
@@ -229,7 +228,10 @@ export default function DebugTab() {
           setGenerating(false);
           setEnginePhase(null);
           // 完成后刷一下引擎状态拿端口
-          void api.getEngineStatus().then((s) => setEngine(s)).catch(() => {});
+          void api
+            .getEngineStatus()
+            .then((s) => setEngine(s))
+            .catch(() => {});
           break;
         case "error":
           setGenerating(false);
@@ -251,7 +253,6 @@ export default function DebugTab() {
   const tRef = useRef(t);
   tRef.current = t;
 
-
   /** 跑一天 debug 总结（完整流程）。 */
   const onStart = async () => {
     if (scope !== "daily") {
@@ -272,12 +273,13 @@ export default function DebugTab() {
       const sysPromptDefault = DEFAULT_SYSTEM_PROMPTS[lang];
       const overrides: AiOverrides = {
         excludedCategories: debugExcluded,
-        systemPrompt:
-          debugSysPrompt.trim() === sysPromptDefault.trim() ? "" : debugSysPrompt,
+        systemPrompt: debugSysPrompt.trim() === sysPromptDefault.trim() ? "" : debugSysPrompt,
         // 引擎参数——null / 1 = 不传，让后端 fallback 到 settings.ai 默认；
         // 非默认值才打包到对应的 summary* 字段，触发 stop+start with overrides
         ...(debugSummaryBatchSize != null ? { summaryBatchSize: debugSummaryBatchSize } : {}),
-        ...(debugSummaryParallelSlots > 1 ? { summaryParallelSlots: debugSummaryParallelSlots } : {}),
+        ...(debugSummaryParallelSlots > 1
+          ? { summaryParallelSlots: debugSummaryParallelSlots }
+          : {}),
         ...(debugSummaryCtxSize != null ? { summaryCtxSize: debugSummaryCtxSize } : {}),
         // 跟 settings 全局值不同才传——一致的话留 undefined 让后端走 settings.ai.externalEnabled
         ...(debugExternalEnabled !== (settings?.ai.externalEnabled ?? false)
@@ -322,9 +324,7 @@ export default function DebugTab() {
     if (!chosenPath) return; // 用户取消
     try {
       await api.writeTextFile(chosenPath, md);
-      setTopNotice(
-        t("aiSummary.debug.actions.exportSavedAt", { path: chosenPath }),
-      );
+      setTopNotice(t("aiSummary.debug.actions.exportSavedAt", { path: chosenPath }));
       // successBar 3.5s 自清——给用户看清楚但不挡视线
       setTimeout(() => setTopNotice(null), 3500);
     } catch (e) {
@@ -347,10 +347,7 @@ export default function DebugTab() {
     let latestGeneratedAt = "";
     sorted.forEach((row) => {
       if (row.status === "ok") okCount += 1;
-      else if (
-        row.status === "skipped_no_screenshots" ||
-        row.status === "skipped_no_activity"
-      )
+      else if (row.status === "skipped_no_screenshots" || row.status === "skipped_no_activity")
         skipCount += 1;
       else errCount += 1;
       if (row.model) modelName = row.model;
@@ -394,357 +391,347 @@ export default function DebugTab() {
 
   return (
     <>
-    <div className={styles.wrap}>
-      {/* —— 顶部主行：报告范围 → 日期 → (右端) 重新生成 ——
+      <div className={styles.wrap}>
+        {/* —— 顶部主行：报告范围 → 日期 → (右端) 重新生成 ——
           按"主操作"原则放在最显眼的第一行；参数 / 删除 / 导出走下方次行避免抢视线。 */}
-      <div className={styles.header}>
-        {/* 调试范围下拉：日报 / 周报 / 月报。样式与 Today 页 DevicePicker 一致。 */}
-        <SimplePicker<DebugScope>
-          value={scope}
-          options={SCOPE_OPTIONS}
-          onChange={(next) => {
-            setScope(next);
-            setDayOffset(0); // 切 scope 时回到"当前周期"
-          }}
-          disabled={generating}
-        />
-
-        <div className={styles.dateNav}>
-          <button
-            ref={prevBtnRef}
-            type="button"
-            className={`${styles.navBtn} glow`}
-            onClick={() => setDayOffset((v) => v - 1)}
+        <div className={styles.header}>
+          {/* 调试范围下拉：日报 / 周报 / 月报。样式与 Today 页 DevicePicker 一致。 */}
+          <SimplePicker<DebugScope>
+            value={scope}
+            options={SCOPE_OPTIONS}
+            onChange={(next) => {
+              setScope(next);
+              setDayOffset(0); // 切 scope 时回到"当前周期"
+            }}
             disabled={generating}
-            aria-label={t(
-              scope === "daily"
-                ? "aiSummary.debug.dateNav.prevDayAria"
-                : scope === "weekly"
-                  ? "aiSummary.debug.dateNav.prevWeekAria"
-                  : "aiSummary.debug.dateNav.prevMonthAria",
-            )}
-          >
-            <ChevronLeft size={14} strokeWidth={1.75} />
-          </button>
-          <button
-            ref={pillRef}
-            type="button"
-            className={`${styles.dayPill} glow`}
-            onClick={() => setDayOffset(0)}
-            disabled={generating || dayOffset === 0}
-            title={t(
-              scope === "daily"
-                ? "aiSummary.debug.dateNav.todayBack"
-                : scope === "weekly"
-                  ? "aiSummary.debug.dateNav.thisWeekBack"
-                  : "aiSummary.debug.dateNav.thisMonthBack",
-            )}
-          >
-            {offsetLabel(scope, dayOffset, t)}
-          </button>
-          <button
-            ref={nextBtnRef}
-            type="button"
-            className={`${styles.navBtn} glow`}
-            onClick={() => setDayOffset((v) => v + 1)}
-            disabled={generating || dayOffset >= 0}
-            aria-label={t(
-              scope === "daily"
-                ? "aiSummary.debug.dateNav.nextDayAria"
-                : scope === "weekly"
-                  ? "aiSummary.debug.dateNav.nextWeekAria"
-                  : "aiSummary.debug.dateNav.nextMonthAria",
-            )}
-          >
-            <ChevronRight size={14} strokeWidth={1.75} />
-          </button>
-        </div>
+          />
 
-        {/* start / stop 放主行最右端：CSS margin-left:auto 推到行尾，"主操作"按钮放第一行
+          <div className={styles.dateNav}>
+            <button
+              ref={prevBtnRef}
+              type="button"
+              className={`${styles.navBtn} glow`}
+              onClick={() => setDayOffset((v) => v - 1)}
+              disabled={generating}
+              aria-label={t(
+                scope === "daily"
+                  ? "aiSummary.debug.dateNav.prevDayAria"
+                  : scope === "weekly"
+                    ? "aiSummary.debug.dateNav.prevWeekAria"
+                    : "aiSummary.debug.dateNav.prevMonthAria",
+              )}
+            >
+              <ChevronLeft size={14} strokeWidth={1.75} />
+            </button>
+            <button
+              ref={pillRef}
+              type="button"
+              className={`${styles.dayPill} glow`}
+              onClick={() => setDayOffset(0)}
+              disabled={generating || dayOffset === 0}
+              title={t(
+                scope === "daily"
+                  ? "aiSummary.debug.dateNav.todayBack"
+                  : scope === "weekly"
+                    ? "aiSummary.debug.dateNav.thisWeekBack"
+                    : "aiSummary.debug.dateNav.thisMonthBack",
+              )}
+            >
+              {offsetLabel(scope, dayOffset, t)}
+            </button>
+            <button
+              ref={nextBtnRef}
+              type="button"
+              className={`${styles.navBtn} glow`}
+              onClick={() => setDayOffset((v) => v + 1)}
+              disabled={generating || dayOffset >= 0}
+              aria-label={t(
+                scope === "daily"
+                  ? "aiSummary.debug.dateNav.nextDayAria"
+                  : scope === "weekly"
+                    ? "aiSummary.debug.dateNav.nextWeekAria"
+                    : "aiSummary.debug.dateNav.nextMonthAria",
+              )}
+            >
+              <ChevronRight size={14} strokeWidth={1.75} />
+            </button>
+          </div>
+
+          {/* start / stop 放主行最右端：CSS margin-left:auto 推到行尾，"主操作"按钮放第一行
             最显眼位置。按钮文案缩短为"重新生成"避免在 960px 窗口里换行，旁边 Info icon hover 看完整说明。 */}
-        {generating ? (
-          <button
-            type="button"
-            className={styles.stopBtn}
-            onClick={() => void onStop()}
-          >
-            <Square size={14} strokeWidth={2} />
-            {t("aiSummary.debug.actions.stop")}
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              className={styles.startBtn}
-              onClick={() => void onStart()}
-              disabled={!hasModel || scope !== "daily"}
-              title={
-                scope !== "daily"
-                  ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
-                  : hasModel
-                    ? t("aiSummary.debug.actions.startTooltipReady")
-                    : t("aiSummary.debug.actions.startTooltipNoModel")
-              }
-            >
-              <Play size={14} strokeWidth={2} />
-              {t("aiSummary.debug.actions.start")}
+          {generating ? (
+            <button type="button" className={styles.stopBtn} onClick={() => void onStop()}>
+              <Square size={14} strokeWidth={2} />
+              {t("aiSummary.debug.actions.stop")}
             </button>
-            <button
-              type="button"
-              className={styles.infoIconWrap}
-              title={t("aiSummary.debug.actions.startInfo")}
-              aria-label={t("aiSummary.debug.actions.startInfoAria")}
-            >
-              <Info size={13} strokeWidth={1.85} />
-            </button>
-          </>
-        )}
-      </div>
-
-
-      {/* —— 引擎状态条 —— */}
-      <EngineBar engine={engine} />
-
-      {/* —— 错误条 / 成功条 / 冷启动提示 —— */}
-      {topError ? (
-        <div className={styles.errorBar}>
-          <AlertTriangle size={14} strokeWidth={2.2} />
-          <span>{topError}</span>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={styles.startBtn}
+                onClick={() => void onStart()}
+                disabled={!hasModel || scope !== "daily"}
+                title={
+                  scope !== "daily"
+                    ? t("aiSummary.debug.actions.startTooltipPending", { type: scopeName(scope) })
+                    : hasModel
+                      ? t("aiSummary.debug.actions.startTooltipReady")
+                      : t("aiSummary.debug.actions.startTooltipNoModel")
+                }
+              >
+                <Play size={14} strokeWidth={2} />
+                {t("aiSummary.debug.actions.start")}
+              </button>
+              <button
+                type="button"
+                className={styles.infoIconWrap}
+                title={t("aiSummary.debug.actions.startInfo")}
+                aria-label={t("aiSummary.debug.actions.startInfoAria")}
+              >
+                <Info size={13} strokeWidth={1.85} />
+              </button>
+            </>
+          )}
         </div>
-      ) : null}
-      {topNotice ? (
-        <div className={styles.successBar}>
-          <span>{topNotice}</span>
-        </div>
-      ) : null}
-      {enginePhase ? (
-        <div className={styles.engineHint}>
-          <Loader2 size={14} className={styles["spin"]} />
-          <span>{enginePhase}</span>
-        </div>
-      ) : null}
 
-      {/* —— 非日报 scope 的占位 —— */}
-      {scope !== "daily" ? (
-        <div className={styles.placeholder}>
-          {t("aiSummary.debug.scopePlaceholder", { type: scopeName(scope) })}
-        </div>
-      ) : null}
+        {/* —— 引擎状态条 —— */}
+        <EngineBar engine={engine} />
 
-      {/* —— 时间段总结提示词：独立 Section box；textarea 默认收起，hover 该卡片展开 —— */}
-      <div className={styles.promptCollapseWrap}>
-        <Section
-          title={t("aiSummary.debug.segPrompt.title")}
-          icon={MessageSquareText}
-          description={t("aiSummary.debug.segPrompt.description")}
-        >
-          <Row label={t("aiSummary.debug.segPrompt.label")} block>
-            <div className={styles.collapsibleWrap}>
-              <textarea
-                className={`${styles.debugPromptTextarea} ${styles.collapsibleTextarea}`}
-                value={debugSysPrompt}
-                onChange={(e) => setDebugSysPrompt(e.target.value)}
-                rows={10}
-                spellCheck={false}
-              />
-              <div className={styles.collapseFade} aria-hidden />
-            </div>
-          </Row>
-        </Section>
-      </div>
-
-      {/* —— 段总结结果：Section 常开 + 滚动。headerAction：「删除」(只清段总结) + 导出。 */}
-      <Section
-        title={t("aiSummary.debug.segments.title")}
-        icon={Newspaper}
-        headerAction={
-          <>
-            <button
-              type="button"
-              className={styles.deleteBtn}
-              onClick={() => {
-                if (generating) return;
-                setConfirmingClear(true);
-              }}
-              disabled={generating || summaries.length === 0}
-              title={t("aiSummary.debug.actions.clearSummariesTooltip")}
-            >
-              <Trash2 size={13} strokeWidth={2} />
-              {t("aiSummary.debug.actions.clearSummaries")}
-            </button>
-            <button
-              type="button"
-              className={styles.exportBtn}
-              onClick={onExportSummariesMd}
-              disabled={summaries.length === 0}
-              title={
-                summaries.length === 0
-                  ? t("aiSummary.debug.actions.exportSummariesMdEmptyTooltip")
-                  : t("aiSummary.debug.actions.exportSummariesMdTooltip")
-              }
-            >
-              <Download size={13} strokeWidth={2} />
-              {t("aiSummary.debug.actions.exportSummariesMd")}
-            </button>
-          </>
-        }
-      >
-        {visibleSummaries.length === 0 ? (
-          <div className={styles.summaryEmpty}>
-            {t("aiSummary.debug.segments.empty")}
+        {/* —— 错误条 / 成功条 / 冷启动提示 —— */}
+        {topError ? (
+          <div className={styles.errorBar}>
+            <AlertTriangle size={14} strokeWidth={2.2} />
+            <span>{topError}</span>
           </div>
-        ) : (
-          <div className={styles.panelOpen}>
-            {visibleSummaries.map((s) => {
-              // 段标签＝色点 + 中性文字（跟 DailyTab 同款）：颜色只出现在圆点上。
-              // settings 未加载到该段时圆点退回中性灰。
-              const seg = segments[s.segmentIdx];
-              const dotColor = seg ? resolveSegmentDotColor(seg) : "#cbd5e1";
-              // 状态徽章：ok 绿 / error 红 / skipped 灰
-              const isSkipped =
-                s.status === "skipped_no_screenshots" ||
-                s.status === "skipped_no_activity";
-              const statusClass =
-                s.status === "ok"
-                  ? styles.summaryStatusOk
-                  : isSkipped
-                    ? styles.summaryStatusSkipped
-                    : styles.summaryStatusError;
-              const statusText = s.status === "ok" ? "ok" : isSkipped ? "skipped" : "error";
-              return (
-                <div key={s.segmentIdx} className={styles.summaryBox}>
-                  <div className={styles.summaryHead}>
-                    <span
-                      className={styles.summaryChip}
-                      title={t("aiSummary.debug.segments.chipTitle", { idx: s.segmentIdx })}
-                    >
-                      <span
-                        className={styles.segDot}
-                        style={{ background: dotColor }}
-                        aria-hidden
-                      />
-                      {s.label}
-                    </span>
-                    <span className={styles.summaryTimeRange}>
-                      <Clock size={12} strokeWidth={2.2} />
-                      {String(s.startHour).padStart(2, "0")}:00 –{" "}
-                      {String(s.endHour).padStart(2, "0")}:00
-                    </span>
-                    <span className={`${styles.summaryStatus} ${statusClass}`}>
-                      {statusText}
-                    </span>
-                  </div>
-                  {s.content ? (
-                    <MarkdownText text={s.content} className={styles.summaryText} />
-                  ) : (
-                    <div className={styles.summaryText}>
-                      {s.status === "skipped_no_screenshots"
-                        ? t("aiSummary.debug.segments.skippedFallback")
-                        : s.status === "skipped_no_activity"
-                          ? t("aiSummary.debug.segments.skippedNoActivityFallback")
-                          : s.error || t("aiSummary.debug.segments.emptyFallback")}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        ) : null}
+        {topNotice ? (
+          <div className={styles.successBar}>
+            <span>{topNotice}</span>
           </div>
-        )}
-      </Section>
-
-      {/* —— 实时事件流 —— */}
-      <div className={styles.panelWrap}>
-        <span className={styles.panelLabel}>{t("aiSummary.debug.events.label")}</span>
-        <div className={styles.panel}>
-          <div className={styles.logBox}>
-            {logs.length === 0 ? (
-              <div className={styles.logEmpty}>{t("aiSummary.debug.events.empty")}</div>
-            ) : (
-              logs.map((entry, i) => (
-                <div key={i} className={styles.logLine}>
-                  <span className={styles.logTime}>{entry.ts}</span>
-                  <span
-                    className={`${styles.logPhase} ${
-                      entry.phase === "error"
-                        ? styles.logPhaseError
-                        : entry.phase === "all_done" || entry.phase === "segment_done"
-                          ? styles.logPhaseDone
-                          : ""
-                    }`}
-                  >
-                    {entry.phase}
-                  </span>
-                  <span className={styles.logBody}>{entry.body}</span>
-                </div>
-              ))
-            )}
+        ) : null}
+        {enginePhase ? (
+          <div className={styles.engineHint}>
+            <Loader2 size={14} className={styles["spin"]} />
+            <span>{enginePhase}</span>
           </div>
-        </div>
-      </div>
+        ) : null}
 
-      {/* —— 引擎启动日志（llama-server stderr / stdout）——
-          诊断 GPU 加载情况：找 "offloaded XX/YY layers to GPU" / "cuBLAS init" 等行。 */}
-      <div className={styles.panelWrap}>
-        <span className={styles.panelLabel}>
-          {t("aiSummary.debug.engineLogs.label")}
-          <button
-            type="button"
-            className={styles.engineLogsRefreshBtn}
-            onClick={() => void refreshEngineLogs()}
-            disabled={engineLogsBusy}
-            title={t("aiSummary.debug.engineLogs.refreshTooltip")}
+        {/* —— 非日报 scope 的占位 —— */}
+        {scope !== "daily" ? (
+          <div className={styles.placeholder}>
+            {t("aiSummary.debug.scopePlaceholder", { type: scopeName(scope) })}
+          </div>
+        ) : null}
+
+        {/* —— 时间段总结提示词：独立 Section box；textarea 默认收起，hover 该卡片展开 —— */}
+        <div className={styles.promptCollapseWrap}>
+          <Section
+            title={t("aiSummary.debug.segPrompt.title")}
+            icon={MessageSquareText}
+            description={t("aiSummary.debug.segPrompt.description")}
           >
-            {engineLogsBusy
-              ? t("aiSummary.debug.engineLogs.refreshing")
-              : t("aiSummary.debug.engineLogs.refresh")}
-          </button>
-          <button
-            type="button"
-            className={styles.engineLogsRefreshBtn}
-            onClick={() => void copyEngineLogs()}
-            disabled={engineLogs.length === 0}
-            title={t("aiSummary.debug.engineLogs.copyTooltip")}
-          >
-            {engineLogsCopied
-              ? t("aiSummary.debug.engineLogs.copied")
-              : t("aiSummary.debug.engineLogs.copy")}
-          </button>
-        </span>
-        <div className={styles.panel}>
-          <div className={styles.logBox}>
-            {engineLogs.length === 0 ? (
-              <div className={styles.logEmpty}>
-                {t("aiSummary.debug.engineLogs.emptyPrefix")}
-                <code>offloaded XX/YY layers to GPU</code>
-                {t("aiSummary.debug.engineLogs.emptySuffix")}
+            <Row label={t("aiSummary.debug.segPrompt.label")} block>
+              <div className={styles.collapsibleWrap}>
+                <textarea
+                  className={`${styles.debugPromptTextarea} ${styles.collapsibleTextarea}`}
+                  value={debugSysPrompt}
+                  onChange={(e) => setDebugSysPrompt(e.target.value)}
+                  rows={10}
+                  spellCheck={false}
+                />
+                <div className={styles.collapseFade} aria-hidden />
               </div>
-            ) : (
-              engineLogs.map((line, i) => (
-                <div key={i} className={styles.logLine}>
-                  <span className={styles.logBody}>{line}</span>
+            </Row>
+          </Section>
+        </div>
+
+        {/* —— 段总结结果：Section 常开 + 滚动。headerAction：「删除」(只清段总结) + 导出。 */}
+        <Section
+          title={t("aiSummary.debug.segments.title")}
+          icon={Newspaper}
+          headerAction={
+            <>
+              <button
+                type="button"
+                className={styles.deleteBtn}
+                onClick={() => {
+                  if (generating) return;
+                  setConfirmingClear(true);
+                }}
+                disabled={generating || summaries.length === 0}
+                title={t("aiSummary.debug.actions.clearSummariesTooltip")}
+              >
+                <Trash2 size={13} strokeWidth={2} />
+                {t("aiSummary.debug.actions.clearSummaries")}
+              </button>
+              <button
+                type="button"
+                className={styles.exportBtn}
+                onClick={onExportSummariesMd}
+                disabled={summaries.length === 0}
+                title={
+                  summaries.length === 0
+                    ? t("aiSummary.debug.actions.exportSummariesMdEmptyTooltip")
+                    : t("aiSummary.debug.actions.exportSummariesMdTooltip")
+                }
+              >
+                <Download size={13} strokeWidth={2} />
+                {t("aiSummary.debug.actions.exportSummariesMd")}
+              </button>
+            </>
+          }
+        >
+          {visibleSummaries.length === 0 ? (
+            <div className={styles.summaryEmpty}>{t("aiSummary.debug.segments.empty")}</div>
+          ) : (
+            <div className={styles.panelOpen}>
+              {visibleSummaries.map((s) => {
+                // 段标签＝色点 + 中性文字（跟 DailyTab 同款）：颜色只出现在圆点上。
+                // settings 未加载到该段时圆点退回中性灰。
+                const seg = segments[s.segmentIdx];
+                const dotColor = seg ? resolveSegmentDotColor(seg) : "#cbd5e1";
+                // 状态徽章：ok 绿 / error 红 / skipped 灰
+                const isSkipped =
+                  s.status === "skipped_no_screenshots" || s.status === "skipped_no_activity";
+                const statusClass =
+                  s.status === "ok"
+                    ? styles.summaryStatusOk
+                    : isSkipped
+                      ? styles.summaryStatusSkipped
+                      : styles.summaryStatusError;
+                const statusText = s.status === "ok" ? "ok" : isSkipped ? "skipped" : "error";
+                return (
+                  <div key={s.segmentIdx} className={styles.summaryBox}>
+                    <div className={styles.summaryHead}>
+                      <span
+                        className={styles.summaryChip}
+                        title={t("aiSummary.debug.segments.chipTitle", { idx: s.segmentIdx })}
+                      >
+                        <span
+                          className={styles.segDot}
+                          style={{ background: dotColor }}
+                          aria-hidden
+                        />
+                        {s.label}
+                      </span>
+                      <span className={styles.summaryTimeRange}>
+                        <Clock size={12} strokeWidth={2.2} />
+                        {String(s.startHour).padStart(2, "0")}:00 –{" "}
+                        {String(s.endHour).padStart(2, "0")}:00
+                      </span>
+                      <span className={`${styles.summaryStatus} ${statusClass}`}>{statusText}</span>
+                    </div>
+                    {s.content ? (
+                      <MarkdownText text={s.content} className={styles.summaryText} />
+                    ) : (
+                      <div className={styles.summaryText}>
+                        {s.status === "skipped_no_screenshots"
+                          ? t("aiSummary.debug.segments.skippedFallback")
+                          : s.status === "skipped_no_activity"
+                            ? t("aiSummary.debug.segments.skippedNoActivityFallback")
+                            : s.error || t("aiSummary.debug.segments.emptyFallback")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Section>
+
+        {/* —— 实时事件流 —— */}
+        <div className={styles.panelWrap}>
+          <span className={styles.panelLabel}>{t("aiSummary.debug.events.label")}</span>
+          <div className={styles.panel}>
+            <div className={styles.logBox}>
+              {logs.length === 0 ? (
+                <div className={styles.logEmpty}>{t("aiSummary.debug.events.empty")}</div>
+              ) : (
+                logs.map((entry, i) => (
+                  <div key={i} className={styles.logLine}>
+                    <span className={styles.logTime}>{entry.ts}</span>
+                    <span
+                      className={`${styles.logPhase} ${
+                        entry.phase === "error"
+                          ? styles.logPhaseError
+                          : entry.phase === "all_done" || entry.phase === "segment_done"
+                            ? styles.logPhaseDone
+                            : ""
+                      }`}
+                    >
+                      {entry.phase}
+                    </span>
+                    <span className={styles.logBody}>{entry.body}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* —— 引擎启动日志（llama-server stderr / stdout）——
+          诊断 GPU 加载情况：找 "offloaded XX/YY layers to GPU" / "cuBLAS init" 等行。 */}
+        <div className={styles.panelWrap}>
+          <span className={styles.panelLabel}>
+            {t("aiSummary.debug.engineLogs.label")}
+            <button
+              type="button"
+              className={styles.engineLogsRefreshBtn}
+              onClick={() => void refreshEngineLogs()}
+              disabled={engineLogsBusy}
+              title={t("aiSummary.debug.engineLogs.refreshTooltip")}
+            >
+              {engineLogsBusy
+                ? t("aiSummary.debug.engineLogs.refreshing")
+                : t("aiSummary.debug.engineLogs.refresh")}
+            </button>
+            <button
+              type="button"
+              className={styles.engineLogsRefreshBtn}
+              onClick={() => void copyEngineLogs()}
+              disabled={engineLogs.length === 0}
+              title={t("aiSummary.debug.engineLogs.copyTooltip")}
+            >
+              {engineLogsCopied
+                ? t("aiSummary.debug.engineLogs.copied")
+                : t("aiSummary.debug.engineLogs.copy")}
+            </button>
+          </span>
+          <div className={styles.panel}>
+            <div className={styles.logBox}>
+              {engineLogs.length === 0 ? (
+                <div className={styles.logEmpty}>
+                  {t("aiSummary.debug.engineLogs.emptyPrefix")}
+                  <code>offloaded XX/YY layers to GPU</code>
+                  {t("aiSummary.debug.engineLogs.emptySuffix")}
                 </div>
-              ))
-            )}
+              ) : (
+                engineLogs.map((line, i) => (
+                  <div key={i} className={styles.logLine}>
+                    <span className={styles.logBody}>{line}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <ConfirmDialog
-      open={confirmingClear}
-      title={t("aiSummary.debug.actions.clearSummariesConfirmTitle", { date })}
-      message={t("aiSummary.debug.actions.clearSummariesConfirmMessage")}
-      variant="danger"
-      onConfirm={async () => {
-        setConfirmingClear(false);
-        try {
-          await api.clearDaySegmentSummaries(date, "debug");
-          setSummaries([]);
-        } catch (e) {
-          setTopError(typeof e === "string" ? e : String(e));
-        }
-      }}
-      onCancel={() => setConfirmingClear(false)}
-    />
+      <ConfirmDialog
+        open={confirmingClear}
+        title={t("aiSummary.debug.actions.clearSummariesConfirmTitle", { date })}
+        message={t("aiSummary.debug.actions.clearSummariesConfirmMessage")}
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmingClear(false);
+          try {
+            await api.clearDaySegmentSummaries(date, "debug");
+            setSummaries([]);
+          } catch (e) {
+            setTopError(typeof e === "string" ? e : String(e));
+          }
+        }}
+        onCancel={() => setConfirmingClear(false)}
+      />
     </>
   );
 }

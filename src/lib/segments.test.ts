@@ -124,7 +124,9 @@ describe("legendItems", () => {
   });
 
   it("大类档：小类都归入了大类，就没有「未归入」", () => {
-    const grouped = CATS.filter((c) => c.superCategoryId === "work" || c.superCategoryId === "social");
+    const grouped = CATS.filter(
+      (c) => c.superCategoryId === "work" || c.superCategoryId === "social",
+    );
     expect(legendItems("supers", grouped, SUPERS, "未归入大类").map((i) => i.id)).toEqual([
       "work",
       "social",

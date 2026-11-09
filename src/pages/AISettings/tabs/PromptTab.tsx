@@ -55,7 +55,6 @@ export default function PromptTab() {
           </Row>
         </div>
       </Section>
-
     </div>
   );
 }
@@ -104,8 +103,7 @@ function PromptSection({
 
   const handleSave = () => {
     // draft 跟内置默认完全一致 → 存空字符串等价"删除覆盖"
-    const text =
-      draft.trim() === DEFAULT_SYSTEM_PROMPTS[language].trim() ? "" : draft;
+    const text = draft.trim() === DEFAULT_SYSTEM_PROMPTS[language].trim() ? "" : draft;
     onSaveOverride(language, text);
   };
 

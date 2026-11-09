@@ -28,10 +28,9 @@ export function FloatingTabNav(props: FloatingTabNavProps) {
   useEffect(() => {
     const target = slotRef.current;
     if (!target) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setPinned(!entry.isIntersecting),
-      { threshold: 0 },
-    );
+    const observer = new IntersectionObserver(([entry]) => setPinned(!entry.isIntersecting), {
+      threshold: 0,
+    });
     observer.observe(target);
     return () => observer.disconnect();
   }, []);

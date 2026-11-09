@@ -95,9 +95,7 @@ export function SimplePicker<T extends string>({
             <button
               key={opt.value}
               type="button"
-              className={`${styles.item} ${
-                opt.value === value ? styles.itemChecked : ""
-              }`}
+              className={`${styles.item} ${opt.value === value ? styles.itemChecked : ""}`}
               onClick={() => {
                 onChange(opt.value);
                 close();
@@ -105,11 +103,7 @@ export function SimplePicker<T extends string>({
             >
               <span className={styles.itemLabel}>{opt.label}</span>
               {opt.value === value && (
-                <Check
-                  size={13}
-                  strokeWidth={2.25}
-                  className={styles.itemCheck}
-                />
+                <Check size={13} strokeWidth={2.25} className={styles.itemCheck} />
               )}
             </button>
           ))}

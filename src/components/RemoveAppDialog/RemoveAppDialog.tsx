@@ -149,11 +149,7 @@ export function RemoveAppDialog({
             <ChartOffIcon size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
             {t("apps.remove.excludeAction")}
           </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnDanger}`}
-            onClick={onDelete}
-          >
+          <button type="button" className={`${styles.btn} ${styles.btnDanger}`} onClick={onDelete}>
             <Trash2 size={13} strokeWidth={2} className={styles.btnIcon} aria-hidden />
             {t("apps.remove.deleteAction")}
           </button>

@@ -6,10 +6,7 @@ import { ROUTES } from "./config/nav";
 import { useSettings } from "./state/settings";
 import { usePluginsSeen } from "./state/pluginsSeen";
 import { api, type PromptLanguage } from "./api/hindsight";
-import {
-  isDefaultSegments,
-  retranslateDefaultSegments,
-} from "./utils/defaultSegments";
+import { isDefaultSegments, retranslateDefaultSegments } from "./utils/defaultSegments";
 
 // 代码拆分：所有 page / tab 都走 `React.lazy`，Vite 给每个组件出独立 chunk。
 // 首屏只加载 sidebar / layout / `i18n` 这些必备的东西；切到某个 tab 时按需 fetch。
@@ -127,10 +124,7 @@ function App() {
             {/* 旧地址重定向:对话已提升为独立页面 */}
             <Route path="chat" element={<Navigate to={ROUTES.chat} replace />} />
             {/* 旧地址重定向:搜索已搬到全部历史 */}
-            <Route
-              path="search"
-              element={<Navigate to={`${ROUTES.history}/search`} replace />}
-            />
+            <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>

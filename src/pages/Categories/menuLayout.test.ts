@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  ASSIGN_MENU_MAX_HEIGHT,
-  assignMenuLayout,
-} from "./menuLayout";
+import { ASSIGN_MENU_MAX_HEIGHT, assignMenuLayout } from "./menuLayout";
 
 // Issue 1A 回归:分类多时菜单曾无限增高、超出视口的分类点不到。
 // 纯函数层钉死:封顶、按侧收紧、翻转、top 永不越出视口。

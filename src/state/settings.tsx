@@ -97,9 +97,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [settings, loading, update, reload],
   );
 
-  return (
-    <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
-  );
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
 // hook 跟 Provider 同文件是有意为之——消费方一次 import 解决，dev 期 fast refresh
@@ -107,7 +105,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useSettings() {
   const ctx = useContext(SettingsContext);
-  if (!ctx)
-    throw new Error("useSettings must be used within SettingsProvider");
+  if (!ctx) throw new Error("useSettings must be used within SettingsProvider");
   return ctx;
 }

@@ -7,12 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  api,
-  type Category,
-  type CategoryInput,
-  type CategoryPatch,
-} from "../api/hindsight";
+import { api, type Category, type CategoryInput, type CategoryPatch } from "../api/hindsight";
 import { logError } from "../lib/logger";
 
 interface CategoriesContextValue {
@@ -126,14 +121,21 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
       unassignApp,
       reorder,
     }),
-    [categories, loading, getCategory, refresh, create, update, remove, assignApp, unassignApp, reorder],
+    [
+      categories,
+      loading,
+      getCategory,
+      refresh,
+      create,
+      update,
+      remove,
+      assignApp,
+      unassignApp,
+      reorder,
+    ],
   );
 
-  return (
-    <CategoriesContext.Provider value={value}>
-      {children}
-    </CategoriesContext.Provider>
-  );
+  return <CategoriesContext.Provider value={value}>{children}</CategoriesContext.Provider>;
 }
 
 // hook 跟 Provider 同文件是有意为之——消费方一次 import 解决，dev 期 fast refresh

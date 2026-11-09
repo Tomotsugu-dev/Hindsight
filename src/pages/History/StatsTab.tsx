@@ -5,10 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronRight, X } from "lucide-react";
 import { EmptyHint } from "../../components/EmptyHint/EmptyHint";
 import { ScrollBox } from "../../components/ScrollBox/ScrollBox";
-import {
-  RankedList,
-  type RankedItem,
-} from "../../components/RankedList/RankedList";
+import { RankedList, type RankedItem } from "../../components/RankedList/RankedList";
 import { useDeviceFilter } from "../../state/deviceFilter";
 import { usePeriodRankings } from "../../hooks/usePeriodRankings";
 import {
@@ -22,19 +19,10 @@ import type { AppUsage, DaySummaryDto } from "../../api/hindsight";
 import { AppDetailCard, type HistoryApp } from "./AppDetailCard";
 import { Heatmap } from "./Heatmap";
 import { clipRange, dayKey, parseDayKey, type DayRange } from "./heatmapGrid";
-import {
-  HistoryChartCard,
-  type ChartTab,
-  type PeriodNav,
-} from "./HistoryChartCard";
+import { HistoryChartCard, type ChartTab, type PeriodNav } from "./HistoryChartCard";
 import type { HistoryOutletContext } from "./HistoryPage";
 import { MonthCalendar } from "./MonthCalendar";
-import {
-  useAppRangeDetail,
-  useEarliestDate,
-  useRangeApps,
-  useRangeDays,
-} from "./useHistoryData";
+import { useAppRangeDetail, useEarliestDate, useRangeApps, useRangeDays } from "./useHistoryData";
 import styles from "./HistoryPage.module.css";
 
 const NO_DAYS: DaySummaryDto[] = [];
@@ -100,10 +88,7 @@ export default function StatsTab() {
     setDay(null);
   };
   // Heatmap 的 effect 依赖这三个回调，保持引用不变，免得拖动中途重挂监听
-  const toggleDay = useCallback(
-    (key: string) => setDay((prev) => (prev === key ? null : key)),
-    [],
-  );
+  const toggleDay = useCallback((key: string) => setDay((prev) => (prev === key ? null : key)), []);
   const zoomTo = useCallback((range: DayRange) => {
     setZoom(range);
     setDay(null);
@@ -409,9 +394,7 @@ export default function StatsTab() {
                 <RankedList
                   items={superItems}
                   selectedId={superId}
-                  onItemClick={(item) =>
-                    setSuperId((prev) => (prev === item.id ? null : item.id))
-                  }
+                  onItemClick={(item) => setSuperId((prev) => (prev === item.id ? null : item.id))}
                 />
               </ScrollBox>
             ) : (

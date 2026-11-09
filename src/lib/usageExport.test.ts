@@ -374,7 +374,9 @@ describe("renderUsageExport", () => {
         date: `2026-06-0${i + 1}`,
       })),
     };
-    expect(renderUsageExport(many, "html", labels)).not.toContain('checkbox" id="t-d-2026-06-01" checked');
+    expect(renderUsageExport(many, "html", labels)).not.toContain(
+      'checkbox" id="t-d-2026-06-01" checked',
+    );
   });
 
   it("HTML：用户数据全部转义,不会被当成标签解析", () => {
@@ -413,9 +415,7 @@ describe("renderUsageExport", () => {
   });
 
   it("HTML：文件名用 .html 扩展名", () => {
-    expect(usageExportFilename(fixture, "html")).toBe(
-      "hindsight-usage-2026-06-29_2026-07-02.html",
-    );
+    expect(usageExportFilename(fixture, "html")).toBe("hindsight-usage-2026-06-29_2026-07-02.html");
   });
 
   it("collectAppIcons：只收集会渲染的 Top N 唯一进程,拿不到图标的只跳过", async () => {

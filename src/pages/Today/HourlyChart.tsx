@@ -47,10 +47,7 @@ export function HourlyChart({
   const maxMinutes = useMemo(() => {
     if (externalMax !== undefined) return externalMax;
     if (!hours.length) return 60;
-    const peak = hours.reduce(
-      (m, h) => Math.max(m, barMinutes(h.segments)),
-      0,
-    );
+    const peak = hours.reduce((m, h) => Math.max(m, barMinutes(h.segments)), 0);
     return peak <= 60 ? 60 : Math.ceil(peak / 15) * 15;
   }, [hours, externalMax]);
   // 4 等分刻度：max/4, max/2, 3max/4, max。每条对应 25/50/75/100% 高度。
@@ -61,11 +58,7 @@ export function HourlyChart({
         {/* Y 轴 */}
         <div className={styles.yAxis} aria-hidden>
           {yTicks.map((t) => (
-            <span
-              key={t}
-              className={styles.yTick}
-              style={{ bottom: `${(t / maxMinutes) * 100}%` }}
-            >
+            <span key={t} className={styles.yTick} style={{ bottom: `${(t / maxMinutes) * 100}%` }}>
               {formatMinLabel(Math.round(t))}
             </span>
           ))}
@@ -117,11 +110,7 @@ export function HourlyChart({
       {/* X 轴 */}
       <div className={styles.xAxis}>
         {X_LABELS.map((h) => (
-          <span
-            key={h}
-            className={styles.xLabel}
-            style={{ left: `${(h / 24) * 100}%` }}
-          >
+          <span key={h} className={styles.xLabel} style={{ left: `${(h / 24) * 100}%` }}>
             {String(h).padStart(2, "0")}
           </span>
         ))}

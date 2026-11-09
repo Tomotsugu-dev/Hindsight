@@ -32,9 +32,7 @@ export function applyFilter(groups: AppGroup[], f: AppsFilter): AppGroup[] {
   if (needle.length > 0) {
     out = out.filter((g) => {
       if (g.displayName.toLowerCase().includes(needle)) return true;
-      return g.members.some((m) =>
-        m.processName.toLowerCase().includes(needle),
-      );
+      return g.members.some((m) => m.processName.toLowerCase().includes(needle));
     });
   }
 

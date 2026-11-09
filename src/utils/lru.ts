@@ -8,12 +8,7 @@
  * 原地 mutate 入参 Map。调用方负责好不变性（比如在 React setState 里先
  * `new Map(prev)` 再 mutate）。
  */
-export function lruInsert<K, V>(
-  map: Map<K, V>,
-  key: K,
-  value: V,
-  max: number,
-): void {
+export function lruInsert<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
   map.delete(key);
   map.set(key, value);
   while (map.size > max) {

@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { listen } from "@tauri-apps/api/event";
@@ -119,7 +112,6 @@ function uid() {
 function fmtTs(ts: string): string {
   return ts.length >= 16 ? ts.slice(0, 16).replace("T", " ") : ts;
 }
-
 
 interface ChatViewProps {
   /** null = 尚未有会话（首条消息后由后端隐式创建） */
@@ -256,13 +248,7 @@ export default function ChatView({
     try {
       // 界面语言随请求传给后端:回答跟随提问语言,界面语言兜底
       const parent = parentOverride ?? thread.leafGuid ?? undefined;
-      const ans = await api.chatAsk(
-        trimmed,
-        conversationId,
-        i18n.language,
-        askId,
-        parent,
-      );
+      const ans = await api.chatAsk(trimmed, conversationId, i18n.language, askId, parent);
       if (loadSeq.current !== seq) return; // 期间切了会话,丢弃
       if (conversationId === null) {
         if (ans.cancelled) {
@@ -596,13 +582,7 @@ function MessageBubble({
     );
   }
   return (
-    <AssistantBubble
-      m={m}
-      t={t}
-      busy={busy}
-      isLast={isLastAssistant}
-      onRegenerate={onRegenerate}
-    />
+    <AssistantBubble m={m} t={t} busy={busy} isLast={isLastAssistant} onRegenerate={onRegenerate} />
   );
 }
 
@@ -822,8 +802,7 @@ const CITATIONS_COLLAPSED = 3;
 function CitationList({ citations, t }: { citations: ChatCitation[]; t: TFunction }) {
   const [expanded, setExpanded] = useState(false);
   const collapsible = citations.length > CITATIONS_COLLAPSED + 1;
-  const shown =
-    collapsible && !expanded ? citations.slice(0, CITATIONS_COLLAPSED) : citations;
+  const shown = collapsible && !expanded ? citations.slice(0, CITATIONS_COLLAPSED) : citations;
 
   return (
     <div className={styles.searchHits}>
@@ -842,11 +821,7 @@ function CitationList({ citations, t }: { citations: ChatCitation[]; t: TFunctio
         </div>
       ))}
       {collapsible && (
-        <button
-          type="button"
-          className={styles.hitsToggle}
-          onClick={() => setExpanded((v) => !v)}
-        >
+        <button type="button" className={styles.hitsToggle} onClick={() => setExpanded((v) => !v)}>
           {expanded ? (
             <>
               <ChevronUp size={12} strokeWidth={2.2} />

@@ -1,9 +1,4 @@
-import {
-  api,
-  dtoToDaySummary,
-  type AppUsage,
-  type DaySummary,
-} from "../api/hindsight";
+import { api, dtoToDaySummary, type AppUsage, type DaySummary } from "../api/hindsight";
 import { createUsageCache } from "./createUsageCache";
 
 export interface WeekData {

@@ -45,9 +45,7 @@ interface AppIconProps {
 }
 
 export function AppIcon({ processName, fallbackColor, size = 18 }: AppIconProps) {
-  const [src, setSrc] = useState<string | null | undefined>(() =>
-    readCache(processName),
-  );
+  const [src, setSrc] = useState<string | null | undefined>(() => readCache(processName));
 
   // processName 变化时重置 src（React 官方"prop 变化调整 state"的渲染期模式）：
   // 不重置的话下面 effect 因 src !== undefined 直接 return，被复用的实例

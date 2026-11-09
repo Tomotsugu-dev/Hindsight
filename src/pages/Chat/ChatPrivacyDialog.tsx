@@ -77,11 +77,7 @@ export function ChatPrivacyDialog({ open, ai, onConfirm, onCancel }: ChatPrivacy
         {cloud && <p className={styles.bodyCloud}>{t("chat.privacy.bodyCloud")}</p>}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
-            onClick={onCancel}
-          >
+          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
             {t("common.cancel")}
           </button>
           <button

@@ -1,13 +1,7 @@
 import { useRef, useState } from "react";
 import { type AiSegment } from "../../api/hindsight";
 import { resolveSegmentChip } from "../../utils/segmentColor";
-import {
-  clampHour,
-  formatHour,
-  hourFromRatio,
-  nearestIndex,
-  parseHour,
-} from "./timeOfDayMath";
+import { clampHour, formatHour, hourFromRatio, nearestIndex, parseHour } from "./timeOfDayMath";
 import styles from "./TimeOfDayPicker.module.css";
 
 interface TimeOfDayPickerProps {
@@ -26,12 +20,7 @@ interface TimeOfDayPickerProps {
  * 标记的增删由宿主负责(定时计划行的 +/− 按钮),本控件只管摆位。
  * 视觉与「时段划分」的 24h 段条同语言(胶囊轨道 + 底部刻度 + 悬浮感)。
  */
-export function TimeOfDayPicker({
-  values,
-  onChange,
-  ariaLabel,
-  bands,
-}: TimeOfDayPickerProps) {
+export function TimeOfDayPicker({ values, onChange, ariaLabel, bands }: TimeOfDayPickerProps) {
   const hours = values.map(parseHour);
   const barRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -131,11 +120,7 @@ export function TimeOfDayPicker({
       </div>
       <div className={styles.ticks} aria-hidden>
         {[0, 6, 12, 18, 24].map((h) => (
-          <span
-            key={h}
-            className={styles.tick}
-            style={{ left: `${(h / 24) * 100}%` }}
-          >
+          <span key={h} className={styles.tick} style={{ left: `${(h / 24) * 100}%` }}>
             <span className={styles.tickMark} />
             <span className={styles.tickLabel}>{h}</span>
           </span>

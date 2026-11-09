@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  buildHeatmap,
-  buildHeatMonth,
-  clipRange,
-  dayKey,
-  parseDayKey,
-} from "./heatmapGrid";
+import { buildHeatmap, buildHeatMonth, clipRange, dayKey, parseDayKey } from "./heatmapGrid";
 
 const YEAR_2026 = { from: "2026-01-01", to: "2026-12-31" };
 

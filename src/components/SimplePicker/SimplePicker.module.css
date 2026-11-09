@@ -15,8 +15,7 @@
   min-width: 100px;
   padding: 4px 7px 4px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid
-    color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
+  border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
   background: var(--control-bg);
   font-size: 12px;
   font-weight: var(--font-weight-600);
@@ -34,11 +33,7 @@
 
 .triggerOpen {
   background: var(--surface-card);
-  border-color: color-mix(
-    in oklab,
-    var(--color-accent) 32%,
-    var(--border-default)
-  );
+  border-color: color-mix(in oklab, var(--color-accent) 32%, var(--border-default));
 }
 
 /* —— label 堆叠：候选 label 占同一 grid 格，trigger 宽度跟着最宽的 label 走 —— */

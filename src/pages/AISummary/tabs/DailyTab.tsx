@@ -30,7 +30,13 @@ import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
 import { SummaryEditor } from "./SummaryEditor";
-import { dayOffsetOf, formatGeneratedAt, modelLabel, parseDateStr, toDateStr } from "./reportFormat";
+import {
+  dayOffsetOf,
+  formatGeneratedAt,
+  modelLabel,
+  parseDateStr,
+  toDateStr,
+} from "./reportFormat";
 import styles from "./DailyTab.module.css";
 
 /** 段卡片在 UI 里的展示状态——由 ai_summaries 行 + 当前 in-flight 进度推导。 */
@@ -102,8 +108,7 @@ export default function DailyTab() {
     (settings?.ai.model ?? "").trim() !== "";
   const cloudSummaryReady = cloudRoute && cloudConfigured;
   const localSummaryAvailable =
-    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) ||
-    activeMain !== "";
+    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) || activeMain !== "";
   const hasModel = cloudRoute || localSummaryAvailable;
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
@@ -182,8 +187,9 @@ export default function DailyTab() {
 
   // AI 引擎缺失时的延后动作——保存用户原本要做的"生成日报 / 重试段"，
   // 待 ConfirmDialog 确认 + downloadBinary 跑完后再执行。null = 没有 pending。
-  const [pendingAfterDownload, setPendingAfterDownload] =
-    useState<null | (() => Promise<void>)>(null);
+  const [pendingAfterDownload, setPendingAfterDownload] = useState<null | (() => Promise<void>)>(
+    null,
+  );
 
   /** 本地路由时检查 llama.cpp 引擎是否已装；齐 → 直接跑 action；
    *  缺 → 保存 action、弹 ConfirmDialog 引导下载，confirm 后下完再续上。
@@ -264,8 +270,7 @@ export default function DailyTab() {
 
   // 是否在跑 = store 标 generating + 跑的日期跟当前 view 日期一致；
   // 切到别的日期看时按钮回到"开始总结"，不该被另一天的 run 拖累
-  const isRunningHere =
-    runSnap.generating && runSnap.runningDate === date;
+  const isRunningHere = runSnap.generating && runSnap.runningDate === date;
   const runningIdx = isRunningHere ? runSnap.runningIdx : null;
   const enginePhase = isRunningHere ? runSnap.enginePhase : null;
   const topError = runSnap.topError;
@@ -380,10 +385,7 @@ export default function DailyTab() {
         return;
       }
       if (row.status === "ok") okCount += 1;
-      else if (
-        row.status === "skipped_no_screenshots" ||
-        row.status === "skipped_no_activity"
-      )
+      else if (row.status === "skipped_no_screenshots" || row.status === "skipped_no_activity")
         skipCount += 1;
       else errCount += 1;
       if (row.model) modelName = row.model;
@@ -410,7 +412,9 @@ export default function DailyTab() {
     if (latestGeneratedAt) lines.push(`generated_at: ${latestGeneratedAt}`);
     if (modelName) lines.push(`model: ${modelName}`);
     lines.push(`segments: ${segments.length}`);
-    lines.push(`status: ${okCount} ok / ${skipCount} skipped / ${errCount} error / ${pendingCount} pending`);
+    lines.push(
+      `status: ${okCount} ok / ${skipCount} skipped / ${errCount} error / ${pendingCount} pending`,
+    );
     lines.push("---", "");
 
     // 标题 + 总览
@@ -570,8 +574,7 @@ export default function DailyTab() {
                 ? { kind: "empty" }
                 : row.status === "ok"
                   ? { kind: "ok", row }
-                  : row.status === "skipped_no_screenshots" ||
-                      row.status === "skipped_no_activity"
+                  : row.status === "skipped_no_screenshots" || row.status === "skipped_no_activity"
                     ? { kind: "skipped", row }
                     : { kind: "error", row };
 

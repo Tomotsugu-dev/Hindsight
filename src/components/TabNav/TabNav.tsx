@@ -96,14 +96,10 @@ export function TabNav({ tabs, groups, ariaLabel }: TabNavProps) {
               key={tab.labelKey}
               to={tab.to}
               end={tab.end}
-              className={({ isActive }) =>
-                `${styles.tab} ${isActive ? styles.tabActive : ""}`
-              }
+              className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ""}`}
             >
               {t(tab.labelKey)}
-              {tab.badgeKey ? (
-                <span className={styles.badge}>{t(tab.badgeKey)}</span>
-              ) : null}
+              {tab.badgeKey ? <span className={styles.badge}>{t(tab.badgeKey)}</span> : null}
             </NavLink>
           ))}
         </span>

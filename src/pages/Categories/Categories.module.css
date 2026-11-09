@@ -190,10 +190,19 @@
 /* 落地撞击：源行刚 reorder 到位时短暂"啪嗒"一下（squish + restore），
    配合 FLIP 的 back-ease 给一个有重量感的着陆 */
 @keyframes catLand {
-  0%   { transform: translateY(0) scaleY(1); }
-  35%  { transform: translateY(0) scaleY(0.94); box-shadow: 0 1px 1px rgba(20,20,40,calc(0.06 * var(--shadow-strength))); }
-  70%  { transform: translateY(0) scaleY(1.015); }
-  100% { transform: translateY(0) scaleY(1); }
+  0% {
+    transform: translateY(0) scaleY(1);
+  }
+  35% {
+    transform: translateY(0) scaleY(0.94);
+    box-shadow: 0 1px 1px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+  }
+  70% {
+    transform: translateY(0) scaleY(1.015);
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
 }
 
 .catRowLanded {
@@ -248,7 +257,10 @@
   cursor: grab;
   border-radius: var(--radius-xs);
   opacity: 0;
-  transition: opacity 140ms ease-out, color 140ms ease-out, background-color 140ms ease-out;
+  transition:
+    opacity 140ms ease-out,
+    color 140ms ease-out,
+    background-color 140ms ease-out;
   flex-shrink: 0;
 }
 
@@ -450,20 +462,12 @@
 .appListClip {
   --collapsed-h: 56px; /* 2 行 chip (24px) + 1 个 6px gap + 一点 buffer */
   position: relative;
-  width: 100%;            /* 锁宽：hover 时绝不允许横向变化 */
+  width: 100%; /* 锁宽：hover 时绝不允许横向变化 */
   box-sizing: border-box;
   display: grid;
   grid-template-rows: minmax(var(--collapsed-h), 0fr);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 65%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 65%,
-    transparent 100%
-  );
+  -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 65%, transparent 100%);
   transition:
     grid-template-rows 900ms var(--ease-out),
     -webkit-mask-image 600ms ease-out,

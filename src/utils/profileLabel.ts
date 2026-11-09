@@ -23,7 +23,5 @@ export function profileLabel(p: ExternalProfile): string {
     }
   }
   if (!provider) return model;
-  return model.toLowerCase().startsWith(provider.toLowerCase())
-    ? model
-    : `${provider} · ${model}`;
+  return model.toLowerCase().startsWith(provider.toLowerCase()) ? model : `${provider} · ${model}`;
 }

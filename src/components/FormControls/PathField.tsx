@@ -12,13 +12,7 @@ interface PathFieldProps {
   pickLabel?: string;
 }
 
-export function PathField({
-  value,
-  onChange,
-  onPick,
-  readOnly,
-  pickLabel,
-}: PathFieldProps) {
+export function PathField({ value, onChange, onPick, readOnly, pickLabel }: PathFieldProps) {
   const { t } = useTranslation();
   const label = pickLabel ?? t("components.pathField.pickLabel");
   return (

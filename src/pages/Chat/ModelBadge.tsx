@@ -128,11 +128,7 @@ export default function ModelBadge() {
         aria-expanded={open}
         aria-label={t("chat.model.pickAria")}
       >
-        {cloud ? (
-          <Cloud size={12} strokeWidth={2.2} />
-        ) : (
-          <HardDrive size={12} strokeWidth={2.2} />
-        )}
+        {cloud ? <Cloud size={12} strokeWidth={2.2} /> : <HardDrive size={12} strokeWidth={2.2} />}
         {cloud
           ? t("chat.badge.cloud", { model: ai.model })
           : localName
@@ -183,20 +179,14 @@ export default function ModelBadge() {
             >
               <HardDrive size={12} strokeWidth={2.2} />
               <span className={styles.badgeMenuLabel}>{m.filename}</span>
-              {!cloud && localName === m.filename && (
-                <Check size={12} strokeWidth={2.4} />
-              )}
+              {!cloud && localName === m.filename && <Check size={12} strokeWidth={2.4} />}
             </button>
           ))}
-          {localModels.length === 0 &&
-            ai.externalProfiles.length === 0 &&
-            !chatCloudReady(ai) && (
-              <p className={styles.badgeMenuEmpty}>
-                {hasToollessOnly
-                  ? t("chat.model.noToolUseModels")
-                  : t("chat.model.empty")}
-              </p>
-            )}
+          {localModels.length === 0 && ai.externalProfiles.length === 0 && !chatCloudReady(ai) && (
+            <p className={styles.badgeMenuEmpty}>
+              {hasToollessOnly ? t("chat.model.noToolUseModels") : t("chat.model.empty")}
+            </p>
+          )}
         </div>
       )}
     </span>

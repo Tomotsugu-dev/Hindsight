@@ -118,8 +118,7 @@ export default function TodayPage() {
     setSelectedApp(null);
     setHoverAppId(null);
   }, [offset, selectedDeviceId]);
-  const handleHourClick = (h: number) =>
-    setSelectedHour((prev) => (prev === h ? null : h));
+  const handleHourClick = (h: number) => setSelectedHour((prev) => (prev === h ? null : h));
   // 点页面任何非柱子区域 → 清除选中
   useClickOutsideBars(selectedHour !== null, () => setSelectedHour(null));
 
@@ -145,11 +144,8 @@ export default function TodayPage() {
   const totalMinutes = useMemo(
     () =>
       Math.round(
-          hours.reduce(
-            (sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0),
-            0,
-          ) / 60,
-        ),
+        hours.reduce((sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0), 0) / 60,
+      ),
     [hours],
   );
 
@@ -163,11 +159,9 @@ export default function TodayPage() {
   const scopedMinutes = useMemo(
     () =>
       Math.round(
-          segmentsForRanks.reduce(
-            (sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0),
-            0,
-          ) / 60,
-        ),
+        segmentsForRanks.reduce((sum, h) => sum + h.segments.reduce((s, x) => s + x.secs, 0), 0) /
+          60,
+      ),
     [segmentsForRanks],
   );
   const appsForRanks = useMemo(
@@ -176,11 +170,7 @@ export default function TodayPage() {
   );
   // The switch is only in the bar chart's legend, so the share view keeps ranking by category.
   const rankLevel = view === "bars" ? barLevel : "cats";
-  const { categoryRanks, appRanks } = usePeriodRankings(
-    segmentsForRanks,
-    appsForRanks,
-    rankLevel,
-  );
+  const { categoryRanks, appRanks } = usePeriodRankings(segmentsForRanks, appsForRanks, rankLevel);
 
   // —— 占比视图三 slide 的 super-category 聚合 —— //
   // prev/curr/next 三天分别算 cat-minutes，再各跑一遍 useSuperCategoryBreakdown
@@ -206,9 +196,7 @@ export default function TodayPage() {
   // - 标题改为「主要应用」/「分类构成」（复用 PieDrillDetail 已有 i18n key）
   // - app 排行只留在这些分类里有时间的应用，只显示这部分时间；category 排行只留该大类下属
   const drilledSlice =
-    drillId !== null
-      ? currBreakdown.slices.find((s) => s.id === drillId) ?? null
-      : null;
+    drillId !== null ? (currBreakdown.slices.find((s) => s.id === drillId) ?? null) : null;
   const childCatIds = useMemo(
     () => (drilledSlice ? new Set(drilledSlice.cats.map((c) => c.id)) : null),
     [drilledSlice],
@@ -228,15 +216,11 @@ export default function TodayPage() {
     [appRanks, childCatIds, pickedCat],
   );
   const displayedCategoryRanks = useMemo(
-    () =>
-      childCatIds
-        ? categoryRanks.filter((r) => childCatIds.has(r.id))
-        : categoryRanks,
+    () => (childCatIds ? categoryRanks.filter((r) => childCatIds.has(r.id)) : categoryRanks),
     [categoryRanks, childCatIds],
   );
-  const appsTitle = pickedCat || drilledSlice
-    ? t("today.pie.drill.appsTitle")
-    : t("today.ranks.topApps");
+  const appsTitle =
+    pickedCat || drilledSlice ? t("today.pie.drill.appsTitle") : t("today.ranks.topApps");
   const categoriesTitle = drilledSlice
     ? t("today.pie.drill.categoriesTitle")
     : rankLevel === "supers"
@@ -378,9 +362,7 @@ export default function TodayPage() {
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{appsTitle}</h2>
             <div className={styles.cardHeadRight}>
-              {selectionLabel && (
-                <span className={styles.selectionLabel}>{selectionLabel}</span>
-              )}
+              {selectionLabel && <span className={styles.selectionLabel}>{selectionLabel}</span>}
               {/* 总活动时间：
                   - 选中某小时 → 该小时总时长（跟下方 apps 列表 scope 一致）
                   - 否则选中小类时 → 该小类小计
@@ -404,9 +386,7 @@ export default function TodayPage() {
             <ScrollBox maxHeight={280}>
               <RankedList
                 items={displayedAppRanks}
-                onItemHover={
-                  view === "pie" ? (item) => setHoverAppId(item?.id ?? null) : undefined
-                }
+                onItemHover={view === "pie" ? (item) => setHoverAppId(item?.id ?? null) : undefined}
                 onItemClick={(item) =>
                   setSelectedApp({
                     name: item.name,
@@ -427,9 +407,7 @@ export default function TodayPage() {
         <section className={styles.card} data-part="card" data-keeps-bar-selection>
           <header className={styles.cardHead}>
             <h2 className={styles.cardTitle}>{categoriesTitle}</h2>
-            {selectionLabel && (
-              <span className={styles.selectionLabel}>{selectionLabel}</span>
-            )}
+            {selectionLabel && <span className={styles.selectionLabel}>{selectionLabel}</span>}
           </header>
           {displayedCategoryRanks.length > 0 ? (
             <div className={styles.rankBody}>

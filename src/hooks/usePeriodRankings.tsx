@@ -49,10 +49,7 @@ export function usePeriodRankings(
         color: row.color,
         minutes: Math.round((ranks.get(row.id)?.secs ?? 0) / 60),
         extras: (
-          <AppStack
-            apps={ranks.get(row.id)?.iconProcesses ?? []}
-            fallbackColor={row.color}
-          />
+          <AppStack apps={ranks.get(row.id)?.iconProcesses ?? []} fallbackColor={row.color} />
         ),
       }))
       .filter((c) => c.minutes > 0)

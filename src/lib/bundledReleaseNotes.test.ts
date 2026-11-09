@@ -3,8 +3,8 @@ import { BUNDLED_VERSIONS, dropVersionLine, loadBundledReleaseNotes } from "./bu
 
 describe("BUNDLED_VERSIONS", () => {
   it("lists versions newest first, comparing numbers rather than text", () => {
-    const order = ["0.9.3", "0.9.2", "0.8.10", "0.8.9", "0.8.6", "0.8.6-beta.1", "0.8.0"].map(
-      (v) => BUNDLED_VERSIONS.indexOf(v),
+    const order = ["0.9.3", "0.9.2", "0.8.10", "0.8.9", "0.8.6", "0.8.6-beta.1", "0.8.0"].map((v) =>
+      BUNDLED_VERSIONS.indexOf(v),
     );
     expect(order).not.toContain(-1);
     expect([...order].sort((a, b) => a - b)).toEqual(order);

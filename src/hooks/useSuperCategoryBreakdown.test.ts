@@ -10,10 +10,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
-import {
-  catMinutesFromSegments,
-  completedDaysOf,
-} from "./useSuperCategoryBreakdown";
+import { catMinutesFromSegments, completedDaysOf } from "./useSuperCategoryBreakdown";
 
 describe("completedDaysOf(日均分母口径:只算已完成自然天)", () => {
   beforeEach(() => {
@@ -35,10 +32,7 @@ describe("completedDaysOf(日均分母口径:只算已完成自然天)", () => {
     ];
     // 今天只过了半天,计入分母会让"日均"失真——半天的数据配一整天的分母;
     // 今天零点这个精确边界值也必须剔除(d.date < 今天零点 是严格小于)
-    expect(completedDaysOf(days).map((d) => d.label)).toEqual([
-      "前天",
-      "昨天最后一秒",
-    ]);
+    expect(completedDaysOf(days).map((d) => d.label)).toEqual(["前天", "昨天最后一秒"]);
   });
 
   it("过去周期(整周都早于今天)天然全量保留", () => {
@@ -82,24 +76,22 @@ describe("catMinutesFromSegments(先累秒后取整口径)", () => {
       .map((b) => Math.round(b.segments[0].secs / 60))
       .reduce((a, b) => a + b, 0);
     expect(perBucketSum).toBe(6); // 锚定"错误口径确实会偏"这一前提
-    expect(catMinutesFromSegments(buckets)).toEqual([
-      { id: "work", minutes: 5 },
-    ]);
+    expect(catMinutesFromSegments(buckets)).toEqual([{ id: "work", minutes: 5 }]);
   });
 
   it("四舍五入在总和上做:29s → 0 分钟,30s → 1 分钟", () => {
-    expect(
-      catMinutesFromSegments([{ segments: [{ categoryId: "a", secs: 29 }] }]),
-    ).toEqual([{ id: "a", minutes: 0 }]);
-    expect(
-      catMinutesFromSegments([{ segments: [{ categoryId: "a", secs: 30 }] }]),
-    ).toEqual([{ id: "a", minutes: 1 }]);
+    expect(catMinutesFromSegments([{ segments: [{ categoryId: "a", secs: 29 }] }])).toEqual([
+      { id: "a", minutes: 0 },
+    ]);
+    expect(catMinutesFromSegments([{ segments: [{ categoryId: "a", secs: 30 }] }])).toEqual([
+      { id: "a", minutes: 1 },
+    ]);
   });
 
   it("0 秒分类也返回条目(minutes=0),过滤是下游 breakdown 的职责", () => {
-    expect(
-      catMinutesFromSegments([{ segments: [{ categoryId: "idle", secs: 0 }] }]),
-    ).toEqual([{ id: "idle", minutes: 0 }]);
+    expect(catMinutesFromSegments([{ segments: [{ categoryId: "idle", secs: 0 }] }])).toEqual([
+      { id: "idle", minutes: 0 },
+    ]);
   });
 
   it("空源 / 空 segments → 空数组", () => {

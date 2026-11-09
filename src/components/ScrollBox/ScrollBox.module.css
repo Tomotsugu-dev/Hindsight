@@ -47,18 +47,8 @@
 
 /* 已滚到底 → 底端不再渐隐 */
 .box.atBottom {
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--fade-size),
-    #000 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--fade-size),
-    #000 100%
-  );
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-size), #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-size), #000 100%);
 }
 
 /* 内容根本没溢出（顶且底）→ 完全不渐隐 */

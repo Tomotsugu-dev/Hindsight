@@ -29,8 +29,7 @@ export function ScrollIndicator({ targetRef, className }: ScrollIndicatorProps) 
     const el = targetRef.current;
     if (!el) return;
 
-    const sync = () =>
-      setGeo(thumbGeometry(el.scrollTop, el.scrollHeight, el.clientHeight));
+    const sync = () => setGeo(thumbGeometry(el.scrollTop, el.scrollHeight, el.clientHeight));
     const onScroll = () => {
       sync();
       // "滚动中"高亮:短暂加深,停手 600ms 后回落

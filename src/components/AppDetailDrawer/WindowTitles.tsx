@@ -84,20 +84,17 @@ export function WindowTitles({
     [],
   );
 
-  const resolveRuleTargets = useCallback(
-    async (groupId: string, iconProcess: string) => {
-      try {
-        if (!groupsRef.current) groupsRef.current = await api.listAppGroups();
-        const g = groupsRef.current.find((grp) => grp.id === groupId);
-        const names = g?.members.map((m) => m.processName) ?? [];
-        return names.length > 0 ? names : [iconProcess];
-      } catch {
-        // 组列表拉不到就退化成只对代表进程建规则——宁可少盖也别整个失败
-        return [iconProcess];
-      }
-    },
-    [],
-  );
+  const resolveRuleTargets = useCallback(async (groupId: string, iconProcess: string) => {
+    try {
+      if (!groupsRef.current) groupsRef.current = await api.listAppGroups();
+      const g = groupsRef.current.find((grp) => grp.id === groupId);
+      const names = g?.members.map((m) => m.processName) ?? [];
+      return names.length > 0 ? names : [iconProcess];
+    } catch {
+      // 组列表拉不到就退化成只对代表进程建规则——宁可少盖也别整个失败
+      return [iconProcess];
+    }
+  }, []);
 
   const ignoreTitle = useCallback(
     async (rawTitle: string) => {

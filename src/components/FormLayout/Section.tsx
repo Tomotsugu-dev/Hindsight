@@ -48,29 +48,17 @@ export function Section({
           <div className={styles.titleRow}>
             <h2 className={styles.title}>{title}</h2>
             {info ? (
-              <button
-                type="button"
-                className={styles.infoWrap}
-                aria-label={info}
-              >
-                <Info
-                  size={14}
-                  strokeWidth={1.85}
-                  className={styles.infoIcon}
-                />
+              <button type="button" className={styles.infoWrap} aria-label={info}>
+                <Info size={14} strokeWidth={1.85} className={styles.infoIcon} />
                 <span className={styles.infoTip} role="tooltip">
                   {info}
                 </span>
               </button>
             ) : null}
           </div>
-          {description ? (
-            <p className={styles.description}>{description}</p>
-          ) : null}
+          {description ? <p className={styles.description}>{description}</p> : null}
         </div>
-        {headerAction ? (
-          <div className={styles.headerAction}>{headerAction}</div>
-        ) : null}
+        {headerAction ? <div className={styles.headerAction}>{headerAction}</div> : null}
       </header>
       {/* collapsible 时外层 cardWrap 走 grid-rows trick；非 collapsible 直接渲 card */}
       {bare ? (

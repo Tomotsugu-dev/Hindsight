@@ -281,8 +281,14 @@
 }
 
 @keyframes reportFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 错误条上的关闭按钮 X：让用户能主动 dismiss 旧错误，不被它一直挡视线 */
@@ -300,7 +306,9 @@
   color: inherit;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity 120ms var(--ease-out), background 120ms var(--ease-out);
+  transition:
+    opacity 120ms var(--ease-out),
+    background 120ms var(--ease-out);
 }
 
 .errorClose:hover {
@@ -333,7 +341,9 @@
 }
 
 @keyframes reportPulse {
-  50% { opacity: 0.5; }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* —— 生成失败 —— */
@@ -365,8 +375,12 @@
 }
 
 @keyframes reportSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

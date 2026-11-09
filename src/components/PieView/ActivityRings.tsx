@@ -88,12 +88,7 @@ function arcPath(c: number, r: number, a0: number, a1: number): string {
  * 把一圈按比例切成首尾相接的几段，每段留缝；圆头会从端点伸出半个线宽，按线宽把两头往里收。
  * 太短收不下圆头的段缩成一个点。返回 SVG 角度。
  */
-function segmentAngles(
-  spans: number[],
-  r: number,
-  width: number,
-  gap: number,
-): [number, number][] {
+function segmentAngles(spans: number[], r: number, width: number, gap: number): [number, number][] {
   const cap = width / 2 / r;
   const pad = gap / r;
   let acc = TOP;
@@ -250,7 +245,8 @@ export function ActivityRings({
       : OTHERS_ID
     : null;
   // tagCatId 在单环上是哪一段（太小并进了「其他」就是「其他」）
-  const tagCat = pinned && tagCatId ? (pinned.cats.find((cat) => cat.id === tagCatId) ?? null) : null;
+  const tagCat =
+    pinned && tagCatId ? (pinned.cats.find((cat) => cat.id === tagCatId) ?? null) : null;
   const tagSegId = tagCat
     ? single.segments.some((s) => s.id === tagCat.id)
       ? tagCat.id
@@ -345,43 +341,45 @@ export function ActivityRings({
         );
       })()
     : null;
-  const frame = zoomFrame ?? slices.map((s, i) => {
-    const lit = litSuperId === null || litSuperId === s.id;
-    const bold = litSuperId === s.id;
-    const color = s.color;
-    const span = (s.minutes / total) * 2 * Math.PI;
-    const Icon = span >= frameIconMinSpan ? resolveCategoryIcon(s.icon) : null;
-    const at = polar(c, frameR, frameSegs[i][0] + (CHIP - FRAME_BOLD / 2) / frameR);
-    return (
-      <g
-        key={s.id}
-        className={`${styles.frameGroup} ${lit ? "" : styles.dim} ${interactive ? styles.interactive : ""}`}
-        onMouseEnter={() => interactive && setFrameHover(s.id)}
-        onMouseLeave={() => interactive && setFrameHover(null)}
-        onClick={() => interactive && onSuperClick?.(s.id)}
-      >
-        <path
-          className={styles.frame}
-          d={arcPath(c, frameR, frameSegs[i][0], frameSegs[i][1])}
-          stroke={color}
-          style={{ strokeWidth: bold ? FRAME_BOLD : FRAME }}
-        />
-        {Icon && (
-          <g className={styles.chip}>
-            <circle cx={at.x} cy={at.y} r={CHIP} fill={color} />
-            <Icon
-              x={at.x - 5.5}
-              y={at.y - 5.5}
-              size={11}
-              color="#fff"
-              strokeWidth={2.6}
-              aria-hidden
-            />
-          </g>
-        )}
-      </g>
-    );
-  });
+  const frame =
+    zoomFrame ??
+    slices.map((s, i) => {
+      const lit = litSuperId === null || litSuperId === s.id;
+      const bold = litSuperId === s.id;
+      const color = s.color;
+      const span = (s.minutes / total) * 2 * Math.PI;
+      const Icon = span >= frameIconMinSpan ? resolveCategoryIcon(s.icon) : null;
+      const at = polar(c, frameR, frameSegs[i][0] + (CHIP - FRAME_BOLD / 2) / frameR);
+      return (
+        <g
+          key={s.id}
+          className={`${styles.frameGroup} ${lit ? "" : styles.dim} ${interactive ? styles.interactive : ""}`}
+          onMouseEnter={() => interactive && setFrameHover(s.id)}
+          onMouseLeave={() => interactive && setFrameHover(null)}
+          onClick={() => interactive && onSuperClick?.(s.id)}
+        >
+          <path
+            className={styles.frame}
+            d={arcPath(c, frameR, frameSegs[i][0], frameSegs[i][1])}
+            stroke={color}
+            style={{ strokeWidth: bold ? FRAME_BOLD : FRAME }}
+          />
+          {Icon && (
+            <g className={styles.chip}>
+              <circle cx={at.x} cy={at.y} r={CHIP} fill={color} />
+              <Icon
+                x={at.x - 5.5}
+                y={at.y - 5.5}
+                size={11}
+                color="#fff"
+                strokeWidth={2.6}
+                aria-hidden
+              />
+            </g>
+          )}
+        </g>
+      );
+    });
 
   // —— 圆心 ——
   const maxChars = holeR < 45 ? 5 : holeR < 70 ? 7 : 10;
@@ -448,137 +446,132 @@ export function ActivityRings({
             transformOrigin: `${c}px ${c}px`,
           }}
         >
-        {frame}
+          {frame}
 
-        {pinned ? (
-          // 单环：一整圈 = 这个大类，各段 = 小类占它的比例；换大类时换 key，各段重新画出来
-          <g key={`single:${pinned.id}`}>
-            {/* 分三层画：各段的线 → 应用那部分的全色线 → 各段开头的图标，图标不会被全色线盖住 */}
-            {single.segments.map((seg, i) => (
-              <path
-                key={seg.id}
-                className={`${styles.segment} ${segClass(seg.id)} ${seg.id === OTHERS_ID ? "" : styles.interactive}`}
-                d={arcPath(c, singleR, singleSegs[i][0], singleSegs[i][1])}
-                stroke={seg.color}
-                strokeWidth={RING}
-                pathLength={1}
-                style={{ animationDelay: `${i * 60}ms` }}
-                onMouseEnter={() => setSegHover(seg.id)}
-                onMouseLeave={() => setSegHover(null)}
-                onClick={() => seg.id !== OTHERS_ID && onCatClick?.(seg.id)}
-              />
-            ))}
-            {/* 停在应用上：它在小类那段里占的部分画成全色；换应用时换 key，重新画出来 */}
-            {focus && appArc && (
-              <path
-                key={`app:${focus.groupId}`}
-                className={styles.progress}
-                d={arcPath(c, singleR, appArc.a0, Math.max(appArc.end, appArc.a0 + 0.001))}
-                stroke={focus.color}
-                strokeWidth={RING}
-                pathLength={1}
-              />
-            )}
-            {single.segments.map((seg, i) => {
-              // 段的开头放小类图标，圆片的前沿对齐圆头的前沿；放不下圆片再加一点线段的段不放
-              const span = single.fractions[i] * 2 * Math.PI;
-              if (span < singleIconMinSpan) return null;
-              const Icon = seg.id === OTHERS_ID ? Ellipsis : catIcon(seg.id);
-              const at = polar(c, singleR, singleSegs[i][0] + (CHIP - RING / 2) / singleR);
-              // 明暗放在外层：弹出动画结束后会一直占着 opacity，跟明暗放在同一个元素上就不生效
-              return (
-                <g
-                  key={`chip:${seg.id}`}
-                  className={`${styles.ring} ${segClass(seg.id)} ${seg.id === OTHERS_ID ? "" : styles.interactive}`}
+          {pinned ? (
+            // 单环：一整圈 = 这个大类，各段 = 小类占它的比例；换大类时换 key，各段重新画出来
+            <g key={`single:${pinned.id}`}>
+              {/* 分三层画：各段的线 → 应用那部分的全色线 → 各段开头的图标，图标不会被全色线盖住 */}
+              {single.segments.map((seg, i) => (
+                <path
+                  key={seg.id}
+                  className={`${styles.segment} ${segClass(seg.id)} ${seg.id === OTHERS_ID ? "" : styles.interactive}`}
+                  d={arcPath(c, singleR, singleSegs[i][0], singleSegs[i][1])}
+                  stroke={seg.color}
+                  strokeWidth={RING}
+                  pathLength={1}
+                  style={{ animationDelay: `${i * 60}ms` }}
                   onMouseEnter={() => setSegHover(seg.id)}
                   onMouseLeave={() => setSegHover(null)}
                   onClick={() => seg.id !== OTHERS_ID && onCatClick?.(seg.id)}
-                >
-                  <g className={styles.chip} style={{ animationDelay: `${i * 60}ms` }}>
+                />
+              ))}
+              {/* 停在应用上：它在小类那段里占的部分画成全色；换应用时换 key，重新画出来 */}
+              {focus && appArc && (
+                <path
+                  key={`app:${focus.groupId}`}
+                  className={styles.progress}
+                  d={arcPath(c, singleR, appArc.a0, Math.max(appArc.end, appArc.a0 + 0.001))}
+                  stroke={focus.color}
+                  strokeWidth={RING}
+                  pathLength={1}
+                />
+              )}
+              {single.segments.map((seg, i) => {
+                // 段的开头放小类图标，圆片的前沿对齐圆头的前沿；放不下圆片再加一点线段的段不放
+                const span = single.fractions[i] * 2 * Math.PI;
+                if (span < singleIconMinSpan) return null;
+                const Icon = seg.id === OTHERS_ID ? Ellipsis : catIcon(seg.id);
+                const at = polar(c, singleR, singleSegs[i][0] + (CHIP - RING / 2) / singleR);
+                // 明暗放在外层：弹出动画结束后会一直占着 opacity，跟明暗放在同一个元素上就不生效
+                return (
+                  <g
+                    key={`chip:${seg.id}`}
+                    className={`${styles.ring} ${segClass(seg.id)} ${seg.id === OTHERS_ID ? "" : styles.interactive}`}
+                    onMouseEnter={() => setSegHover(seg.id)}
+                    onMouseLeave={() => setSegHover(null)}
+                    onClick={() => seg.id !== OTHERS_ID && onCatClick?.(seg.id)}
+                  >
+                    <g className={styles.chip} style={{ animationDelay: `${i * 60}ms` }}>
+                      <circle cx={at.x} cy={at.y} r={CHIP} fill={seg.color} />
+                      <Icon
+                        x={at.x - 5.5}
+                        y={at.y - 5.5}
+                        size={11}
+                        color="#fff"
+                        strokeWidth={2.6}
+                        aria-hidden
+                      />
+                    </g>
+                  </g>
+                );
+              })}
+              {/* 钉住时点圆心取消钉住，回到同心环；停在应用上时圆心不接点击 */}
+              {pinnedSlice && !focus && (
+                <circle
+                  className={styles.interactive}
+                  cx={c}
+                  cy={c}
+                  r={holeR}
+                  fill="transparent"
+                  onClick={() => onSuperClick?.(pinnedSlice.id)}
+                />
+              )}
+            </g>
+          ) : (
+            <g key="rings">
+              {draw.map((ring) => {
+                const r = ringR(ring.index);
+                const color = ring.color;
+                const span = Math.min(ring.minutes / total, 1) * 2 * Math.PI;
+                const dim =
+                  litRingId !== null
+                    ? litRingId !== ring.hoverId
+                    : emphasisSuperId !== null && ring.superId !== emphasisSuperId;
+                const delay = { animationDelay: `${ring.index * 80}ms` };
+                const Icon = ring.icon;
+                return (
+                  <g
+                    key={ring.key}
+                    className={`${styles.ring} ${dim ? styles.dim : ""} ${interactive ? styles.interactive : ""}`}
+                    onMouseEnter={() => interactive && setRingHover(ring.hoverId)}
+                    onMouseLeave={() => interactive && setRingHover(null)}
+                    onClick={() => interactive && onCatClick?.(ring.hoverId)}
+                  >
+                    {/* 底下的淡轨道：整圈，环有多长一眼看得出 */}
                     <circle
-                      cx={at.x}
-                      cy={at.y}
-                      r={CHIP}
-                      fill={seg.color}
+                      className={styles.track}
+                      cx={c}
+                      cy={c}
+                      r={r}
+                      stroke={`color-mix(in oklab, ${color} 14%, transparent)`}
+                      strokeWidth={RING}
                     />
-                    <Icon
-                      x={at.x - 5.5}
-                      y={at.y - 5.5}
-                      size={11}
-                      color="#fff"
-                      strokeWidth={2.6}
-                      aria-hidden
+                    <path
+                      className={styles.progress}
+                      d={arcPath(c, r, TOP, TOP + Math.max(span, 0.001))}
+                      stroke={color}
+                      strokeWidth={RING}
+                      pathLength={1}
+                      style={delay}
                     />
+                    {/* 起点的图标：圆形色块里放分类图标 */}
+                    <g className={styles.chip} style={delay}>
+                      <circle cx={c} cy={c - r} r={CHIP} fill={color} />
+                      <Icon
+                        x={c - 5.5}
+                        y={c - r - 5.5}
+                        size={11}
+                        color="#fff"
+                        strokeWidth={2.6}
+                        aria-hidden
+                      />
+                    </g>
                   </g>
-                </g>
-              );
-            })}
-            {/* 钉住时点圆心取消钉住，回到同心环；停在应用上时圆心不接点击 */}
-            {pinnedSlice && !focus && (
-              <circle
-                className={styles.interactive}
-                cx={c}
-                cy={c}
-                r={holeR}
-                fill="transparent"
-                onClick={() => onSuperClick?.(pinnedSlice.id)}
-              />
-            )}
-          </g>
-        ) : (
-          <g key="rings">
-            {draw.map((ring) => {
-              const r = ringR(ring.index);
-              const color = ring.color;
-              const span = Math.min(ring.minutes / total, 1) * 2 * Math.PI;
-              const dim =
-                litRingId !== null
-                  ? litRingId !== ring.hoverId
-                  : emphasisSuperId !== null && ring.superId !== emphasisSuperId;
-              const delay = { animationDelay: `${ring.index * 80}ms` };
-              const Icon = ring.icon;
-              return (
-                <g
-                  key={ring.key}
-                  className={`${styles.ring} ${dim ? styles.dim : ""} ${interactive ? styles.interactive : ""}`}
-                  onMouseEnter={() => interactive && setRingHover(ring.hoverId)}
-                  onMouseLeave={() => interactive && setRingHover(null)}
-                  onClick={() => interactive && onCatClick?.(ring.hoverId)}
-                >
-                  {/* 底下的淡轨道：整圈，环有多长一眼看得出 */}
-                  <circle
-                    className={styles.track}
-                    cx={c}
-                    cy={c}
-                    r={r}
-                    stroke={`color-mix(in oklab, ${color} 14%, transparent)`}
-                    strokeWidth={RING}
-                  />
-                  <path
-                    className={styles.progress}
-                    d={arcPath(c, r, TOP, TOP + Math.max(span, 0.001))}
-                    stroke={color}
-                    strokeWidth={RING}
-                    pathLength={1}
-                    style={delay}
-                  />
-                  {/* 起点的图标：圆形色块里放分类图标 */}
-                  <g className={styles.chip} style={delay}>
-                    <circle cx={c} cy={c - r} r={CHIP} fill={color} />
-                    <Icon
-                      x={c - 5.5}
-                      y={c - r - 5.5}
-                      size={11}
-                      color="#fff"
-                      strokeWidth={2.6}
-                      aria-hidden
-                    />
-                  </g>
-                </g>
-              );
-            })}
-          </g>
-        )}
+                );
+              })}
+            </g>
+          )}
         </g>
 
         {/* 引线：从气泡往里穿过大类那段、小类那段，指到应用那段（缩完才开始画）；换应用时换 key，重新画 */}
@@ -675,7 +668,6 @@ export function ActivityRings({
           <AppIcon processName={focus.iconProcess} fallbackColor={focus.color} size={16} />
         </div>
       )}
-
     </div>
   );
 }

@@ -106,7 +106,8 @@ export function PieView({
   };
 
   // 下面那排小类：钉住大类时只列它下面的，占比按占这个大类算；否则列全部，按占全部时间算
-  const pinnedSlice = interactive && pinnedId ? (slices.find((s) => s.id === pinnedId) ?? null) : null;
+  const pinnedSlice =
+    interactive && pinnedId ? (slices.find((s) => s.id === pinnedId) ?? null) : null;
   const tagOf = pinnedSlice ? pinnedSlice.minutes : total;
   const tags = (pinnedSlice ? [pinnedSlice] : slices)
     .flatMap((s) => s.cats.map((cat) => ({ ...cat, superId: s.id })))
@@ -129,11 +130,7 @@ export function PieView({
       className={styles.body}
       data-part="chart"
       data-depth={depth}
-      style={
-        interactive
-          ? ({ viewTransitionName: "pie-body" })
-          : undefined
-      }
+      style={interactive ? { viewTransitionName: "pie-body" } : undefined}
     >
       <div ref={donutRef} className={styles.donutWrap}>
         {depth === "cats" ? (
@@ -194,9 +191,7 @@ export function PieView({
               <button
                 type="button"
                 className={styles.row}
-                style={
-                  { "--row-color": s.color } as CSSProperties
-                }
+                style={{ "--row-color": s.color } as CSSProperties}
                 data-active={isActive || undefined}
                 data-dim={dim || undefined}
                 onMouseEnter={() => interactive && setHover(s.id)}
@@ -209,10 +204,7 @@ export function PieView({
                 </span>
                 <span className={styles.name}>{s.name}</span>
                 <span className={styles.barWrap}>
-                  <span
-                    className={styles.barFill}
-                    style={{ width: `${pct}%` }}
-                  />
+                  <span className={styles.barFill} style={{ width: `${pct}%` }} />
                 </span>
                 <span className={styles.num}>
                   <span className={styles.pct}>{pct}%</span>
@@ -238,9 +230,7 @@ export function PieView({
                 <button
                   type="button"
                   className={styles.tag}
-                  style={
-                    { "--row-color": cat.color } as CSSProperties
-                  }
+                  style={{ "--row-color": cat.color } as CSSProperties}
                   data-active={isActive || undefined}
                   data-dim={dim || undefined}
                   aria-pressed={interactive ? pickedCatId === cat.id : undefined}

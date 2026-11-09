@@ -163,10 +163,7 @@ function SpinPart({ value, max, onChange, ariaLabel }: SpinPartProps) {
 function DigitColumn({ digit }: { digit: number }) {
   return (
     <span className={styles.column} aria-hidden>
-      <span
-        className={styles.strip}
-        style={{ transform: `translateY(-${digit}em)` }}
-      >
+      <span className={styles.strip} style={{ transform: `translateY(-${digit}em)` }}>
         {Array.from({ length: 10 }, (_, i) => (
           <span key={i} className={styles.digit}>
             {i}

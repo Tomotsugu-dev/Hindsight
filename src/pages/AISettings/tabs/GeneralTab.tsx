@@ -1,14 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  CalendarClock,
-  Clock,
-  Filter,
-  Minus,
-  Plus,
-  ScanText,
-  Timer,
-} from "lucide-react";
+import { CalendarClock, Clock, Filter, Minus, Plus, ScanText, Timer } from "lucide-react";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
@@ -37,11 +29,7 @@ export default function GeneralTab() {
   // legacy 自愈:此前"自动总结开 + 未指定时刻 = 尽快"的老配置,
   // 首次进入本页补写默认 23:00,让滑条显示与实际行为一致
   useEffect(() => {
-    if (
-      ai?.autoSummary &&
-      ai.autoSummaryTimes.length === 0 &&
-      ai.autoSummaryAt == null
-    ) {
+    if (ai?.autoSummary && ai.autoSummaryTimes.length === 0 && ai.autoSummaryAt == null) {
       updateAi({ autoSummaryTimes: ["23:00"] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,9 +118,7 @@ export default function GeneralTab() {
           >
             <TimeOfDayPicker
               values={summaryTimes.length > 0 ? summaryTimes : ["23:00"]}
-              onChange={(next) =>
-                updateAi({ autoSummaryTimes: next, autoSummaryAt: null })
-              }
+              onChange={(next) => updateAi({ autoSummaryTimes: next, autoSummaryAt: null })}
               ariaLabel={t("aiSettings.autoSummary.timeLabel")}
               bands={ai.segments}
             />
@@ -178,9 +164,7 @@ export default function GeneralTab() {
                 <button
                   type="button"
                   className={styles.timeDotBtn}
-                  onClick={() =>
-                    update({ memoryOcrDailyTimes: ocrTimes.slice(0, -1) })
-                  }
+                  onClick={() => update({ memoryOcrDailyTimes: ocrTimes.slice(0, -1) })}
                   disabled={ocrTimes.length <= 1}
                   aria-label={t("aiSettings.autoSummary.removeTimeAria")}
                 >

@@ -70,16 +70,8 @@ export function Row({
               {label}
             </span>
             {labelHint ? (
-              <button
-                type="button"
-                className={styles.infoWrap}
-                aria-label={labelHint}
-              >
-                <Info
-                  size={14}
-                  strokeWidth={1.85}
-                  className={styles.infoIcon}
-                />
+              <button type="button" className={styles.infoWrap} aria-label={labelHint}>
+                <Info size={14} strokeWidth={1.85} className={styles.infoIcon} />
                 <span className={styles.infoTip} role="tooltip">
                   {labelHint}
                 </span>
@@ -87,15 +79,11 @@ export function Row({
             ) : null}
             {actions ? <span className={styles.actions}>{actions}</span> : null}
           </span>
-          {description ? (
-            <span className={styles.description}>{description}</span>
-          ) : null}
+          {description ? <span className={styles.description}>{description}</span> : null}
         </div>
       </div>
       <div className={styles.control}>
-        <RowLabelContext.Provider value={labelId}>
-          {children}
-        </RowLabelContext.Provider>
+        <RowLabelContext.Provider value={labelId}>{children}</RowLabelContext.Provider>
       </div>
     </div>
   );

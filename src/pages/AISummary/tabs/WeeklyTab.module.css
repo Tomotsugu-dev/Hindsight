@@ -46,11 +46,21 @@
   outline-offset: 2px;
 }
 
-.tile[data-level="1"] { --heat: 14%; }
-.tile[data-level="2"] { --heat: 30%; }
-.tile[data-level="3"] { --heat: 48%; }
-.tile[data-level="4"] { --heat: 68%; }
-.tile[data-level="5"] { --heat: 100%; }
+.tile[data-level="1"] {
+  --heat: 14%;
+}
+.tile[data-level="2"] {
+  --heat: 30%;
+}
+.tile[data-level="3"] {
+  --heat: 48%;
+}
+.tile[data-level="4"] {
+  --heat: 68%;
+}
+.tile[data-level="5"] {
+  --heat: 100%;
+}
 
 /* 浅色主题最深一级换白字，其余用深字，对比度都在 4.5 以上 */
 .tile[data-level="5"] {
@@ -58,10 +68,18 @@
 }
 
 /* 深色主题整体压暗一档：满色的主题色在黑底上太刺眼。这几档用默认的浅字就够 */
-:global([data-mode="dark"]) .tile[data-level="1"] { --heat: 12%; }
-:global([data-mode="dark"]) .tile[data-level="2"] { --heat: 24%; }
-:global([data-mode="dark"]) .tile[data-level="3"] { --heat: 38%; }
-:global([data-mode="dark"]) .tile[data-level="4"] { --heat: 56%; }
+:global([data-mode="dark"]) .tile[data-level="1"] {
+  --heat: 12%;
+}
+:global([data-mode="dark"]) .tile[data-level="2"] {
+  --heat: 24%;
+}
+:global([data-mode="dark"]) .tile[data-level="3"] {
+  --heat: 38%;
+}
+:global([data-mode="dark"]) .tile[data-level="4"] {
+  --heat: 56%;
+}
 
 :global([data-mode="dark"]) .tile[data-level="5"] {
   --heat: 78%;
@@ -159,8 +177,14 @@
 }
 
 @keyframes panelIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 整周回顾：一整段连贯的文字，按文章排 */

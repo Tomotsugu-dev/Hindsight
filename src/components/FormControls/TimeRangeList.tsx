@@ -35,15 +35,9 @@ export function TimeRangeList({ ranges, onChange }: TimeRangeListProps) {
       ) : (
         ranges.map((range, i) => (
           <div key={i} className={styles.row}>
-            <TimeField
-              value={range.start}
-              onChange={(v) => update(i, { start: v })}
-            />
+            <TimeField value={range.start} onChange={(v) => update(i, { start: v })} />
             <span className={styles.dash}>{t("components.timeRangeList.to")}</span>
-            <TimeField
-              value={range.end}
-              onChange={(v) => update(i, { end: v })}
-            />
+            <TimeField value={range.end} onChange={(v) => update(i, { end: v })} />
             <button
               type="button"
               className={styles.remove}

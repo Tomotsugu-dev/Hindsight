@@ -224,116 +224,106 @@ export function SegmentList({ segments, onChange }: Props) {
         <div className={styles.bar} ref={barRef}>
           {/* 圆角剪裁层：off 斜纹 + 段块都画在这里。handle 在外面，避免边缘被裁。 */}
           <div className={styles.barClip}>
-          <div className={styles.off} />
+            <div className={styles.off} />
 
-          {sorted.map((s, i) => {
-            const { background: bg, isLight: light } = resolveSegmentChip(s);
-            const isEditing = editing?.index === i;
-            return (
-              <div
-                key={i}
-                className={styles.segment}
-                role="button"
-                tabIndex={0}
-                onMouseEnter={() => enterSegment(i)}
-                onMouseLeave={leaveSegment}
-                onClick={() => {
-                  // 自己已经在 editing 不要再处理；其它情况点段块 = 仅开 picker 改色
-                  if (editing?.index === i) return;
-                  openPicker(i);
-                }}
-                onKeyDown={(e) => {
-                  if (editing?.index === i) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
+            {sorted.map((s, i) => {
+              const { background: bg, isLight: light } = resolveSegmentChip(s);
+              const isEditing = editing?.index === i;
+              return (
+                <div
+                  key={i}
+                  className={styles.segment}
+                  role="button"
+                  tabIndex={0}
+                  onMouseEnter={() => enterSegment(i)}
+                  onMouseLeave={leaveSegment}
+                  onClick={() => {
+                    // 自己已经在 editing 不要再处理；其它情况点段块 = 仅开 picker 改色
+                    if (editing?.index === i) return;
                     openPicker(i);
-                  }
-                }}
-                style={
-                  {
-                    left: pct(s.startHour),
-                    width: pct(s.endHour - s.startHour),
-                    background: bg,
-                    color: light ? "#3a3f55" : "#fff",
-                    "--time-opacity": light ? "0.72" : "0.9",
-                    "--text-shadow": light
-                      ? "none"
-                      : "0 1px 2px rgba(0, 0, 0, 0.18)",
-                  } as React.CSSProperties
-                }
-              >
-                {isEditing ? (
-                  <input
-                    className={styles.editInput}
-                    // 编辑模式刚展开就让光标进 input 是用户预期，键盘 user 也希望立刻能输入
-                    // eslint-disable-next-line jsx-a11y/no-autofocus
-                    autoFocus
-                    value={editing.value}
-                    onChange={(e) =>
-                      setEditing({ index: i, value: e.target.value })
+                  }}
+                  onKeyDown={(e) => {
+                    if (editing?.index === i) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openPicker(i);
                     }
-                    onBlur={commitEdit}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitEdit();
-                      else if (e.key === "Escape") closeAll();
-                    }}
-                    maxLength={12}
-                  />
-                ) : (
-                  <div className={styles.segmentBody}>
-                    <span
-                      className={styles.segmentLabel}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditor(i);
-                      }}
+                  }}
+                  style={
+                    {
+                      left: pct(s.startHour),
+                      width: pct(s.endHour - s.startHour),
+                      background: bg,
+                      color: light ? "#3a3f55" : "#fff",
+                      "--time-opacity": light ? "0.72" : "0.9",
+                      "--text-shadow": light ? "none" : "0 1px 2px rgba(0, 0, 0, 0.18)",
+                    } as React.CSSProperties
+                  }
+                >
+                  {isEditing ? (
+                    <input
+                      className={styles.editInput}
+                      // 编辑模式刚展开就让光标进 input 是用户预期，键盘 user 也希望立刻能输入
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
+                      value={editing.value}
+                      onChange={(e) => setEditing({ index: i, value: e.target.value })}
+                      onBlur={commitEdit}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
+                        if (e.key === "Enter") commitEdit();
+                        else if (e.key === "Escape") closeAll();
+                      }}
+                      maxLength={12}
+                    />
+                  ) : (
+                    <div className={styles.segmentBody}>
+                      <span
+                        className={styles.segmentLabel}
+                        onClick={(e) => {
                           e.stopPropagation();
                           openEditor(i);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      {s.label}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openEditor(i);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        {s.label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
-          {sorted.length === 0 && (
-            <div className={styles.empty}>{t("components.segmentList.empty")}</div>
-          )}
+            {sorted.length === 0 && (
+              <div className={styles.empty}>{t("components.segmentList.empty")}</div>
+            )}
           </div>
 
           {sorted.length > 0 && (
             <div className={styles.handles}>
               <Handle
                 position={pct(sorted[0].startHour)}
-                onPointerDown={(e) =>
-                  startDrag(e, { kind: "left-edge", index: -1 })
-                }
+                onPointerDown={(e) => startDrag(e, { kind: "left-edge", index: -1 })}
                 ariaLabel={t("components.segmentList.leftEdgeAria")}
               />
               {sorted.slice(0, -1).map((s, i) => (
                 <Handle
                   key={`h-${i}`}
                   position={pct(s.endHour)}
-                  onPointerDown={(e) =>
-                    startDrag(e, { kind: "between", index: i })
-                  }
+                  onPointerDown={(e) => startDrag(e, { kind: "between", index: i })}
                   ariaLabel={t("components.segmentList.betweenAria")}
                 />
               ))}
               <Handle
                 position={pct(sorted[sorted.length - 1].endHour)}
-                onPointerDown={(e) =>
-                  startDrag(e, { kind: "right-edge", index: -1 })
-                }
+                onPointerDown={(e) => startDrag(e, { kind: "right-edge", index: -1 })}
                 ariaLabel={t("components.segmentList.rightEdgeAria")}
               />
             </div>
@@ -407,27 +397,16 @@ export function SegmentList({ segments, onChange }: Props) {
           // 同时让 popover 不冒泡触发段 onClick / outside-click 关闭
           // 仅作为事件容器，内部 swatch 按钮才是真正的交互目标
           // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-          <div
-            className={styles.swatchLayer}
-            onMouseDown={(e) => e.preventDefault()}
-          >
+          <div className={styles.swatchLayer} onMouseDown={(e) => e.preventDefault()}>
             <div
               className={styles.swatchPopover}
               style={{
-                left: pct(
-                  (sorted[pickerIndex].startHour +
-                    sorted[pickerIndex].endHour) /
-                    2,
-                ),
+                left: pct((sorted[pickerIndex].startHour + sorted[pickerIndex].endHour) / 2),
               }}
             >
               {SWATCHES.map((sw) => {
-                const active =
-                  sorted[pickerIndex].color.toLowerCase() ===
-                  sw.hex.toLowerCase();
-                const swatchName = t(
-                  `components.segmentList.swatches.${sw.labelKey}`,
-                );
+                const active = sorted[pickerIndex].color.toLowerCase() === sw.hex.toLowerCase();
+                const swatchName = t(`components.segmentList.swatches.${sw.labelKey}`);
                 return (
                   <button
                     key={sw.hex}

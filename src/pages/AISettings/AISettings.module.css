@@ -546,8 +546,8 @@
   background: rgba(28, 28, 36, 0.94);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, calc(0.20 * var(--shadow-strength))),
-    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
+    0 4px 12px -2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
@@ -746,7 +746,9 @@
   font: inherit;
   appearance: none;
   -webkit-appearance: none;
-  transition: color 140ms var(--ease-out), background 140ms var(--ease-out);
+  transition:
+    color 140ms var(--ease-out),
+    background 140ms var(--ease-out);
 }
 .vramEstInfo:hover,
 .vramEstInfo:focus-visible {
@@ -1206,8 +1208,8 @@
   background: rgba(28, 28, 36, 0.94);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, calc(0.20 * var(--shadow-strength))),
-    0 2px 4px rgba(0, 0, 0, calc(0.10 * var(--shadow-strength)));
+    0 4px 12px -2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength))),
+    0 2px 4px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
   opacity: 0;
   pointer-events: none;
   white-space: normal;
@@ -1842,7 +1844,6 @@
   font-weight: var(--font-weight-500);
   color: var(--text-muted);
 }
-
 
 /* 定时计划:时间点 +/− 小按钮(贴在「指定处理时间」标题行尾) */
 .timeDotBtn {

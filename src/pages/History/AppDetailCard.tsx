@@ -87,9 +87,7 @@ export function AppDetailCard({
   const fmtDay = (key: string) => dateFmt.format(parseDayKey(key));
 
   const drawerTarget: AppDetailTarget | null =
-    drawerOpen && selectedDay !== null
-      ? { ...app, minutes: Math.round(totalSecs / 60) }
-      : null;
+    drawerOpen && selectedDay !== null ? { ...app, minutes: Math.round(totalSecs / 60) } : null;
 
   return (
     <section className={styles.card} data-part="card">

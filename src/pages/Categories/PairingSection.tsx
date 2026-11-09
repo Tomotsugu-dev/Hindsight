@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Trash2, X } from "lucide-react";
@@ -78,9 +71,7 @@ export function PairingSection({
   // controlled 模式（外部传 groups）跳过内部 state；uncontrolled 走旧 path
   const isControlled = groupsProp !== undefined;
   const [groupsInternal, setGroupsInternal] = useState<AppGroup[] | null>(null);
-  const groups = isControlled
-    ? (groupsProp ?? [])
-    : groupsInternal;
+  const groups = isControlled ? (groupsProp ?? []) : groupsInternal;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverGroupId, setHoverGroupId] = useState<string | null>(null);
   const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
@@ -229,9 +220,7 @@ export function PairingSection({
 
   // 设备列每个 minmax(160px, 1fr)：在容器够宽时弹性 1fr 分配；容器不够宽时
   // 缩到最小 160px 后触发表格容器的横向滚动（多设备场景下窗口装不下也不挤压）
-  const deviceColsTemplate = sortedDevices
-    .map(() => "minmax(160px, 1fr)")
-    .join(" ");
+  const deviceColsTemplate = sortedDevices.map(() => "minmax(160px, 1fr)").join(" ");
   const cssVars = { "--device-cols": deviceColsTemplate } as CSSProperties;
 
   const startDrag = (
@@ -352,9 +341,7 @@ export function PairingSection({
             {d.name}
           </span>
         ))}
-        <span className={styles.devHeaderName}>
-          {t("categories.pairing.header.displayName")}
-        </span>
+        <span className={styles.devHeaderName}>{t("categories.pairing.header.displayName")}</span>
         <span className={styles.devHeaderActionPad} />
         <span className={styles.deleteCol} />
       </div>
@@ -369,8 +356,7 @@ export function PairingSection({
         // 没分类的行用淡黄橙色高亮，提醒用户去指派；
         // 注意还要排除找不到对应 active category 的孤儿引用情况（categoryId 非 null 但 categories 里没匹配）
         const hasActiveCategory =
-          group.categoryId != null &&
-          categories.some((c) => c.id === group.categoryId);
+          group.categoryId != null && categories.some((c) => c.id === group.categoryId);
         return (
           <div
             key={group.id}
@@ -397,8 +383,7 @@ export function PairingSection({
               return (
                 <div key={dev.id} className={styles.devCol}>
                   {colMembers.map((member) => {
-                    const isDraggingThis =
-                      drag !== null && drag.processName === member.processName;
+                    const isDraggingThis = drag !== null && drag.processName === member.processName;
                     // 组 id 就是这个成员的进程名时，「移出」没有落脚点：它要回的
                     // 单成员组就是当前这个组。后端会拒绝，所以按钮不渲染；
                     // 想把它移走请拖进别的组。
@@ -408,9 +393,7 @@ export function PairingSection({
                       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
                       <span
                         key={member.processName}
-                        className={`${styles.chip} ${
-                          isDraggingThis ? styles.chipPlaceholder : ""
-                        }`}
+                        className={`${styles.chip} ${isDraggingThis ? styles.chipPlaceholder : ""}`}
                         onMouseDown={(e) => startDrag(e, member, group.id, idx)}
                       >
                         <AppIcon
@@ -421,9 +404,7 @@ export function PairingSection({
                         <span className={styles.chipName} title={member.processName}>
                           {displayAppName(member.processName)}
                         </span>
-                        <span className={styles.chipMeta}>
-                          {fmtDuration(member.recentSecs)}
-                        </span>
+                        <span className={styles.chipMeta}>{fmtDuration(member.recentSecs)}</span>
                         {isPaired && !isDraggingThis && !isGroupNamesake && (
                           <button
                             type="button"
@@ -447,9 +428,7 @@ export function PairingSection({
                 className={styles.nameInput}
                 value={nameDraft}
                 onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) =>
-                  setPendingNames((p) => ({ ...p, [group.id]: e.target.value }))
-                }
+                onChange={(e) => setPendingNames((p) => ({ ...p, [group.id]: e.target.value }))}
                 onBlur={() => void onCommitName(group.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {

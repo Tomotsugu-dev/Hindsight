@@ -107,7 +107,7 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
             onChange(min);
           } else if (e.key === "Enter") {
             e.preventDefault();
-            (e.currentTarget).blur();
+            e.currentTarget.blur();
           }
         }}
         onWheel={(e) => {
@@ -118,11 +118,7 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
       >
         <span className={styles.digits}>
           {padded.split("").map((d, i) => (
-            <DigitColumn
-              key={i}
-              digit={Number(d)}
-              hidden={i < visibleStart}
-            />
+            <DigitColumn key={i} digit={Number(d)} hidden={i < visibleStart} />
           ))}
         </span>
         {suffix ? <span className={styles.suffix}>{suffix}</span> : null}
@@ -133,14 +129,8 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
 
 function DigitColumn({ digit, hidden }: { digit: number; hidden: boolean }) {
   return (
-    <span
-      className={`${styles.column} ${hidden ? styles.columnHidden : ""}`}
-      aria-hidden
-    >
-      <span
-        className={styles.strip}
-        style={{ transform: `translateY(-${digit}em)` }}
-      >
+    <span className={`${styles.column} ${hidden ? styles.columnHidden : ""}`} aria-hidden>
+      <span className={styles.strip} style={{ transform: `translateY(-${digit}em)` }}>
         {Array.from({ length: 10 }, (_, i) => (
           <span key={i} className={styles.digit}>
             {i}

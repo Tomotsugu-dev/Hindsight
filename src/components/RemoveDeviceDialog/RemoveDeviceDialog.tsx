@@ -65,24 +65,16 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
           {t("settings.data.removeDeviceDialog.title")}
         </h2>
 
-        <p className={styles.intro}>
-          {t("settings.data.removeDeviceDialog.intro")}
-        </p>
+        <p className={styles.intro}>{t("settings.data.removeDeviceDialog.intro")}</p>
 
-        <p className={styles.unaffected}>
-          {t("settings.data.removeDeviceDialog.unaffected")}
-        </p>
+        <p className={styles.unaffected}>{t("settings.data.removeDeviceDialog.unaffected")}</p>
 
         <hr className={styles.divider} />
 
-        <p className={styles.question}>
-          {t("settings.data.removeDeviceDialog.localQuestion")}
-        </p>
+        <p className={styles.question}>{t("settings.data.removeDeviceDialog.localQuestion")}</p>
 
         <div className={styles.options}>
-          <label
-            className={`${styles.option} ${!keepLocal ? styles.optionChecked : ""}`}
-          >
+          <label className={`${styles.option} ${!keepLocal ? styles.optionChecked : ""}`}>
             <input
               type="radio"
               className={styles.optionRadio}
@@ -100,9 +92,7 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
             </div>
           </label>
 
-          <label
-            className={`${styles.option} ${keepLocal ? styles.optionChecked : ""}`}
-          >
+          <label className={`${styles.option} ${keepLocal ? styles.optionChecked : ""}`}>
             <input
               type="radio"
               className={styles.optionRadio}
@@ -142,11 +132,7 @@ export function RemoveDeviceDialog({ open, onConfirm, onCancel }: Props) {
         />
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnCancel}`}
-            onClick={onCancel}
-          >
+          <button type="button" className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>
             {t("settings.data.removeDeviceDialog.cancel")}
           </button>
           <button

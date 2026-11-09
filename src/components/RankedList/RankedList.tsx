@@ -82,17 +82,11 @@ export function RankedList({
           <>
             <span className={styles.rank}>{idx + 1}</span>
             {item.leading ?? (
-              <span
-                className={styles.dot}
-                style={{ background: item.color }}
-                aria-hidden
-              />
+              <span className={styles.dot} style={{ background: item.color }} aria-hidden />
             )}
             <div className={styles.text}>
               <div className={styles.name}>{item.name}</div>
-              {item.subtitle ? (
-                <div className={styles.subtitle}>{item.subtitle}</div>
-              ) : null}
+              {item.subtitle ? <div className={styles.subtitle}>{item.subtitle}</div> : null}
             </div>
             <div className={styles.extras}>{item.extras}</div>
             <div className={styles.barWrap}>

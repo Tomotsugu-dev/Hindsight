@@ -123,7 +123,11 @@ interface MainButtonProps {
 /** 主按钮的轻重跟着状态走：没生成时实心，生成完浅底，在跑时中性。 */
 export function MainButton({ action, label, title, disabled, onClick }: MainButtonProps) {
   const look =
-    action === "start" ? styles.btnPrimary : action === "regenerate" ? styles.btnSoft : styles.btnNeutral;
+    action === "start"
+      ? styles.btnPrimary
+      : action === "regenerate"
+        ? styles.btnSoft
+        : styles.btnNeutral;
   return (
     <button
       type="button"

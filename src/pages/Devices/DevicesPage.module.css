@@ -94,7 +94,8 @@
 }
 
 .syncCardConnected {
-  background: linear-gradient(180deg,
+  background: linear-gradient(
+    180deg,
     color-mix(in oklab, var(--color-accent) 5%, #ffffff),
     #fbfbfd
   );
@@ -120,8 +121,7 @@
     color-mix(in oklab, var(--color-accent) 6%, var(--surface-card-elevated))
   );
   border-color: color-mix(in oklab, var(--color-accent) 26%, transparent);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength)));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.2 * var(--shadow-strength)));
 }
 
 :global([data-mode="dark"]) .setupClose {
@@ -212,7 +212,8 @@
 }
 
 @keyframes syncDotPulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       0 0 0 1px rgba(245, 158, 11, 0.22),
       0 0 4px rgba(245, 158, 11, 0.5);
@@ -230,8 +231,12 @@
   animation: spin 1s linear infinite;
 }
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .syncActions {
@@ -277,11 +282,7 @@
 .smallBtnAccent {
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   color: var(--color-accent);
-  border-color: color-mix(
-    in oklab,
-    var(--color-accent) 28%,
-    rgba(0, 0, 0, 0.06)
-  );
+  border-color: color-mix(in oklab, var(--color-accent) 28%, rgba(0, 0, 0, 0.06));
   transition:
     background-color 180ms ease-out,
     color 180ms ease-out,
@@ -430,8 +431,13 @@
 }
 
 @keyframes syncActionsSkeletonPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .syncError {
@@ -507,15 +513,14 @@
   gap: 14px;
   margin-top: 4px;
   padding: 16px 18px 18px;
-  background:
-    linear-gradient(180deg,
-      color-mix(in oklab, var(--color-accent) 5%, #ffffff),
-      color-mix(in oklab, var(--color-accent) 1%, #fbfbfd)
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-accent) 5%, #ffffff),
+    color-mix(in oklab, var(--color-accent) 1%, #fbfbfd)
+  );
   border: 1px solid color-mix(in oklab, var(--color-accent) 16%, rgba(0, 0, 0, 0.05));
   border-radius: var(--radius-md);
-  box-shadow:
-    0 1px 2px color-mix(in srgb, var(--color-accent) 5%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 .setupHeader {
@@ -574,7 +579,8 @@
   top: 16px;
   bottom: 16px;
   width: 1px;
-  background: linear-gradient(180deg,
+  background: linear-gradient(
+    180deg,
     color-mix(in oklab, var(--color-accent) 24%, transparent),
     color-mix(in oklab, var(--color-accent) 6%, transparent)
   );
@@ -595,7 +601,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg,
+  background: linear-gradient(
+    135deg,
     color-mix(in oklab, var(--color-accent) 22%, #ffffff),
     color-mix(in oklab, var(--color-accent) 8%, #ffffff)
   );
@@ -655,7 +662,9 @@
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.005em;
   cursor: pointer;
-  transition: color 160ms ease-out, gap 160ms ease-out;
+  transition:
+    color 160ms ease-out,
+    gap 160ms ease-out;
 }
 
 .stepBtn:hover {
@@ -804,8 +813,7 @@
   background: var(--surface-card);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-lg);
-  box-shadow:
-    0 1px 16px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
+  box-shadow: 0 1px 16px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength)));
 }
 
 /* 暗色：surface-card(#16161a) 跟页面底(#0e0e11) 太接近，卡几乎看不出填充、显得扁平。

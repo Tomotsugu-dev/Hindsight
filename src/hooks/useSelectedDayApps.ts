@@ -18,10 +18,7 @@ function cacheKey(offset: number, deviceId: string | undefined): string {
   return `${offset}|${deviceId ?? ""}`;
 }
 
-export function useSelectedDayApps(
-  dayOffset: number | null,
-  deviceId?: string,
-): State {
+export function useSelectedDayApps(dayOffset: number | null, deviceId?: string): State {
   const cacheRef = useRef<Map<string, { apps: AppUsage[]; at: number }>>(new Map());
   const [state, setState] = useState<State>({ apps: null, loading: false });
 

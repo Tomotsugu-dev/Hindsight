@@ -11,9 +11,7 @@ export interface LogEntry {
 /** 调试 tab 顶部的"调什么"——目前只有日报有真后端，周报 / 月报先占位。 */
 export type DebugScope = "daily" | "weekly" | "monthly";
 
-export function buildScopeOptions(
-  t: TFunction,
-): Array<{ value: DebugScope; label: string }> {
+export function buildScopeOptions(t: TFunction): Array<{ value: DebugScope; label: string }> {
   return [
     { value: "daily", label: t("aiSummary.debug.scope.daily") },
     { value: "weekly", label: t("aiSummary.debug.scope.weekly") },
@@ -53,11 +51,7 @@ export function anchorDateStr(scope: DebugScope, offset: number): string {
 }
 
 /** 按 scope + offset 给 dayPill 显示的文案。 */
-export function offsetLabel(
-  scope: DebugScope,
-  offset: number,
-  t: TFunction,
-): string {
+export function offsetLabel(scope: DebugScope, offset: number, t: TFunction): string {
   if (scope === "daily") {
     if (offset === 0) return t("aiSummary.debug.dateNav.today");
     if (offset === -1) return t("aiSummary.debug.dateNav.yesterday");

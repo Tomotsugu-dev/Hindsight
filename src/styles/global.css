@@ -27,7 +27,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-
 button {
   font: inherit;
   color: inherit;
@@ -116,7 +115,7 @@ a {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  mask-composite: exclude;
   pointer-events: none;
   opacity: var(--glow-strength);
   /* 极短的 transition 让 strength 跳变时也丝滑（避免 60fps mousemove 抖动） */

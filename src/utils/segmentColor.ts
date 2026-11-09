@@ -20,7 +20,7 @@ const COLOR_STOPS: Array<{ hour: number; hsl: HSL }> = [
 ];
 
 function lerpHue(a: number, b: number, t: number): number {
-  const diff = (((b - a + 540) % 360) - 180);
+  const diff = ((b - a + 540) % 360) - 180;
   return (a + diff * t + 360) % 360;
 }
 

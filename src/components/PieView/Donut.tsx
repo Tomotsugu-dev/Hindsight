@@ -223,12 +223,7 @@ export function Donut({
       {/* 中央文案：完全可选，不传则空圆心
           —— PieView idle 不传任何，hover 时由父穿入；PieDrillDetail 永远传 pct + 名 */}
       {centerPctTop && (
-        <text
-          className={styles.centerPct}
-          x={cx}
-          y={cy - size * 0.16}
-          textAnchor="middle"
-        >
+        <text className={styles.centerPct} x={cx} y={cy - size * 0.16} textAnchor="middle">
           {centerPctTop}
         </text>
       )}
@@ -248,15 +243,10 @@ export function Donut({
           className={styles.centerSub}
           x={cx}
           /* sub 跟 title 共存时排在下方；单独存在（idle watermark）时垂直居中 */
-          y={
-            centerTitle || centerPctTop
-              ? cy + size * 0.18
-              : cy + size * 0.035
-          }
+          y={centerTitle || centerPctTop ? cy + size * 0.18 : cy + size * 0.035}
           textAnchor="middle"
           style={{
-            fontSize:
-              centerTitle || centerPctTop ? size * 0.085 : size * 0.1,
+            fontSize: centerTitle || centerPctTop ? size * 0.085 : size * 0.1,
           }}
         >
           {centerSub}

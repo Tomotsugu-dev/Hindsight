@@ -41,10 +41,7 @@ export function VramEstimateLine({
   }
   const est = estimateVramGB(modelName, parallelSlots, ctxSize);
   // OOM 判断走 effective（Apple unified × 0.7）；UI 显示走 raw（systemVram.totalGb）
-  const risk = classifyVramRisk(
-    est.totalGB,
-    systemVram ? effectiveVramGB(systemVram) : null,
-  );
+  const risk = classifyVramRisk(est.totalGB, systemVram ? effectiveVramGB(systemVram) : null);
 
   // 选 className：有 systemVram 走 risk；没 systemVram 走绝对阈值
   let levelClass: string = styles.vramEstOk;
@@ -59,12 +56,8 @@ export function VramEstimateLine({
   return (
     <div className={`${styles.vramEst} ${levelClass}`}>
       <div className={styles.vramEstRow}>
-        <span className={styles.vramEstLabel}>
-          {t("aiSettings.engineParams.vramLabel")}
-        </span>
-        <span className={styles.vramEstValue}>
-          ~{est.totalGB.toFixed(1)} GB
-        </span>
+        <span className={styles.vramEstLabel}>{t("aiSettings.engineParams.vramLabel")}</span>
+        <span className={styles.vramEstValue}>~{est.totalGB.toFixed(1)} GB</span>
         {/* 权重 / KV / 模型 / ctx / slots 拆分细节折进 Info icon——
             原本占整行的灰字噪声大，hover / focus 显示更干净 */}
         <button
@@ -132,10 +125,7 @@ function batchLabel(batch: number | null): string {
   return String(batch);
 }
 
-function riskClass(
-  risk: VramRisk,
-  styles: Record<string, string>,
-): string {
+function riskClass(risk: VramRisk, styles: Record<string, string>): string {
   if (risk === "safe") return styles.vramEstOk;
   if (risk === "near") return styles.vramEstWarn;
   return styles.vramEstDanger;

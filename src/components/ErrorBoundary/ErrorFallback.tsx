@@ -10,11 +10,7 @@ export function ErrorFallback() {
     <div className={styles.wrap} role="alert">
       <h1 className={styles.title}>{t("common.errorBoundary.title")}</h1>
       <p className={styles.message}>{t("common.errorBoundary.message")}</p>
-      <button
-        type="button"
-        className={styles.btn}
-        onClick={() => window.location.reload()}
-      >
+      <button type="button" className={styles.btn} onClick={() => window.location.reload()}>
         {t("common.errorBoundary.reload")}
       </button>
     </div>
