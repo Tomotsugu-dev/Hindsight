@@ -1,5 +1,5 @@
-/* 复用 RemoveDeviceDialog 的 modal grammar（backdrop / dialog / btn 同款视觉），
-   选中态换成 accent 紫——导出是普通操作，不该用红色警示语言。 */
+/* Same backdrop and dialog as RemoveDeviceDialog. The selected option uses the accent color:
+   exporting is an ordinary action, so it does not use the red warning style. */
 
 .backdrop {
   position: fixed;
@@ -74,17 +74,6 @@
   align-items: center;
   gap: calc(8px * var(--density));
   flex-wrap: wrap;
-}
-
-.dateInput:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-/* ── 统计粒度 checkbox 行 ── */
-
-.check input:disabled {
-  cursor: not-allowed;
 }
 
 /* ── 格式 radio 卡片（选中 = accent 描边） ── */
@@ -193,20 +182,6 @@
 .revealBtn {
   flex-shrink: 0;
   align-self: center;
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(10px * var(--density));
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  cursor: pointer;
-  transition: background-color 180ms ease-out;
-}
-
-.revealBtn:hover {
-  background: var(--fill-strong);
 }
 
 .errorBar {
@@ -218,74 +193,11 @@
   word-break: break-all;
 }
 
-/* ── 底部按钮（同 RemoveDeviceDialog，主按钮换 accent） ── */
-
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: calc(8px * var(--density));
   margin-top: calc(6px * var(--density));
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(14px * var(--density));
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.005em;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    color 160ms ease-out,
-    transform 100ms ease-out;
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btnCancel {
-  background: var(--fill-default);
-  border-color: var(--border-subtle);
-  color: var(--text-strong);
-}
-
-.btnCancel:hover:not(:disabled) {
-  background: var(--fill-strong);
-}
-
-.btnPrimary {
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-}
-
-.btnPrimary:hover:not(:disabled) {
-  background: var(--accent-fill-hover);
-}
-
-.spinning {
-  animation: exportDialogSpin 0.9s linear infinite;
-}
-
-@keyframes exportDialogSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes fadeIn {
