@@ -8,7 +8,7 @@
   display: flex;
   justify-content: flex-end;
   /* 四周留间隙 → 抽屉悬浮成一张圆角卡，而不是贴边到顶/右/底的直角面板 */
-  padding: 14px;
+  padding: calc(14px * var(--density));
   animation: fadeIn 160ms var(--ease-out);
 }
 
@@ -22,8 +22,8 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow:
-    0 12px 40px rgba(20, 20, 40, calc(0.22 * var(--shadow-strength))),
-    0 2px 8px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength)));
+    0 12px 40px rgba(var(--shadow-rgb), calc(0.22 * var(--shadow-strength))),
+    0 2px 8px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
   animation: slideInRight 240ms var(--ease-spring);
@@ -33,8 +33,8 @@
 .head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: calc(12px * var(--density));
+  padding: calc(16px * var(--density)) calc(18px * var(--density));
   flex-shrink: 0;
 }
 
@@ -47,8 +47,8 @@
 }
 
 .appName {
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-title) * var(--font-scale));
+  font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.005em;
   overflow: hidden;
@@ -59,8 +59,8 @@
 .appCat {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: calc(5px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -72,7 +72,7 @@
 }
 
 .headTotal {
-  font-size: 14px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
@@ -83,8 +83,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: calc(var(--control-height-md) * var(--density));
+  height: calc(var(--control-height-md) * var(--density));
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -107,10 +107,10 @@
   min-height: 0;
   overflow-y: auto;
   /* top 4：head 已有 16 下内边距，这里不必再大留白；两张卡之间用 gap */
-  padding: 4px 16px 16px;
+  padding: calc(4px * var(--density)) calc(16px * var(--density)) calc(16px * var(--density));
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--density));
   /* 隐藏滚动条（保留滚动功能），跟侧栏 / 主内容一致 */
   scrollbar-width: none;
 }
@@ -122,10 +122,10 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: calc(10px * var(--density));
+  padding: calc(14px * var(--density)) calc(16px * var(--density));
   background: var(--surface-card-elevated);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 
@@ -160,7 +160,7 @@
 .axis {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -169,7 +169,7 @@
 .axisWeek {
   display: flex;
   gap: 2px;
-  font-size: 10px;
+  font-size: calc(var(--font-size-micro) * var(--font-scale));
   color: var(--text-faint);
 }
 
@@ -185,20 +185,20 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .titleRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--density));
 }
 
 .titleName {
   /* 标题是"干了啥"的主角 → 弹性吃掉中间空间、尽量显示完整；省略号兜底 */
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -223,10 +223,10 @@
 
 .titleTime {
   /* 按内容自适应、至少 56px、不收缩——月/周的超长时长不溢出 */
-  min-width: 56px;
+  min-width: calc(56px * var(--font-scale));
   flex-shrink: 0;
   text-align: right;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
@@ -237,9 +237,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 40px 0;
-  font-size: 13px;
+  gap: calc(8px * var(--density));
+  padding: calc(40px * var(--density)) 0;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-muted);
 }
 
@@ -247,7 +247,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.12);
+  border: 2px solid var(--border-strong);
   border-top-color: var(--color-accent);
   animation: spin 700ms linear infinite;
 }
@@ -283,8 +283,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--density));
+  height: calc(24px * var(--density));
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-sm);
@@ -315,12 +315,12 @@
 .ignoreNotice {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 7px 10px;
+  gap: calc(10px * var(--density));
+  margin-bottom: calc(10px * var(--density));
+  padding: calc(7px * var(--density)) calc(10px * var(--density));
   border-radius: var(--radius-sm);
   background: var(--fill-default);
-  font-size: 12.5px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
 }
 
 .ignoreNoticeText {
@@ -336,9 +336,9 @@
   flex-shrink: 0;
   border: none;
   background: transparent;
-  padding: 2px 4px;
-  font-size: 12.5px;
-  font-weight: 600;
+  padding: 2px calc(4px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  font-weight: var(--font-weight-600);
   color: inherit;
   text-decoration: underline;
   cursor: pointer;
@@ -351,8 +351,8 @@
 
 /* —— 按网站（浏览器应用：域名 → 页面 两级折叠） —— */
 .sectionTitle {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 calc(8px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -364,16 +364,16 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .siteHead {
   /* 整行可点：域名行同时是展开开关 */
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--density));
   width: 100%;
-  padding: 4px 0;
+  padding: calc(4px * var(--density)) 0;
   border: none;
   background: transparent;
   color: inherit;
@@ -405,7 +405,7 @@
 .siteHost {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   overflow: hidden;
@@ -414,7 +414,7 @@
 }
 
 .siteHostUnknown {
-  font-weight: normal;
+  font-weight: var(--font-weight-400);
   color: var(--text-muted);
 }
 
@@ -426,19 +426,19 @@
 .pageList {
   /* 页面行缩进到箭头之后，视觉上从属于上面的域名 */
   list-style: none;
-  margin: 2px 0 4px;
-  padding: 0 0 0 22px;
+  margin: 2px 0 calc(4px * var(--density));
+  padding: 0 0 0 calc(22px * var(--density));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .siteHint {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 10px;
-  font-size: 12px;
+  gap: calc(8px * var(--density));
+  margin: 0 0 calc(10px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -464,15 +464,15 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-  padding: 2px 8px 2px 4px;
+  gap: calc(4px * var(--density));
+  margin-top: calc(6px * var(--density));
+  padding: 2px calc(8px * var(--density)) 2px calc(4px * var(--density));
   border: none;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   cursor: pointer;
 }
 
@@ -482,5 +482,5 @@
 }
 
 .pageList + .moreBtn {
-  margin: 0 0 6px 22px;
+  margin: 0 0 calc(6px * var(--density)) calc(22px * var(--density));
 }
