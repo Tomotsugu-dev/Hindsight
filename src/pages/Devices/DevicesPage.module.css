@@ -102,7 +102,7 @@
   border-color: color-mix(in oklab, var(--color-accent) 22%, var(--border-default));
 }
 
-/* —— 暗色：账户卡「已连接」态、OAuth setup 面板、面板关闭钮原本都是 accent×白 的亮卡，
+/* —— 暗色：账户卡「已连接」态、OAuth setup 面板原本都是 accent×白 的亮卡，
    暗色下会发白（且卡内 --text-strong 亮字打在白底上直接看不清）。统一改成 accent 淡染
    暗底：卡内文字都是语义 token，卡底一暗就自动恢复正常。 —— */
 :global([data-mode="dark"]) .syncCardConnected {
@@ -122,11 +122,6 @@
   );
   border-color: color-mix(in oklab, var(--color-accent) 26%, transparent);
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.2 * var(--shadow-strength)));
-}
-
-:global([data-mode="dark"]) .setupClose {
-  background: var(--surface-2);
-  border-color: var(--border-default);
 }
 
 .syncIcon {
@@ -246,108 +241,6 @@
   flex-shrink: 0;
 }
 
-.smallBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--density));
-  height: calc(28px * var(--density));
-  padding: 0 calc(10px * var(--density));
-  background: var(--fill-default);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  color: var(--text-strong);
-  transition:
-    background-color 180ms ease-out,
-    color 180ms ease-out,
-    transform 100ms ease-out;
-}
-
-.smallBtn:hover {
-  background: var(--fill-strong);
-}
-
-.smallBtn:active {
-  transform: scale(0.97);
-}
-
-.smallBtnDanger:hover {
-  background: var(--status-error-soft);
-  color: var(--status-error);
-  border-color: color-mix(in oklab, var(--status-error) 22%, transparent);
-}
-
-/* 凭证失效时按钮平时就是 accent 色，hover 加深 */
-.smallBtnAccent {
-  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-  color: var(--color-accent);
-  border-color: color-mix(in oklab, var(--color-accent) 28%, var(--border-subtle));
-  transition:
-    background-color 180ms ease-out,
-    color 180ms ease-out,
-    border-color 180ms ease-out,
-    transform 100ms ease-out;
-}
-
-.smallBtnAccent:hover {
-  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-
-/* 双 face 切换：两个 <span> 占同一 grid cell，宽度跟"更宽"那个走，不抖。
-   非激活的 face 用 opacity 淡出，激活的 face 淡入。 */
-.smallBtnSwap {
-  display: inline-grid;
-  grid-template-columns: 1fr;
-  align-items: center;
-}
-
-.smallBtnFace {
-  grid-area: 1 / 1;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--density));
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 220ms ease-out;
-}
-
-.smallBtnFace[data-active="true"] {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.connectBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--density));
-  height: calc(var(--control-height-md) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  background: var(--accent-fill);
-  color: var(--text-on-accent);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  font-weight: var(--font-weight-600);
-  letter-spacing: -0.005em;
-  transition:
-    background-color 200ms ease-out,
-    transform 100ms ease-out;
-}
-
-.connectBtn:hover {
-  background: var(--accent-fill-hover);
-}
-
-.connectBtn:active {
-  transform: scale(0.97);
-}
-
-.connectBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* —— 选择同步服务：两张并排的服务卡 —— */
 .serviceGrid {
   display: grid;
@@ -418,11 +311,11 @@
   align-self: flex-end;
 }
 
-/* auth 状态还没拿到时占位——尺寸跟 .smallBtn 同高，宽度按 "Sync Now" 文案估的。
-   静态淡灰底 + 轻 pulse 动画，避免渲染出错误的 connectBtn(蓝)/smallBtn(灰) 然后秒切。 */
+/* auth 状态还没拿到时占位——尺寸跟小按钮同高，宽度按 "Sync Now" 文案估的。
+   静态淡灰底 + 轻 pulse 动画，避免渲染出错误的蓝色主按钮/灰色小按钮然后秒切。 */
 .syncActionsSkeleton {
   display: inline-block;
-  height: calc(28px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   width: calc(96px * var(--font-scale));
   background: var(--fill-default);
   border: 1px solid var(--border-subtle);
@@ -539,26 +432,11 @@
   opacity: 0.85;
 }
 
+/* The button sits in the uppercase header and must not inherit its text style */
 .setupClose {
   margin-left: auto;
-  height: calc(22px * var(--density));
-  padding: 0 calc(9px * var(--density));
-  font-size: calc(var(--font-size-caption) * var(--font-scale));
-  font-weight: var(--font-weight-medium);
-  color: var(--text-muted);
-  background: var(--control-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
   letter-spacing: 0;
   text-transform: none;
-  transition:
-    color 180ms ease-out,
-    background-color 180ms ease-out;
-}
-
-.setupClose:hover {
-  background: var(--surface-card);
-  color: var(--text-strong);
 }
 
 .setupSteps {
@@ -719,26 +597,10 @@
   text-transform: uppercase;
 }
 
+/* The input inherits this font from its box */
 .credInput {
   width: 100%;
-  height: calc(32px * var(--density));
-  padding: 0 calc(11px * var(--density));
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  color: var(--text-strong);
   font-family: var(--font-mono);
-  outline: none;
-  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), calc(0.03 * var(--shadow-strength))) inset;
-  transition:
-    border-color 200ms ease-out,
-    background-color 200ms ease-out,
-    box-shadow 200ms ease-out;
-}
-
-.credInput::placeholder {
-  color: var(--text-faint);
 }
 
 /* Client Secret 输入框右侧的"显示/隐藏"按钮容器 */
@@ -748,45 +610,17 @@
   align-items: stretch;
 }
 
-.credInputWithBtn {
+/* Room for the eye button: its right offset plus its width plus a gap */
+.credInputWrap .credInputWithBtn {
   padding-right: calc(38px * var(--density));
 }
 
 .credEyeBtn {
   position: absolute;
   right: calc(4px * var(--density));
-  top: 50%;
-  transform: translateY(-50%);
-  width: calc(var(--control-height-sm) * var(--density));
-  height: calc(var(--control-height-sm) * var(--density));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: none;
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    color 160ms ease-out,
-    background-color 160ms ease-out;
-}
-
-.credEyeBtn:hover {
-  color: var(--color-accent);
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-}
-
-.credEyeBtn:active {
-  transform: translateY(-50%) scale(0.92);
-}
-
-.credInput:focus {
-  background: var(--surface-card);
-  border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
-  box-shadow:
-    0 1px 1px rgba(var(--shadow-rgb), calc(0.03 * var(--shadow-strength))) inset,
-    0 0 0 3px color-mix(in oklab, var(--color-accent) 16%, transparent);
+  top: 0;
+  bottom: 0;
+  margin: auto 0;
 }
 
 .section {

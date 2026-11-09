@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeftRight,
@@ -29,6 +29,9 @@ import { ForgetRemoteDeviceDialog } from "../../components/ForgetRemoteDeviceDia
 import { resolveCategoryIcon } from "../../config/categoryIcons";
 import { logError } from "../../lib/logger";
 import { api, OAUTH_URL_EVENT, type AuthState, type SyncStatus } from "../../api/hindsight";
+import { Button } from "../../components/Button/Button";
+import { IconButton } from "../../components/Button/IconButton";
+import { TextInput } from "../../components/TextInput/TextInput";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SyncOptInDialog } from "./SyncOptInDialog";
 import { connectErrorKind, NUTSTORE_DAV_URL, serviceKind, webdavAccountLabel } from "./syncAccount";
@@ -419,56 +422,48 @@ function CloudSyncCard({
         </div>
         <div className={styles.syncActions}>
           {auth == null ? (
-            // auth 状态还没拿到——别渲染 connectBtn(蓝) 然后秒切到 smallBtn(灰)，
+            // auth 状态还没拿到——别渲染蓝色主按钮然后秒切到灰色小按钮，
             // 改成同尺寸 skeleton 占位，等 authStatus resolve 完再 swap
             <div className={styles.syncActionsSkeleton} aria-hidden="true" />
           ) : signedIn ? (
             <>
-              <button
-                type="button"
-                className={styles.smallBtn}
+              <Button
+                size="sm"
+                icon={ArrowLeftRight}
                 onClick={() => (chooserOpen ? setChooserOpen(false) : openChooser("cards"))}
                 disabled={busy}
                 title={t("devices.cloud.actions.changeTitle")}
               >
-                <ArrowLeftRight size={13} strokeWidth={1.85} />
                 {t("devices.cloud.actions.change")}
-              </button>
-              <button
-                type="button"
-                className={styles.smallBtn}
+              </Button>
+              <Button
+                size="sm"
+                icon={RefreshCw}
+                loading={syncing}
                 onClick={onSyncNow}
-                disabled={syncing}
                 title={t("devices.cloud.actions.syncNowTitle")}
               >
-                <RefreshCw
-                  size={13}
-                  strokeWidth={1.85}
-                  className={syncing ? styles.spinning : ""}
-                />
                 {syncing ? t("devices.cloud.actions.syncing") : t("devices.cloud.actions.syncNow")}
-              </button>
+              </Button>
               {/* 凭证失效时同时给两个按钮：
                   - 退出登录：清掉本机 auth_state，回到未登录状态（不动云端数据 / 本机数据）
                   - 重新登录：走 OAuth 重新拿 token
                   没有 authExpired 时只显示退出登录（不需要"重新登录"，因为已经登着）。 */}
               {authExpired && (
-                <button
-                  type="button"
-                  className={`${styles.smallBtn} ${styles.smallBtnDanger}`}
+                <Button
+                  size="sm"
+                  icon={LogOut}
                   onClick={onSignOut}
                   disabled={busy}
                   title={t("devices.cloud.actions.signOutTitle")}
                 >
-                  <LogOut size={13} strokeWidth={1.85} />
                   {t("devices.cloud.actions.signOut")}
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                className={`${styles.smallBtn} ${
-                  authExpired ? styles.smallBtnAccent : styles.smallBtnDanger
-                }`}
+              <Button
+                size="sm"
+                tone={authExpired ? "accent" : "neutral"}
+                icon={authExpired ? LogIn : LogOut}
                 onClick={authExpired ? onReauth : onSignOut}
                 disabled={busy}
                 title={
@@ -477,18 +472,10 @@ function CloudSyncCard({
                     : t("devices.cloud.actions.signOutTitle")
                 }
               >
-                {authExpired ? (
-                  <>
-                    <LogIn size={13} strokeWidth={1.85} />
-                    {t("devices.cloud.actions.signIn")}
-                  </>
-                ) : (
-                  <>
-                    <LogOut size={13} strokeWidth={1.85} />
-                    {t("devices.cloud.actions.signOut")}
-                  </>
-                )}
-              </button>
+                {authExpired
+                  ? t("devices.cloud.actions.signIn")
+                  : t("devices.cloud.actions.signOut")}
+              </Button>
             </>
           ) : null}
         </div>
@@ -550,19 +537,11 @@ function CloudSyncCard({
       {busy && showOauthFallback && oauthUrl && (
         <div className={styles.oauthFallback}>
           <span className={styles.oauthFallbackText}>{t("devices.cloud.oauthFallback.hint")}</span>
-          <button type="button" className={styles.smallBtn} onClick={() => void onCopyOauthUrl()}>
-            {oauthCopied ? (
-              <>
-                <Check size={13} strokeWidth={2.2} />
-                {t("devices.cloud.oauthFallback.copied")}
-              </>
-            ) : (
-              <>
-                <Copy size={13} strokeWidth={1.85} />
-                {t("devices.cloud.oauthFallback.copy")}
-              </>
-            )}
-          </button>
+          <Button size="sm" icon={oauthCopied ? Check : Copy} onClick={() => void onCopyOauthUrl()}>
+            {oauthCopied
+              ? t("devices.cloud.oauthFallback.copied")
+              : t("devices.cloud.oauthFallback.copy")}
+          </Button>
         </div>
       )}
 
@@ -654,6 +633,8 @@ function SetupPanel({
 }) {
   const { t } = useTranslation();
   const [secretVisible, setSecretVisible] = useState(false);
+  const clientIdId = useId();
+  const secretId = useId();
   const open = (url: string) => {
     void openUrl(url).catch(() => {});
   };
@@ -663,9 +644,9 @@ function SetupPanel({
         <Settings2 size={13} strokeWidth={2} />
         <span>{t("devices.setup.header")}</span>
         {collapsible && (
-          <button type="button" className={styles.setupClose} onClick={onCollapse}>
+          <Button size="sm" className={styles.setupClose} onClick={onCollapse}>
             {t("devices.setup.collapse")}
-          </button>
+          </Button>
         )}
       </div>
       <ol className={styles.setupSteps}>
@@ -731,10 +712,12 @@ function SetupPanel({
           <span className={styles.stepNum}>4</span>
           <div className={styles.stepBody}>
             <div className={styles.stepTitle}>{t("devices.setup.step4.title")}</div>
-            <label className={styles.credField}>
-              <span className={styles.credLabel}>{t("devices.setup.step4.clientIdLabel")}</span>
-              <input
-                type="text"
+            <div className={styles.credField}>
+              <label htmlFor={clientIdId} className={styles.credLabel}>
+                {t("devices.setup.step4.clientIdLabel")}
+              </label>
+              <TextInput
+                id={clientIdId}
                 className={styles.credInput}
                 value={clientId}
                 onChange={(e) => onChangeId(e.target.value)}
@@ -742,11 +725,14 @@ function SetupPanel({
                 spellCheck={false}
                 autoComplete="off"
               />
-            </label>
-            <label className={styles.credField}>
-              <span className={styles.credLabel}>{t("devices.setup.step4.secretLabel")}</span>
+            </div>
+            <div className={styles.credField}>
+              <label htmlFor={secretId} className={styles.credLabel}>
+                {t("devices.setup.step4.secretLabel")}
+              </label>
               <div className={styles.credInputWrap}>
-                <input
+                <TextInput
+                  id={secretId}
                   type={secretVisible ? "text" : "password"}
                   className={`${styles.credInput} ${styles.credInputWithBtn}`}
                   value={clientSecret}
@@ -755,11 +741,12 @@ function SetupPanel({
                   spellCheck={false}
                   autoComplete="off"
                 />
-                <button
-                  type="button"
+                <IconButton
+                  size="sm"
+                  icon={secretVisible ? EyeOff : Eye}
                   className={styles.credEyeBtn}
                   onClick={() => setSecretVisible((v) => !v)}
-                  aria-label={
+                  label={
                     secretVisible
                       ? t("devices.setup.step4.hideSecret")
                       : t("devices.setup.step4.showSecret")
@@ -768,15 +755,9 @@ function SetupPanel({
                     secretVisible ? t("devices.setup.step4.hide") : t("devices.setup.step4.show")
                   }
                   tabIndex={-1}
-                >
-                  {secretVisible ? (
-                    <EyeOff size={14} strokeWidth={1.85} />
-                  ) : (
-                    <Eye size={14} strokeWidth={1.85} />
-                  )}
-                </button>
+                />
               </div>
-            </label>
+            </div>
           </div>
         </li>
       </ol>
@@ -821,14 +802,14 @@ function ServiceChooser({
         <ArrowLeftRight size={13} strokeWidth={2} />
         <span>{t("devices.cloud.chooser.header")}</span>
         {view === "webdav" ? (
-          <button type="button" className={styles.setupClose} onClick={() => onViewChange("cards")}>
+          <Button size="sm" className={styles.setupClose} onClick={() => onViewChange("cards")}>
             {t("devices.cloud.chooser.back")}
-          </button>
+          </Button>
         ) : (
           onCollapse && (
-            <button type="button" className={styles.setupClose} onClick={onCollapse}>
+            <Button size="sm" className={styles.setupClose} onClick={onCollapse}>
               {t("devices.setup.collapse")}
-            </button>
+            </Button>
           )
         )}
       </div>
@@ -900,14 +881,15 @@ function ServiceCard({
             {t("devices.cloud.chooser.current")}
           </span>
         )}
-        <button
-          type="button"
-          className={current ? styles.smallBtn : styles.connectBtn}
+        <Button
+          size={current ? "sm" : "md"}
+          variant={current ? "soft" : "solid"}
+          tone={current ? "neutral" : "accent"}
           onClick={onAction}
           disabled={disabled}
         >
           {actionLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -928,6 +910,9 @@ function WebDavForm({
   const [user, setUser] = useState(initialUser);
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const urlId = useId();
+  const userId = useId();
+  const passwordId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canConnect = url.trim() !== "" && user.trim() !== "" && password !== "" && !busy;
@@ -962,9 +947,12 @@ function WebDavForm({
       <div className={styles.stepDesc}>
         {t("devices.cloud.webdav.hint", { url: NUTSTORE_DAV_URL })}
       </div>
-      <label className={styles.credField}>
-        <span className={styles.credLabel}>{t("devices.cloud.webdav.url")}</span>
-        <input
+      <div className={styles.credField}>
+        <label htmlFor={urlId} className={styles.credLabel}>
+          {t("devices.cloud.webdav.url")}
+        </label>
+        <TextInput
+          id={urlId}
           type="url"
           className={styles.credInput}
           value={url}
@@ -973,22 +961,27 @@ function WebDavForm({
           spellCheck={false}
           autoComplete="off"
         />
-      </label>
-      <label className={styles.credField}>
-        <span className={styles.credLabel}>{t("devices.cloud.webdav.user")}</span>
-        <input
-          type="text"
+      </div>
+      <div className={styles.credField}>
+        <label htmlFor={userId} className={styles.credLabel}>
+          {t("devices.cloud.webdav.user")}
+        </label>
+        <TextInput
+          id={userId}
           className={styles.credInput}
           value={user}
           onChange={(e) => setUser(e.target.value)}
           spellCheck={false}
           autoComplete="off"
         />
-      </label>
-      <label className={styles.credField}>
-        <span className={styles.credLabel}>{t("devices.cloud.webdav.password")}</span>
+      </div>
+      <div className={styles.credField}>
+        <label htmlFor={passwordId} className={styles.credLabel}>
+          {t("devices.cloud.webdav.password")}
+        </label>
         <div className={styles.credInputWrap}>
-          <input
+          <TextInput
+            id={passwordId}
             type={passwordVisible ? "text" : "password"}
             className={`${styles.credInput} ${styles.credInputWithBtn}`}
             value={password}
@@ -996,39 +989,33 @@ function WebDavForm({
             spellCheck={false}
             autoComplete="off"
           />
-          <button
-            type="button"
+          <IconButton
+            size="sm"
+            icon={passwordVisible ? EyeOff : Eye}
             className={styles.credEyeBtn}
             onClick={() => setPasswordVisible((v) => !v)}
-            aria-label={
+            label={
               passwordVisible
                 ? t("devices.cloud.webdav.hidePassword")
                 : t("devices.cloud.webdav.showPassword")
             }
             title={passwordVisible ? t("devices.setup.step4.hide") : t("devices.setup.step4.show")}
             tabIndex={-1}
-          >
-            {passwordVisible ? (
-              <EyeOff size={14} strokeWidth={1.85} />
-            ) : (
-              <Eye size={14} strokeWidth={1.85} />
-            )}
-          </button>
+          />
         </div>
-      </label>
+      </div>
       {error && <div className={styles.syncError}>{error}</div>}
-      <button
+      <Button
         type="submit"
-        className={`${styles.connectBtn} ${styles.davSubmit}`}
+        variant="solid"
+        tone="accent"
+        icon={LogIn}
+        loading={busy}
+        className={styles.davSubmit}
         disabled={!canConnect}
       >
-        {busy ? (
-          <Loader2 size={13} strokeWidth={2} className={styles.spinning} />
-        ) : (
-          <LogIn size={13} strokeWidth={2} />
-        )}
         {busy ? t("devices.cloud.webdav.connecting") : t("devices.cloud.webdav.connect")}
-      </button>
+      </Button>
     </form>
   );
 }
