@@ -5,8 +5,8 @@
 .bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  gap: calc(10px * var(--density));
+  padding: calc(8px * var(--density)) 0;
   flex-wrap: wrap;
 }
 
@@ -14,7 +14,7 @@
 .rightGroup {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--density));
   margin-left: auto;
 }
 
@@ -27,12 +27,12 @@
   flex: 1;
   min-width: 200px;
   max-width: 320px;
-  height: 32px;
+  height: calc(32px * var(--density));
 }
 
 .searchIcon {
   position: absolute;
-  left: 10px;
+  left: calc(10px * var(--density));
   color: var(--text-faint);
   pointer-events: none;
 }
@@ -40,11 +40,11 @@
 .searchInput {
   width: 100%;
   height: 100%;
-  padding: 0 10px 0 30px;
-  background: var(--surface-2, rgba(0, 0, 0, 0.025));
+  padding: 0 calc(10px * var(--density)) 0 calc(30px * var(--density));
+  background: var(--surface-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   outline: none;
   transition:
@@ -70,13 +70,13 @@
 .trigger {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
+  gap: calc(4px * var(--density));
+  height: calc(32px * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: transparent;
   border: 1px solid color-mix(in oklab, var(--text-faint) 30%, transparent);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   cursor: pointer;
   transition:
@@ -145,29 +145,29 @@
 .panel {
   position: fixed;
   z-index: var(--z-dropdown);
-  min-width: 280px;
-  max-width: 360px;
+  min-width: calc(280px * var(--font-scale));
+  max-width: calc(360px * var(--font-scale));
   /* 同 1A 防御：分类极多时 chip 面板也不许长过视口，超出内滚
      （offsetHeight 翻转测量拿到的是限高后的值，定位逻辑不受影响） */
   max-height: calc(100vh - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 10px;
-  background: var(--surface-1, #ffffff);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: calc(10px * var(--density));
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow:
-    0 12px 40px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 12px 40px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--density));
 }
 
 .panelRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .panelDivider {
@@ -178,12 +178,12 @@
 
 /* pseudo-chip = 「全部」「未分类」灰色风格 */
 .pseudoChip {
-  height: 26px;
-  padding: 0 10px;
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: transparent;
   border: 1px solid color-mix(in oklab, var(--text-faint) 30%, transparent);
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
@@ -207,13 +207,13 @@
 .catChip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 10px 0 8px;
+  gap: calc(5px * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density)) 0 calc(8px * var(--density));
   background: transparent;
   border: 1px solid color-mix(in oklab, var(--chip-color) 40%, transparent);
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
   cursor: pointer;
@@ -244,13 +244,13 @@
 .sortMenu {
   position: fixed;
   z-index: var(--z-dropdown);
-  padding: 4px;
-  background: var(--surface-1, #ffffff);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: calc(4px * var(--density));
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   box-shadow:
-    0 12px 40px rgba(20, 20, 40, calc(0.12 * var(--shadow-strength))),
-    0 2px 6px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 12px 40px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength))),
+    0 2px 6px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -259,12 +259,12 @@
 .sortItem {
   display: flex;
   align-items: center;
-  height: 30px;
-  padding: 0 10px;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
   background: transparent;
   border: none;
   border-radius: var(--radius-xs);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   color: var(--text-strong);
   cursor: pointer;
   text-align: left;
@@ -288,20 +288,20 @@
 /* —— 空态 —— */
 
 .empty {
-  padding: 24px 0;
+  padding: calc(24px * var(--density)) 0;
   text-align: center;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
 }
 
 .emptyClearBtn {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: calc(6px * var(--density));
   padding: 0;
   background: transparent;
   border: none;
   color: var(--color-accent);
-  font-size: 13px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
   font-weight: var(--font-weight-600);
   cursor: pointer;
   text-decoration: underline;
