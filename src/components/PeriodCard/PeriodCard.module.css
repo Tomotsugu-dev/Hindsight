@@ -5,15 +5,15 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow:
-    0 1px 2px rgba(20, 20, 40, calc(0.04 * var(--shadow-strength))),
-    0 8px 20px rgba(20, 20, 40, calc(0.06 * var(--shadow-strength)));
+    0 1px 2px rgba(var(--shadow-rgb), calc(0.04 * var(--shadow-strength))),
+    0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
 .cardHead {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2, 8px);
-  padding: 14px 16px 10px;
+  gap: calc(var(--space-2) * var(--density));
+  padding: calc(14px * var(--density)) calc(16px * var(--density)) calc(10px * var(--density));
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -29,7 +29,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: calc(16px * var(--density));
   min-width: 0;
 }
 
@@ -37,12 +37,12 @@
 .cardHeadLeft {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: calc(var(--space-3) * var(--density));
   min-width: 0;
 }
 
 .cardTitle {
-  font-size: 14px;
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   font-weight: var(--font-weight-semibold);
   color: var(--text-strong);
   margin: 0;
@@ -53,19 +53,19 @@
 .headRight {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--density));
 }
 
 /* 日期导航：outlined 按钮组，配合 .glow 跟随鼠标的描边光 */
 .dayNav {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--density));
 }
 
 .navBtn {
-  width: 26px;
-  height: 26px;
+  width: calc(var(--control-height-sm) * var(--density));
+  height: calc(var(--control-height-sm) * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -89,16 +89,16 @@
 }
 
 .dayPill {
-  min-width: 64px;
-  height: 26px;
-  padding: 0 10px;
+  min-width: calc(64px * var(--font-scale));
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(10px * var(--density));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
   border: 1px solid color-mix(in oklab, var(--color-accent) 18%, var(--border-default));
   background: var(--control-bg);
-  font-size: 12px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   font-weight: var(--font-weight-600);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
@@ -153,8 +153,8 @@
 }
 
 :global([data-layout="flat"]) .cardHead {
-  padding: 22px 0 12px;
-  gap: 14px;
+  padding: calc(22px * var(--density)) 0 calc(12px * var(--density));
+  gap: calc(14px * var(--density));
   border-bottom: 0;
 }
 
@@ -167,6 +167,6 @@
   :global([data-layout="flat"]) .cardControlsRow,
   :global([data-layout="flat"]) .headRight {
     flex-wrap: wrap;
-    gap: 10px;
+    gap: calc(10px * var(--density));
   }
 }
