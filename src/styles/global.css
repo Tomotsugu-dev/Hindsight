@@ -42,15 +42,8 @@ a {
 }
 
 ::selection {
-  background: var(--color-accent-soft);
-  color: var(--text-strong);
-}
-
-/* 暗色：--color-accent-soft 在深底上太淡，鼠标拖拽选中几乎看不见。
-   改成 accent 半透明高亮 + 白字，选中范围清晰。亮色不动。 */
-[data-mode="dark"] ::selection {
-  background: color-mix(in oklab, var(--color-accent) 45%, transparent);
-  color: var(--text-on-accent);
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
 /* a11y 兜底：键盘聚焦时如果元素没有自定义 focus 样式，给一个默认的描边。
