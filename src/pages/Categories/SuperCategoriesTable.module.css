@@ -206,6 +206,46 @@
   flex-direction: column;
   gap: calc(8px * var(--density));
   min-width: 0;
+  position: relative;
+  border-radius: var(--radius-lg);
+  transition:
+    background-color 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.superBodyDemote {
+  background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--color-accent) 62%, transparent);
+}
+
+.superFlyHint {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  max-width: calc(100% - 16px);
+  padding: calc(5px * var(--density)) calc(9px * var(--density));
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 38%, var(--border-default));
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--color-accent) 20%, transparent);
+  color: var(--text-strong);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  line-height: 1.25;
+  pointer-events: none;
+  animation: flyHintIn 140ms var(--ease-out);
+}
+
+@keyframes flyHintIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .emptyHint {
@@ -235,6 +275,26 @@
   background: color-mix(in oklab, var(--color-accent) 14%, var(--surface-1)) !important;
 }
 
+.superCardJustCreated {
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  animation: superJustCreatedRing 1600ms var(--ease-out);
+}
+
+@keyframes superJustCreatedRing {
+  0% {
+    outline-color: color-mix(in oklab, var(--color-accent) 75%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 10%, var(--surface-card));
+  }
+  70% {
+    outline-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+  }
+  100% {
+    outline-color: transparent;
+    background: transparent;
+  }
+}
+
 /* 大类拖动 fly-box 不再有专属类——
    见 SuperCategoriesTable.tsx 的 portal 渲染：直接复用 .superBox / .superCard /
    .superBody 三件套 + inline style 覆盖 position/left/top/width/drop-shadow/z-index/
@@ -247,24 +307,145 @@
   gap: calc(8px * var(--density));
 }
 
-/* —— 跨大类拖拽的发光插入线：position:fixed，坐标由 JS 按最终落点算 —— */
-.dropLine {
+/* —— 拖拽预览层：整层只走 transform，避免逐帧 top/left 触发布局 —— */
+.dragOverlay {
   position: fixed;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--color-accent);
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent),
-    0 0 10px color-mix(in oklab, var(--color-accent) 70%, transparent),
-    0 0 20px color-mix(in oklab, var(--color-accent) 40%, transparent);
+  left: 0;
+  top: 0;
+  z-index: 10000;
   pointer-events: none;
-  z-index: 9998;
+  will-change: transform, opacity;
+  transition:
+    transform var(--drop-line-shift-ms, 160ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease-out;
+  animation: dropOverlayIn 150ms ease-out;
+}
+
+@keyframes dropOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dropLine {
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-accent) 24%, transparent) 12%,
+    color-mix(in oklab, var(--color-accent) 64%, transparent) 50%,
+    color-mix(in oklab, var(--color-accent) 24%, transparent) 88%,
+    transparent
+  );
+  clip-path: polygon(0 44%, 50% 0, 100% 44%, 100% 56%, 50% 100%, 0 56%);
+  filter: drop-shadow(0 0 3px color-mix(in oklab, var(--color-accent) 54%, transparent))
+    drop-shadow(0 0 8px color-mix(in oklab, var(--color-accent) 28%, transparent));
   transform: translateY(-50%);
 }
 
+.promoteGhost {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 104px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: calc(10px * var(--density)) calc(8px * var(--density));
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--drag-color) 13%, var(--surface-card));
+  border: 1px solid color-mix(in oklab, var(--drag-color) 35%, transparent);
+  box-shadow: 0 8px 22px color-mix(in oklab, var(--drag-color) 18%, transparent);
+  color: var(--text-strong);
+  text-align: center;
+  animation: dropGhostIn 140ms var(--ease-out);
+}
+
+.promoteGhostIcon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--drag-color) 18%, transparent);
+  color: var(--drag-color);
+}
+
+.promoteGhostName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-700);
+}
+
+@keyframes dropGhostIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dragError {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: calc(10px * var(--density)) calc(12px * var(--density));
+  border-radius: var(--radius-md);
+  background: var(--status-error-soft);
+  border: 1px solid color-mix(in oklab, var(--status-error) 24%, transparent);
+  color: color-mix(in oklab, var(--status-error-strong) 72%, var(--text-strong));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+}
+
+.dragErrorText {
+  flex: 1;
+  min-width: 0;
+}
+
+.dragErrorClose {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dragErrorClose:hover {
+  background: color-mix(in oklab, var(--status-error) 12%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .superCardJustCreated,
+  .superFlyHint,
+  .promoteGhost,
+  .dragOverlay {
+    animation: none;
+    transition: none;
+  }
+
   .dropLine {
-    box-shadow: 0 0 0 1px var(--color-accent);
+    filter: none;
   }
 }
 

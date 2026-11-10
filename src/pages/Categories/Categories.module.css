@@ -207,10 +207,21 @@
     catJustCreatedRing 1600ms var(--ease-out);
 }
 
+/* 拖拽落地：只在刷新后的新位置短促描边，不重复新建态的 squish / 改名。 */
+.catRowLanded {
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  animation: catJustCreatedRing 700ms var(--ease-out);
+}
+
 /* 减少动态效果：只留描边渐隐，去掉 squish 位移 */
 @media (prefers-reduced-motion: reduce) {
   .catRowJustCreated {
     animation: catJustCreatedRing 1600ms var(--ease-out);
+  }
+
+  .catRowLanded {
+    animation: catJustCreatedRing 700ms var(--ease-out);
   }
 }
 
@@ -298,6 +309,25 @@
   font-weight: var(--font-weight-title);
   color: var(--text-strong);
   letter-spacing: -0.01em;
+}
+
+.catFlyHint {
+  position: absolute;
+  top: calc(7px * var(--density));
+  right: calc(9px * var(--density));
+  z-index: 3;
+  max-width: calc(100% - 112px);
+  padding: calc(4px * var(--density)) calc(8px * var(--density));
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 34%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklab, var(--color-accent) 10%, var(--surface-card));
+  color: var(--text-strong);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .catIconWrap {
@@ -414,6 +444,12 @@
   grid-template-rows: minmax(var(--collapsed-h), 1fr);
   -webkit-mask-image: linear-gradient(to bottom, #000 100%, #000 100%);
   mask-image: linear-gradient(to bottom, #000 100%, #000 100%);
+}
+
+:global(body[data-category-drag="true"]) .catRow .appListClip {
+  grid-template-rows: minmax(var(--collapsed-h), 0fr);
+  -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 65%, transparent 100%);
 }
 
 /* grid item：min-height: 0 解锁缩小（默认 min-content）；overflow:hidden 截掉溢出

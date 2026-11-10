@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -27,6 +28,12 @@ interface SuperRowProps {
   justCreatedCatId: string | null;
   /** 本大类卡片是否刚被新建：同款高亮 + 直接进改名态 */
   justCreated?: boolean;
+  /** 拖拽刚落地后的短暂高亮，不进入改名态。 */
+  isLanded?: boolean;
+  /** 刚完成拖拽落地的子分类 id。 */
+  landedCatId: string | null;
+  /** 大类降级预览：true 时高亮右侧内容区。 */
+  isDemoteTarget: boolean;
   onGripMouseDown: (
     cat: Category,
     e: ReactMouseEvent<HTMLButtonElement>,
@@ -54,6 +61,9 @@ function SuperRow_({
   draggingCatId,
   justCreatedCatId,
   justCreated,
+  isLanded = false,
+  landedCatId,
+  isDemoteTarget,
   onGripMouseDown,
   registerRowRef,
   onSuperMouseDown,
@@ -102,9 +112,7 @@ function SuperRow_({
     dragging ? styles.dropTarget : "",
     isHot ? styles.dropHot : "",
     isSuperDragTarget ? styles.superCardDropHot : "",
-    // TODO: catRowJustCreated is defined in Categories.module.css, not in this file, so a new
-    // group card never shows the ring.
-    justCreated ? styles.catRowJustCreated : "",
+    justCreated || isLanded ? styles.superCardJustCreated : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -204,8 +212,10 @@ function SuperRow_({
         emptyHint={t("categories.super.emptyHint")}
         draggingCatId={draggingCatId}
         justCreatedCatId={justCreatedCatId}
+        landedCatId={landedCatId}
         onGripMouseDown={onGripMouseDown}
         registerRowRef={registerRowRef}
+        isDemoteTarget={isDemoteTarget}
       />
 
       <ConfirmDialog
@@ -227,12 +237,12 @@ function SuperRow_({
 }
 
 /** SuperRow 用 forwardRef 把 section DOM 引用暴露给父；父用它做 Y-band 快照 */
-export const SuperRow = ({
+export const SuperRow = memo(function SuperRow({
   ref,
   ...props
-}: SuperRowProps & { ref: (el: HTMLElement | null) => void }) => (
-  <SuperRow_ rowRef={ref} {...props} />
-);
+}: SuperRowProps & { ref: (el: HTMLElement | null) => void }) {
+  return <SuperRow_ rowRef={ref} {...props} />;
+});
 
 interface OrphanRowProps {
   cats: Category[];
@@ -240,6 +250,7 @@ interface OrphanRowProps {
   isHot: boolean;
   draggingCatId: string | null;
   justCreatedCatId: string | null;
+  landedCatId: string | null;
   onGripMouseDown: (
     cat: Category,
     e: ReactMouseEvent<HTMLButtonElement>,
@@ -254,6 +265,7 @@ function OrphanRow_({
   isHot,
   draggingCatId,
   justCreatedCatId,
+  landedCatId,
   onGripMouseDown,
   registerRowRef,
   rowRef,
@@ -282,6 +294,7 @@ function OrphanRow_({
         emptyHint={t("categories.super.orphanEmptyHint")}
         draggingCatId={draggingCatId}
         justCreatedCatId={justCreatedCatId}
+        landedCatId={landedCatId}
         onGripMouseDown={onGripMouseDown}
         registerRowRef={registerRowRef}
       />
@@ -289,12 +302,12 @@ function OrphanRow_({
   );
 }
 
-export const OrphanRow = ({
+export const OrphanRow = memo(function OrphanRow({
   ref,
   ...props
-}: OrphanRowProps & { ref: (el: HTMLElement | null) => void }) => (
-  <OrphanRow_ rowRef={ref} {...props} />
-);
+}: OrphanRowProps & { ref: (el: HTMLElement | null) => void }) {
+  return <OrphanRow_ rowRef={ref} {...props} />;
+});
 
 /** 「隐藏」builtin 行：极简渲染，**不展示左侧大类 label 列**——直接一个无 header 的卡片
  *  装 hidden CategoryRow。视觉上跟大类卡同款边框 / 阴影，但少了 grid 左列。
@@ -302,7 +315,7 @@ export const OrphanRow = ({
  *  - 不入 superRowRefs → 拖动时不是 drop target
  *  - hidden cat 的 grip 在 CategoryRow 内部 builtin 拦截，也无法被拖出
  */
-export function BuiltinRow({
+export const BuiltinRow = memo(function BuiltinRow({
   cats,
   registerRowRef,
 }: {
@@ -316,7 +329,7 @@ export function BuiltinRow({
       ))}
     </section>
   );
-}
+});
 
 /** SuperRow / OrphanRow 共享的 body 渲染：列出 CategoryRow + 空态提示 + 手写 FLIP
  *  让同大类内 reorder 时行平滑滑到新位置。手写 FLIP 见 SuperCategoriesTable 内 prevSuperTops
@@ -326,23 +339,29 @@ function SuperBody({
   emptyHint,
   draggingCatId,
   justCreatedCatId,
+  landedCatId,
   onGripMouseDown,
   registerRowRef,
+  isDemoteTarget = false,
 }: {
   cats: Category[];
   emptyHint: string;
   draggingCatId: string | null;
   justCreatedCatId: string | null;
+  landedCatId: string | null;
   onGripMouseDown: (
     cat: Category,
     e: ReactMouseEvent<HTMLButtonElement>,
     rowEl: HTMLDivElement,
   ) => void;
   registerRowRef: (id: string, el: HTMLDivElement | null) => void;
+  isDemoteTarget?: boolean;
 }) {
   // 本 body 内的行 DOM ref（独立于父的 catRowRefs——FLIP 只关心本 body 内重排）
   const localRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const prevTops = useRef<Map<string, number>>(new Map());
+  const rowAnimations = useRef<Map<string, Animation>>(new Map());
+  const prevOrder = useRef("");
   const setLocalRowRef = useCallback(
     (id: string, el: HTMLDivElement | null) => {
       if (el) localRowRefs.current.set(id, el);
@@ -353,45 +372,58 @@ function SuperBody({
     [registerRowRef],
   );
   useLayoutEffect(() => {
+    const orderKey = cats.map((category) => category.id).join("\u0000");
+    if (orderKey === prevOrder.current) return;
+    prevOrder.current = orderKey;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const newTops = new Map<string, number>();
     localRowRefs.current.forEach((el, id) => {
-      el.style.transition = "none";
-      el.style.transform = "";
+      rowAnimations.current.get(id)?.cancel();
+      rowAnimations.current.delete(id);
       const newTop = el.getBoundingClientRect().top;
       newTops.set(id, newTop);
+      if (reduced || typeof el.animate !== "function") return;
       const prevTop = prevTops.current.get(id);
       if (prevTop === undefined) return;
       const dy = prevTop - newTop;
       if (Math.abs(dy) < 0.5) return;
-      el.style.transform = `translateY(${dy}px)`;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          el.style.transition = "transform 380ms cubic-bezier(0.2, 0.9, 0.3, 1)";
-          el.style.transform = "";
-        });
-      });
+      const animation = el.animate(
+        [{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
+        {
+          duration: 300,
+          easing: "cubic-bezier(0.22, 0.72, 0.24, 1)",
+        },
+      );
+      rowAnimations.current.set(id, animation);
+      animation.onfinish = () => {
+        if (rowAnimations.current.get(id) === animation) {
+          rowAnimations.current.delete(id);
+        }
+      };
     });
     prevTops.current = newTops;
   }, [cats]);
-  if (cats.length === 0) {
-    return (
-      <div className={styles.superBody}>
-        <div className={styles.emptyHint}>{emptyHint}</div>
-      </div>
-    );
-  }
+  const bodyClass = [styles.superBody, isDemoteTarget ? styles.superBodyDemote : ""]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={styles.superBody}>
-      {cats.map((cat) => (
-        <CategoryRow
-          key={cat.id}
-          category={cat}
-          isDragging={draggingCatId === cat.id}
-          justCreated={justCreatedCatId === cat.id}
-          onGripMouseDown={onGripMouseDown}
-          registerRowRef={setLocalRowRef}
-        />
-      ))}
+    <div className={bodyClass}>
+      {cats.length === 0 ? (
+        <div className={styles.emptyHint}>{emptyHint}</div>
+      ) : (
+        cats.map((cat) => (
+          <CategoryRow
+            key={cat.id}
+            category={cat}
+            isDragging={draggingCatId === cat.id}
+            justCreated={justCreatedCatId === cat.id}
+            isLanded={landedCatId === cat.id}
+            onGripMouseDown={onGripMouseDown}
+            registerRowRef={setLocalRowRef}
+          />
+        ))
+      )}
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import {
+  memo,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -31,6 +33,8 @@ interface Props {
   /** 刚被用户新建出来的那一行：挂着陆动画 + accent 描边，并直接进改名态。
    *  没有这个反馈的话，新建按钮在视口外建出一行，用户看不到任何变化（issue #19）。 */
   justCreated?: boolean;
+  /** 刚完成拖拽落地：只做短暂描边，不进入改名态。 */
+  isLanded?: boolean;
   /** SuperCategoriesTable 把 catId → DOM 收集到全局 Map，用来 drag 开始时快照各 row Y 范围
    *  做"同大类内 reorder hover 命中" */
   registerRowRef?: (id: string, el: HTMLDivElement | null) => void;
@@ -49,11 +53,12 @@ interface Props {
  * 视觉提示"此行可拖"，不绑定 mousedown handler——HTML5 DnD 自动覆盖整个行的
  * 拖拽语义。
  */
-export function CategoryRow({
+export const CategoryRow = memo(function CategoryRow({
   category,
   onGripMouseDown,
   isDragging,
   justCreated,
+  isLanded,
   registerRowRef,
 }: Props) {
   const { t } = useTranslation();
@@ -69,13 +74,15 @@ export function CategoryRow({
   const rowRef = useRef<HTMLDivElement>(null);
   const Icon = resolveCategoryIcon(category.icon);
 
-  // 把 row DOM 注册到父（SuperCategoriesTable）的 Map，让父在 drag 开始时拍 Y 范围快照
-  useEffect(() => {
-    if (!registerRowRef) return;
-    const el = rowRef.current;
-    registerRowRef(category.id, el);
-    return () => registerRowRef(category.id, null);
-  }, [category.id, registerRowRef]);
+  // 用 callback ref 在 layout effect 之前完成注册，确保首次 reorder 的 FLIP
+  // 已经拿到旧位置。
+  const setRowRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      rowRef.current = el;
+      registerRowRef?.(category.id, el);
+    },
+    [category.id, registerRowRef],
+  );
 
   useEffect(() => {
     if (editingName) {
@@ -127,11 +134,12 @@ export function CategoryRow({
 
   return (
     <div
-      ref={rowRef}
+      ref={setRowRef}
       className={[
         styles.catRow,
         isDragging ? styles.catRowSource : "",
         justCreated ? styles.catRowJustCreated : "",
+        isLanded ? styles.catRowLanded : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -259,4 +267,4 @@ export function CategoryRow({
       )}
     </div>
   );
-}
+});

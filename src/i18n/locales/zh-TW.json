@@ -864,6 +864,14 @@
       },
       "orphanLabel": "未歸入大類",
       "catCount": "{{count}} 個分類",
+      "drag": {
+        "moveHint": "放開：把「{{name}}」移到這裡",
+        "promoteHint": "放開：新建大類「{{name}}」",
+        "demoteHint": "放開：併入「{{name}}」（{{count}} 個分類）",
+        "promoteFailed": "沒能建立大類，本次變更已撤銷。",
+        "demoteFailed": "沒能併入大類，本次變更已撤銷。",
+        "partialFailure": "本次拖曳只撤銷了一部分，請重新整理後再試。"
+      },
       "emptyHint": "拖一個分類到左邊大類名上即歸入",
       "orphanEmptyHint": "（所有分類已歸入大類）",
       "deleteAria": "刪除大類",

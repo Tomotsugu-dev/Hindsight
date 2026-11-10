@@ -864,6 +864,14 @@
       },
       "orphanLabel": "Sin grupo",
       "catCount": "{{count}} categorías",
+      "drag": {
+        "moveHint": "Suelta para mover «{{name}}» aquí",
+        "promoteHint": "Suelta para crear la supercategoría «{{name}}»",
+        "demoteHint": "Suelta para combinar con «{{name}}» ({{count}})",
+        "promoteFailed": "No se pudo crear la supercategoría. El cambio se deshizo.",
+        "demoteFailed": "No se pudo combinar la supercategoría. El cambio se deshizo.",
+        "partialFailure": "El cambio de arrastre solo se deshizo en parte. Actualiza y vuelve a intentarlo."
+      },
       "emptyHint": "Arrastra una categoría hasta la etiqueta de una supercategoría para asignarla",
       "orphanEmptyHint": "(Todas las categorías están agrupadas)",
       "deleteAria": "Eliminar la supercategoría",

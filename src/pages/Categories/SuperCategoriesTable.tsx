@@ -9,6 +9,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
 import { useCategories } from "../../state/categories";
 import { useSuperCategories } from "../../state/superCategories";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
@@ -23,10 +25,17 @@ import {
 } from "../../hooks/useDragAutoScroll";
 import {
   insertBlockAtSuperPosition,
+  pickPromoteGap,
+  planDemoteOrder,
+  sameCategoryDrop,
+  sameSuperDrop,
   moveBeforeOrAfter,
   pickRowDrop,
   sameOrder,
+  type CategoryDropIntent,
+  type GapBand,
   type RowBand,
+  type SuperDropIntent,
 } from "./dragOrder";
 import styles from "./SuperCategoriesTable.module.css";
 import catStyles from "./Categories.module.css";
@@ -44,8 +53,8 @@ interface SuperBand {
   bodyRight: number;
 }
 
-/** 跨大类拖拽的插入线（fixed 定位，屏幕坐标）。 */
-interface DropLine {
+interface CatPreviewGeometry {
+  kind: "row" | "promote";
   top: number;
   left: number;
   width: number;
@@ -65,8 +74,6 @@ interface DragState {
   height: number;
   /** 源大类 id；orphan 用 ORPHAN_KEY */
   sourceSuperKey: string;
-  /** 当前鼠标 Y（屏幕坐标） */
-  cursorY: number;
 }
 
 /** 大类卡片拖动状态——独立于 cat drag 的 DragState，两条 pipeline 互斥。 */
@@ -80,8 +87,19 @@ interface SuperDragState {
   /** 源大类卡片宽 / 高（fly-chip 复用） */
   width: number;
   height: number;
-  /** 当前鼠标 Y */
-  cursorY: number;
+}
+
+interface CatLanding {
+  preview: DragState;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+}
+
+interface DragError {
+  kind: "promote" | "demote";
+  rollback: "complete" | "partial";
 }
 
 /**
@@ -105,18 +123,29 @@ export function SuperCategoriesTable({
   justCreatedCatId = null,
   justCreatedSuperId = null,
 }: SuperCategoriesTableProps = {}) {
+  const { t } = useTranslation();
   const { categories, reorder: reorderCategories } = useCategories();
-  const { supers, reorder: reorderSupers, moveCategoryToSuper } = useSuperCategories();
+  const {
+    supers,
+    reorder: reorderSupers,
+    moveCategoryToSuper,
+    promoteCategory,
+    demoteSuper,
+  } = useSuperCategories();
 
   // super-card / orphan-card 的 DOM ref —— 拍 Y 范围快照判断 cursor 落在哪个 super 区
   const superRowRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const setSuperRowRef = useCallback(
-    (key: string) => (el: HTMLElement | null) => {
+  const superRowRefSetters = useRef<Map<string, (el: HTMLElement | null) => void>>(new Map());
+  const getSuperRowRef = useCallback((key: string) => {
+    const existing = superRowRefSetters.current.get(key);
+    if (existing) return existing;
+    const setter = (el: HTMLElement | null) => {
       if (el) superRowRefs.current.set(key, el);
       else superRowRefs.current.delete(key);
-    },
-    [],
-  );
+    };
+    superRowRefSetters.current.set(key, setter);
+    return setter;
+  }, []);
 
   // 每行 CategoryRow 的 DOM ref —— 同大类内 reorder 时拍 Y 范围做行命中
   const catRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -151,14 +180,8 @@ export function SuperCategoriesTable({
   }, [justCreatedCatId, justCreatedSuperId]);
 
   const [drag, setDrag] = useState<DragState | null>(null);
-  // 跨大类 drop 目标：cursor 落在哪个 super 上（≠ sourceSuperKey 时表示要跨）
-  const [hotSuperKey, setHotSuperKey] = useState<string | null>(null);
-  // 同大类内 reorder 目标：cursor 落在源大类内哪一行上（用作 insertion target）
-  const [hoverRowId, setHoverRowId] = useState<string | null>(null);
-  // 插入到 hover 行的前面还是后面（行内上半区/下半区）
-  const [hoverAfter, setHoverAfter] = useState(false);
-  // 跨大类时的发光插入线
-  const [dropLine, setDropLine] = useState<DropLine | null>(null);
+  const [catDrop, setCatDrop] = useState<CategoryDropIntent | null>(null);
+  const [catLanding, setCatLanding] = useState<CatLanding | null>(null);
   // 拖拽坐标基准。快照存的是内容坐标（相对滚动内容顶部），命中时用
   // clientY - 容器顶部 + 当前 scrollTop 换算；这样滚动不会让按下时的快照失效。
   const scrollRef = useRef<HTMLElement | null>(null);
@@ -168,20 +191,28 @@ export function SuperCategoriesTable({
   const cursorXRef = useRef(0);
   const catDragRef = useRef<DragState | null>(null);
   const superDragRef = useRef<SuperDragState | null>(null);
-  const hotSuperRef = useRef<string | null>(null);
-  const hoverRowRef = useRef<string | null>(null);
-  const hoverAfterRef = useRef(false);
-  const dropLineRef = useRef<DropLine | null>(null);
-  const hoverSuperReorderRef = useRef<string | null>(null);
+  const catDropRef = useRef<CategoryDropIntent | null>(null);
+  const catPreviewRef = useRef<CatPreviewGeometry | null>(null);
+  const catOverlayRef = useRef<HTMLDivElement>(null);
+  const catFlyRef = useRef<HTMLDivElement>(null);
+  const superFlyRef = useRef<HTMLDivElement>(null);
+  const superDropRef = useRef<SuperDropIntent | null>(null);
   // super 级 Y 范围快照
   const snapshotYRanges = useRef<Map<string, SuperBand>>(new Map());
+  const snapshotGapBands = useRef<GapBand[]>([]);
   // 所有可拖拽行的 Y 范围快照（drag start 时拍一次，按 top 排序）
   const snapshotRowYRanges = useRef<RowBand[]>([]);
 
   // 大类拖动 reorder 的独立 state（跟上面 cat drag 互斥）
   const [superDrag, setSuperDrag] = useState<SuperDragState | null>(null);
-  /** 大类拖动期间，cursor Y 命中哪个 super 作 insertion target（≠ sourceSuper 时表示要换位） */
-  const [hoverSuperReorderId, setHoverSuperReorderId] = useState<string | null>(null);
+  const [superDrop, setSuperDrop] = useState<SuperDropIntent | null>(null);
+  const [landedSuperId, setLandedSuperId] = useState<string | null>(null);
+  const [landedCatId, setLandedCatId] = useState<string | null>(null);
+  const [mutationPending, setMutationPending] = useState(false);
+  const [dragError, setDragError] = useState<DragError | null>(null);
+  const landedTimerRef = useRef<number | null>(null);
+  const landedCatTimerRef = useRef<number | null>(null);
+  const catLandingTimerRef = useRef<number | null>(null);
   /** 大类松手后 fly-box 平滑"吸"到落地位置的目标坐标。
    *  非 null 时 fly-box 走 CSS transition 从 cursor → target，over ~200ms。
    *  动画期间 superDrag / hoverSuperReorderId 都保留——保持源 superBox 处在投机重排位置
@@ -215,56 +246,26 @@ export function SuperCategoriesTable({
     return { catsBySuper: map, orphans: orph, builtins: bi };
   }, [categories, supers]);
 
-  // 同大类内 reorder 中的"投机重排"——只动源大类内行的顺序，FLIP 据此播 row 滑动。
-  // 注意 deps：只能依赖 drag 的 catId / sourceSuperKey（拖动期间不变），不能依赖整个
-  // drag 对象——后者每次 mousemove 都因 cursorY 更新而变身份，会导致 useMemo 每帧
-  // 返回新引用 → FLIP useLayoutEffect 每帧重置 transform → 动画从来没机会播完。
   const dragCatId = drag?.catId ?? null;
-  const dragSourceSuperKey = drag?.sourceSuperKey ?? null;
-  const { effectiveCatsBySuper, effectiveOrphans } = useMemo(() => {
-    if (!dragCatId || !hoverRowId || hoverRowId === dragCatId) {
-      return { effectiveCatsBySuper: catsBySuper, effectiveOrphans: orphans };
-    }
-    const reorder = (arr: Category[]) => {
-      const ids = arr.map((c) => c.id);
-      const next = moveBeforeOrAfter(ids, dragCatId, hoverRowId, hoverAfter);
-      if (sameOrder(ids, next)) return arr;
-      const byId = new Map(arr.map((c) => [c.id, c]));
-      return next.map((id) => byId.get(id)).filter((c): c is Category => c !== undefined);
-    };
-    if (dragSourceSuperKey === ORPHAN_KEY) {
-      return { effectiveCatsBySuper: catsBySuper, effectiveOrphans: reorder(orphans) };
-    }
-    if (!dragSourceSuperKey) {
-      return { effectiveCatsBySuper: catsBySuper, effectiveOrphans: orphans };
-    }
-    const sourceCats = catsBySuper.get(dragSourceSuperKey);
-    if (!sourceCats) {
-      return { effectiveCatsBySuper: catsBySuper, effectiveOrphans: orphans };
-    }
-    const nextMap = new Map(catsBySuper);
-    nextMap.set(dragSourceSuperKey, reorder(sourceCats));
-    return { effectiveCatsBySuper: nextMap, effectiveOrphans: orphans };
-  }, [catsBySuper, orphans, dragCatId, dragSourceSuperKey, hoverRowId, hoverAfter]);
 
   // 大类拖动时的"投机重排"：当 cursor 命中其他 super，supers 数组实时按"会落在哪"
   // 的顺序渲染。手写 FLIP（见 prevSuperTops 那段）据此把整个 superBox（左卡 + 右行）
   // 平滑滑到新位置——右侧小类跟着大类卡一起动，跟小类内拖动同款效果。
-  // deps 只用 superDrag.superId（drag 期间稳定），跟 effectiveCatsBySuper 同理：
-  // 不能传整个 superDrag 对象，cursorY 每帧变会让 useMemo 每帧返回新数组 → FLIP 死循环。
+  // deps 只用 superDrag.superId（drag 期间稳定）：不能传整个 superDrag 对象，
+  // cursorY 每帧变会让 useMemo 每帧返回新数组 → FLIP 死循环。
   const superDragId = superDrag?.superId ?? null;
   const effectiveSupers = useMemo(() => {
-    if (!superDragId || !hoverSuperReorderId || hoverSuperReorderId === superDragId) {
+    if (!superDragId || superDrop?.kind !== "reorder" || superDrop.targetSuperId === superDragId) {
       return supers;
     }
     const fromIdx = supers.findIndex((s) => s.id === superDragId);
-    const toIdx = supers.findIndex((s) => s.id === hoverSuperReorderId);
+    const toIdx = supers.findIndex((s) => s.id === superDrop.targetSuperId);
     if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return supers;
     const out = [...supers];
     const [moved] = out.splice(fromIdx, 1);
     out.splice(toIdx, 0, moved);
     return out;
-  }, [supers, superDragId, hoverSuperReorderId]);
+  }, [supers, superDragId, superDrop]);
 
   const validSuperIds = useMemo(() => new Set(supers.map((s) => s.id)), [supers]);
   const superKeyOfCategory = useCallback(
@@ -299,6 +300,24 @@ export function SuperCategoriesTable({
       });
     });
     snapshotYRanges.current = snap;
+
+    const ordered = [...snap.entries()].sort((a, b) => a[1].top - b[1].top);
+    const gaps: GapBand[] = [];
+    for (let index = 0; index < ordered.length - 1; index += 1) {
+      const [afterSuperId, current] = ordered[index];
+      const [, next] = ordered[index + 1];
+      if (afterSuperId === ORPHAN_KEY) continue;
+      const top = current.bottom;
+      const bottom = next.top;
+      if (bottom < top) continue;
+      gaps.push({
+        afterSuperId,
+        top,
+        bottom,
+        lineTop: (top + bottom) / 2,
+      });
+    }
+    snapshotGapBands.current = gaps;
   }, []);
 
   /** 量所有非 builtin 行的位置（内容坐标），滚动期间不重测。 */
@@ -322,112 +341,155 @@ export function SuperCategoriesTable({
     snapshotRowYRanges.current = bands;
   }, [categories, superKeyOfCategory]);
 
-  const updateCatHits = useCallback((clientY: number, clientX: number) => {
-    const cur = catDragRef.current;
-    if (!cur) return;
-    const scrollTop = scrollRef.current?.scrollTop ?? 0;
-    const containerTop = containerTopRef.current;
-    const containerBottom = containerBottomRef.current;
-    const y = clientY - containerTop + scrollTop;
-    const rows = snapshotRowYRanges.current;
+  const positionCatPreview = useCallback(() => {
+    const preview = catPreviewRef.current;
+    const element = catOverlayRef.current;
+    if (!preview || !element) return;
+    const width = `${preview.width}px`;
+    if (element.style.width !== width) element.style.width = width;
+    element.style.transform = `translate3d(${preview.left}px, ${preview.top}px, 0)`;
+  }, []);
 
-    let nextRow: string | null = null;
-    let nextAfter = false;
-    let nextSuper: string | null = null;
+  const updateCatHits = useCallback(
+    (clientY: number, clientX: number) => {
+      const cur = catDragRef.current;
+      if (!cur) return;
+      const scrollTop = scrollRef.current?.scrollTop ?? 0;
+      const containerTop = containerTopRef.current;
+      const containerBottom = containerBottomRef.current;
+      const y = clientY - containerTop + scrollTop;
+      const rows = snapshotRowYRanges.current;
 
-    if (rows.length > 0 && clientY <= containerTop + DRAG_AUTO_SCROLL_EDGE) {
-      // 拖到窗口上沿：全列表第一行（含「未归入」，跳过 builtin）
-      nextRow = rows[0].id;
-      nextAfter = false;
-      nextSuper = rows[0].superKey;
-    } else if (rows.length > 0 && clientY >= containerBottom - DRAG_AUTO_SCROLL_EDGE) {
-      // 拖到窗口下沿：全列表最后一行
-      const last = rows[rows.length - 1];
-      nextRow = last.id;
-      nextAfter = true;
-      nextSuper = last.superKey;
-    } else {
-      let hitSuper: string | null = null;
-      let band: SuperBand | null = null;
-      for (const [key, r] of snapshotYRanges.current) {
-        if (y >= r.top && y <= r.bottom) {
-          hitSuper = key;
-          band = r;
-          break;
+      let next: CategoryDropIntent | null = null;
+      let lineTop = 0;
+      let left = 0;
+      let width = 0;
+      let kind: CatPreviewGeometry["kind"] = "row";
+
+      if (rows.length > 0 && clientY <= containerTop + DRAG_AUTO_SCROLL_EDGE) {
+        // 拖到窗口上沿：全列表第一行（含「未归入」，跳过 builtin）
+        const first = rows[0];
+        const band = snapshotYRanges.current.get(first.superKey);
+        next = {
+          kind: "row",
+          superKey: first.superKey,
+          rowId: first.id,
+          after: false,
+        };
+        lineTop = first.top - scrollTop + containerTop;
+        left = band?.bodyLeft ?? 0;
+        width = (band?.bodyRight ?? 0) - (band?.bodyLeft ?? 0);
+      } else if (rows.length > 0 && clientY >= containerBottom - DRAG_AUTO_SCROLL_EDGE) {
+        // 拖到窗口下沿：全列表最后一行
+        const last = rows[rows.length - 1];
+        const band = snapshotYRanges.current.get(last.superKey);
+        next = {
+          kind: "row",
+          superKey: last.superKey,
+          rowId: last.id,
+          after: true,
+        };
+        lineTop = last.bottom - scrollTop + containerTop;
+        left = band?.bodyLeft ?? 0;
+        width = (band?.bodyRight ?? 0) - (band?.bodyLeft ?? 0);
+      } else {
+        const promoteAfter = pickPromoteGap(snapshotGapBands.current, y);
+        if (promoteAfter) {
+          const gap = snapshotGapBands.current.find((item) => item.afterSuperId === promoteAfter);
+          const band = snapshotYRanges.current.get(promoteAfter);
+          if (gap && band) {
+            next = { kind: "promote", afterSuperId: promoteAfter };
+            kind = "promote";
+            lineTop = gap.lineTop - scrollTop + containerTop;
+            left = band.bodyLeft;
+            width = band.bodyRight - band.bodyLeft;
+          }
         }
-      }
-      // 落在两个大类之间的空隙：保留上一次命中，避免松手变成 no-op
-      if (!hitSuper || !band) return;
 
-      nextSuper = hitSuper;
-      const superRows = rows.filter((r) => r.superKey === hitSuper);
-      if (superRows.length > 0) {
-        // 落在目标大类左侧卡片上 = 追加到该组末尾。源大类不用这条，
-        // 避免在组内拖动时误把行甩到组尾。
-        if (hitSuper !== cur.sourceSuperKey && clientX < band.bodyLeft) {
-          const last = superRows[superRows.length - 1];
-          nextRow = last.id;
-          nextAfter = true;
-        } else {
-          const drop = pickRowDrop(superRows, y);
-          if (drop) {
-            nextRow = drop.rowId;
-            nextAfter = drop.after;
+        if (!next) {
+          let hitSuper: string | null = null;
+          let band: SuperBand | null = null;
+          for (const [key, range] of snapshotYRanges.current) {
+            if (y >= range.top && y <= range.bottom) {
+              hitSuper = key;
+              band = range;
+              break;
+            }
+          }
+          // 落在两个大类之间的空隙：保留上一次命中，避免松手变成 no-op
+          if (!hitSuper || !band) return;
+
+          const superRows = rows.filter((row) => row.superKey === hitSuper);
+          let rowId: string | null = null;
+          let after = false;
+          if (superRows.length > 0) {
+            // 落在目标大类左侧卡片上 = 追加到该组末尾。源大类不用这条，
+            // 避免在组内拖动时误把行甩到组尾。
+            if (hitSuper !== cur.sourceSuperKey && clientX < band.bodyLeft) {
+              const last = superRows[superRows.length - 1];
+              rowId = last.id;
+              after = true;
+            } else {
+              const drop = pickRowDrop(superRows, y);
+              if (drop) {
+                rowId = drop.rowId;
+                after = drop.after;
+              }
+            }
+          }
+
+          next = { kind: "row", superKey: hitSuper, rowId, after };
+          left = band.bodyLeft;
+          width = band.bodyRight - band.bodyLeft;
+          if (rowId) {
+            const rowBand = rows.find((row) => row.id === rowId);
+            if (rowBand) {
+              lineTop = (after ? rowBand.bottom : rowBand.top) - scrollTop + containerTop;
+            }
+          } else {
+            lineTop = band.top - scrollTop + containerTop;
           }
         }
       }
-      // superRows 为空：目标大类是空的，只记 super，松手时按组位置插入
-    }
 
-    if (hoverRowRef.current !== nextRow) {
-      hoverRowRef.current = nextRow;
-      setHoverRowId(nextRow);
-    }
-    if (hoverAfterRef.current !== nextAfter) {
-      hoverAfterRef.current = nextAfter;
-      setHoverAfter(nextAfter);
-    }
-    if (hotSuperRef.current !== nextSuper) {
-      hotSuperRef.current = nextSuper;
-      setHotSuperKey(nextSuper);
-    }
-
-    // 跨大类且命中具体行：在最终落点画一条发光插入线
-    let nextLine: DropLine | null = null;
-    if (nextRow && nextSuper && nextSuper !== cur.sourceSuperKey) {
-      const band = snapshotYRanges.current.get(nextSuper);
-      const rowBand = rows.find((r) => r.id === nextRow);
-      if (band && rowBand) {
-        const lineY = nextAfter ? rowBand.bottom : rowBand.top;
-        nextLine = {
-          top: lineY - scrollTop + containerTop,
-          left: band.bodyLeft,
-          width: band.bodyRight - band.bodyLeft,
-        };
+      const previousPreview = catPreviewRef.current;
+      catPreviewRef.current = {
+        kind,
+        top: lineTop,
+        left,
+        width,
+      };
+      if (previousPreview && catOverlayRef.current) {
+        const distance = Math.abs(lineTop - previousPreview.top);
+        const shiftDuration = Math.min(280, Math.max(160, 120 + distance * 0.35));
+        catOverlayRef.current.style.setProperty(
+          "--drop-line-shift-ms",
+          `${Math.round(shiftDuration)}ms`,
+        );
       }
-    }
-    const prevLine = dropLineRef.current;
-    const lineChanged =
-      (prevLine === null) !== (nextLine === null) ||
-      (prevLine !== null &&
-        nextLine !== null &&
-        (Math.abs(prevLine.top - nextLine.top) > 0.5 ||
-          Math.abs(prevLine.left - nextLine.left) > 0.5 ||
-          Math.abs(prevLine.width - nextLine.width) > 0.5));
-    if (lineChanged) {
-      dropLineRef.current = nextLine;
-      setDropLine(nextLine);
-    }
-  }, []);
+      positionCatPreview();
+
+      if (!sameCategoryDrop(catDropRef.current, next)) {
+        catDropRef.current = next;
+        setCatDrop(next);
+      }
+    },
+    [positionCatPreview],
+  );
 
   const updateSuperHits = useCallback((clientY: number) => {
+    const cur = superDragRef.current;
+    if (!cur) return;
     const y = clientY - containerTopRef.current + (scrollRef.current?.scrollTop ?? 0);
+    const clientX = cursorXRef.current;
 
     let hit: string | null = null;
-    for (const [key, r] of snapshotYRanges.current) {
+    let band: SuperBand | null = null;
+    for (const [key, range] of snapshotYRanges.current) {
       if (key === ORPHAN_KEY) continue;
-      if (y >= r.top && y <= r.bottom) {
+      if (y >= range.top && y <= range.bottom) {
         hit = key;
+        band = range;
         break;
       }
     }
@@ -438,14 +500,14 @@ export function SuperCategoriesTable({
       let firstTop = Infinity;
       let lastId: string | null = null;
       let lastBottom = -Infinity;
-      for (const [key, r] of snapshotYRanges.current) {
+      for (const [key, range] of snapshotYRanges.current) {
         if (key === ORPHAN_KEY) continue;
-        if (r.top < firstTop) {
-          firstTop = r.top;
+        if (range.top < firstTop) {
+          firstTop = range.top;
           firstId = key;
         }
-        if (r.bottom > lastBottom) {
-          lastBottom = r.bottom;
+        if (range.bottom > lastBottom) {
+          lastBottom = range.bottom;
           lastId = key;
         }
       }
@@ -453,15 +515,103 @@ export function SuperCategoriesTable({
       else if (lastId && y >= lastBottom) hit = lastId;
     }
 
-    if (hoverSuperReorderRef.current !== hit) {
-      hoverSuperReorderRef.current = hit;
-      setHoverSuperReorderId(hit);
+    // 滚动容器上下边缘强制落到首/尾组；即使首组刚好贴边，也不能把
+    // 边缘拖拽误判成“降级到首组内容区”。
+    const atTopEdge = clientY <= containerTopRef.current + DRAG_AUTO_SCROLL_EDGE;
+    const atBottomEdge = clientY >= containerBottomRef.current - DRAG_AUTO_SCROLL_EDGE;
+    if (atTopEdge || atBottomEdge) {
+      let firstId: string | null = null;
+      let firstTop = Infinity;
+      let lastId: string | null = null;
+      let lastBottom = -Infinity;
+      for (const [key, range] of snapshotYRanges.current) {
+        if (key === ORPHAN_KEY) continue;
+        if (range.top < firstTop) {
+          firstTop = range.top;
+          firstId = key;
+        }
+        if (range.bottom > lastBottom) {
+          lastBottom = range.bottom;
+          lastId = key;
+        }
+      }
+      hit = atTopEdge ? firstId : lastId;
+      band = null;
     }
+
+    if (!hit) {
+      // 从内容区移到组间空隙时不能继续沿用 demote，否则会在空隙里误降级。
+      // 保留同一大类的排序目标，空隙按“原有排序”处理。
+      const previous = superDropRef.current;
+      if (previous?.kind === "demote") {
+        const next: SuperDropIntent = {
+          kind: "reorder",
+          targetSuperId: previous.targetSuperId,
+        };
+        superDropRef.current = next;
+        setSuperDrop(next);
+      }
+      return;
+    }
+    if (hit === cur.superId) {
+      if (superDropRef.current !== null) {
+        superDropRef.current = null;
+        setSuperDrop(null);
+      }
+      return;
+    }
+
+    const targetBand = band ?? snapshotYRanges.current.get(hit) ?? null;
+    const overTargetBody =
+      band !== null &&
+      hit !== ORPHAN_KEY &&
+      targetBand !== null &&
+      clientX >= targetBand.bodyLeft &&
+      clientX <= targetBand.bodyRight;
+
+    let next: SuperDropIntent | null;
+    if (overTargetBody) {
+      const targetRows = snapshotRowYRanges.current.filter((row) => row.superKey === hit);
+      const drop = pickRowDrop(targetRows, y);
+      next = {
+        kind: "demote",
+        targetSuperId: hit,
+        targetRowId: drop?.rowId ?? null,
+        after: drop?.after ?? false,
+      };
+    } else if (hit !== ORPHAN_KEY) {
+      next = { kind: "reorder", targetSuperId: hit };
+    } else {
+      next = null;
+    }
+
+    if (!sameSuperDrop(superDropRef.current, next)) {
+      superDropRef.current = next;
+      setSuperDrop(next);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (catDrop || catLanding) positionCatPreview();
+  }, [catDrop, catLanding, positionCatPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (landedTimerRef.current !== null) {
+        window.clearTimeout(landedTimerRef.current);
+      }
+      if (catLandingTimerRef.current !== null) {
+        window.clearTimeout(catLandingTimerRef.current);
+      }
+      if (landedCatTimerRef.current !== null) {
+        window.clearTimeout(landedCatTimerRef.current);
+      }
+    };
   }, []);
 
   const handleGripMouseDown = useCallback(
     (cat: Category, e: ReactMouseEvent<HTMLButtonElement>, rowEl: HTMLDivElement) => {
-      if (e.button !== 0) return; // 只接左键
+      if (e.button !== 0 || mutationPending) return; // 只接左键
       e.preventDefault();
       const rect = rowEl.getBoundingClientRect();
       const sourceSuperKey =
@@ -476,12 +626,20 @@ export function SuperCategoriesTable({
       containerBottomRef.current = scrollRect ? scrollRect.bottom : window.innerHeight;
       cursorYRef.current = e.clientY;
       cursorXRef.current = e.clientX;
-      hotSuperRef.current = null;
-      hoverRowRef.current = null;
-      hoverAfterRef.current = false;
-      dropLineRef.current = null;
-      setHoverAfter(false);
-      setDropLine(null);
+      catDropRef.current = null;
+      catPreviewRef.current = null;
+      setCatDrop(null);
+      setCatLanding(null);
+      if (catLandingTimerRef.current !== null) {
+        window.clearTimeout(catLandingTimerRef.current);
+        catLandingTimerRef.current = null;
+      }
+      if (landedCatTimerRef.current !== null) {
+        window.clearTimeout(landedCatTimerRef.current);
+        landedCatTimerRef.current = null;
+      }
+      setLandedCatId(null);
+      setDragError(null);
       measureSuperBands();
       measureRowBands();
 
@@ -494,13 +652,34 @@ export function SuperCategoriesTable({
         width: rect.width,
         height: rect.height,
         sourceSuperKey,
-        cursorY: e.clientY,
       };
       catDragRef.current = nextDrag;
       setDrag(nextDrag);
     },
-    [supers, measureSuperBands, measureRowBands],
+    [mutationPending, supers, measureSuperBands, measureRowBands],
   );
+
+  const flashLandedSuper = useCallback((superId: string) => {
+    if (landedTimerRef.current !== null) {
+      window.clearTimeout(landedTimerRef.current);
+    }
+    setLandedSuperId(superId);
+    landedTimerRef.current = window.setTimeout(() => {
+      setLandedSuperId(null);
+      landedTimerRef.current = null;
+    }, 1700);
+  }, []);
+
+  const flashLandedCat = useCallback((catId: string) => {
+    if (landedCatTimerRef.current !== null) {
+      window.clearTimeout(landedCatTimerRef.current);
+    }
+    setLandedCatId(catId);
+    landedCatTimerRef.current = window.setTimeout(() => {
+      setLandedCatId(null);
+      landedCatTimerRef.current = null;
+    }, 700);
+  }, []);
 
   // 全局 mousemove / mouseup —— drag 期间 attach，结束 detach。
   // 依赖只放 catId；cursorY / hover 都走 ref，避免每次 mousemove 都解绑重绑。
@@ -509,70 +688,134 @@ export function SuperCategoriesTable({
     // 拖动期间整个文档 cursor 锁成 grabbing —— fly-chip 是 pointer-events:none，
     // cursor 会穿透到下面元素，不锁 body 就会变成下方元素的 cursor（pointer/text 等）
     const prevCursor = document.body.style.cursor;
+    const prevCategoryDrag = document.body.dataset.categoryDrag;
     document.body.style.cursor = "grabbing";
+    document.body.dataset.categoryDrag = "true";
+    let frame = 0;
+    let lastX = cursorXRef.current;
+    let lastY = cursorYRef.current;
+
+    const positionFly = () => {
+      const cur = catDragRef.current;
+      const element = catFlyRef.current;
+      if (!cur || !element) return;
+      const height = Math.min(cur.height, 96);
+      element.style.transform = `translate3d(${cur.lockedX}px, ${lastY - height / 2}px, 0) scale(1.02)`;
+    };
+
     const onMove = (e: MouseEvent) => {
       cursorYRef.current = e.clientY;
       cursorXRef.current = e.clientX;
-      if (catDragRef.current) {
-        catDragRef.current = { ...catDragRef.current, cursorY: e.clientY };
-      }
-      setDrag((d) => (d ? { ...d, cursorY: e.clientY } : null));
-      updateCatHits(e.clientY, e.clientX);
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        positionFly();
+        updateCatHits(lastY, lastX);
+      });
     };
     const onUp = () => {
+      // 鼠标最后一次移动可能还在待处理的 rAF 里；松手前重算一次，
+      // 不能依赖上一帧的命中结果。
+      updateCatHits(cursorYRef.current, cursorXRef.current);
       const cur = catDragRef.current;
-      const targetRow = hoverRowRef.current;
-      const targetAfter = hoverAfterRef.current;
-      const targetSuper = hotSuperRef.current;
+      const drop = catDropRef.current;
+      const preview = catPreviewRef.current;
       catDragRef.current = null;
-      hotSuperRef.current = null;
-      hoverRowRef.current = null;
-      hoverAfterRef.current = false;
-      dropLineRef.current = null;
+      catDropRef.current = null;
       setDrag(null);
-      setHotSuperKey(null);
-      setHoverRowId(null);
-      setHoverAfter(false);
-      setDropLine(null);
-      if (!cur) return;
+      setCatDrop(null);
 
-      const allIds = categories.map((c) => c.id);
-      const targetRowBand = targetRow
-        ? snapshotRowYRanges.current.find((r) => r.id === targetRow)
-        : undefined;
-      const targetSuperKey = targetRowBand?.superKey ?? targetSuper;
-
-      // 命中具体行：按上半区/下半区精确插到该行前/后
-      if (targetRow && targetRow !== cur.catId && targetSuperKey) {
-        const newOrder = moveBeforeOrAfter(allIds, cur.catId, targetRow, targetAfter);
-        if (targetSuperKey === cur.sourceSuperKey) {
-          if (!sameOrder(newOrder, allIds)) void reorderCategories(newOrder);
-        } else {
-          const superId = targetSuperKey === ORPHAN_KEY ? null : targetSuperKey;
-          void moveCategoryToSuper(cur.catId, superId, newOrder);
+      if (cur && preview && drop) {
+        const height = Math.min(cur.height, 96);
+        const landing: CatLanding = {
+          preview: cur,
+          fromX: cur.lockedX,
+          fromY: lastY - height / 2,
+          toX: preview.left + (preview.kind === "row" ? 8 : 0),
+          toY: preview.top - height / 2,
+        };
+        setCatLanding(landing);
+        if (catLandingTimerRef.current !== null) {
+          window.clearTimeout(catLandingTimerRef.current);
         }
+        catLandingTimerRef.current = window.setTimeout(() => {
+          catLandingTimerRef.current = null;
+          setCatLanding(null);
+        }, 190);
+      }
+
+      if (!cur || !drop) return;
+      const allIds = categories.map((category) => category.id);
+
+      if (drop.kind === "promote") {
+        setMutationPending(true);
+        void promoteCategory(cur.catId, drop.afterSuperId, {
+          name: cur.displayName,
+          color: cur.color,
+          icon: cur.iconKey,
+        })
+          .then((result) => {
+            if (!result.ok) {
+              setDragError({
+                kind: "promote",
+                rollback: result.rollback,
+              });
+            } else {
+              flashLandedCat(cur.catId);
+              flashLandedSuper(result.value.id);
+            }
+          })
+          .finally(() => setMutationPending(false));
         return;
       }
 
-      // 目标大类是空的：按大类在页面上的位置插进去
-      if (!targetSuperKey || targetSuperKey === cur.sourceSuperKey) return;
-      const superOrder = [...supers.map((s) => s.id), ORPHAN_KEY];
-      const newOrder = insertBlockAtSuperPosition(
-        allIds,
-        [cur.catId],
-        targetSuperKey,
-        superOrder,
-        superKeyOf,
-      );
-      const superId = targetSuperKey === ORPHAN_KEY ? null : targetSuperKey;
-      void moveCategoryToSuper(cur.catId, superId, newOrder);
+      if (!drop.rowId) {
+        if (drop.superKey === cur.sourceSuperKey) return;
+        const superOrder = [...supers.map((superCategory) => superCategory.id), ORPHAN_KEY];
+        const newOrder = insertBlockAtSuperPosition(
+          allIds,
+          [cur.catId],
+          drop.superKey,
+          superOrder,
+          superKeyOf,
+        );
+        const superId = drop.superKey === ORPHAN_KEY ? null : drop.superKey;
+        setMutationPending(true);
+        void moveCategoryToSuper(cur.catId, superId, newOrder)
+          .then(() => flashLandedCat(cur.catId))
+          .finally(() => setMutationPending(false));
+        return;
+      }
+
+      if (drop.rowId === cur.catId) return;
+      const newOrder = moveBeforeOrAfter(allIds, cur.catId, drop.rowId, drop.after);
+      setMutationPending(true);
+      if (drop.superKey === cur.sourceSuperKey) {
+        const orderChanged = !sameOrder(newOrder, allIds);
+        void (
+          orderChanged
+            ? reorderCategories(newOrder).then(() => flashLandedCat(cur.catId))
+            : Promise.resolve()
+        ).finally(() => setMutationPending(false));
+      } else {
+        const superId = drop.superKey === ORPHAN_KEY ? null : drop.superKey;
+        void moveCategoryToSuper(cur.catId, superId, newOrder)
+          .then(() => flashLandedCat(cur.catId))
+          .finally(() => setMutationPending(false));
+      }
     };
-    document.addEventListener("mousemove", onMove);
+    positionFly();
+    document.addEventListener("mousemove", onMove, { passive: true });
     document.addEventListener("mouseup", onUp);
     return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = prevCursor;
+      if (prevCategoryDrag === undefined) delete document.body.dataset.categoryDrag;
+      else document.body.dataset.categoryDrag = prevCategoryDrag;
     };
   }, [
     dragCatId,
@@ -582,6 +825,9 @@ export function SuperCategoriesTable({
     supers,
     superKeyOf,
     updateCatHits,
+    promoteCategory,
+    flashLandedCat,
+    flashLandedSuper,
   ]);
 
   useDragAutoScroll({
@@ -591,17 +837,59 @@ export function SuperCategoriesTable({
     onScroll: () => updateCatHits(cursorYRef.current, cursorXRef.current),
   });
 
-  const FlyIcon = drag ? resolveCategoryIcon(drag.iconKey) : null;
+  const catVisual = drag ?? catLanding?.preview ?? null;
+  const FlyIcon = catVisual ? resolveCategoryIcon(catVisual.iconKey) : null;
+  const catDragHint =
+    drag && catDrop
+      ? catDrop.kind === "promote"
+        ? t("categories.super.drag.promoteHint", { name: drag.displayName })
+        : catDrop.superKey !== drag.sourceSuperKey
+          ? t("categories.super.drag.moveHint", { name: drag.displayName })
+          : null
+      : null;
+  const catDropForLine =
+    drag && catDrop && !(catDrop.kind === "row" && catDrop.rowId === drag.catId) ? catDrop : null;
   // 用户如果先 hover 让 AppList 展开后才抓 grip，drag.height 会测到展开值（>150px），
   // 那种 fly-chip 视觉太重；clamp 到 96px collapsed 高度兜底
-  const flyHeight = drag ? Math.min(drag.height, 96) : 0;
+  const flyHeight = catVisual ? Math.min(catVisual.height, 96) : 0;
+
+  useLayoutEffect(() => {
+    const element = catFlyRef.current;
+    if (!drag || !element) return;
+    // 落地过渡结束后元素可能因新拖拽被复用，必须把 landing 期间的
+    // transition / opacity / height 恢复成正常拖拽态。
+    element.style.transition = "none";
+    element.style.opacity = "1";
+    element.style.transform = `translate3d(${drag.lockedX}px, ${
+      cursorYRef.current - flyHeight / 2
+    }px, 0) scale(1.02)`;
+  }, [drag, flyHeight]);
+
+  useLayoutEffect(() => {
+    if (!catLanding || !catFlyRef.current) return;
+    const element = catFlyRef.current;
+    const height = Math.min(catLanding.preview.height, 96);
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    element.style.transition = "none";
+    element.style.opacity = "1";
+    element.style.transform = `translate3d(${catLanding.fromX}px, ${catLanding.fromY}px, 0) scale(1.02)`;
+    requestAnimationFrame(() => {
+      if (!catFlyRef.current) return;
+      element.style.transition = reduced
+        ? "opacity 80ms ease-out"
+        : "transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out";
+      element.style.transform = `translate3d(${catLanding.toX}px, ${catLanding.toY}px, 0) scale(0.96)`;
+      element.style.opacity = "0";
+      element.style.height = `${height}px`;
+    });
+  }, [catLanding]);
 
   // —— 大类卡片 mousedown 启动 super drag。除 icon/name/del 按钮以外的区域触发 —— //
   // 注意：传入的是**整个 .superBox section**，不是 .superCard，
   // 这样测出来的 width 才包含右侧 CategoryRow 区域，fly-box 1:1 复刻整组。
   const handleSuperMouseDown = useCallback(
     (sup: SuperCategory, e: ReactMouseEvent<HTMLDivElement>, boxEl: HTMLElement) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || mutationPending) return;
       // mousedown 落在按钮 / input / role=button 元素上则不当 drag（让它们自己 click / dblclick）
       // role=button 用于排除 superName span（双击改名）等"语义按钮但非 <button> tag"的节点
       const target = e.target as HTMLElement;
@@ -611,9 +899,22 @@ export function SuperCategoriesTable({
       const scrollEl = findScrollContainer(boxEl);
       scrollRef.current = scrollEl;
       containerTopRef.current = scrollEl ? scrollEl.getBoundingClientRect().top : 0;
+      containerBottomRef.current = scrollEl
+        ? scrollEl.getBoundingClientRect().bottom
+        : window.innerHeight;
       cursorYRef.current = e.clientY;
-      hoverSuperReorderRef.current = null;
+      cursorXRef.current = e.clientX;
+      superDropRef.current = null;
+      setSuperDrop(null);
+      setSuperSnap(null);
+      setDragError(null);
+      setLandedCatId(null);
+      if (landedCatTimerRef.current !== null) {
+        window.clearTimeout(landedCatTimerRef.current);
+        landedCatTimerRef.current = null;
+      }
       measureSuperBands();
+      measureRowBands();
 
       const nextDrag: SuperDragState = {
         superId: sup.id,
@@ -623,12 +924,11 @@ export function SuperCategoriesTable({
         lockedX: rect.left,
         width: rect.width,
         height: rect.height,
-        cursorY: e.clientY,
       };
       superDragRef.current = nextDrag;
       setSuperDrag(nextDrag);
     },
-    [measureSuperBands],
+    [mutationPending, measureSuperBands, measureRowBands],
   );
 
   // —— super drag 全局 mousemove / mouseup —— //
@@ -636,45 +936,120 @@ export function SuperCategoriesTable({
     if (!superDragId) return;
     // 整个文档 cursor 锁成 grabbing —— 同 cat drag 那边的理由
     const prevCursor = document.body.style.cursor;
+    const prevCategoryDrag = document.body.dataset.categoryDrag;
     document.body.style.cursor = "grabbing";
+    document.body.dataset.categoryDrag = "true";
+    let frame = 0;
+    let lastY = cursorYRef.current;
+
+    const positionFly = () => {
+      const cur = superDragRef.current;
+      const element = superFlyRef.current;
+      if (!cur || !element) return;
+      element.style.transform = `translate3d(${cur.lockedX}px, ${lastY - cur.height / 2}px, 0)`;
+    };
+
     const onMove = (e: MouseEvent) => {
       cursorYRef.current = e.clientY;
-      if (superDragRef.current) {
-        superDragRef.current = { ...superDragRef.current, cursorY: e.clientY };
-      }
-      setSuperDrag((d) => (d ? { ...d, cursorY: e.clientY } : null));
-      updateSuperHits(e.clientY);
+      cursorXRef.current = e.clientX;
+      lastY = e.clientY;
+      if (!superDragRef.current || frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        positionFly();
+        updateSuperHits(lastY);
+      });
     };
     const onUp = () => {
+      // 同 cat drag：先把最后一个未处理的鼠标位置落成命中结果。
+      updateSuperHits(cursorYRef.current);
       const cur = superDragRef.current;
-      const target = hoverSuperReorderRef.current;
+      const drop = superDropRef.current;
       superDragRef.current = null;
-      hoverSuperReorderRef.current = null;
+      superDropRef.current = null;
       // 没目标 / 落回自己 → 直接清掉，不放 snap 动画（fly-box 应"原地消失"）
-      if (!cur || !target || target === cur.superId) {
+      if (!cur || !drop || (drop.kind === "reorder" && drop.targetSuperId === cur.superId)) {
         setSuperDrag(null);
-        setHoverSuperReorderId(null);
+        setSuperDrop(null);
         setSuperSnap(null);
         return;
       }
+
+      if (drop.kind === "demote") {
+        const targetBand = snapshotYRanges.current.get(drop.targetSuperId);
+        const targetRow = drop.targetRowId
+          ? snapshotRowYRanges.current.find((row) => row.id === drop.targetRowId)
+          : null;
+        if (!targetBand) {
+          setSuperDrag(null);
+          setSuperDrop(null);
+          setSuperSnap(null);
+          return;
+        }
+        const scrollTop = scrollRef.current?.scrollTop ?? 0;
+        const targetY = targetRow
+          ? (drop.after ? targetRow.bottom : targetRow.top) - scrollTop + containerTopRef.current
+          : targetBand.top - scrollTop + containerTopRef.current;
+        setMutationPending(true);
+        setSuperSnap({
+          left: targetBand.bodyLeft,
+          top: targetY - cur.height / 2,
+        });
+        window.setTimeout(() => {
+          const allIds = categories.map((category) => category.id);
+          const movingIds = categories
+            .filter((category) => !category.builtin && category.superCategoryId === cur.superId)
+            .map((category) => category.id);
+          const superOrder = [...supers.map((superCategory) => superCategory.id), ORPHAN_KEY];
+          const orderedIds = planDemoteOrder(
+            allIds,
+            movingIds,
+            drop.targetSuperId,
+            drop.targetRowId,
+            drop.after,
+            superOrder,
+            superKeyOf,
+          );
+          void demoteSuper(cur.superId, drop.targetSuperId, orderedIds)
+            .then((result) => {
+              if (!result.ok) {
+                setDragError({ kind: "demote", rollback: result.rollback });
+              } else {
+                flashLandedSuper(drop.targetSuperId);
+              }
+            })
+            .finally(() => {
+              setSuperDrag(null);
+              setSuperSnap(null);
+              setSuperDrop(null);
+              setMutationPending(false);
+            });
+        }, 190);
+        return;
+      }
+
       // 落到别的大类：测量"源 superBox"当前 DOM 位置——因 effectiveSupers 已投机重排，
       // 它的当前 rect == 最终落地位置。set superSnap，让 fly-box CSS transition 滑过去。
+      setMutationPending(true);
       const sourceEl = superRowRefs.current.get(cur.superId);
-      const ids = supers.map((s) => s.id);
+      const ids = supers.map((superCategory) => superCategory.id);
       const fromIdx = ids.indexOf(cur.superId);
-      const toIdx = ids.indexOf(target);
+      const toIdx = ids.indexOf(drop.targetSuperId);
       const commit = () => {
         if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
           const reordered = [...ids];
           reordered.splice(fromIdx, 1);
           reordered.splice(toIdx, 0, cur.superId);
-          void reorderSupers(reordered);
+          void reorderSupers(reordered)
+            .then(() => flashLandedSuper(cur.superId))
+            .finally(() => setMutationPending(false));
+        } else {
+          setMutationPending(false);
         }
       };
       if (!sourceEl) {
-        // 拿不到 DOM 兜底：跳过 snap 直接 commit
         setSuperDrag(null);
-        setHoverSuperReorderId(null);
+        setSuperDrop(null);
         setSuperSnap(null);
         commit();
         return;
@@ -683,22 +1058,34 @@ export function SuperCategoriesTable({
       setSuperSnap({ left: rect.left, top: rect.top });
       // CSS transition 跑完后再清 state + commit reorder。期间 superDrag 仍 truthy，
       // 投机重排 + opacity 0.3 占位都保留，视觉上 fly-box 平滑落地后整组无缝接管。
-      // 420ms 与下面 transition 时长保持一致
-      setTimeout(() => {
+      window.setTimeout(() => {
         setSuperDrag(null);
-        setHoverSuperReorderId(null);
+        setSuperDrop(null);
         setSuperSnap(null);
         commit();
       }, 420);
     };
-    document.addEventListener("mousemove", onMove);
+    positionFly();
+    document.addEventListener("mousemove", onMove, { passive: true });
     document.addEventListener("mouseup", onUp);
     return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = prevCursor;
+      if (prevCategoryDrag === undefined) delete document.body.dataset.categoryDrag;
+      else document.body.dataset.categoryDrag = prevCategoryDrag;
     };
-  }, [superDragId, supers, reorderSupers, updateSuperHits]);
+  }, [
+    superDragId,
+    supers,
+    reorderSupers,
+    updateSuperHits,
+    categories,
+    superKeyOf,
+    demoteSuper,
+    flashLandedSuper,
+  ]);
 
   useDragAutoScroll({
     active: superDragId !== null && superSnap === null,
@@ -708,6 +1095,31 @@ export function SuperCategoriesTable({
   });
 
   const SuperFlyIcon = superDrag ? resolveCategoryIcon(superDrag.iconKey) : null;
+  const demoteTargetName =
+    superDrop?.kind === "demote"
+      ? supers.find((superCategory) => superCategory.id === superDrop.targetSuperId)?.name
+      : null;
+  const superDragHint =
+    superDrag && demoteTargetName
+      ? t("categories.super.drag.demoteHint", {
+          name: demoteTargetName,
+          count: catsBySuper.get(superDrag.superId)?.length ?? 0,
+        })
+      : null;
+
+  useLayoutEffect(() => {
+    const element = superFlyRef.current;
+    if (!superDrag || !element) return;
+    if (superSnap) {
+      element.style.transition = "transform 420ms cubic-bezier(0.2, 0.9, 0.3, 1)";
+      element.style.transform = `translate3d(${superSnap.left}px, ${superSnap.top}px, 0)`;
+      return;
+    }
+    element.style.transition = "none";
+    element.style.transform = `translate3d(${superDrag.lockedX}px, ${
+      cursorYRef.current - superDrag.height / 2
+    }px, 0)`;
+  }, [superDrag, superSnap]);
 
   // —— 手写 FLIP：大类整组（左卡 + 右行）reorder 时的滑动动画 ——
   // 用 useAutoAnimate 时整组从来不动 —— 大概率是 React 19 strict mode 双挂载、
@@ -748,32 +1160,70 @@ export function SuperCategoriesTable({
 
   return (
     <>
+      {dragError && (
+        <div className={styles.dragError} role="alert">
+          <span className={styles.dragErrorText}>
+            {t(
+              dragError.rollback === "partial"
+                ? "categories.super.drag.partialFailure"
+                : dragError.kind === "promote"
+                  ? "categories.super.drag.promoteFailed"
+                  : "categories.super.drag.demoteFailed",
+            )}
+          </span>
+          <button
+            type="button"
+            className={styles.dragErrorClose}
+            onClick={() => setDragError(null)}
+            aria-label={t("common.close")}
+            title={t("common.close")}
+          >
+            <X size={14} strokeWidth={2} />
+          </button>
+        </div>
+      )}
       <div className={styles.table}>
         {effectiveSupers.map((sup) => (
           <SuperRow
             key={sup.id}
-            ref={setSuperRowRef(sup.id)}
+            ref={getSuperRowRef(sup.id)}
             sup={sup}
-            cats={effectiveCatsBySuper.get(sup.id) ?? []}
+            cats={catsBySuper.get(sup.id) ?? []}
             dragging={drag !== null}
-            isHot={hotSuperKey === sup.id && drag?.sourceSuperKey !== sup.id}
+            isHot={
+              catDrop?.kind === "row" &&
+              catDrop.superKey === sup.id &&
+              drag?.sourceSuperKey !== sup.id
+            }
             draggingCatId={drag?.catId ?? null}
             justCreatedCatId={justCreatedCatId}
+            landedCatId={landedCatId}
             justCreated={justCreatedSuperId === sup.id}
+            isLanded={landedSuperId === sup.id}
+            isDemoteTarget={superDrop?.kind === "demote" && superDrop.targetSuperId === sup.id}
             onGripMouseDown={handleGripMouseDown}
             registerRowRef={registerCatRowRef}
             onSuperMouseDown={handleSuperMouseDown}
             isSuperDragSource={superDrag?.superId === sup.id}
-            isSuperDragTarget={hoverSuperReorderId === sup.id && superDrag?.superId !== sup.id}
+            isSuperDragTarget={
+              superDrop?.kind === "reorder" &&
+              superDrop.targetSuperId === sup.id &&
+              superDrag?.superId !== sup.id
+            }
           />
         ))}
         <OrphanRow
-          ref={setSuperRowRef(ORPHAN_KEY)}
-          cats={effectiveOrphans}
+          ref={getSuperRowRef(ORPHAN_KEY)}
+          cats={orphans}
           dragging={drag !== null}
-          isHot={hotSuperKey === ORPHAN_KEY && drag?.sourceSuperKey !== ORPHAN_KEY}
+          isHot={
+            catDrop?.kind === "row" &&
+            catDrop.superKey === ORPHAN_KEY &&
+            drag?.sourceSuperKey !== ORPHAN_KEY
+          }
           draggingCatId={drag?.catId ?? null}
           justCreatedCatId={justCreatedCatId}
+          landedCatId={landedCatId}
           onGripMouseDown={handleGripMouseDown}
           registerRowRef={registerCatRowRef}
         />
@@ -782,17 +1232,25 @@ export function SuperCategoriesTable({
         {builtins.length > 0 && <BuiltinRow cats={builtins} registerRowRef={registerCatRowRef} />}
       </div>
 
-      {/* —— 跨大类拖拽插入线：只在跨组且命中具体行时出现，位置就是松手后的落点 —— */}
-      {dropLine &&
+      {/* —— 拖拽落点预览：整层通过 transform 更新，内容只在命中类型变化时重渲染 —— */}
+      {catDropForLine &&
+        catVisual &&
+        FlyIcon &&
         createPortal(
-          <div
-            className={styles.dropLine}
-            style={{
-              top: dropLine.top,
-              left: dropLine.left,
-              width: dropLine.width,
-            }}
-          />,
+          <div ref={catOverlayRef} className={styles.dragOverlay} style={{ width: 280 }}>
+            <div className={styles.dropLine} />
+            {catDropForLine.kind === "promote" && (
+              <div
+                className={styles.promoteGhost}
+                style={{ "--drag-color": catVisual.color } as CSSProperties}
+              >
+                <span className={styles.promoteGhostIcon}>
+                  <FlyIcon size={20} strokeWidth={1.85} />
+                </span>
+                <span className={styles.promoteGhostName}>{catVisual.displayName}</span>
+              </div>
+            )}
+          </div>,
           document.body,
         )}
 
@@ -801,25 +1259,29 @@ export function SuperCategoriesTable({
           state 变化都会让 React 重新协调 .table 的 children 列表（portal 在 JSX 树里算
           .table 的子节点，虽然 DOM 上 portal 到 body）。这会干扰 useAutoAnimate 对子节点
           mutation 的检测，导致排序动画不触发。 */}
-      {drag &&
+      {catVisual &&
         FlyIcon &&
         createPortal(
           <div
+            ref={catFlyRef}
             className={catStyles.catFlyChip}
             style={
               {
-                left: drag.lockedX,
-                top: drag.cursorY - flyHeight / 2,
-                width: drag.width,
+                left: 0,
+                top: 0,
+                width: catVisual.width,
                 height: flyHeight,
-                "--cat-color": drag.color,
+                opacity: 1,
+                willChange: "transform, opacity",
+                "--cat-color": catVisual.color,
               } as CSSProperties
             }
           >
             <span className={catStyles.catFlyIcon}>
               <FlyIcon size={20} strokeWidth={1.85} />
             </span>
-            <span className={catStyles.catFlyName}>{drag.displayName}</span>
+            <span className={catStyles.catFlyName}>{catVisual.displayName}</span>
+            {catDragHint && <span className={catStyles.catFlyHint}>{catDragHint}</span>}
           </div>,
           document.body,
         )}
@@ -835,21 +1297,22 @@ export function SuperCategoriesTable({
         SuperFlyIcon &&
         createPortal(
           <div
+            ref={superFlyRef}
             className={styles.superBox}
             style={
               {
                 position: "fixed",
                 zIndex: 9999,
                 pointerEvents: "none",
-                // snap 阶段：left/top 切到落地位置 + 加 transition；正常拖动期间用 cursor
-                left: superSnap ? superSnap.left : superDrag.lockedX,
-                top: superSnap ? superSnap.top : superDrag.cursorY - superDrag.height / 2,
+                left: 0,
+                top: 0,
                 width: superDrag.width,
                 filter:
                   "drop-shadow(0 12px 28px rgba(var(--shadow-rgb), calc(0.18 * var(--shadow-strength))))",
-                transition: superSnap
-                  ? "left 420ms cubic-bezier(0.2, 0.9, 0.3, 1), top 420ms cubic-bezier(0.2, 0.9, 0.3, 1)"
-                  : undefined,
+                willChange: "transform",
+                transform: `translate3d(${superDrag.lockedX}px, ${
+                  cursorYRef.current - superDrag.height / 2
+                }px, 0)`,
                 "--sup-color": superDrag.color,
               } as CSSProperties
             }
@@ -869,6 +1332,7 @@ export function SuperCategoriesTable({
                 <CategoryRow key={cat.id} category={cat} />
               ))}
             </div>
+            {superDragHint && <span className={styles.superFlyHint}>{superDragHint}</span>}
           </div>,
           document.body,
         )}
