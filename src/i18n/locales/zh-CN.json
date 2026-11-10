@@ -864,6 +864,14 @@
       },
       "orphanLabel": "未归入大类",
       "catCount": "{{count}} 个分类",
+      "drag": {
+        "moveHint": "松开：把「{{name}}」移到这里",
+        "promoteHint": "松开：新建大类「{{name}}」",
+        "demoteHint": "松开：并入「{{name}}」（{{count}} 个分类）",
+        "promoteFailed": "没能创建大类，本次改动已撤销。",
+        "demoteFailed": "没能并入大类，本次改动已撤销。",
+        "partialFailure": "本次拖拽只撤销了一部分，请刷新后重试。"
+      },
       "emptyHint": "拖一个分类到左边大类名上即归入",
       "orphanEmptyHint": "（所有分类已归入大类）",
       "deleteAria": "删除大类",

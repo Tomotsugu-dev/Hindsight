@@ -15,6 +15,11 @@ import {
 } from "../api/hindsight";
 import { useCategories } from "./categories";
 import { logError } from "../lib/logger";
+import {
+  demoteSuperTransaction,
+  promoteCategoryTransaction,
+  type DragMutationResult,
+} from "../pages/Categories/superCategoryMutations";
 
 interface SuperCategoriesContextValue {
   supers: SuperCategory[];
@@ -32,6 +37,18 @@ interface SuperCategoriesContextValue {
     superId: string | null,
     orderedIds: string[],
   ) => Promise<void>;
+  /** 小类拖到组间空隙时升级：创建大类、迁入原分类并放到对应顺序。 */
+  promoteCategory: (
+    categoryId: string,
+    afterSuperId: string,
+    input: SuperCategoryInput,
+  ) => Promise<DragMutationResult<SuperCategory>>;
+  /** 大类拖到另一大类内容区时降级：整块迁入、重排并删除源大类。 */
+  demoteSuper: (
+    sourceSuperId: string,
+    targetSuperId: string,
+    orderedIds: string[],
+  ) => Promise<DragMutationResult<void>>;
 }
 
 const SuperCategoriesContext = createContext<SuperCategoriesContextValue | null>(null);
@@ -40,7 +57,7 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
   const [supers, setSupers] = useState<SuperCategory[]>([]);
   const [loading, setLoading] = useState(true);
   // 操作分类的 super_category_id 后，要让 useCategories 也重拉一遍才能反映新归属
-  const { refresh: refreshCategories } = useCategories();
+  const { categories: allCategories, refresh: refreshCategories } = useCategories();
 
   const refresh = useCallback(async () => {
     try {
@@ -122,6 +139,62 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
     [refreshCategories],
   );
 
+  const promoteCategory = useCallback(
+    async (categoryId: string, afterSuperId: string, input: SuperCategoryInput) => {
+      const sourceSuperId =
+        allCategories.find((category) => category.id === categoryId)?.superCategoryId ?? null;
+      const result = await promoteCategoryTransaction(
+        {
+          categoryId,
+          sourceSuperId,
+          afterSuperId,
+          input,
+          supers: supers.map((superCategory) => superCategory.id),
+        },
+        {
+          createSuper: api.createSuperCategory,
+          assignCategory: api.assignCategoryToSuper,
+          reorderSupers: api.reorderSuperCategories,
+          deleteSuper: api.deleteSuperCategory,
+        },
+      );
+      if (!result.ok) {
+        logError("superCategories.promoteCategory", result.error);
+      }
+      await Promise.all([refresh(), refreshCategories()]);
+      return result;
+    },
+    [allCategories, refresh, refreshCategories, supers],
+  );
+
+  const demoteSuper = useCallback(
+    async (sourceSuperId: string, targetSuperId: string, orderedIds: string[]) => {
+      const categoryIds = allCategories
+        .filter((category) => !category.builtin && category.superCategoryId === sourceSuperId)
+        .map((category) => category.id);
+      const result = await demoteSuperTransaction(
+        {
+          sourceSuperId,
+          targetSuperId,
+          categoryIds,
+          orderedIds,
+          originalCategoryOrder: allCategories.map((category) => category.id),
+        },
+        {
+          assignCategory: api.assignCategoryToSuper,
+          reorderCategories: api.reorderCategories,
+          deleteSuper: api.deleteSuperCategory,
+        },
+      );
+      if (!result.ok) {
+        logError("superCategories.demoteSuper", result.error);
+      }
+      await Promise.all([refresh(), refreshCategories()]);
+      return result;
+    },
+    [allCategories, refresh, refreshCategories],
+  );
+
   const value = useMemo<SuperCategoriesContextValue>(
     () => ({
       supers,
@@ -133,6 +206,8 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
       reorder,
       assignCategory,
       moveCategoryToSuper,
+      promoteCategory,
+      demoteSuper,
     }),
     [
       supers,
@@ -144,6 +219,8 @@ export function SuperCategoriesProvider({ children }: { children: ReactNode }) {
       reorder,
       assignCategory,
       moveCategoryToSuper,
+      promoteCategory,
+      demoteSuper,
     ],
   );
 

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  insertSuperAfter,
   insertBlockAtSuperPosition,
   moveBeforeOrAfter,
   moveBlockBeforeOrAfter,
+  pickPromoteGap,
   pickRowDrop,
+  planDemoteOrder,
+  sameCategoryDrop,
+  sameSuperDrop,
   sameOrder,
+  type GapBand,
   type RowBand,
 } from "./dragOrder";
 
@@ -35,6 +41,47 @@ describe("pickRowDrop", () => {
   it("clamps above the first and below the last row", () => {
     expect(pickRowDrop(rows, 0)).toEqual({ rowId: "a", after: false });
     expect(pickRowDrop(rows, 999)).toEqual({ rowId: "c", after: true });
+  });
+});
+
+describe("pickPromoteGap", () => {
+  const gaps: GapBand[] = [
+    { afterSuperId: "work", top: 300, bottom: 320, lineTop: 310 },
+    { afterSuperId: "play", top: 500, bottom: 520, lineTop: 510 },
+  ];
+
+  it("uses the middle eight-pixel band", () => {
+    expect(pickPromoteGap(gaps, 302)).toBe("work");
+    expect(pickPromoteGap(gaps, 318)).toBe("work");
+    expect(pickPromoteGap(gaps, 301)).toBeNull();
+    expect(pickPromoteGap(gaps, 319)).toBeNull();
+  });
+
+  it("returns the matching gap after its super", () => {
+    expect(pickPromoteGap(gaps, 510)).toBe("play");
+  });
+});
+
+describe("drop intent equality", () => {
+  it("compares category and super targets by identity", () => {
+    expect(
+      sameCategoryDrop(
+        { kind: "row", superKey: "work", rowId: "a", after: true },
+        { kind: "row", superKey: "work", rowId: "a", after: true },
+      ),
+    ).toBe(true);
+    expect(
+      sameCategoryDrop(
+        { kind: "row", superKey: "work", rowId: "a", after: true },
+        { kind: "row", superKey: "work", rowId: "a", after: false },
+      ),
+    ).toBe(false);
+    expect(
+      sameSuperDrop(
+        { kind: "demote", targetSuperId: "play", targetRowId: null, after: false },
+        { kind: "demote", targetSuperId: "play", targetRowId: null, after: false },
+      ),
+    ).toBe(true);
   });
 });
 
@@ -99,6 +146,47 @@ describe("insertBlockAtSuperPosition", () => {
         keyOf,
       ),
     ).toEqual(["a", "b", "p1", "x", "z"]);
+  });
+});
+
+describe("planDemoteOrder", () => {
+  const keyOf = (id: string) =>
+    id.startsWith("w") ? "work" : id.startsWith("p") ? "play" : "__ORPHAN__";
+  const superOrder = ["work", "play", "__ORPHAN__"];
+
+  it("inserts a block before or after a concrete row", () => {
+    const ids = ["w1", "x", "y", "w2", "p1"];
+    expect(planDemoteOrder(ids, ["x", "y"], "work", "w2", false, superOrder, keyOf)).toEqual([
+      "w1",
+      "x",
+      "y",
+      "w2",
+      "p1",
+    ]);
+    expect(planDemoteOrder(ids, ["x", "y"], "work", "w2", true, superOrder, keyOf)).toEqual([
+      "w1",
+      "w2",
+      "x",
+      "y",
+      "p1",
+    ]);
+  });
+
+  it("inserts at the target super position when the body is empty", () => {
+    const ids = ["w1", "x", "y", "p1"];
+    expect(planDemoteOrder(ids, ["x", "y"], "play", null, false, superOrder, keyOf)).toEqual([
+      "w1",
+      "p1",
+      "x",
+      "y",
+    ]);
+  });
+});
+
+describe("insertSuperAfter", () => {
+  it("inserts the promoted super immediately after its gap anchor", () => {
+    expect(insertSuperAfter(["work", "play"], "work", "new")).toEqual(["work", "new", "play"]);
+    expect(insertSuperAfter(["work", "play"], "missing", "new")).toBeNull();
   });
 });
 

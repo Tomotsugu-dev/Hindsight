@@ -864,6 +864,14 @@
       },
       "orphanLabel": "未グループ",
       "catCount": "{{count}} 件の分類",
+      "drag": {
+        "moveHint": "ドロップして「{{name}}」をここへ移動",
+        "promoteHint": "ドロップして大分類「{{name}}」を作成",
+        "demoteHint": "ドロップして「{{name}}」に統合（{{count}} 件）",
+        "promoteFailed": "大分類を作成できませんでした。変更は元に戻されました。",
+        "demoteFailed": "大分類に統合できませんでした。変更は元に戻されました。",
+        "partialFailure": "ドラッグ操作の一部しか元に戻せませんでした。再読み込みして再試行してください。"
+      },
       "emptyHint": "分類を左の大分類名にドラッグすると追加",
       "orphanEmptyHint": "（すべての分類がグループ化されています）",
       "deleteAria": "大分類を削除",

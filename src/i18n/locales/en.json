@@ -864,6 +864,14 @@
       },
       "orphanLabel": "Ungrouped",
       "catCount": "{{count}} categories",
+      "drag": {
+        "moveHint": "Drop to move “{{name}}” here",
+        "promoteHint": "Drop to create super-category “{{name}}”",
+        "demoteHint": "Drop to merge into “{{name}}” ({{count}})",
+        "promoteFailed": "Could not create the super-category. The change was undone.",
+        "demoteFailed": "Could not merge the super-category. The change was undone.",
+        "partialFailure": "The drag change was only partially undone. Refresh and try again."
+      },
       "emptyHint": "Drag a category onto a super-category label to assign",
       "orphanEmptyHint": "(All categories are grouped)",
       "deleteAria": "Delete super-category",
