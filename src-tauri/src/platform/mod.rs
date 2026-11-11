@@ -2,7 +2,9 @@
 
 mod window_fit;
 
-pub use window_fit::{fit_main_window, ignore_text_scale};
+pub use window_fit::fit_main_window;
+#[cfg(target_os = "windows")]
+pub use window_fit::ignore_text_scale;
 
 use crate::error::{Error, Result};
 
