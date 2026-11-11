@@ -850,6 +850,14 @@ export const api = {
       state.syncStatus.lastPushedAt = new Date().toISOString();
     }, 1500);
   },
+  syncRetryFailed: async (): Promise<void> => {
+    state.syncStatus.deadLetter = 0;
+    state.syncStatus.running = true;
+    setTimeout(() => {
+      state.syncStatus.running = false;
+      state.syncStatus.lastPushedAt = new Date().toISOString();
+    }, 1500);
+  },
 
   // ─── AI external endpoint ──────────────────
   testAiEndpoint: async (_endpoint: string, _apiKey?: string): Promise<TestAiEndpointResp> => ({

@@ -1369,6 +1369,8 @@
         "syncNow": "Sync now",
         "syncing": "Syncing…",
         "syncNowTitle": "Sync now",
+        "retryFailed": "Retry",
+        "retryFailedTitle": "Upload the failed records again now, without waiting for the automatic retry",
         "signOut": "Sign out",
         "signIn": "Sign in again",
         "signOutTitle": "Sign out of this account",

@@ -1364,6 +1364,8 @@
         "syncNow": "今すぐ同期",
         "syncing": "同期中…",
         "syncNowTitle": "今すぐ同期",
+        "retryFailed": "再試行",
+        "retryFailedTitle": "自動の再試行を待たずに、失敗した記録を今すぐ再アップロード",
         "signOut": "ログアウト",
         "signIn": "再ログイン",
         "signOutTitle": "現在のアカウントからログアウト",

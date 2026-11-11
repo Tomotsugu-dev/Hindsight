@@ -2229,6 +2229,51 @@ async fn rows_that_failed_10_times_upload_once_the_server_recovers() {
     assert_eq!(status.pending, 0);
 }
 
+/// 设备页的「重试」：失败满 8 次的行还在退避里，「立即同步」不选它们；点「重试」立刻上传，
+/// 失败数归零。
+#[tokio::test]
+async fn retry_uploads_failed_rows_without_waiting() {
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let today = Local::now();
+    insert_sealed(&a, "Code", today, 30).await;
+
+    dav.fail_puts(Some((500, ""))).await;
+    for _ in 0..8 {
+        a.pool
+            .0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE sync_outbox SET next_retry_at = '1970-01-01T00:00:00+00:00'",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        a.engine.sync_now().await.expect_err("传不上去");
+    }
+    assert_eq!(a.engine.status().await.dead_letter, 1);
+
+    // 服务器恢复：还在退避里，立即同步不传
+    dav.fail_puts(None).await;
+    a.engine.sync_now().await.unwrap();
+    assert!(dav
+        .file(&webdav_day_file("device-a", today))
+        .await
+        .is_none());
+
+    a.engine.retry_failed().await.unwrap();
+    assert!(dav
+        .file(&webdav_day_file("device-a", today))
+        .await
+        .is_some());
+    let status = a.engine.status().await;
+    assert_eq!(status.dead_letter, 0);
+    assert_eq!(status.pending, 0);
+}
+
 /// B 的 AI 总结开关关着时先同步过，打开开关后要补上 A 的日报，而清空过的活动不能跟着
 /// 回来（ADR-0006：开关打开后只有这类数据从停下的地方接着拉）。
 // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。

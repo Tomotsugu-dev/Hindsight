@@ -1364,6 +1364,8 @@
         "syncNow": "立即同步",
         "syncing": "同步中…",
         "syncNowTitle": "立即同步",
+        "retryFailed": "重试",
+        "retryFailedTitle": "不等自动重试，立刻重新上传失败的记录",
         "signOut": "退出",
         "signIn": "重新登录",
         "signOutTitle": "退出当前账号",

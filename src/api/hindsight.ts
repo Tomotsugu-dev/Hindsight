@@ -972,6 +972,8 @@ export const api = {
     invoke<void>("connect_webdav", { serverUrl, user, password }),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncNow: () => invoke<void>("sync_now"),
+  /** 失败过的记录不等退避，马上重传，然后跑一轮同步。 */
+  syncRetryFailed: () => invoke<void>("sync_retry_failed"),
   /** 测试 AI 端点连通性：GET {endpoint}/models。
    *  失败不抛 Promise reject，而是 resolve { ok: false, message }，
    *  前端只需检查 ok 字段。 */

@@ -14,6 +14,7 @@ import {
   LogOut,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Server,
   Settings2,
   Trash2,
@@ -286,11 +287,11 @@ function CloudSyncCard({
     }
   };
 
-  const onSyncNow = async () => {
+  const runSync = async (request: () => Promise<void>) => {
     setSyncBusy(true);
     setError(null);
     try {
-      await api.syncNow();
+      await request();
       refreshSync();
       // 拉到新的远端活动后，让 device 列表也刷一下
       void reloadDevices();
@@ -304,6 +305,8 @@ function CloudSyncCard({
       setSyncBusy(false);
     }
   };
+  const onSyncNow = () => runSync(api.syncNow);
+  const onRetryFailed = () => runSync(api.syncRetryFailed);
 
   // 派生值放到早返回之前，确保所有 hook 调用顺序在每次渲染都一致（rules-of-hooks）。
   // 「同步中」= 本地 promise 在途(点击瞬间即时反馈)|| 引擎标志(跳页重挂后
@@ -402,11 +405,24 @@ function CloudSyncCard({
                 <span>{t("devices.cloud.stats.waitingFirst")}</span>
               )}
               {sync.deadLetter > 0 && (
-                <span className={styles.syncStatErr}>
-                  {t("devices.cloud.stats.deadLetter", {
-                    count: sync.deadLetter,
-                  })}
-                </span>
+                <>
+                  <span className={styles.syncStatErr}>
+                    {t("devices.cloud.stats.deadLetter", {
+                      count: sync.deadLetter,
+                    })}
+                  </span>
+                  <Button
+                    size="xs"
+                    tone="danger"
+                    icon={RotateCcw}
+                    onClick={onRetryFailed}
+                    disabled={syncing}
+                    title={t("devices.cloud.actions.retryFailedTitle")}
+                    className={styles.retryButton}
+                  >
+                    {t("devices.cloud.actions.retryFailed")}
+                  </Button>
+                </>
               )}
             </div>
           )}
