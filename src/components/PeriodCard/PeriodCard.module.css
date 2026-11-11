@@ -24,12 +24,15 @@
   min-width: 0;
 }
 
-/* 行 2：headLeftExtras 跟 rightExtras + period stepper 各占一边 */
+/* 行 2：headLeftExtras 在左，rightExtras + period stepper 在右。
+   放不下时右边整组换到下一行、仍靠右。Windows 调大「文本大小」时 WebView2 整页放大，
+   960 宽的窗口只剩约 600 CSS px，不换行会把左边压扁、右边被卡片裁掉 */
 .cardControlsRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: calc(16px * var(--density));
+  column-gap: calc(16px * var(--density));
+  row-gap: calc(var(--space-2) * var(--density));
   min-width: 0;
 }
 
@@ -49,11 +52,16 @@
   letter-spacing: -0.01em;
 }
 
-/* 卡片头右侧：picker + 日期导航 并排 */
+/* 卡片头右侧：picker + 日期导航 并排；整组还放不下时日期导航再换一行，同样靠右 */
 .headRight {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: calc(12px * var(--density));
+  column-gap: calc(12px * var(--density));
+  row-gap: calc(var(--space-2) * var(--density));
+  min-width: 0;
+  margin-left: auto;
 }
 
 /* 滑动 carousel */
@@ -96,7 +104,6 @@
 @media (max-width: 900px) {
   :global([data-layout="flat"]) .cardControlsRow,
   :global([data-layout="flat"]) .headRight {
-    flex-wrap: wrap;
     gap: calc(10px * var(--density));
   }
 }

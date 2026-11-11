@@ -151,6 +151,9 @@ impl Island {
                 .focusable(false)
                 .always_on_top(true)
         })?;
+        // 下面的位置和大小都按「页面的一个像素 = 显示缩放个物理像素」来算，
+        // 系统的「文本大小」调大时要让页面别跟着放大，这个换算才成立
+        crate::platform::ignore_text_scale(&window);
         let hwnd = match window.hwnd() {
             Ok(hwnd) => hwnd.0 as HWND,
             Err(e) => {
