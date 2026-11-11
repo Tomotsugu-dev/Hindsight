@@ -1369,6 +1369,8 @@
         "syncNow": "Sincronizar agora",
         "syncing": "Sincronizando…",
         "syncNowTitle": "Sincronizar agora",
+        "retryFailed": "Tentar novamente",
+        "retryFailedTitle": "Enviar de novo agora os registros que falharam, sem esperar a nova tentativa automática",
         "signOut": "Sair",
         "signIn": "Fazer login novamente",
         "signOutTitle": "Sair desta conta",
