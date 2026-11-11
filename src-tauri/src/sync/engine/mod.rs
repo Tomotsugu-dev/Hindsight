@@ -6,11 +6,6 @@
 //!   database.
 //!
 //! Push and pull both ask [`enabled_datasets`] which datasets sync this round.
-//!
-//! When an outbox row fails to upload, the wait before the next try doubles
-//! each time, up to `RETRY_MAX_SECS`. After `MAX_ATTEMPTS` failures the row is
-//! no longer retried. It stays in the outbox, and the Devices page shows how
-//! many such rows there are.
 
 mod io;
 mod pull;
@@ -92,10 +87,11 @@ pub struct SyncStatus {
     /// The latest failure, prefixed as `ERR_PREFIX_CRED_EXPIRED` and
     /// `ERR_PREFIX_TRANSIENT` describe. Cleared once a push uploads again.
     pub last_error: Option<String>,
-    /// Outbox rows waiting to be pushed, dead letters included.
+    /// Outbox rows waiting to be pushed. Rows counted in `dead_letter` are not
+    /// included.
     pub pending: u64,
-    /// Outbox rows that failed `MAX_ATTEMPTS` times. Push no longer retries them;
-    /// the Devices page counts them as failed.
+    /// Outbox rows that have failed `FAILED_AFTER_ATTEMPTS` times or more. Push
+    /// keeps retrying them; the Devices page counts them as failed.
     pub dead_letter: u64,
 }
 

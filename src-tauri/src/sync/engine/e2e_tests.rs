@@ -2179,6 +2179,56 @@ async fn webdav_a_busy_server_ends_the_round() {
     assert_eq!(count_for_device(&b, "device-a").await, 2);
 }
 
+/// #280：上传连续失败 10 轮（失败是「下一轮可能自己好」的那类，这里用 500），这几行算进
+/// 设备页的「N 条失败」，但不放弃。服务器恢复、重试时间到了，下一轮同步就把它们的文件
+/// 传上去，失败数归零，不用用户做什么。
+#[tokio::test]
+async fn rows_that_failed_10_times_upload_once_the_server_recovers() {
+    /// 把 outbox 的重试时间拨回过去，相当于退避已经等完。
+    async fn make_outbox_due(pool: &DbPool) {
+        pool.0
+            .call(|conn| {
+                conn.execute(
+                    "UPDATE sync_outbox SET next_retry_at = '1970-01-01T00:00:00+00:00'",
+                    [],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    let dav = Arc::new(FakeDav::new());
+    let a = make_webdav_device("device-a", dav.clone()).await;
+    let today = Local::now();
+    let yesterday = today - Duration::days(1);
+    insert_sealed(&a, "Code", yesterday, 30).await;
+    insert_sealed(&a, "Chrome", yesterday, 60).await;
+    insert_sealed(&a, "Code", today, 30).await;
+
+    // 连续 10 轮上传失败
+    dav.fail_puts(Some((500, ""))).await;
+    for _ in 0..10 {
+        make_outbox_due(&a.pool).await;
+        a.engine.sync_now().await.expect_err("传不上去，这一轮报错");
+    }
+    let status = a.engine.status().await;
+    assert_eq!(status.dead_letter, 3);
+    assert_eq!(status.pending, 0);
+
+    // 服务器恢复，重试时间到了
+    dav.fail_puts(None).await;
+    make_outbox_due(&a.pool).await;
+    a.engine.sync_now().await.unwrap();
+    for day in [yesterday, today] {
+        assert!(dav.file(&webdav_day_file("device-a", day)).await.is_some());
+    }
+    let status = a.engine.status().await;
+    assert_eq!(status.dead_letter, 0);
+    assert_eq!(status.pending, 0);
+}
+
 /// B 的 AI 总结开关关着时先同步过，打开开关后要补上 A 的日报，而清空过的活动不能跟着
 /// 回来（ADR-0006：开关打开后只有这类数据从停下的地方接着拉）。
 // 清空数据会删 <数据目录>/icons，所以整条测试持 env 锁、指到临时目录。

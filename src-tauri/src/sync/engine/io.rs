@@ -6,7 +6,9 @@ use rusqlite::OptionalExtension;
 use crate::error::Result;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
-pub(super) const MAX_ATTEMPTS: i64 = 10;
+/// A row that has failed this many times counts as failed on the Devices page.
+/// Push keeps retrying it.
+const FAILED_AFTER_ATTEMPTS: i64 = 8;
 const RETRY_BASE_SECS: i64 = 5;
 const RETRY_MAX_SECS: i64 = 60 * 60;
 
@@ -19,9 +21,6 @@ pub(super) struct OutboxRow {
 
 pub(super) async fn read_due_outbox(pool: &DbPool, limit: usize) -> Result<Vec<OutboxRow>> {
     let limit = limit as i64;
-    // 关键：next_retry_at 是 chrono::to_rfc3339()（"2026-05-03T...+00:00"），
-    // 不能跟 SQLite 的 datetime('now')（"2026-05-03 ..."，空格无 T）做字典序比较 —— 'T' > ' ' 永远不等。
-    // 这里用 Rust 端生成同格式的 now 当参数。
     let now_rfc = utc_now_rfc3339();
     let rows = pool
         .0
@@ -30,13 +29,13 @@ pub(super) async fn read_due_outbox(pool: &DbPool, limit: usize) -> Result<Vec<O
                 .prepare(
                     "SELECT id, entity, payload
                      FROM sync_outbox
-                     WHERE next_retry_at <= ?1 AND attempts < ?2
+                     WHERE next_retry_at <= ?1
                      ORDER BY id ASC
-                     LIMIT ?3",
+                     LIMIT ?2",
                 )
                 .db()?;
             let rows = stmt
-                .query_map(rusqlite::params![now_rfc, MAX_ATTEMPTS, limit], |r| {
+                .query_map(rusqlite::params![now_rfc, limit], |r| {
                     Ok(OutboxRow {
                         id: r.get(0)?,
                         entity: r.get(1)?,
@@ -110,7 +109,7 @@ pub(super) async fn count_outbox(pool: &DbPool) -> Result<u64> {
             let n: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sync_outbox WHERE attempts < ?",
-                    [MAX_ATTEMPTS],
+                    [FAILED_AFTER_ATTEMPTS],
                     |r| r.get(0),
                 )
                 .unwrap_or(0);
@@ -127,7 +126,7 @@ pub(super) async fn count_dead_letter(pool: &DbPool) -> Result<u64> {
             let n: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sync_outbox WHERE attempts >= ?",
-                    [MAX_ATTEMPTS],
+                    [FAILED_AFTER_ATTEMPTS],
                     |r| r.get(0),
                 )
                 .unwrap_or(0);
@@ -178,12 +177,12 @@ mod tests {
     use super::*;
     use crate::repo::test_util::fresh_test_pool;
 
-    /// 测 [`bump_outbox_retry`] + [`count_dead_letter`]：连续失败 N 次后 attempts 累加，
-    /// 第 10 次达到 [`MAX_ATTEMPTS`] 阈值，`read_due_outbox` 不再选中它，`count_dead_letter` += 1。
+    /// 失败多少次都接着重试：从第 8 次起设备页把这行算进「失败」，到点了 `read_due_outbox`
+    /// 照样选中它；再失败下去，等待封顶在一小时。
     ///
-    /// 钉死 dead-letter 边界：若未来谁把 MAX_ATTEMPTS 改成 100，本测试立刻红。
+    /// 次数写死 8：谁改了这条线，这条测试就红。
     #[tokio::test]
-    async fn bump_outbox_retry_dead_letter_at_10() {
+    async fn a_row_counted_as_failed_is_still_retried() {
         let pool = fresh_test_pool().await;
         // 入一条 outbox（attempts=0，next_retry_at=epoch 让它立刻 due）
         let id = pool
@@ -202,21 +201,54 @@ mod tests {
             .await
             .unwrap();
 
-        // 跑 10 次 bump_outbox_retry
-        for _ in 0..MAX_ATTEMPTS {
+        // 失败 7 次：还算待发送
+        for _ in 0..7 {
             bump_outbox_retry(&pool, &[id], "test error").await.unwrap();
         }
+        assert_eq!(count_dead_letter(&pool).await.unwrap(), 0);
+        assert_eq!(count_outbox(&pool).await.unwrap(), 1);
 
-        // attempts 应到 10 → count_dead_letter = 1
+        // 第 8 次：算进失败
+        bump_outbox_retry(&pool, &[id], "test error").await.unwrap();
         assert_eq!(count_dead_letter(&pool).await.unwrap(), 1);
         assert_eq!(count_outbox(&pool).await.unwrap(), 0);
 
-        // read_due_outbox 不该再选中它（attempts >= MAX_ATTEMPTS 被过滤）
+        // 没到点不选；到点了照样选中
+        assert!(read_due_outbox(&pool, 100).await.unwrap().is_empty());
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "UPDATE sync_outbox SET next_retry_at = '1970-01-01T00:00:00+00:00'
+                     WHERE id = ?1",
+                    [id],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
         let due = read_due_outbox(&pool, 100).await.unwrap();
-        assert!(
-            due.iter().all(|r| r.id != id),
-            "attempts >= MAX_ATTEMPTS 的行不应被 read_due_outbox 选中"
-        );
+        assert_eq!(due.iter().map(|r| r.id).collect::<Vec<_>>(), vec![id]);
+
+        // 再失败 4 次，一共 12 次：下一次重试在一小时后，外加不到 30 秒的抖动
+        for _ in 0..4 {
+            bump_outbox_retry(&pool, &[id], "test error").await.unwrap();
+        }
+        let next_retry_at: String = pool
+            .0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT next_retry_at FROM sync_outbox WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        let wait = chrono::DateTime::parse_from_rfc3339(&next_retry_at).unwrap()
+            - chrono::Utc::now().fixed_offset();
+        assert!((3590..=3630).contains(&wait.num_seconds()), "{wait}");
     }
 
     /// `bump_outbox_retry` 第 N 次调用后 attempts 单调递增。

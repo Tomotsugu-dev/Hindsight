@@ -153,9 +153,9 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     }
 
     if let Some(e) = last_err {
-        // Only a failure the next round may fix on its own counts as a retry.
-        // Counting the others would move these rows to dead letters after 10
-        // rounds, and they would never upload even after the user fixes it.
+        // Only a Transient failure counts one more failure on these rows and
+        // delays their next try. Any other failure leaves the rows as they
+        // are: once the problem is fixed, the next round uploads them.
         if inner.cloud().failure_kind(&e) == FailureKind::Transient {
             io::bump_outbox_retry(&inner.pool, &failed_ids, &e.to_string()).await?;
         }
