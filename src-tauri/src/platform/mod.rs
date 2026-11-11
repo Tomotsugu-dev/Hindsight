@@ -1,5 +1,9 @@
 //! 平台特定的系统集成。
 
+mod window_fit;
+
+pub use window_fit::{fit_main_window, ignore_text_scale};
+
 use crate::error::{Error, Result};
 
 /// 在系统文件管理器中打开指定目录。

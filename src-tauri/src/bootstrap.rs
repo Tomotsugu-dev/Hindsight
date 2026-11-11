@@ -235,7 +235,7 @@ pub fn install_tray_and_window(app: &mut App) -> tauri::Result<()> {
     if let Some(main_window) = handle.get_webview_window("main") {
         platform::apply_window_tweaks(&main_window);
         // 此时窗口还没显示：按文本大小和屏幕工作区调好尺寸，用户看不到跳变
-        crate::window_fit::fit_main_window(&main_window);
+        platform::fit_main_window(&main_window);
         install_window_handlers(&main_window);
     }
 
