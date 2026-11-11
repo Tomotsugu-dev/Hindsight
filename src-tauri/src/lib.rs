@@ -366,6 +366,7 @@ pub fn run() {
             // --- sync: 云同步 ---
             commands::sync::sync_status,
             commands::sync::sync_now,
+            commands::sync::sync_retry_failed,
             // --- ai: endpoint 测试 ---
             commands::ai_endpoint::test_ai_endpoint,
             commands::ai_endpoint::test_ai_chat,

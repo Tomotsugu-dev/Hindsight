@@ -17,3 +17,10 @@ pub async fn sync_status(engine: State<'_, Arc<SyncEngine>>) -> Result<SyncStatu
 pub async fn sync_now(engine: State<'_, Arc<SyncEngine>>) -> Result<(), String> {
     engine.sync_now().await.map_err(Into::into)
 }
+
+/// Uploads the rows that have failed now, without waiting for their next try:
+/// the Retry button on the Devices page.
+#[tauri::command]
+pub async fn sync_retry_failed(engine: State<'_, Arc<SyncEngine>>) -> Result<(), String> {
+    engine.retry_failed().await.map_err(Into::into)
+}
