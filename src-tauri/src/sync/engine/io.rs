@@ -102,6 +102,23 @@ pub(super) async fn bump_outbox_retry(pool: &DbPool, ids: &[i64], err: &str) -> 
     Ok(())
 }
 
+/// Resets the failure count of every row that has failed and makes it due now,
+/// so the next round uploads it.
+pub(super) async fn retry_now(pool: &DbPool) -> Result<()> {
+    let now = utc_now_rfc3339();
+    pool.0
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE sync_outbox SET attempts = 0, next_retry_at = ?1 WHERE attempts > 0",
+                [now],
+            )
+            .db()?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 pub(super) async fn count_outbox(pool: &DbPool) -> Result<u64> {
     let n = pool
         .0
@@ -291,6 +308,67 @@ mod tests {
             bump_outbox_retry(&pool, &[id], "x").await.unwrap();
             assert_eq!(read_attempts().await, expected);
         }
+    }
+
+    /// 点「重试」：失败过的行次数清零、马上到期，还在退避里的也一样；没失败过的行不动。
+    #[tokio::test]
+    async fn retry_now_resets_failed_rows_and_makes_them_due() {
+        let pool = fresh_test_pool().await;
+        let insert = |pk: &'static str| {
+            let pool = pool.clone();
+            async move {
+                pool.0
+                    .call(move |conn| {
+                        conn.execute(
+                            "INSERT INTO sync_outbox(op, entity, entity_pk, payload, created_at, attempts, next_retry_at)
+                             VALUES('upsert', 'activity', ?1, '{\"localDate\":\"2026-05-15\"}',
+                                    '1970-01-01T00:00:00+00:00', 0,
+                                    '1970-01-01T00:00:00+00:00')",
+                            [pk],
+                        )
+                        .db()?;
+                        Ok(conn.last_insert_rowid())
+                    })
+                    .await
+                    .unwrap()
+            }
+        };
+        let counted = insert("counted").await;
+        let backing_off = insert("backing-off").await;
+        let fresh = insert("fresh").await;
+        for _ in 0..FAILED_AFTER_ATTEMPTS {
+            bump_outbox_retry(&pool, &[counted], "x").await.unwrap();
+        }
+        bump_outbox_retry(&pool, &[backing_off], "x").await.unwrap();
+        assert_eq!(read_due_outbox(&pool, 100).await.unwrap().len(), 1);
+
+        retry_now(&pool).await.unwrap();
+
+        let mut due: Vec<i64> = read_due_outbox(&pool, 100)
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.id)
+            .collect();
+        due.sort();
+        assert_eq!(due, vec![counted, backing_off, fresh]);
+        assert_eq!(count_dead_letter(&pool).await.unwrap(), 0);
+        let attempts: Vec<i64> = pool
+            .0
+            .call(|conn| {
+                let mut stmt = conn
+                    .prepare("SELECT attempts FROM sync_outbox ORDER BY id")
+                    .db()?;
+                let rows = stmt
+                    .query_map([], |r| r.get(0))
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                Ok(rows)
+            })
+            .await
+            .unwrap();
+        assert_eq!(attempts, vec![0, 0, 0]);
     }
 
     /// `read_cursor` 在 sync_cursor 表无对应行时返回 epoch 默认值。

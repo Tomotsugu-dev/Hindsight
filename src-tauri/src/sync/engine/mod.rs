@@ -303,6 +303,19 @@ impl SyncEngine {
         }
         Ok(())
     }
+
+    /// Resets every row that has failed and makes it due now, then runs a round
+    /// of sync.
+    ///
+    /// # Errors
+    ///
+    /// A round is already running:
+    /// [`Error::InvalidInput`](crate::error::Error::InvalidInput). The rows are
+    /// reset all the same, and the round after that one uploads them.
+    pub async fn retry_failed(&self) -> Result<()> {
+        io::retry_now(&self.inner.pool).await?;
+        self.sync_now().await
+    }
 }
 
 /// A pause in sync, which ends when this is dropped. Only this hands out and
