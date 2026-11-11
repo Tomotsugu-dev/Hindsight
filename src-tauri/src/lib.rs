@@ -17,6 +17,7 @@ mod repo;
 mod storage;
 mod sync;
 mod themes;
+mod window_fit;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
