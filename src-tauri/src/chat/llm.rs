@@ -1342,4 +1342,52 @@ mod cloud_http_tests {
         assert!(err.contains("[LLM_EMPTY]"), "缺 usage 应落未分类码: {err}");
         assert!(!err.contains("[LLM_EMPTY_EOS]"), "不能误判成 EOS: {err}");
     }
+
+    // ---- 以下从网络这一侧锁住聊天发请求的行为：重构传输层前后，这几条一行不改 ----
+
+    use crate::ai::transport::fake::{FakeServer, Reply};
+
+    /// 云端回 400 并写明该换哪个字段名：改名后重发，第二次成功。
+    #[tokio::test]
+    async fn chat_cloud_heals_400_then_succeeds() {
+        let server = FakeServer::start(vec![
+            Reply::json(
+                400,
+                json!({"error": {"message": "Unsupported parameter: 'max_completion_tokens' is not supported with this model. Use 'max_tokens' instead."}}),
+            ),
+            Reply::json(
+                200,
+                json!({"choices": [{"message": {"role": "assistant", "content": "好"}, "finish_reason": "stop"}]}),
+            ),
+        ])
+        .await;
+        let (out, _) = cloud_client(server.port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap();
+        assert!(matches!(out, StepOut::Final(ref t) if t == "好"), "{out:?}");
+        let got = server.received();
+        assert_eq!(got.len(), 2, "只重发一次");
+        assert!(got[1].body.get("max_completion_tokens").is_none());
+        assert_eq!(got[1].body["max_tokens"], CLOUD_THINKING_MAX_TOKENS);
+    }
+
+    /// 停止按钮丢弃生成的 future：连接随之断开，服务端看得到。
+    #[tokio::test]
+    async fn chat_dropping_step_closes_connection() {
+        let server = FakeServer::start(vec![Reply::Hang]).await;
+        let llm = cloud_client(server.port);
+        let r = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            llm.step("s", &[Turn::User("q".into())]),
+        )
+        .await;
+        assert!(r.is_err(), "服务端不回包时不该有结果");
+        assert!(
+            server
+                .wait_disconnect(std::time::Duration::from_secs(2))
+                .await,
+            "丢弃 future 后连接应断开"
+        );
+    }
 }

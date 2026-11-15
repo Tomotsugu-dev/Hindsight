@@ -199,3 +199,68 @@ pub async fn test_ai_chat(
         message: String::new(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::transport::fake::{FakeServer, Reply};
+    use serde_json::json;
+
+    /// 测试连接：GET /models，带鉴权头，返回模型 ID。
+    #[tokio::test]
+    async fn test_ai_endpoint_lists_model_ids() {
+        let server = FakeServer::start(vec![Reply::json(
+            200,
+            json!({"data": [{"id": "a"}, {"id": "b"}]}),
+        )])
+        .await;
+        let r = test_ai_endpoint(server.base_url(), Some("sk-x".into()))
+            .await
+            .unwrap();
+        assert!(r.ok, "{}", r.message);
+        assert_eq!(r.models, ["a", "b"]);
+        let got = server.received();
+        assert!(got[0].head.starts_with("get /v1/models"), "{}", got[0].head);
+        assert!(got[0].head.contains("authorization: bearer sk-x"));
+    }
+
+    /// 测试模型：非 2xx 时 ok=false，消息里有状态码和服务端的原话。
+    #[tokio::test]
+    async fn test_ai_chat_reports_status_and_body() {
+        let server = FakeServer::start(vec![Reply::json(
+            401,
+            json!({"error": {"message": "Invalid API key"}}),
+        )])
+        .await;
+        let r = test_ai_chat(server.base_url(), Some("bad".into()), "m".into(), false)
+            .await
+            .unwrap();
+        assert!(!r.ok);
+        assert!(
+            r.message.contains("401") && r.message.contains("Invalid API key"),
+            "{}",
+            r.message
+        );
+        assert_eq!(server.received().len(), 1);
+    }
+
+    /// 测试模型：200 就算通过。没填 Key 时不发鉴权头。
+    #[tokio::test]
+    async fn test_ai_chat_ok_on_200() {
+        let server = FakeServer::start(vec![Reply::json(
+            200,
+            json!({"choices": [{"message": {"role": "assistant", "content": "h"}, "finish_reason": "length"}]}),
+        )])
+        .await;
+        let r = test_ai_chat(server.base_url(), None, "m".into(), false)
+            .await
+            .unwrap();
+        assert!(r.ok, "{}", r.message);
+        let got = server.received();
+        assert_eq!(got[0].body["messages"][0]["content"], "hi");
+        assert!(
+            !got[0].head.contains("authorization"),
+            "没填 Key 不发鉴权头"
+        );
+    }
+}

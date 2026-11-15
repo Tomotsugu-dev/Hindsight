@@ -1016,4 +1016,109 @@ mod tests {
         assert!(s.contains(" ← "), "缺链接符:{s}");
         assert!(s.contains("connection reset by peer"), "缺底层原因:{s}");
     }
+
+    // ---- 以下从网络这一侧锁住日报发请求的行为：重构传输层前后，这几条一行不改 ----
+
+    use crate::ai::transport::fake::{FakeServer, Reply};
+    use serde_json::json;
+
+    fn cloud(server: &FakeServer) -> ExternalChatClient {
+        ExternalChatClient::new(&server.base_url(), "m".into(), "sk-test".into(), 4096).unwrap()
+    }
+
+    /// 一段完整的流：正文一块，末块只带用量，最后 [DONE]。
+    fn sse_ok(text: &str) -> Reply {
+        Reply::sse(
+            &[
+                json!({"choices": [{"delta": {"content": text}}]}),
+                json!({"choices": [], "usage": {"prompt_tokens": 9, "completion_tokens": 3}}),
+            ],
+            true,
+        )
+    }
+
+    /// 云端：请求要流式和用量，带鉴权头；回来的流拼出正文和用量。
+    #[tokio::test]
+    async fn summary_cloud_reads_sse_reply() {
+        let server = FakeServer::start(vec![sse_ok("今天在写测试。")]).await;
+        let (text, usage) = cloud(&server).chat_text("sys", "user", &[]).await.unwrap();
+        assert_eq!(text, "今天在写测试。");
+        assert_eq!(
+            (usage.prompt_tokens, usage.completion_tokens),
+            (Some(9), Some(3))
+        );
+        let got = server.received();
+        assert_eq!(got[0].body["stream"], true);
+        assert_eq!(got[0].body["stream_options"]["include_usage"], true);
+        assert!(got[0].head.contains("authorization: bearer sk-test"));
+    }
+
+    /// 云端回 400 并写明该换哪个字段名：改名后重发，第二次成功。
+    #[tokio::test]
+    async fn summary_cloud_heals_400_then_succeeds() {
+        let server = FakeServer::start(vec![
+            Reply::json(
+                400,
+                json!({"error": {"message": "Unsupported parameter: 'max_completion_tokens' is not supported with this model. Use 'max_tokens' instead."}}),
+            ),
+            sse_ok("好"),
+        ])
+        .await;
+        let (text, _) = cloud(&server).chat_text("sys", "user", &[]).await.unwrap();
+        assert_eq!(text, "好");
+        let got = server.received();
+        assert_eq!(got.len(), 2, "只重发一次");
+        assert!(got[1].body.get("max_completion_tokens").is_none());
+        assert_eq!(got[1].body["max_tokens"], 4096);
+    }
+
+    /// 云端限流：等一会儿原样重发，第二次成功。
+    #[tokio::test]
+    async fn summary_cloud_backs_off_on_429_then_succeeds() {
+        let server = FakeServer::start(vec![
+            Reply::json(429, json!({"error": {"message": "rate limited"}}))
+                .header("Retry-After", "1"),
+            sse_ok("好"),
+        ])
+        .await;
+        let (text, _) = cloud(&server).chat_text("sys", "user", &[]).await.unwrap();
+        assert_eq!(text, "好");
+        let got = server.received();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].body, got[1].body, "限流后原样重发");
+    }
+
+    /// 云端的流没收到 [DONE] 就断了：原样重发，第二次成功。
+    #[tokio::test]
+    async fn summary_cloud_retries_cut_stream_then_succeeds() {
+        let server = FakeServer::start(vec![
+            Reply::sse(
+                &[json!({"choices": [{"delta": {"content": "半截"}}]})],
+                false,
+            ),
+            sse_ok("完整"),
+        ])
+        .await;
+        let (text, _) = cloud(&server).chat_text("sys", "user", &[]).await.unwrap();
+        assert_eq!(text, "完整", "半截的流不能当结果");
+        assert_eq!(server.received().len(), 2);
+    }
+
+    /// 本机 llama-server 回 400：不改请求、不重发，直接报错。
+    #[tokio::test]
+    async fn summary_local_400_fails_without_retry() {
+        let server = FakeServer::start(vec![Reply::json(
+            400,
+            json!({"error": {"message": "Unknown parameter: 'temperature'."}}),
+        )])
+        .await;
+        let err = ChatClient::new(server.port, "m.gguf", 1024)
+            .unwrap()
+            .chat_with_images("sys", "user", &[])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("400"), "{err}");
+        assert_eq!(server.received().len(), 1);
+    }
 }
