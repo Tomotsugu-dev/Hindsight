@@ -225,8 +225,8 @@ impl SseAccumulator {
     }
 }
 
-/// `remove_field` does not remove these fields.
-/// If these fields are missing, the reply is not what the caller wants,
+/// `remove_field` does not remove these fields, and value changes skip them.
+/// If these fields are missing or changed, the reply is not what the caller wants,
 /// even when the service returns 200.
 const PROTECTED_FIELDS: [&str; 4] = ["model", "messages", "tools", "tool_choice"];
 
@@ -286,13 +286,12 @@ fn heal_request(body: &mut Value, err_msg: &str) -> bool {
     // 例如 `'reasoning_effort' does not support 'minimal' with this model. Supported values are: 'none', 'low', 'medium', 'high'.`
     if lower_msg.contains("does not support") {
         if let Some(param) = nth_quoted(err_msg, 0) {
-            if body.get(param).is_some() {
+            if body.get(param).is_some() && !PROTECTED_FIELDS.contains(&param) {
                 let fallback = lower_msg
                     .find("supported values")
                     .and_then(|i| nth_quoted(&err_msg[i..], 0).map(str::to_string));
                 return match fallback {
                     Some(v) => {
-                        // TODO: 改值不查 `PROTECTED_FIELDS`，`model` 也会被换成错误文字里列出的值。
                         body[param] = json!(v);
                         true
                     }
@@ -551,6 +550,22 @@ mod tests {
                 "{f} 不该为了让请求通过被删"
             );
             assert!(b.get(f).is_some(), "{f} 必须原样保留");
+        }
+    }
+
+    /// 服务说受保护字段的值不被支持时，自愈不改这个值，返回 false。错误文字是编的。
+    #[test]
+    fn heal_request_never_changes_core_values() {
+        let e400 = |s: &str| format!("HTTP 400 Bad Request: {{\"error\":{{\"message\":\"{s}\"}}}}");
+        for f in PROTECTED_FIELDS {
+            let original =
+                json!({"model": "m", "messages": [], "tools": [], "tool_choice": "auto"});
+            let mut b = original.clone();
+            let err = format!(
+                "Unsupported value: '{f}' does not support this value. Supported values are: 'x'."
+            );
+            assert!(!heal_request(&mut b, &e400(&err)), "{f} 的值不该被改");
+            assert_eq!(b, original, "{f} 必须原样保留");
         }
     }
 }
