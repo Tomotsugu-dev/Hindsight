@@ -102,31 +102,39 @@ fn native_messages(req: &Request) -> Vec<Value> {
 
 /// Writes the conversation as one text.
 /// Returns the system message and one user message that holds this text.
+///
+/// Each message is wrapped in a `<user>`, `<assistant>` or `<tool_result>` tag.
+/// The tags contain no natural language. Small models tend to answer in the language of the tags.
+/// Each assistant message is written as a decision object, like the model's own output.
+/// The whole conversation goes into one user message,
+/// because some chat templates require user and assistant messages to alternate strictly.
 fn transcript(req: &Request) -> Vec<Value> {
     let mut text = String::new();
     let mut images = Vec::new();
     for m in &req.messages {
-        match m {
+        let (tag, inner) = match m {
             Message::User { text: t, images: i } => {
-                text.push_str(&format!("用户: {t}\n"));
                 images.extend(i.iter().cloned());
+                ("user", t.clone())
             }
             Message::Assistant {
                 call: Some(call), ..
-            } => text.push_str(&format!(
-                "助手(调用工具): {} {}\n",
-                call.name, call.arguments
-            )),
-            Message::Assistant { text: t, .. } => text.push_str(&format!("助手: {t}\n")),
-            Message::ToolResult { content, .. } => {
-                text.push_str(&format!("工具结果:\n{content}\n"))
+            } => {
+                let mut decision = call.arguments.as_object().cloned().unwrap_or_default();
+                decision.insert("action".into(), json!(call.name));
+                ("assistant", Value::Object(decision).to_string())
             }
-        }
+            Message::Assistant { text: t, .. } => (
+                "assistant",
+                json!({ "action": "answer", "answer": t }).to_string(),
+            ),
+            Message::ToolResult { content, .. } => ("tool_result", content.clone()),
+        };
+        text.push_str(&format!("<{tag}>\n{inner}\n</{tag}>\n"));
     }
-    text.push_str("请输出下一步决策(JSON):");
     vec![
         json!({ "role": "system", "content": req.system }),
-        json!({ "role": "user", "content": user_content(&text, &images) }),
+        json!({ "role": "user", "content": user_content(text.trim_end(), &images) }),
     ]
 }
 
@@ -323,7 +331,8 @@ mod tests {
         );
     }
 
-    /// Grammar 方式下，对话写进一条 user 消息。请求带决策 schema，不带 `tools`。
+    /// Grammar 方式下，对话写进一条 user 消息。每一条用标签包起来，标签里没有自然语言。
+    /// 助手的每一条写成决策对象。请求带决策 schema，不带 `tools`。
     #[test]
     fn grammar_writes_a_transcript_and_a_schema() {
         let messages = vec![
@@ -355,8 +364,10 @@ mod tests {
         assert_eq!(msgs.len(), 2);
         assert_eq!(
             msgs[1]["content"],
-            "用户: 搜一下\n助手(调用工具): search_text {\"keywords\":[\"报销\"]}\n\
-             工具结果:\n三条结果\n助手: 好\n请输出下一步决策(JSON):"
+            "<user>\n搜一下\n</user>\n\
+             <assistant>\n{\"action\":\"search_text\",\"keywords\":[\"报销\"]}\n</assistant>\n\
+             <tool_result>\n三条结果\n</tool_result>\n\
+             <assistant>\n{\"action\":\"answer\",\"answer\":\"好\"}\n</assistant>"
         );
         assert_eq!(b["json_schema"]["required"], json!(["action"]));
     }
