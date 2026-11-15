@@ -126,6 +126,29 @@ pub struct Capabilities {
     pub on_device: bool,
 }
 
+/// 模型在这台电脑上用不了的原因。
+///
+/// 传给前端时写成 snake_case，比如 `device_not_eligible`。
+// Windows 上目前没有模型会报这些原因。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnavailableReason {
+    /// 不是 macOS。
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    NotMacos,
+    /// macOS 低于 26，系统里没有这个框架。
+    OsTooOld,
+    /// 系统说这台设备不支持。可能是 Intel 芯片，也可能是在中国大陆，系统不区分。
+    DeviceNotEligible,
+    /// 系统说没开 Apple Intelligence。
+    NotEnabled,
+    /// 系统说模型还没准备好，比如还在下载。
+    ModelNotReady,
+    /// 设置里的提示词语言不受支持。
+    LanguageNotSupported,
+}
+
 /// Why a model call failed.
 ///
 /// The transport layer has already retried a cloud request on 429, on a connection failure

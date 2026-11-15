@@ -8,7 +8,67 @@ fn main() {
     // dev 兜底（具体见脚本头注释）。
 
     add_swift_concurrency_rpath();
+    build_apple_fm();
 }
+
+/// 编译 Apple Intelligence 的 Swift 包，静态链接进来。
+///
+/// 最低系统版本和 `tauri.conf.json` 的 `minimumSystemVersion` 一样是 14.0。
+/// FoundationModels 从 macOS 26 才有，所以链接器会把它弱链接：老系统上没有它也能启动。
+#[cfg(target_os = "macos")]
+fn build_apple_fm() {
+    use std::process::Command;
+
+    let package = "src/ai/providers/apple_fm/swift";
+    println!("cargo:rerun-if-changed={package}");
+    let arch = match std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
+        Ok("aarch64") => "arm64",
+        Ok("x86_64") => "x86_64",
+        other => panic!("Apple Intelligence: unsupported target arch {other:?}"),
+    };
+    let triple = format!("{arch}-apple-macosx14.0");
+    let config = if std::env::var("PROFILE").as_deref() == Ok("release") {
+        "release"
+    } else {
+        "debug"
+    };
+    let scratch = format!("{}/apple-fm", std::env::var("OUT_DIR").unwrap());
+    let args = [
+        "build",
+        "--package-path",
+        package,
+        "--scratch-path",
+        &scratch,
+        "--triple",
+        &triple,
+        "-c",
+        config,
+    ];
+
+    let built = Command::new("swift")
+        .args(args)
+        .output()
+        .expect("run swift build");
+    if !built.status.success() {
+        panic!(
+            "swift build failed:\n{}\n{}",
+            String::from_utf8_lossy(&built.stdout),
+            String::from_utf8_lossy(&built.stderr)
+        );
+    }
+    // 不同版本的 SwiftPM 把产物放在不同的目录，所以问它放在哪。
+    let bin = Command::new("swift")
+        .args(args)
+        .arg("--show-bin-path")
+        .output()
+        .expect("run swift build --show-bin-path");
+    let bin = String::from_utf8_lossy(&bin.stdout);
+    println!("cargo:rustc-link-search=native={}", bin.trim());
+    println!("cargo:rustc-link-lib=static=AppleFm");
+}
+
+#[cfg(not(target_os = "macos"))]
+fn build_apple_fm() {}
 
 /// 给 macOS dev 二进制补 `LC_RPATH`，让 `@rpath/libswift_Concurrency.dylib`
 /// 解析到系统 dyld shared cache 里的 `/usr/lib/swift/libswift_Concurrency.dylib`。

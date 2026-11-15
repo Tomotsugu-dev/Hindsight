@@ -391,6 +391,7 @@ pub fn run() {
             commands::ai_models::import_model,
             commands::ai_models::cancel_model_download,
             commands::ai_models::list_partial_downloads,
+            commands::apple_intelligence::apple_intelligence_status,
             // --- 屏幕记忆(L2/L3) ---
             commands::screen_memory::memory_backfill,
             commands::screen_memory::memory_digest_now,

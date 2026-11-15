@@ -4,6 +4,7 @@ pub mod ai_engine;
 pub mod ai_models;
 pub mod ai_summary;
 pub mod app_groups;
+pub mod apple_intelligence;
 pub mod auth;
 pub mod capture;
 pub mod categories;
