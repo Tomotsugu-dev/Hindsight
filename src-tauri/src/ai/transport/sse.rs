@@ -46,24 +46,26 @@ pub(super) async fn read_events(
     (events.finish(), None)
 }
 
+/// A network chunk can end inside a multi-byte UTF-8 character.
+/// The buffer keeps bytes and decodes a line only when its `\n` has arrived.
 #[derive(Default)]
 struct Lines {
-    buf: String,
+    buf: Vec<u8>,
 }
 
 impl Lines {
     fn push(&mut self, bytes: &[u8]) -> Vec<String> {
-        self.buf.push_str(&String::from_utf8_lossy(bytes));
+        self.buf.extend_from_slice(bytes);
         let mut out = Vec::new();
-        while let Some(end) = self.buf.find('\n') {
-            let line: String = self.buf.drain(..=end).collect();
-            out.push(line[..end].to_string());
+        while let Some(end) = self.buf.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = self.buf.drain(..=end).collect();
+            out.push(String::from_utf8_lossy(&line[..end]).into_owned());
         }
         out
     }
 
     fn finish(self) -> Option<String> {
-        (!self.buf.is_empty()).then_some(self.buf)
+        (!self.buf.is_empty()).then(|| String::from_utf8_lossy(&self.buf).into_owned())
     }
 }
 
@@ -119,6 +121,13 @@ mod tests {
             events.push_line(&line);
         }
         events.finish()
+    }
+
+    /// 一个汉字被切在两个网络块里：拼回来还是原字。
+    #[test]
+    fn keeps_a_character_split_across_chunks() {
+        let bytes = "data: 上午\n".as_bytes();
+        assert_eq!(events(&[&bytes[..7], &bytes[7..]]), ["上午"]);
     }
 
     /// 只取 data 字段：注释、event 字段跳过，\r\n 行尾也认。
