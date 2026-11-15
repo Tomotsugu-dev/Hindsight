@@ -292,17 +292,15 @@ pub async fn answer(
             StepOut::Call {
                 name,
                 args,
-                id,
-                raw,
+                id: call_id,
+                carry,
             } => {
-                // 云端用模型自己的 call id(回放时必须与 tool 消息对上);本地自造
-                let call_id = id.unwrap_or_else(|| format!("call_{steps}"));
                 let args_str = args.to_string();
                 turns.push(Turn::AssistantCall {
                     id: call_id.clone(),
                     name: name.clone(),
-                    args: args_str.clone(),
-                    raw,
+                    args: args.clone(),
+                    carry,
                 });
 
                 // 护栏:同名同参的调用只执行一次
@@ -655,15 +653,16 @@ mod tests {
             .filter_level(log::LevelFilter::Warn)
             .is_test(true)
             .try_init();
-        let thinking = crate::chat::llm::ThinkingMode::from_setting(
+        let thinking = crate::chat::llm::reasoning_from_setting(
             &std::env::var("CHAT_E2E_THINKING").unwrap_or_default(),
         );
+        let model = std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL");
         let llm = if let Ok(endpoint) = std::env::var("CHAT_E2E_ENDPOINT") {
             ChatLlm::cloud(
                 &endpoint,
-                std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL"),
-                std::env::var("CHAT_E2E_KEY").unwrap_or_default(),
-                std::env::var("CHAT_E2E_PROVIDER").unwrap_or_else(|_| "custom".into()),
+                &model,
+                &std::env::var("CHAT_E2E_KEY").unwrap_or_default(),
+                &std::env::var("CHAT_E2E_PROVIDER").unwrap_or_else(|_| "custom".into()),
                 thinking,
             )
             .unwrap()
@@ -672,12 +671,7 @@ mod tests {
                 .expect("设 CHAT_E2E_ENDPOINT(云端)或 CHAT_E2E_PORT(本地)")
                 .parse()
                 .unwrap();
-            ChatLlm::local(
-                port,
-                std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL"),
-                thinking,
-            )
-            .unwrap()
+            ChatLlm::local(port, &model, thinking).unwrap()
         };
         let ctx = ToolCtx::open_readonly().await.unwrap();
         let today = chrono::Local::now().date_naive();
@@ -891,10 +885,10 @@ mod loop_tests {
     fn cloud_llm(port: u16) -> ChatLlm {
         ChatLlm::cloud(
             &format!("http://127.0.0.1:{port}/v1"),
-            "test-model".into(),
-            String::new(),
-            "custom".into(),
-            crate::chat::llm::ThinkingMode::Auto,
+            "test-model",
+            "",
+            "custom",
+            crate::ai::model::Reasoning::Default,
         )
         .unwrap()
     }

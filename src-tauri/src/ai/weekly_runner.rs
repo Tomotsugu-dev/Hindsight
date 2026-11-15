@@ -289,8 +289,8 @@ impl WeekSummaryRunner {
             .is_local()
             .then(|| self.supervisor.acquire_inference());
         let (row, status_str): (SegmentSummaryRow, &'static str) =
-            match step2.chat(&system, &user_text, &[]).await {
-                Ok((content, _usage)) => (
+            match step2.chat(&system, &user_text).await {
+                Ok(content) => (
                     SegmentSummaryRow {
                         source: WEEKLY_SOURCE.to_string(),
                         local_date: week_key.clone(),

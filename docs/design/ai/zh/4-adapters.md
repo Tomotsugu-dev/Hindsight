@@ -61,7 +61,7 @@ enum ToolProtocol {
 
 | 方言 | `Off` 发什么 | 强度发什么 | 有哪些档 | 特别规则 |
 |---|---|---|---|---|
-| openai | `reasoning_effort: "none"` | `reasoning_effort: "<档>"` | low、medium、high | 带工具时一律发 `none`，`Default` 也是。`applied = Off` |
+| openai | `reasoning_effort: "none"` | `reasoning_effort: "<档>"` | low、medium、high | 带工具时一律发 `none`，`Default` 也是。`effective_reasoning = Off` |
 | kimi | 同 openai | 同 openai | low、medium、high | 个别模型强制思考，发 `none` 会被拒，靠自愈撤掉 |
 | deepseek | `thinking: {type: "disabled"}` | `thinking: {type: "enabled"}`，加 `reasoning_effort: "<档>"` | low、high、max | — |
 | openrouter | `reasoning: {enabled: false}` | `reasoning: {effort: "<档>"}` | low、medium、high | 不能同时发顶层的 `reasoning_effort` |
@@ -77,7 +77,7 @@ enum ToolProtocol {
 
 - 云端必须开流式：不开的话，写完之前连接上没有数据，长回答会被网络中途掐断。
 - 云端不发温度：有的模型只接受固定值，用厂商的默认值最安全。
-- 数值沿用现有代码。
+- 思考底线的依据：云端实测 DeepSeek 最高档思考 6K token 以上；本机实测完整的思考链 1K 到 2K token。
 
 ### 3.3 重试
 

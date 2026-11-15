@@ -9,7 +9,9 @@ use std::time::Duration;
 use reqwest::StatusCode;
 use serde::Serialize;
 
-use crate::ai::openai_compat::{model_ids, ChatCompletions, CHAT_COMPLETIONS_PATH, MODELS_PATH};
+use crate::ai::providers::chat_completions::{
+    model_ids, ChatCompletions, CHAT_COMPLETIONS_PATH, MODELS_PATH,
+};
 use crate::ai::transport::{
     bearer_headers, fmt_send_err, ModelTransport, TransportError, TransportPolicy,
 };

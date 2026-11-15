@@ -2,7 +2,7 @@
 //!
 //! - [`build_activity_timeline`]：从 activities 合成段内逐小时活动时间线（唯一材料源）
 //! - [`summarize_segment`]：段总结（纯文本调用，写库 + 返回行）
-//! - [`build_step2`]：根据 settings 构造段总结 chat 路由（本地 / 外部）
+//! - [`build_step2`]：按设置打开日报和周报用的模型（本地 / 云端）
 //!
 //! 这些函数从 `DaySummaryRunner` 拎出来便于单测与代码审查；调用方传 owned
 //! 数据 + Arc 的 supervisor / cancel / pool，避免持引用跨 await。
@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::ai::config::AiConfig;
-use crate::ai::llm::{ChatClient, ExternalChatClient, Step2Chat};
+use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
 use crate::capture::screenshot;
@@ -83,16 +83,16 @@ pub(crate) async fn summarize_segment(
     let user_text = build_user_prompt(ai, &ctx);
 
     // 本地走自家引擎，需要 acquire 防止 watcher 在请求中途 stop；
-    // 云端 (External) 不动 supervisor，不 acquire。
+    // 云端不动 supervisor，不 acquire。
     let _inflight = step2.is_local().then(|| supervisor.acquire_inference());
-    let chat_result = cancellable(cancel, step2.chat(&system, &user_text, &[])).await;
+    let chat_result = cancellable(cancel, step2.chat(&system, &user_text)).await;
     if matches!(chat_result, Err(Error::SummaryCancelled)) {
         return Err(Error::SummaryCancelled);
     }
     let (row, status_str): (SegmentSummaryRow, &'static str) = match chat_result {
         // 落库的 model 用 step2_model——本地是 GGUF 文件名，
         // 外部是用户填的云端模型 ID（如 deepseek-chat）
-        Ok((content, _usage)) => (
+        Ok(content) => (
             SegmentSummaryRow {
                 source: source.to_string(),
                 local_date: date_str.to_string(),
@@ -138,16 +138,9 @@ pub(crate) async fn summarize_segment(
     Ok((row, status_str))
 }
 
-/// 根据 [`AiConfig::summary_use_cloud`] 构造段总结的 chat 路由。
+/// 按 [`AiConfig::summary_use_cloud`] 打开日报和周报用的模型。
 ///
-/// - false：[`Step2Chat::Local`]——本地端口；`local_model_label` 是当前引擎实际加载的
-///   GGUF 文件名（即 `effective_summary_main`），用作 `model_label()` 落库 +
-///   chat completions 请求的 model 字段
-/// - true：[`Step2Chat::External`] 包一个新建的 [`ExternalChatClient`]，
-///   走用户填的 endpoint / model / api_key
-///
-/// 外部 client 构造失败（endpoint 空、model 空）会向上抛——这种情况说明用户
-/// 选了 cloud 但配置不全，让顶层错误条直接显示让他去填。
+/// 用本机模型时，`local_model_label` 是引擎加载的 GGUF 文件名。
 pub(crate) fn build_step2(
     ai: &AiConfig,
     local_port: u16,
@@ -155,19 +148,15 @@ pub(crate) fn build_step2(
 ) -> Result<Step2Chat> {
     let max_tokens = ai.summary_max_tokens();
     if ai.summary_use_cloud() {
-        let ext = ExternalChatClient::new(
+        Step2Chat::cloud(
             &ai.endpoint,
-            ai.model.clone(),
-            ai.api_key.clone(),
+            &ai.model,
+            &ai.api_key,
+            &ai.external_provider,
             max_tokens,
-        )?;
-        Ok(Step2Chat::External(ext))
+        )
     } else {
-        Ok(Step2Chat::Local(ChatClient::new(
-            local_port,
-            local_model_label,
-            max_tokens,
-        )?))
+        Step2Chat::local(local_port, local_model_label, max_tokens)
     }
 }
 
@@ -1134,7 +1123,7 @@ mod tests {
     async fn summarize_segment_chat_failure_writes_error_row() {
         let pool = fresh_test_pool().await;
         let port = free_local_port();
-        let step2 = Step2Chat::Local(ChatClient::new(port, "dead.gguf", 1024).unwrap());
+        let step2 = Step2Chat::local(port, "dead.gguf", 1024).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -1186,7 +1175,7 @@ mod tests {
             .unwrap();
 
         let port = free_local_port();
-        let step2 = Step2Chat::Local(ChatClient::new(port, "dead.gguf", 1024).unwrap());
+        let step2 = Step2Chat::local(port, "dead.gguf", 1024).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -1228,7 +1217,7 @@ mod tests {
         // 挂起的假服务：backlog 完成握手但永不回包，让请求停在途中等 cancel 打断
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let step2 = Step2Chat::Local(ChatClient::new(port, "m.gguf", 1024).unwrap());
+        let step2 = Step2Chat::local(port, "m.gguf", 1024).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(true)); // 预先按下停止
@@ -1271,7 +1260,7 @@ mod tests {
     async fn summarize_segment_ok_writes_ok_row_and_trims_content() {
         let pool = fresh_test_pool().await;
         let port = spawn_canned_openai_server("  上午主要在写 Hindsight 的单元测试。  ").await;
-        let step2 = Step2Chat::Local(ChatClient::new(port, "qwen.gguf", 1024).unwrap());
+        let step2 = Step2Chat::local(port, "qwen.gguf", 1024).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));

@@ -299,14 +299,14 @@ async fn run_ask(
 
     // 路由走独立的 chat 槽位:chat_main 空 = 自动(云端配好走云端,否则同 step 2);
     // sentinel = 明确云端;文件名 = 明确该本地模型
-    let thinking = crate::chat::llm::ThinkingMode::from_setting(&ai.chat_thinking);
+    let thinking = crate::chat::llm::reasoning_from_setting(&ai.chat_thinking);
     let (llm, _inflight) = if ai.chat_use_cloud() {
         (
             ChatLlm::cloud(
                 &ai.endpoint,
-                ai.model.clone(),
-                ai.api_key.clone(),
-                ai.external_provider.clone(),
+                &ai.model,
+                &ai.api_key,
+                &ai.external_provider,
                 thinking,
             )
             .map_err(String::from)?,
@@ -364,7 +364,7 @@ async fn run_ask(
         // 循环期间持 inference guard,防 idle watcher 中途杀掉 server
         let guard = supervisor.acquire_inference();
         (
-            ChatLlm::local(port, main_name.to_string(), thinking).map_err(String::from)?,
+            ChatLlm::local(port, main_name, thinking).map_err(String::from)?,
             Some(guard),
         )
     };
