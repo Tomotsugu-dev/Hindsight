@@ -2,14 +2,17 @@
 //!
 //! 用户在「AI 设置 → 外部模型」里填 endpoint / api_key 之后点"测试连接"，
 //! 触发 `test_ai_endpoint` 这条命令；返回成功时附可用模型 ID(上限 500)。
-//!
-//! 该模块同时提供 [`fmt_send_err`] —— 把 reqwest::Error 的整条 source chain
-//! 拼成对用户可读的中文错误，被 `crate::ai::llm` 的本地 chat 路径复用。
+//! 请求经 [`ModelTransport`] 发。
 
 use std::time::Duration;
 
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use reqwest::StatusCode;
+use serde::Serialize;
+
+use crate::ai::openai_compat::{model_ids, ChatCompletions, CHAT_COMPLETIONS_PATH, MODELS_PATH};
+use crate::ai::transport::{
+    bearer_headers, fmt_send_err, ModelTransport, TransportError, TransportPolicy,
+};
 
 /// `test_ai_endpoint` 的返回。
 ///
@@ -26,108 +29,59 @@ pub struct TestAiEndpointResp {
     pub message: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ModelsResp {
-    data: Vec<OpenAIModelEntry>,
-}
-
-/// OpenAI `/v1/models` 响应里的一项；只为本地解析用，跟
-/// 本地磁盘上的 [`crate::ai::models::ModelEntry`] 是两个概念
-#[derive(Debug, Deserialize)]
-struct OpenAIModelEntry {
-    id: String,
-}
-
 /// 测试 OpenAI 兼容端点的连通性：`GET {endpoint}/models`。
 ///
-/// `endpoint` 末尾的 `/` 会被吃掉再拼路径，避免出现 `//models`。
 /// `api_key` 非空时走 Bearer auth；Ollama 一般不用填。
 #[tauri::command]
 pub async fn test_ai_endpoint(
     endpoint: String,
     api_key: Option<String>,
 ) -> Result<TestAiEndpointResp, String> {
-    let trimmed = endpoint.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
+    if endpoint.trim().trim_end_matches('/').is_empty() {
         return Ok(fail("服务地址为空"));
     }
-    let url = format!("{}/models", trimmed);
-
-    let client = match Client::builder().timeout(Duration::from_secs(8)).build() {
-        Ok(c) => c,
-        Err(e) => return Ok(fail(&format!("HTTP 客户端构造失败：{e}"))),
+    let transport = match probe_transport(&endpoint, api_key.as_deref(), Duration::from_secs(8)) {
+        Ok(t) => t,
+        Err(msg) => return Ok(fail(&msg)),
     };
-
-    let mut req = client.get(&url);
-    if let Some(k) = api_key.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        req = req.bearer_auth(k);
+    let body = match transport.get(MODELS_PATH).await {
+        Ok(body) => body,
+        Err(e) => return Ok(fail(&describe(e, 120))),
+    };
+    match model_ids(body) {
+        // 500:够住 OpenRouter 这类聚合站的全目录;"拉取模型"下拉与测试
+        // toast 共用这份返回,展示层各自截断
+        Ok(ids) => Ok(TestAiEndpointResp {
+            ok: true,
+            models: ids.into_iter().take(500).collect(),
+            message: String::new(),
+        }),
+        Err(e) => Ok(fail(&format!(
+            "cannot read or parse the response body: {e}"
+        ))),
     }
-
-    let resp = match req.send().await {
-        Ok(r) => r,
-        Err(e) => return Ok(fail(&fmt_send_err(e))),
-    };
-
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        // 截短服务返回，避免把整个 HTML 错误页粘进 toast
-        let preview: String = body.chars().take(120).collect();
-        return Ok(fail(&format!("服务返回 {status}：{preview}")));
-    }
-
-    let parsed: ModelsResp = match resp.json().await {
-        Ok(p) => p,
-        // 带原因链：外层 Display 只说"解码失败"，连接被掐还是 JSON 格式错
-        // 全在 source 链里，测试端点正是给用户排障用的
-        Err(e) => {
-            return Ok(fail(&format!(
-                "响应体读取/解析失败：{}",
-                crate::ai::llm::error_chain(&e)
-            )))
-        }
-    };
-
-    // 500:够住 OpenRouter 这类聚合站的全目录;"拉取模型"下拉与测试
-    // toast 共用这份返回,展示层各自截断
-    let models: Vec<String> = parsed.data.into_iter().map(|m| m.id).take(500).collect();
-
-    Ok(TestAiEndpointResp {
-        ok: true,
-        models,
-        message: String::new(),
-    })
 }
 
-/// 把 reqwest 发送错误格式化成对用户可读的字符串。
-///
-/// reqwest::Error 的 Display 只给最外层（"error sending request for url ..."），
-/// 真正告诉用户"为啥连不上"的是 source chain 最深处的 io::Error
-/// （`Connection refused`、`os error 10061` 等）。这里把整条链拼起来，
-/// 并按 reqwest 提供的分类给一句开场白。
-pub(crate) fn fmt_send_err(e: reqwest::Error) -> String {
-    let head = if e.is_timeout() {
-        "请求超时"
-    } else if e.is_connect() {
-        "连接失败（确认服务是否启动、端口是否正确）"
-    } else if e.is_request() {
-        "请求构造失败"
-    } else {
-        "网络错误"
-    };
+fn probe_transport(
+    endpoint: &str,
+    api_key: Option<&str>,
+    total_timeout: Duration,
+) -> Result<ModelTransport, String> {
+    let headers = bearer_headers(api_key.unwrap_or("")).map_err(|e| e.to_string())?;
+    ModelTransport::new(endpoint, headers, TransportPolicy::probe(total_timeout))
+        .map_err(|e| e.to_string())
+}
 
-    // 跳过 reqwest::Error 自己（它的 to_string 跟 URL 重复了），从 source 起拼
-    let mut details: Vec<String> = Vec::new();
-    let mut cur: Option<&dyn std::error::Error> = std::error::Error::source(&e);
-    while let Some(s) = cur {
-        details.push(s.to_string());
-        cur = s.source();
-    }
-
-    if details.is_empty() {
-        head.to_string()
-    } else {
-        format!("{head}：{}", details.join(" → "))
+/// 测试失败时 toast 上的一句话。响应体最多留 `preview` 个字，不把整个 HTML 错误页贴上去。
+fn describe(e: TransportError, preview: usize) -> String {
+    let cut = |body: String| body.chars().take(preview).collect::<String>();
+    match e {
+        TransportError::Send(e) => fmt_send_err(e),
+        TransportError::Status { status, body } => format!("服务返回 {status}：{}", cut(body)),
+        TransportError::RateLimited { body, .. } => {
+            format!("服务返回 {}：{}", StatusCode::TOO_MANY_REQUESTS, cut(body))
+        }
+        TransportError::Body(msg) => msg,
     }
 }
 
@@ -154,12 +108,9 @@ pub async fn test_ai_chat(
     model: String,
     with_image: bool,
 ) -> Result<TestAiEndpointResp, String> {
-    let trimmed = endpoint.trim().trim_end_matches('/');
-    if trimmed.is_empty() || model.trim().is_empty() {
+    if endpoint.trim().trim_end_matches('/').is_empty() || model.trim().is_empty() {
         return Ok(fail("服务地址或模型 ID 为空"));
     }
-    let url = format!("{}/chat/completions", trimmed);
-
     let content = if with_image {
         serde_json::json!([
             { "type": "text", "text": "hi" },
@@ -175,27 +126,127 @@ pub async fn test_ai_chat(
     });
 
     // chat 比 /models 慢得多（要真跑一次前向），超时放宽到 30s
-    let client = match Client::builder().timeout(Duration::from_secs(30)).build() {
-        Ok(c) => c,
-        Err(e) => return Ok(fail(&format!("HTTP 客户端构造失败：{e}"))),
+    let transport = match probe_transport(&endpoint, api_key.as_deref(), Duration::from_secs(30)) {
+        Ok(t) => t,
+        Err(msg) => return Ok(fail(&msg)),
     };
-    let mut req = client.post(&url).json(&body);
-    if let Some(k) = api_key.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        req = req.bearer_auth(k);
+    match transport
+        .post(CHAT_COMPLETIONS_PATH, &body, &ChatCompletions)
+        .await
+    {
+        Ok(_) => Ok(TestAiEndpointResp {
+            ok: true,
+            models: Vec::new(),
+            message: String::new(),
+        }),
+        Err(e) => Ok(fail(&describe(e, 200))),
     }
-    let resp = match req.send().await {
-        Ok(r) => r,
-        Err(e) => return Ok(fail(&fmt_send_err(e))),
-    };
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        let preview: String = body.chars().take(200).collect();
-        return Ok(fail(&format!("服务返回 {status}：{preview}")));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::transport::fake::{FakeServer, Reply};
+    use serde_json::json;
+
+    /// 测试连接：GET /models，带鉴权头，返回模型 ID。
+    #[tokio::test]
+    async fn test_ai_endpoint_lists_model_ids() {
+        let server = FakeServer::start(vec![Reply::json(
+            200,
+            json!({"data": [{"id": "a"}, {"id": "b"}]}),
+        )])
+        .await;
+        let r = test_ai_endpoint(server.base_url(), Some("sk-x".into()))
+            .await
+            .unwrap();
+        assert!(r.ok, "{}", r.message);
+        assert_eq!(r.models, ["a", "b"]);
+        let got = server.received();
+        assert!(got[0].head.starts_with("get /v1/models"), "{}", got[0].head);
+        assert!(got[0].head.contains("authorization: bearer sk-x"));
     }
-    Ok(TestAiEndpointResp {
-        ok: true,
-        models: Vec::new(),
-        message: String::new(),
-    })
+
+    /// 测试模型：非 2xx 时 ok=false，消息里有状态码和服务端的原话。
+    #[tokio::test]
+    async fn test_ai_chat_reports_status_and_body() {
+        let server = FakeServer::start(vec![Reply::json(
+            401,
+            json!({"error": {"message": "Invalid API key"}}),
+        )])
+        .await;
+        let r = test_ai_chat(server.base_url(), Some("bad".into()), "m".into(), false)
+            .await
+            .unwrap();
+        assert!(!r.ok);
+        assert!(
+            r.message.contains("401") && r.message.contains("Invalid API key"),
+            "{}",
+            r.message
+        );
+        assert_eq!(server.received().len(), 1);
+    }
+
+    /// 测试模型：200 就算通过。没填 Key 时不发鉴权头。
+    #[tokio::test]
+    async fn test_ai_chat_ok_on_200() {
+        let server = FakeServer::start(vec![Reply::json(
+            200,
+            json!({"choices": [{"message": {"role": "assistant", "content": "h"}, "finish_reason": "length"}]}),
+        )])
+        .await;
+        let r = test_ai_chat(server.base_url(), None, "m".into(), false)
+            .await
+            .unwrap();
+        assert!(r.ok, "{}", r.message);
+        let got = server.received();
+        assert_eq!(got[0].body["messages"][0]["content"], "hi");
+        assert!(
+            !got[0].head.contains("authorization"),
+            "没填 Key 不发鉴权头"
+        );
+    }
+
+    // ---- 以下锁住改用传输层后的新行为 ----
+
+    /// 测试模型：服务拒收 max_tokens 时跟真跑一样改名再发，算通过。
+    #[tokio::test]
+    async fn test_ai_chat_heals_400_like_real_runs() {
+        let server = FakeServer::start(vec![
+            Reply::json(
+                400,
+                json!({"error": {"message": "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."}}),
+            ),
+            Reply::json(
+                200,
+                json!({"choices": [{"message": {"role": "assistant", "content": "h"}, "finish_reason": "length"}]}),
+            ),
+        ])
+        .await;
+        let r = test_ai_chat(server.base_url(), None, "m".into(), false)
+            .await
+            .unwrap();
+        assert!(r.ok, "{}", r.message);
+        let got = server.received();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[1].body["max_completion_tokens"], 1);
+    }
+
+    /// 测试连接：被限流不等也不重发，照实报 429。
+    #[tokio::test]
+    async fn test_ai_endpoint_reports_429_without_retry() {
+        let server = FakeServer::start(vec![Reply::json(
+            429,
+            json!({"error": {"message": "slow down"}}),
+        )])
+        .await;
+        let r = test_ai_endpoint(server.base_url(), None).await.unwrap();
+        assert!(!r.ok);
+        assert!(
+            r.message.contains("429") && r.message.contains("slow down"),
+            "{}",
+            r.message
+        );
+        assert_eq!(server.received().len(), 1);
+    }
 }
