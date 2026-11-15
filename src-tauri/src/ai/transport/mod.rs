@@ -102,6 +102,20 @@ impl TransportPolicy {
             max_heal_rounds: 0,
         }
     }
+
+    /// Returns the settings for "Test connection".
+    ///
+    /// These settings retry only when a 400 can be fixed.
+    pub fn probe(total_timeout: Duration) -> Self {
+        Self {
+            total_timeout: Some(total_timeout),
+            connect_timeout: None,
+            read_timeout: None,
+            max_rate_limit_retries: 0,
+            max_transient_retries: 0,
+            max_heal_rounds: MAX_HEAL_ROUNDS,
+        }
+    }
 }
 
 /// Why a model request failed.
@@ -240,6 +254,20 @@ impl ModelTransport {
                 None => return Err(err),
             }
         }
+    }
+
+    /// Sends `GET` to `path` and returns the JSON response body.
+    ///
+    /// Sends once and does not retry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the request gets no response, the status is not 2xx,
+    /// or the body is not JSON.
+    pub async fn get(&self, path: &str) -> std::result::Result<Value, TransportError> {
+        let url = format!("{}{path}", self.base_url);
+        let resp = self.send(self.http.get(url)).await?;
+        read_json(resp).await
     }
 
     async fn post_once(
@@ -388,11 +416,16 @@ mod tests {
     /// 路径和请求头都由调用方给，传输层原样发出，自己不加鉴权头。
     #[tokio::test]
     async fn sends_the_callers_path_and_headers() {
-        let server = FakeServer::start(vec![Reply::json(200, json!({"a": 1}))]).await;
+        let server = FakeServer::start(vec![
+            Reply::json(200, json!({"a": 1})),
+            Reply::json(200, json!({"x": 1})),
+        ])
+        .await;
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_static("k1"));
         let t = ModelTransport::new(&server.base_url(), headers, TransportPolicy::cloud()).unwrap();
         t.post("/messages", &json!({}), &Plain).await.unwrap();
+        assert_eq!(t.get("/anything").await.unwrap()["x"], 1);
         let got = server.received();
         assert!(
             got[0].head.starts_with("post /v1/messages"),
@@ -401,6 +434,11 @@ mod tests {
         );
         assert!(got[0].head.contains("x-api-key: k1"));
         assert!(!got[0].head.contains("authorization"));
+        assert!(
+            got[1].head.starts_with("get /v1/anything"),
+            "{}",
+            got[1].head
+        );
     }
 
     #[test]

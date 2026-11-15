@@ -414,19 +414,6 @@ struct ChatMessage {
     reasoning_content: Option<String>,
 }
 
-/// reqwest 错误的 Display 只给最外层（如 "error decoding response body"），
-/// 真实原因（连接被重置 / JSON 语法错在哪）全藏在 source 链里——排障靠它。
-pub(crate) fn error_chain(e: &dyn std::error::Error) -> String {
-    let mut s = e.to_string();
-    let mut cur = e.source();
-    while let Some(c) = cur {
-        s.push_str(" ← ");
-        s.push_str(&c.to_string());
-        cur = c.source();
-    }
-    s
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

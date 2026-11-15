@@ -24,6 +24,21 @@ impl Protocol for ChatCompletions {
 }
 
 pub(crate) const CHAT_COMPLETIONS_PATH: &str = "/chat/completions";
+pub(crate) const MODELS_PATH: &str = "/models";
+
+/// 从 [`MODELS_PATH`] 的响应体里取出模型 ID。
+pub(crate) fn model_ids(body: Value) -> Result<Vec<String>, serde_json::Error> {
+    #[derive(serde::Deserialize)]
+    struct Models {
+        data: Vec<Model>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Model {
+        id: String,
+    }
+    let models: Models = serde_json::from_value(body)?;
+    Ok(models.data.into_iter().map(|m| m.id).collect())
+}
 
 /// 输出预算的字段名。云端用 OpenAI 现行的 `max_completion_tokens`:实测
 /// (2026-08)gpt-5.6 起对 `max_tokens` 直接 400「not supported with this
