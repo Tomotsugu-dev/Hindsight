@@ -171,10 +171,10 @@ impl Default for InflightState {
 /// `last_used_at` 推到当前时刻。配合 idle watcher 实现"跑完任务 N 秒无新请求
 /// → 自动 stop 引擎释放显存"。
 ///
-/// 用法（必须在调 `chat.chat_*` **之前** acquire，跨 await 持有到请求返回）：
+/// 用法（必须在向本机引擎发推理请求**之前** acquire，跨 await 持有到请求返回）：
 /// ```ignore
 /// let _g = supervisor.acquire_inference();  // in-flight++
-/// chat.chat_with_images(...).await?;        // 真正发请求
+/// step2.chat(...).await?;                   // 真正发请求
 /// // _g 在此处 drop → in-flight--
 /// ```
 pub struct InferenceGuard {

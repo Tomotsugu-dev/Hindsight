@@ -37,9 +37,9 @@ pub struct AiOverrides {
     /// 段总结阶段的每槽 ctx；`None` = fallback 到 [`Self::ctx_size`]。
     pub summary_ctx_size: Option<u32>,
 
-    /// 本次跑是否走云端段总结。`Some(true)` = 强制走 ExternalChatClient，
+    /// 本次跑是否走云端段总结。`Some(true)` = 强制走云端，
     /// `Some(false)` = 强制本地，`None` = 沿用 settings.ai。
-    /// endpoint / model / api_key 永远沿用 settings 全局值——这里只决定路径。
+    /// endpoint、model、api_key 和 external_provider 都用 settings.ai 的值。
     pub external_enabled: Option<bool>,
 }
 

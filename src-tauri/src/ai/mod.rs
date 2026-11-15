@@ -21,6 +21,7 @@ pub mod embedding_runtime;
 pub mod gguf;
 pub mod job_guard;
 pub mod llm;
+pub mod model;
 pub mod models;
 pub mod ocr;
 pub mod ocr_catchup;
@@ -30,9 +31,9 @@ pub mod ocr_supervisor;
 #[cfg(target_os = "macos")]
 pub mod ocr_vision;
 pub mod ocr_worker;
-pub mod openai_compat;
 pub mod platform;
 pub mod prompt;
+pub mod providers;
 pub mod recommended;
 pub mod server;
 pub mod summary;
