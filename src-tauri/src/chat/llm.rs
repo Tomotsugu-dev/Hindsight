@@ -270,29 +270,25 @@ const CLOUD_THINKING_MAX_TOKENS: u32 = 12288;
 /// Chat LLM 客户端:云端 or 本地,一个 step 接口。
 pub enum ChatLlm {
     Cloud {
-        base_url: String,
         model: String,
-        api_key: String,
         /// 服务商预设(ai.external_provider),思考注入按它分发
         provider: String,
         thinking: ThinkingMode,
-        http: reqwest::Client,
+        transport: ModelTransport,
     },
     Local {
-        base_url: String,
         model: String,
         thinking: ThinkingMode,
-        http: reqwest::Client,
+        transport: ModelTransport,
     },
 }
 
-// 请求自愈与输出预算字段名与 ai::llm(日报/周报)共用同一份实现——
-// 两套 OpenAI 兼容传输层曾各自演化出分歧:聊天发 max_completion_tokens
-// 且带自愈,摘要硬编码 max_tokens 且无自愈,导致同一端点下聊天可用、
-// 日报永久 400。共用后新规则一次生效两边。
-use crate::ai::openai_compat::{budget_key, heal_request, MAX_HEAL_ROUNDS};
+// 输出预算字段名与 ai::llm(日报/周报)共用同一份口径;发请求、重发在 ModelTransport,
+// 拼流式回复和 400 自愈在 ChatCompletions。
+use crate::ai::openai_compat::{budget_key, ChatCompletions, CHAT_COMPLETIONS_PATH};
+use crate::ai::transport::{bearer_headers, ModelTransport, TransportError, TransportPolicy};
+use reqwest::header::HeaderMap;
 
-const CHAT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 const MAX_ANSWER_TOKENS: u32 = 1024;
 
 impl ChatLlm {
@@ -308,21 +304,26 @@ impl ChatLlm {
             return Err(Error::InvalidInput("云端 API 地址或模型 ID 为空"));
         }
         Ok(Self::Cloud {
-            base_url,
             model,
-            api_key,
             provider,
             thinking,
-            http: http_client()?,
+            transport: ModelTransport::new(
+                &base_url,
+                bearer_headers(&api_key)?,
+                TransportPolicy::cloud(),
+            )?,
         })
     }
 
     pub fn local(port: u16, model: String, thinking: ThinkingMode) -> Result<Self> {
         Ok(Self::Local {
-            base_url: format!("http://127.0.0.1:{port}/v1"),
             model,
             thinking,
-            http: http_client()?,
+            transport: ModelTransport::new(
+                &format!("http://127.0.0.1:{port}/v1"),
+                HeaderMap::new(),
+                TransportPolicy::local(),
+            )?,
         })
     }
 
@@ -334,20 +335,13 @@ impl ChatLlm {
         user: &str,
         max_tokens: u32,
     ) -> Result<(String, TokenUsage)> {
-        let (base_url, model, api_key, http) = match self {
+        let (model, transport) = match self {
             Self::Cloud {
-                base_url,
-                model,
-                api_key,
-                http,
-                ..
-            } => (base_url, model, api_key.trim(), http),
+                model, transport, ..
+            } => (model, transport),
             Self::Local {
-                base_url,
-                model,
-                http,
-                ..
-            } => (base_url, model, "", http),
+                model, transport, ..
+            } => (model, transport),
         };
         let mut body = json!({
             "model": model,
@@ -370,6 +364,7 @@ impl ChatLlm {
                     max_tokens.max(CLOUD_THINKING_MAX_TOKENS)
                 };
                 body[budget_key(true)] = json!(budget);
+                request_stream(&mut body);
             }
             Self::Local { thinking, .. } => {
                 inject_local_thinking(&mut body, *thinking);
@@ -381,8 +376,7 @@ impl ChatLlm {
                 body[budget_key(false)] = json!(budget);
             }
         }
-        let url = format!("{base_url}/chat/completions");
-        let resp: Value = send_healing(http, &url, api_key, &mut body).await?;
+        let resp = send(transport, &body).await?;
         let usage = TokenUsage::from_resp(&resp);
         let content = resp["choices"][0]["message"]["content"]
             .as_str()
@@ -405,12 +399,10 @@ impl ChatLlm {
 
     async fn step_cloud(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
         let Self::Cloud {
-            base_url,
             model,
-            api_key,
             provider,
             thinking,
-            http,
+            transport,
         } = self
         else {
             unreachable!()
@@ -451,8 +443,8 @@ impl ChatLlm {
         });
         body[budget_key(true)] = json!(max_tokens);
         inject_cloud_thinking(&mut body, provider, *thinking, true);
-        let url = format!("{base_url}/chat/completions");
-        let resp: Value = send_healing(http, &url, api_key.trim(), &mut body).await?;
+        request_stream(&mut body);
+        let resp = send(transport, &body).await?;
         let usage = TokenUsage::from_resp(&resp);
         let msg = &resp["choices"][0]["message"];
         if let Some(call) = msg["tool_calls"].get(0) {
@@ -492,10 +484,9 @@ impl ChatLlm {
 
     async fn step_local(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
         let Self::Local {
-            base_url,
             model,
             thinking,
-            http,
+            transport,
         } = self
         else {
             unreachable!()
@@ -532,11 +523,7 @@ impl ChatLlm {
             "json_schema": local_decision_schema(),
         });
         inject_local_thinking(&mut body, *thinking);
-        let resp: Value = send_json(
-            http.post(format!("{base_url}/chat/completions"))
-                .json(&body),
-        )
-        .await?;
+        let resp = send(transport, &body).await?;
         let usage = TokenUsage::from_resp(&resp);
         let content = resp["choices"][0]["message"]["content"]
             .as_str()
@@ -570,63 +557,32 @@ impl ChatLlm {
     }
 }
 
-fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(CHAT_TIMEOUT)
-        .build()
-        .map_err(|e| Error::LlmResponse(format!("HTTP 客户端构造失败: {e}")))
+/// 让云端边生成边回。`include_usage` 让最后一块带上用量。
+fn request_stream(body: &mut Value) {
+    body["stream"] = json!(true);
+    body["stream_options"] = json!({"include_usage": true});
 }
 
-/// 发请求;400 且能按错误信息修正时自愈重试(见 [`heal_request`])。
-/// 非 400(鉴权/限流/网关)一律不重试——那不是参数问题,重发只是浪费。
-async fn send_healing(
-    http: &reqwest::Client,
-    url: &str,
-    api_key: &str,
-    body: &mut Value,
-) -> Result<Value> {
-    let mut round = 0u32;
-    loop {
-        let mut req = http.post(url).json(&*body);
-        if !api_key.is_empty() {
-            req = req.bearer_auth(api_key);
-        }
-        match send_json(req).await {
-            Ok(v) => return Ok(v),
-            Err(e) => {
-                let Error::LlmResponse(msg) = &e else {
-                    return Err(e);
-                };
-                if round >= MAX_HEAL_ROUNDS
-                    || !msg.starts_with("HTTP 400")
-                    || !heal_request(body, msg)
-                {
-                    return Err(e);
-                }
-                log::warn!("chat 云端 400,按错误信息自愈后重试(第 {} 轮)", round + 1);
-                round += 1;
-            }
-        }
-    }
+/// 发一次聊天请求，失败时转成聊天面板显示的错误。
+async fn send(transport: &ModelTransport, body: &Value) -> Result<Value> {
+    transport
+        .post(CHAT_COMPLETIONS_PATH, body, &ChatCompletions)
+        .await
+        .map_err(chat_error)
 }
 
-async fn send_json(req: reqwest::RequestBuilder) -> Result<Value> {
-    let resp = req
-        .send()
-        .await
-        .map_err(|e| Error::LlmResponse(format!("请求失败: {e}")))?;
-    let status = resp.status();
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| Error::LlmResponse(format!("读响应失败: {e}")))?;
-    if !status.is_success() {
-        // 预览按字符截断:错误体可能是中文/多字节(网关中文错误页),
-        // 按字节切 300 会切在字符中间直接 panic(B 档测试实锤的隐患)
-        let preview: String = text.chars().take(300).collect();
-        return Err(Error::LlmResponse(format!("HTTP {status}: {preview}")));
-    }
-    serde_json::from_str(&text).map_err(|e| Error::LlmResponse(format!("响应不是 JSON: {e}")))
+fn chat_error(e: TransportError) -> Error {
+    // 按字符截：错误页可能是中文，按字节截会切在字符中间
+    let preview = |body: &str| body.chars().take(300).collect::<String>();
+    Error::LlmResponse(match e {
+        // TODO: 日报和测试连接用 fmt_send_err，带种类和原因链；聊天这里只有最外层一句
+        TransportError::Send(e) => format!("请求失败: {e}"),
+        TransportError::Status { status, body } => format!("HTTP {status}: {}", preview(&body)),
+        TransportError::RateLimited { body, .. } => {
+            format!("HTTP 429 Too Many Requests: {}", preview(&body))
+        }
+        TransportError::Body(msg) => msg,
+    })
 }
 
 #[cfg(test)]
@@ -698,6 +654,7 @@ mod schema_tests {
 #[cfg(test)]
 mod cloud_http_tests {
     use super::*;
+    use crate::ai::transport::fake::{FakeServer, Reply};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     /// 拿一个刚释放的本地端口——连接必然被拒,模拟"服务没起来/地址配错"。
@@ -1131,16 +1088,12 @@ mod cloud_http_tests {
         );
     }
 
-    /// 429/500 同理透传;chat 通路对 429 不做退避重试(交互式场景等不起),
-    /// 应立刻把限流信息报给用户。
+    /// 429 退避重试 5 次仍限流、500 不重试：两种都把状态码和服务端原话报给用户。
     #[tokio::test]
     async fn step_cloud_429_and_500_pass_through_readably() {
-        let (port, _rx) = spawn_http_once(
-            "429 Too Many Requests",
-            r#"{"error":{"message":"rate limited"}}"#.into(),
-        )
-        .await;
-        let err = cloud_client(port)
+        let limited = || Reply::json(429, json!({"error": {"message": "rate limited"}}));
+        let server = FakeServer::start((0..6).map(|_| limited()).collect()).await;
+        let err = cloud_client(server.port)
             .step("s", &[Turn::User("q".into())])
             .await
             .unwrap_err()
@@ -1149,6 +1102,7 @@ mod cloud_http_tests {
             err.contains("429") && err.contains("rate limited"),
             "429 信息不可读: {err}"
         );
+        assert_eq!(server.received().len(), 6, "首发 1 次 + 重试 5 次");
 
         let (port, _rx) =
             spawn_http_once("500 Internal Server Error", "上游模型服务不可用".into()).await;
@@ -1195,17 +1149,22 @@ mod cloud_http_tests {
         assert!(!err.contains("误"), "第 301 个字符起应被截断: {err}");
     }
 
-    /// 2xx 但响应体不是 JSON(网关吐 HTML 错误页等):应报"响应不是 JSON"
+    /// 2xx 但响应体不是 JSON(网关吐 HTML 错误页等):重试 2 次后报解析失败,
     /// 而不是 panic 或含糊的空内容错误。
     #[tokio::test]
     async fn step_cloud_non_json_body_reports_parse_error() {
-        let (port, _rx) = spawn_http_once("200 OK", "<html>Bad Gateway</html>".into()).await;
-        let err = cloud_client(port)
+        let page = || Reply::html(200, "<html>Bad Gateway</html>");
+        let server = FakeServer::start(vec![page(), page(), page()]).await;
+        let err = cloud_client(server.port)
             .step("s", &[Turn::User("q".into())])
             .await
             .unwrap_err()
             .to_string();
-        assert!(err.contains("响应不是 JSON"), "畸形体应报解析错误: {err}");
+        assert!(
+            err.contains("cannot read or parse the response body"),
+            "畸形体应报解析错误: {err}"
+        );
+        assert_eq!(server.received().len(), 3, "首发 1 次 + 重试 2 次");
     }
 
     /// 缺字段容错:choices 整个缺失,以及 content 只有空白——都应归为
@@ -1240,9 +1199,9 @@ mod cloud_http_tests {
         assert!(err.contains("请求失败"), "拒连应报请求失败: {err}");
     }
 
-    /// 挂死不回包的服务:请求应保持等待(靠 120s 客户端超时兜底),
+    /// 挂死不回包的服务:请求应保持等待(靠读超时兜底),
     /// 绝不能早退成假成功/假错误。这里断言 500ms 内仍 pending;
-    /// 真实 120s 超时触发需要 tokio test-util 虚拟时钟,本 crate 未启用,不硬测。
+    /// 真实超时触发需要 tokio test-util 虚拟时钟,本 crate 未启用,不硬测。
     #[tokio::test]
     async fn step_cloud_hanging_server_stays_pending() {
         // backlog 会完成 TCP 握手但应用层永不 accept/回包——最像"服务活着但卡死"
@@ -1345,8 +1304,6 @@ mod cloud_http_tests {
 
     // ---- 以下从网络这一侧锁住聊天发请求的行为：重构传输层前后，这几条一行不改 ----
 
-    use crate::ai::transport::fake::{FakeServer, Reply};
-
     /// 云端回 400 并写明该换哪个字段名：改名后重发，第二次成功。
     #[tokio::test]
     async fn chat_cloud_heals_400_then_succeeds() {
@@ -1389,5 +1346,122 @@ mod cloud_http_tests {
                 .await,
             "丢弃 future 后连接应断开"
         );
+    }
+
+    // ---- 以下锁住聊天改用传输层后的新行为 ----
+
+    /// 云端请求流式；工具调用的碎片拼回一条，id 和参数都在，用量取最后一块。
+    #[tokio::test]
+    async fn chat_cloud_streams_and_joins_tool_call() {
+        let call = |args: &str, head: bool| {
+            let mut c = json!({"index": 0, "function": {"arguments": args}});
+            if head {
+                c["id"] = json!("call_1");
+                c["function"]["name"] = json!("query_day");
+            }
+            json!({"choices": [{"delta": {"tool_calls": [c]}}]})
+        };
+        let server = FakeServer::start(vec![Reply::sse(
+            &[
+                call("{\"date\":", true),
+                call("\"2026-01-02\"}", false),
+                json!({"choices": [], "usage": {"prompt_tokens": 7, "completion_tokens": 3}}),
+            ],
+            true,
+        )])
+        .await;
+        let (out, usage) = cloud_client(server.port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap();
+        let StepOut::Call {
+            name,
+            args,
+            id,
+            raw,
+        } = out
+        else {
+            panic!("应是工具调用: {out:?}");
+        };
+        assert_eq!(name, "query_day");
+        assert_eq!(args, json!({"date": "2026-01-02"}));
+        assert_eq!(id.as_deref(), Some("call_1"));
+        assert_eq!(raw.unwrap()["tool_calls"][0]["id"], "call_1");
+        assert_eq!((usage.prompt, usage.completion), (7, 3));
+        let got = server.received();
+        assert_eq!(got[0].body["stream"], true);
+        assert_eq!(got[0].body["stream_options"]["include_usage"], true);
+    }
+
+    /// 流式工具调用没带 id：聊天拿到 None，和非流式回复一致。
+    #[tokio::test]
+    async fn chat_cloud_stream_tool_call_without_id_gives_none() {
+        let call = json!({"index": 0, "function": {"name": "query_day", "arguments": "{}"}});
+        let server = FakeServer::start(vec![Reply::sse(
+            &[json!({"choices": [{"delta": {"tool_calls": [call]}}]})],
+            true,
+        )])
+        .await;
+        let (out, _) = cloud_client(server.port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap();
+        let StepOut::Call { name, id, .. } = out else {
+            panic!("应是工具调用: {out:?}");
+        };
+        assert_eq!(name, "query_day");
+        assert_eq!(id, None);
+    }
+
+    /// 网络块切在一个汉字中间：拼出来的正文不能有乱码。
+    #[tokio::test]
+    async fn chat_cloud_stream_split_inside_a_character() {
+        let server = FakeServer::start(vec![Reply::sse(
+            &[json!({"choices": [{"delta": {"content": "上午"}}]})],
+            true,
+        )
+        .split_inside("上")])
+        .await;
+        let (out, _) = cloud_client(server.port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap();
+        assert!(
+            matches!(out, StepOut::Final(ref t) if t == "上午"),
+            "{out:?}"
+        );
+    }
+
+    /// 云端限流时按退避重发，限流解除就正常作答。
+    #[tokio::test]
+    async fn chat_cloud_backs_off_on_429_then_succeeds() {
+        let server = FakeServer::start(vec![
+            Reply::json(429, json!({"error": {"message": "slow down"}})),
+            Reply::sse(&[json!({"choices": [{"delta": {"content": "好"}}]})], true),
+        ])
+        .await;
+        let (out, _) = cloud_client(server.port)
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap();
+        assert!(matches!(out, StepOut::Final(ref t) if t == "好"), "{out:?}");
+        assert_eq!(server.received().len(), 2);
+    }
+
+    /// 本机不流式、不重发：500 一次就报错。
+    #[tokio::test]
+    async fn chat_local_sends_once_without_stream() {
+        let server = FakeServer::start(vec![Reply::json(500, json!({"error": "boom"}))]).await;
+        let err = ChatLlm::local(server.port, "m".into(), ThinkingMode::Off)
+            .unwrap()
+            .step("s", &[Turn::User("q".into())])
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("500") && err.contains("boom"), "{err}");
+        let got = server.received();
+        assert_eq!(got.len(), 1);
+        assert!(got[0].body.get("stream").is_none());
+        assert!(got[0].body.get("json_schema").is_some());
     }
 }

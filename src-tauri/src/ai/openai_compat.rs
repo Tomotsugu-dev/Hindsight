@@ -219,9 +219,6 @@ impl SseAccumulator {
 // 抓到的 400 原文(8 场景全自愈)、边界侧 4 场景全部按预期干净放弃、
 // 真端点 DeepSeek×2 / OpenAI / Moonshot 端到端通过。
 
-/// 自愈重试上限。够用:实测最长的链是"改名 → 补 none"两轮。
-pub(crate) const MAX_HEAL_ROUNDS: u32 = 3;
-
 /// 绝不可为了让请求通过而删掉的字段。删了确实能 200,但功能已经废了——
 /// 例如删 `tools` 后 Chat 失去查库能力却装作一切正常,静默失效比报错更坏。
 const PROTECTED_FIELDS: [&str; 4] = ["model", "messages", "tools", "tool_choice"];

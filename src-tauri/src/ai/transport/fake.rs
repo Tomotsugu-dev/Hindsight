@@ -23,6 +23,13 @@ pub(crate) enum Reply {
     },
     /// 读完请求后不回包，等客户端自己断开。
     Hang,
+    /// 同 `Http`，但响应体分两次写出：前 `at` 个字节一次，其余隔一会儿再写。
+    Split {
+        status: u16,
+        headers: Vec<(&'static str, String)>,
+        body: String,
+        at: usize,
+    },
 }
 
 impl Reply {
@@ -30,6 +37,15 @@ impl Reply {
         Self::Http {
             status,
             headers: vec![("Content-Type", "application/json".into())],
+            body: body.to_string(),
+        }
+    }
+
+    /// 网关错误页那种 HTML。
+    pub(crate) fn html(status: u16, body: &str) -> Self {
+        Self::Http {
+            status,
+            headers: vec![("Content-Type", "text/html".into())],
             body: body.to_string(),
         }
     }
@@ -47,6 +63,26 @@ impl Reply {
             status: 200,
             headers: vec![("Content-Type", "text/event-stream".into())],
             body,
+        }
+    }
+
+    /// 响应体从 `text` 第一次出现处的第 1 个字节之后断开，分两次写出。
+    /// `text` 是汉字时，断点正好在这个字的中间。
+    pub(crate) fn split_inside(self, text: &str) -> Self {
+        let Self::Http {
+            status,
+            headers,
+            body,
+        } = self
+        else {
+            panic!("split_inside 只用于 Http");
+        };
+        let at = body.find(text).expect("响应体里没有这段文字") + 1;
+        Self::Split {
+            status,
+            headers,
+            body,
+            at,
         }
     }
 
@@ -92,15 +128,22 @@ impl FakeServer {
                         headers,
                         body,
                     } => {
-                        let mut resp = format!("HTTP/1.1 {status} {}\r\n", reason(status));
-                        for (k, v) in headers {
-                            resp.push_str(&format!("{k}: {v}\r\n"));
-                        }
-                        resp.push_str(&format!(
-                            "Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                            body.len()
-                        ));
+                        let resp = response(status, &headers, &body);
                         let _ = sock.write_all(resp.as_bytes()).await;
+                        let _ = sock.shutdown().await;
+                    }
+                    Reply::Split {
+                        status,
+                        headers,
+                        body,
+                        at,
+                    } => {
+                        let resp = response(status, &headers, &body);
+                        let cut = resp.len() - body.len() + at;
+                        let _ = sock.write_all(&resp.as_bytes()[..cut]).await;
+                        let _ = sock.flush().await;
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        let _ = sock.write_all(&resp.as_bytes()[cut..]).await;
                         let _ = sock.shutdown().await;
                     }
                     Reply::Hang => {
@@ -160,6 +203,18 @@ async fn read_request(sock: &mut tokio::net::TcpStream) -> (String, Value) {
             }
         }
     }
+}
+
+fn response(status: u16, headers: &[(&'static str, String)], body: &str) -> String {
+    let mut resp = format!("HTTP/1.1 {status} {}\r\n", reason(status));
+    for (k, v) in headers {
+        resp.push_str(&format!("{k}: {v}\r\n"));
+    }
+    resp.push_str(&format!(
+        "Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    ));
+    resp
 }
 
 fn reason(status: u16) -> &'static str {

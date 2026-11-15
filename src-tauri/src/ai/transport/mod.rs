@@ -119,7 +119,10 @@ pub enum TransportError {
     /// The server returned 429.
     ///
     /// `retry_after` is the wait given in seconds by the `Retry-After` header.
-    RateLimited { retry_after: Option<Duration> },
+    RateLimited {
+        retry_after: Option<Duration>,
+        body: String,
+    },
     /// The status was 2xx, but the response body was cut short or could not be parsed.
     Body(String),
 }
@@ -271,7 +274,8 @@ impl ModelTransport {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.trim().parse::<u64>().ok())
                 .map(Duration::from_secs);
-            return Err(TransportError::RateLimited { retry_after });
+            let body = resp.text().await.unwrap_or_default();
+            return Err(TransportError::RateLimited { retry_after, body });
         }
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
@@ -476,10 +480,12 @@ mod tests {
             .post("/x", &json!({}), &Plain)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, TransportError::RateLimited { .. }),
-            "应是 RateLimited: {err:?}"
-        );
+        match err {
+            TransportError::RateLimited { body, .. } => {
+                assert!(body.contains("slow down"), "{body}");
+            }
+            other => panic!("应是 RateLimited: {other:?}"),
+        }
         assert_eq!(server.received().len(), 6);
     }
 
