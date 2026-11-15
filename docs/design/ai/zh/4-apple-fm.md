@@ -46,7 +46,7 @@ Apple Foundation Models 是 macOS 自带的本机语言模型，由系统管理�
 | 要翻译的地方 | Apple FM 怎么做 |
 |---|---|
 | 消息 | 每次生成新建一个 session，段和段之间不带上一次的对话 |
-| 思考 | 没有。收到任何档位都忽略，`applied = Off` |
+| 思考 | 没有。收到任何档位都忽略，`effective_reasoning = Off` |
 | 输出预算 | 交给系统的生成选项 |
 | 工具、`carry`、结构化输出 | 第一版没有 |
 | 传输 | 一个小 Swift 库导出 C 函数，Rust 通过 FFI 调用。不流式 |

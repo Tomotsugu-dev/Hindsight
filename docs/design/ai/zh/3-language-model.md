@@ -47,7 +47,7 @@ pub struct Response {
     pub text: String,
     pub call: Option<ToolCall>,        // 最多一个
     pub carry: Option<Carry>,          // 下一步要原样带回的内容
-    pub applied: Reasoning,            // 实际生效的思考档位
+    pub effective_reasoning: Reasoning, // 实际生效的思考档位
     pub usage: Usage,
 }
 
@@ -91,7 +91,7 @@ pub struct ToolCall {
 
 1. **降级**：模型没有请求的那一档时，取它有的、更高的最近一档；没有更高的，取它的最高档。只有开关的模型，任何强度都等于「开」。
    - 例：DeepSeek 没有 `Medium`，取 `High`。OpenAI 没有 `Max`，取 `High`。
-2. **适配器可以改写档位**：请求的其他部分不允许思考时，适配器改成允许的档位，并在 `Response.applied` 里报告。
+2. **适配器可以改写档位**：请求的其他部分不允许思考时，适配器改成允许的档位，并在 `Response.effective_reasoning` 里报告。
    - 例：OpenAI 的 Chat Completions 带工具时不能思考，适配器强制成 `Off`。
 3. **思考占预算**：见[第 3 节](#3-输出预算)。
 
