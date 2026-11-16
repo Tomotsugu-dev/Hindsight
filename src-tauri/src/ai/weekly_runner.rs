@@ -26,6 +26,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::ai::config::AiConfig;
 use crate::ai::models;
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
@@ -100,12 +101,7 @@ impl WeekSummaryRunner {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = cfg.ai.clone();
 
-        // step2 模型校验：本地 summary main 非空 或 选定走云端
-        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
-            ));
-        }
+        check_weekly_model(&ai)?;
 
         if force_refresh {
             ai_summaries::clear_day_summaries_only(&self.pool, WEEKLY_SOURCE, &week_key).await?;
@@ -367,7 +363,7 @@ impl WeekSummaryRunner {
     ///
     /// 跟 `DaySummaryRunner::ensure_engine_running` 同语义——但只关心 Step::Summary
     /// 因为周报全程纯文本，不需要 vision describe 的 mmproj。
-    async fn ensure_engine_running(&self, ai: &crate::ai::config::AiConfig) -> Result<u16> {
+    async fn ensure_engine_running(&self, ai: &AiConfig) -> Result<u16> {
         let main_name = ai.effective_summary_main();
         let mmproj_name = ai.effective_summary_mmproj();
         let models_dir = models::root_dir(ai);
@@ -442,6 +438,26 @@ impl WeekSummaryRunner {
         p.message = message;
         self.emit(p);
     }
+}
+
+/// 检查设置里选的模型能不能写周报。
+///
+/// # Errors
+///
+/// - 选了 Apple Intelligence：它暂时不写周报，错误里带 `[AI_WEEKLY_NOT_SUPPORTED]`。
+/// - 什么模型都没选。
+fn check_weekly_model(ai: &AiConfig) -> Result<()> {
+    if ai.summary_use_apple_fm() {
+        return Err(Error::InvalidInput(
+            "[AI_WEEKLY_NOT_SUPPORTED] Apple Intelligence does not write weekly reports yet",
+        ));
+    }
+    if !ai.summary_model_chosen() {
+        return Err(Error::InvalidInput(
+            "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
+        ));
+    }
+    Ok(())
 }
 
 /// 把一周内所有 daily 段总结按日期 group + 拼成日维度文本。
@@ -656,6 +672,22 @@ mod tests {
             error: None,
             generated_at: "2026-07-26T00:00:00Z".into(),
         }
+    }
+
+    /// 选了 Apple Intelligence 时周报直接拒绝，错误里带前端认得的错误码。
+    /// 选了本机模型时照常；什么都没选时报「先选模型」。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn weekly_refuses_apple_fm() {
+        use crate::ai::config::SUMMARY_APPLE_FM_SENTINEL;
+
+        let mut ai = AiConfig::default();
+        assert!(check_weekly_model(&ai).is_err(), "什么都没选");
+        ai.active_main = "local.gguf".to_string();
+        assert!(check_weekly_model(&ai).is_ok());
+        ai.summary_main = SUMMARY_APPLE_FM_SENTINEL.to_string();
+        let err = check_weekly_model(&ai).unwrap_err().to_string();
+        assert!(err.contains("[AI_WEEKLY_NOT_SUPPORTED]"), "{err}");
     }
 
     #[test]

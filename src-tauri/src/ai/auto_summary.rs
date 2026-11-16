@@ -89,7 +89,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
         return Ok(());
     }
     // AI 未配置(既无云端也没选本地模型)时静默跳过——开关先于配置打开是合法状态
-    if !cfg.ai.summary_use_cloud() && cfg.ai.effective_summary_main().trim().is_empty() {
+    if !cfg.ai.summary_model_chosen() {
         log::debug!("自动总结:AI 未配置,跳过");
         return Ok(());
     }
@@ -161,6 +161,10 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     }
 
     // ── 周报:上一个完整周的周一 ───────────────────────
+    // Apple Intelligence 不写周报:不跑,免得先做一遍 OCR 补漏再被周报拒绝。
+    if cfg.ai.summary_use_apple_fm() {
+        return Ok(());
+    }
     let last_monday = align_to_monday(today) - ChronoDuration::days(7);
     let w_key = format!("w:{last_monday}");
     if !attempted.contains(&w_key) && weekly_absent(&pool, last_monday).await? {

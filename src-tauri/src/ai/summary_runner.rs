@@ -162,7 +162,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             None => cfg.ai.clone(),
         };
 
-        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
+        if !ai.summary_model_chosen() {
             return Err(Error::InvalidInput(
                 "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
@@ -265,7 +265,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 云端总结跳过本地引擎；本地则确保引擎按 summary 模型 + 参数在跑，返回端口。
+    /// 云端和 Apple Intelligence 跳过本地引擎；本地则确保引擎按 summary 模型 + 参数在跑，返回端口。
     async fn ensure_summary_engine(
         &self,
         source: &str,
@@ -276,6 +276,10 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     ) -> Result<u16> {
         if ai.summary_use_cloud() {
             log::info!("日报：段总结走云端，跳过本地引擎启动");
+            return Ok(0);
+        }
+        if ai.summary_use_apple_fm() {
+            log::info!("Daily report: Apple Intelligence needs no local engine");
             return Ok(0);
         }
         let st = self.supervisor.status().await;
@@ -515,7 +519,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             None => cfg.ai.clone(),
         };
 
-        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
+        if !ai.summary_model_chosen() {
             return Err(Error::InvalidInput(
                 "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));

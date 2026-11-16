@@ -19,6 +19,11 @@ use serde::{Deserialize, Serialize};
 /// 两条件合在一起，避免漏判其一造成静默退化。
 pub const SUMMARY_CLOUD_SENTINEL: &str = "__cloud__";
 
+/// `summary_main` 的另一个特殊值：日报用 macOS 自带的 Apple Intelligence。
+///
+/// 跟 [`SUMMARY_CLOUD_SENTINEL`] 一样不是文件名。判断走 [`AiConfig::summary_use_apple_fm`]。
+pub const SUMMARY_APPLE_FM_SENTINEL: &str = "__apple_fm__";
+
 /// 一天内的一个时段，AI 按段聚合截图 + 活动做总结。
 ///
 /// 取值约束：`start_hour ∈ 0..=23`、`end_hour ∈ 1..=24`、`start_hour < end_hour`。
@@ -193,11 +198,11 @@ impl AiConfig {
     }
 
     /// 段总结主权重文件名；空 → fallback 到 `active_main`。
-    /// `summary_main == SUMMARY_CLOUD_SENTINEL` 也走 fallback —— 那是"用云端"标记，
-    /// 不是真实文件名；走本地路径的代码（VRAM 估算 / fallback chain）应当看到 active_main。
+    /// `summary_main` 是特殊值（云端、Apple Intelligence）时也走 fallback —— 那不是真实文件名；
+    /// 走本地路径的代码（VRAM 估算 / fallback chain）应当看到 active_main。
     pub fn effective_summary_main(&self) -> &str {
         let s = self.summary_main.trim();
-        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
+        if s.is_empty() || is_sentinel(s) {
             self.active_main.as_str()
         } else {
             self.summary_main.as_str()
@@ -209,7 +214,7 @@ impl AiConfig {
     /// 否则会把 vision mmproj 强加到文本模型上，token embedding 错位首 token 即 EOS。
     pub fn effective_summary_mmproj(&self) -> &str {
         let s = self.summary_main.trim();
-        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
+        if s.is_empty() || is_sentinel(s) {
             self.active_mmproj.as_str()
         } else {
             self.summary_mmproj.as_str()
@@ -221,6 +226,18 @@ impl AiConfig {
     /// 不会因为 sentinel 残留就硬卡住没法跑总结。
     pub fn summary_use_cloud(&self) -> bool {
         self.external_enabled && self.summary_main.trim() == SUMMARY_CLOUD_SENTINEL
+    }
+
+    /// 日报是否用 Apple Intelligence。只在 macOS 上成立；别的系统上按没选处理，回落到本机模型。
+    pub fn summary_use_apple_fm(&self) -> bool {
+        cfg!(target_os = "macos") && self.summary_main.trim() == SUMMARY_APPLE_FM_SENTINEL
+    }
+
+    /// 日报有没有可用的模型：云端、Apple Intelligence，或者一个本机模型文件名。
+    pub fn summary_model_chosen(&self) -> bool {
+        self.summary_use_cloud()
+            || self.summary_use_apple_fm()
+            || !self.effective_summary_main().trim().is_empty()
     }
 
     /// 云端三元组是否配齐(Chat 路由用:enabled + endpoint + model 缺一不可)。
@@ -251,10 +268,29 @@ impl AiConfig {
 
     /// 段总结单次响应 max_tokens：取 effective ctx 的一半（给 prompt 留另一半），
     /// 下界 2048（给 reasoning 模型思考链最低保障）。
+    ///
+    /// 用 Apple Intelligence 时固定是 [`APPLE_FM_SUMMARY_MAX_TOKENS`]。
     pub fn summary_max_tokens(&self) -> u32 {
+        if self.summary_use_apple_fm() {
+            return APPLE_FM_SUMMARY_MAX_TOKENS;
+        }
         let ctx = self.summary_ctx_size_effective().unwrap_or(8192);
         (ctx / 2).max(2048)
     }
+}
+
+/// 日报用 Apple Intelligence 时，一段的回答上限。
+///
+/// 它的上下文是输入和输出的合计，只有 4K 到 8K。撞上上限时文字会在句子中间被截断，不报错。
+/// 依据见 `docs/design/ai/zh/4-apple-fm.md` 的 6.3。
+const APPLE_FM_SUMMARY_MAX_TOKENS: u32 = 1024;
+
+/// `summary_main` 是不是特殊值（不是模型文件名）。
+fn is_sentinel(summary_main: &str) -> bool {
+    matches!(
+        summary_main,
+        SUMMARY_CLOUD_SENTINEL | SUMMARY_APPLE_FM_SENTINEL
+    )
 }
 
 /// 用户编辑过的 system prompt 覆盖文本，按语言分别独立存。
@@ -536,6 +572,48 @@ mod tests {
             end_hour: end,
             color: color.to_string(),
         }
+    }
+
+    // ---------- Apple Intelligence ----------
+
+    /// 日报选了 Apple Intelligence 时，本机模型的路径（引擎、聊天的「自动」）都回落到
+    /// active_main，不会把 `__apple_fm__` 当成模型文件名。
+    #[test]
+    fn chat_never_routes_to_apple_fm() {
+        let mut c = base();
+        c.active_main = "active.gguf".to_string();
+        c.active_mmproj = "active-mmproj.gguf".to_string();
+        c.summary_main = SUMMARY_APPLE_FM_SENTINEL.to_string();
+        assert_eq!(c.effective_summary_main(), "active.gguf");
+        assert_eq!(c.effective_summary_mmproj(), "active-mmproj.gguf");
+        assert!(!c.chat_use_cloud());
+        assert_eq!(c.effective_chat_main(), "active.gguf");
+    }
+
+    /// 只有 macOS 上 `__apple_fm__` 才算选了 Apple Intelligence。选了它就算选了日报模型，
+    /// 不再要求本机模型文件。
+    #[test]
+    fn apple_fm_counts_as_a_chosen_report_model() {
+        let mut c = base();
+        assert!(!c.summary_model_chosen(), "什么都没选");
+        c.summary_main = SUMMARY_APPLE_FM_SENTINEL.to_string();
+        assert_eq!(c.summary_use_apple_fm(), cfg!(target_os = "macos"));
+        assert_eq!(c.summary_model_chosen(), cfg!(target_os = "macos"));
+        assert!(!c.summary_use_cloud());
+    }
+
+    /// 日报用 Apple Intelligence 时，回答上限是 1024；其他模型照旧按 ctx 算。
+    #[test]
+    fn apple_fm_answer_limit_is_1024() {
+        let mut c = base();
+        assert_eq!(c.summary_max_tokens(), 4096, "没设 ctx 时是 8192 的一半");
+        c.summary_main = SUMMARY_APPLE_FM_SENTINEL.to_string();
+        let want = if cfg!(target_os = "macos") {
+            1024
+        } else {
+            4096
+        };
+        assert_eq!(c.summary_max_tokens(), want);
     }
 
     // ---------- sanitize ----------
