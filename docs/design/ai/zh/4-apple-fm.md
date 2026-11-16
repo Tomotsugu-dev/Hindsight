@@ -268,8 +268,8 @@ pub enum UnavailableReason {
 ### 6.1 选模型
 
 - 新增 `AiConfig::summary_use_apple_fm()`：`summary_main` 是 `__apple_fm__`，并且是 macOS。
-- `effective_summary_main()`、`effective_summary_mmproj()`、`effective_chat_main()` 遇到 `__apple_fm__` 时，跟遇到 `__cloud__` 一样跳过，回落到 `active_main`。前端的 `chatRouting.ts` 同样改。这样聊天的「自动」不会跟到 Apple FM。
-- `set_step_model`：聊天不接受 `__apple_fm__`。
+- `effective_summary_main()`、`effective_summary_mmproj()` 遇到 `__apple_fm__` 时，跟遇到 `__cloud__` 一样跳过，回落到 `active_main`。聊天的「自动」沿用这两个函数，所以不会跟到 Apple FM。前端的 `chatRouting.ts` 同样改。
+- 聊天的槽位不放 `__apple_fm__`：界面只在日报的槽位显示这张卡。万一存进去，聊天报「选中的本地模型不存在」。`set_step_model` 不另外检查，以后聊天支持 Apple FM 时只改聊天的路由。
 - 日报的 runner：选它时跟云端一样，不起引擎。打开模型的地方（`build_step2`）加一个分支。
 - 周报的 runner：选它时，开始前就拒绝，报错误码 `AI_WEEKLY_NOT_SUPPORTED`，前端同样用 `aiErrors.ts` 翻译。周报页的提示和灰掉的按钮只是让用户提前看到，拒绝以后端为准。
 - 自动总结：选它时跳过周报，不写错误行。判断「没选模型」的地方（`auto_summary.rs`）把它算作选了。
@@ -311,7 +311,7 @@ pub enum UnavailableReason {
 
 ## 7. 测试
 
-- CI 的构建机是虚拟机，没有 Apple Intelligence，跑不了真模型。CI 只测纯逻辑：错误怎么认、token 怎么估、超长预检、`__apple_fm__` 不影响聊天、`set_step_model` 拒绝聊天用它、周报被拒、自动总结跳过周报。
+- CI 的构建机是虚拟机，没有 Apple Intelligence，跑不了真模型。CI 只测纯逻辑：错误怎么认、token 怎么估、超长预检、`__apple_fm__` 不影响聊天、周报被拒、自动总结跳过周报。
 - 真模型的测试标 `#[ignore]`，在开发者的 Mac 上跑：生成一段、超长报 `ContextOverflow`、取消。
 - CI 加一步：检查 FoundationModels 是弱链接。
 - 发版前手动做一次：打签名、公证过的通用包，在本机跑一次日报。
