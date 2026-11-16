@@ -138,7 +138,7 @@ pub(crate) async fn summarize_segment(
     Ok((row, status_str))
 }
 
-/// 按 [`AiConfig::summary_use_cloud`] 打开日报和周报用的模型。
+/// 按设置打开日报和周报用的模型：Apple Intelligence、云端，或者本机引擎。
 ///
 /// 用本机模型时，`local_model_label` 是引擎加载的 GGUF 文件名。
 pub(crate) fn build_step2(
@@ -147,6 +147,10 @@ pub(crate) fn build_step2(
     local_model_label: &str,
 ) -> Result<Step2Chat> {
     let max_tokens = ai.summary_max_tokens();
+    #[cfg(target_os = "macos")]
+    if ai.summary_use_apple_fm() {
+        return Ok(Step2Chat::apple_fm(&ai.prompt_language, max_tokens));
+    }
     if ai.summary_use_cloud() {
         Step2Chat::cloud(
             &ai.endpoint,
@@ -1004,6 +1008,23 @@ mod tests {
         let s = build_step2(&ai, 8080, "local.gguf").unwrap();
         assert!(!s.is_local());
         assert_eq!(s.model_label(), "deepseek-chat");
+    }
+
+    /// 选了 Apple Intelligence 时打开它：不占用本机引擎，model 一栏写 `apple-intelligence`。
+    /// 云端配齐了也不走云端。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn build_step2_opens_apple_intelligence() {
+        let ai = AiConfig {
+            external_enabled: true,
+            endpoint: "https://api.example.com/v1".to_string(),
+            model: "deepseek-chat".to_string(),
+            summary_main: crate::ai::config::SUMMARY_APPLE_FM_SENTINEL.to_string(),
+            ..AiConfig::default()
+        };
+        let s = build_step2(&ai, 0, "").unwrap();
+        assert!(!s.is_local());
+        assert_eq!(s.model_label(), "apple-intelligence");
     }
 
     /// 用户选了云端但 endpoint / model 没填全：必须构造期抛错让顶层错误条提示

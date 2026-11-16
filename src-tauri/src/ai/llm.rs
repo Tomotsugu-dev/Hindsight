@@ -1,6 +1,8 @@
 //! 日报和周报调模型的入口。
 
 use crate::ai::model::{LanguageModel, LanguageModelOps, Message, Reasoning, Request};
+#[cfg(target_os = "macos")]
+use crate::ai::providers::apple_fm::AppleFmModel;
 use crate::ai::providers::chat_completions::ChatCompletionsModel;
 use crate::error::Result;
 
@@ -41,6 +43,16 @@ impl Step2Chat {
         })
     }
 
+    /// 打开 macOS 自带的 Apple Intelligence。`prompt_language` 是设置里 `ai.prompt_language` 的值。
+    #[cfg(target_os = "macos")]
+    pub fn apple_fm(prompt_language: &str, max_tokens: u32) -> Self {
+        Self {
+            model: LanguageModel::AppleFm(AppleFmModel::new(prompt_language)),
+            label: "apple-intelligence".to_string(),
+            max_tokens,
+        }
+    }
+
     /// 发一次纯文本请求，返回回复的正文。
     pub async fn chat(&self, system: &str, user_text: &str) -> Result<String> {
         let req = Request {
@@ -57,11 +69,14 @@ impl Step2Chat {
         Ok(self.model.generate(req).await?.text)
     }
 
+    /// 是否用本机的 llama-server。Apple Intelligence 也在本机跑，但不用这个引擎。
     pub fn is_local(&self) -> bool {
-        self.model.capabilities().on_device
+        matches!(self.model, LanguageModel::ChatCompletions(_))
+            && self.model.capabilities().on_device
     }
 
-    /// 写进 `ai_summaries.model` 的模型名：本机是 GGUF 文件名，云端是模型 ID。
+    /// 写进 `ai_summaries.model` 的模型名：本机是 GGUF 文件名，云端是模型 ID，
+    /// Apple Intelligence 是 `apple-intelligence`。
     pub fn model_label(&self) -> &str {
         &self.label
     }

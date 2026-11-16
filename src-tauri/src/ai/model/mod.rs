@@ -4,6 +4,8 @@ use std::future::Future;
 
 use serde_json::Value;
 
+#[cfg(target_os = "macos")]
+use crate::ai::providers::apple_fm::AppleFmModel;
 use crate::ai::providers::chat_completions::ChatCompletionsModel;
 use crate::error::Error;
 
@@ -149,6 +151,20 @@ pub enum UnavailableReason {
     LanguageNotSupported,
 }
 
+impl UnavailableReason {
+    /// 前端认的错误码，比如 `LLM_UNAVAILABLE_DEVICE_NOT_ELIGIBLE`。
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::NotMacos => "LLM_UNAVAILABLE_NOT_MACOS",
+            Self::OsTooOld => "LLM_UNAVAILABLE_OS_TOO_OLD",
+            Self::DeviceNotEligible => "LLM_UNAVAILABLE_DEVICE_NOT_ELIGIBLE",
+            Self::NotEnabled => "LLM_UNAVAILABLE_NOT_ENABLED",
+            Self::ModelNotReady => "LLM_UNAVAILABLE_MODEL_NOT_READY",
+            Self::LanguageNotSupported => "LLM_UNAVAILABLE_LANGUAGE_NOT_SUPPORTED",
+        }
+    }
+}
+
 /// Why a model call failed.
 ///
 /// The transport layer has already retried a cloud request on 429, on a connection failure
@@ -175,6 +191,19 @@ pub enum ModelError {
     /// or the model output is not in the agreed format.
     #[error("{0}")]
     Provider(String),
+    /// 模型在这台电脑上用不了。
+    // Windows 上目前没有模型会报下面三种错误。
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    #[error("[{}] the model is not available on this device", .0.code())]
+    Unavailable(UnavailableReason),
+    /// 输入加回答上限超过了模型的上下文长度。
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    #[error("[LLM_CONTEXT_OVERFLOW] {0}")]
+    ContextOverflow(String),
+    /// 模型拒绝回答，或者内容被安全检查拦下。
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    #[error("[LLM_REFUSED] {0}")]
+    Refused(String),
 }
 
 impl From<ModelError> for Error {
@@ -199,18 +228,25 @@ pub trait LanguageModelOps {
 pub enum LanguageModel {
     /// Cloud services and the local llama-server all use this kind.
     ChatCompletions(ChatCompletionsModel),
+    /// macOS 自带的本机模型 Apple Intelligence。
+    #[cfg(target_os = "macos")]
+    AppleFm(AppleFmModel),
 }
 
 impl LanguageModelOps for LanguageModel {
     fn capabilities(&self) -> &Capabilities {
         match self {
             Self::ChatCompletions(m) => m.capabilities(),
+            #[cfg(target_os = "macos")]
+            Self::AppleFm(m) => m.capabilities(),
         }
     }
 
     async fn generate(&self, req: Request) -> Result<Response, ModelError> {
         match self {
             Self::ChatCompletions(m) => m.generate(req).await,
+            #[cfg(target_os = "macos")]
+            Self::AppleFm(m) => m.generate(req).await,
         }
     }
 }
