@@ -16,7 +16,7 @@ use tauri::{Emitter, State};
 
 use super::screen_memory::MemoryState;
 use crate::ai::server::EngineSupervisor;
-use crate::ai::tools::ToolCtx;
+use crate::ai::tools::Tools;
 use crate::chat::engine::{self, ChatAnswer};
 use crate::chat::llm::ChatLlm;
 use crate::chat::store::{self, ConversationMeta, StoredMessage};
@@ -369,8 +369,10 @@ async fn run_ask(
         )
     };
 
-    let ctx = ToolCtx::open_readonly().await.map_err(String::from)?;
     let today = chrono::Local::now().date_naive();
+    let tools = Tools::open_readonly(today, lang)
+        .await
+        .map_err(String::from)?;
     // 生成可被"停止"打断:cancel 分支丢弃生成 future——reqwest 连接随之断开,
     // llama-server 对断连会中止解码;云端同理。提问已落库,什么都不补写,
     // 会话呈"有问无答"可重问;guard 广播 ok=false 让各处视图清掉打字指示。
@@ -392,7 +394,7 @@ async fn run_ask(
                 },
             });
         }
-        r = engine::answer(&llm, &ctx, &question, &history, today, lang) => {
+        r = engine::answer(&llm, &tools, &question, &history, today, lang) => {
             r.map_err(String::from)?
         }
     };

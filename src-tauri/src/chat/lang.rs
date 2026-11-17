@@ -190,28 +190,6 @@ impl ChatLang {
         }
     }
 
-    pub fn args_format_err(self, e: &impl std::fmt::Display) -> String {
-        match self {
-            Self::ZhHans => format!("参数格式错误: {e}"),
-            Self::ZhHant => format!("參數格式錯誤: {e}"),
-            Self::En => format!("Malformed arguments: {e}"),
-            Self::Ja => format!("引数の形式が不正です: {e}"),
-            Self::Pt => format!("Argumentos malformados: {e}"),
-            Self::Es => format!("Argumentos con formato incorrecto: {e}"),
-        }
-    }
-
-    pub fn args_invalid(self, msg: &str) -> String {
-        match self {
-            Self::ZhHans => format!("参数校验未通过: {msg}"),
-            Self::ZhHant => format!("參數校驗未通過: {msg}"),
-            Self::En => format!("Argument validation failed: {msg}"),
-            Self::Ja => format!("引数の検証に失敗しました: {msg}"),
-            Self::Pt => format!("Falha na validação dos argumentos: {msg}"),
-            Self::Es => format!("Falló la validación de los argumentos: {msg}"),
-        }
-    }
-
     pub fn tool_exec_failed(self) -> &'static str {
         match self {
             Self::ZhHans => "查询执行失败,请换个方式,或直接基于本轮已返回的资料作答。",
@@ -373,8 +351,6 @@ mod tests {
                 lang.rewrite_prompt(today).contains("2026-07-26"),
                 "{lang:?}"
             );
-            assert!(lang.args_format_err(&"boom").contains("boom"));
-            assert!(lang.args_invalid("bad-arg").contains("bad-arg"));
         }
     }
 
