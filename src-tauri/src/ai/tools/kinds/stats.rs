@@ -2,8 +2,8 @@
 
 use chrono::NaiveDate;
 
-use super::query::{Bucket, GroupBy, StatMetric};
-use super::{like_pattern, truncate, ChatLang, ToolCtx, ToolOutput, RESULT_CHAR_BUDGET};
+use crate::ai::tools::query::{Bucket, GroupBy, StatMetric};
+use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolOutput, RESULT_CHAR_BUDGET};
 use crate::error::Result;
 use crate::storage::{DbResult, SqliteResultExt};
 
@@ -30,7 +30,7 @@ const STATS_FROM_CATEGORY: &str = "FROM activities a
        ON c.id = COALESCE(NULLIF(g.category_id, 'none'), 'other') AND c.deleted_at IS NULL";
 
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn query_stats(
+pub(in crate::ai::tools) async fn query_stats(
     ctx: &ToolCtx,
     (from, to): (NaiveDate, NaiveDate),
     apps: &[String],

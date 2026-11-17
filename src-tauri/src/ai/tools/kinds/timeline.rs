@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 use rusqlite::params;
 
-use super::{
+use crate::ai::tools::{
     coverage_line, truncate, ChatLang, Citation, ToolCtx, ToolOutput, ACTIVITY_WHERE,
     RESULT_CHAR_BUDGET,
 };
@@ -16,7 +16,7 @@ const TIMELINE_LIMIT: usize = 50;
 /// 每个小时桶最多取几条代表活动(按时长选)。
 const TIMELINE_PER_HOUR: i64 = 3;
 
-pub(super) async fn get_timeline(
+pub(in crate::ai::tools) async fn get_timeline(
     ctx: &ToolCtx,
     (from, to): (NaiveDate, NaiveDate),
     next_citation: usize,

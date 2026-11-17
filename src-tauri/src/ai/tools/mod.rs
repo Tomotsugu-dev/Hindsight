@@ -10,19 +10,18 @@
 //! 校验错误包成 [`ToolError`]——engine 会把它回填给模型重试,
 //! 所以措辞要能指导模型改参数。
 
+mod kinds;
 mod lang;
 mod query;
-mod search;
 mod spec;
-mod stats;
 #[cfg(test)]
 mod test_util;
-mod timeline;
 
 use chrono::NaiveDate;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
+use self::kinds::{search, stats, timeline};
 pub use self::lang::ChatLang;
 pub use self::query::Query;
 use self::query::RawParams;

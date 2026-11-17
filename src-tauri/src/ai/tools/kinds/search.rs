@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 use rusqlite::params;
 
-use super::{
+use crate::ai::tools::{
     coverage_line, fts_literal, like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolOutput,
     ACTIVITY_WHERE, RESULT_CHAR_BUDGET,
 };
@@ -16,7 +16,7 @@ const SEARCH_LIMIT: usize = 8;
 /// 搜索的窗口标题层命中显示上限(屏幕文字索引之外的兜底证据层)
 const TITLE_LIMIT: usize = 8;
 
-pub(super) async fn search_text(
+pub(in crate::ai::tools) async fn search_text(
     ctx: &ToolCtx,
     keywords: &[String],
     range: Option<(NaiveDate, NaiveDate)>,
