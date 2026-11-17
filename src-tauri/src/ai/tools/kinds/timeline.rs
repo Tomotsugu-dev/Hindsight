@@ -11,17 +11,23 @@ use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::SqliteResultExt;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineQuery {
+    pub range: (NaiveDate, NaiveDate),
+}
+
 /// 时间线会话数上限
 const TIMELINE_LIMIT: usize = 50;
 /// 每个小时桶最多取几条代表活动(按时长选)。
 const TIMELINE_PER_HOUR: i64 = 3;
 
-pub(in crate::ai::tools) async fn get_timeline(
+pub(in crate::ai::tools) async fn run(
     ctx: &ToolCtx,
-    (from, to): (NaiveDate, NaiveDate),
+    q: &TimelineQuery,
     next_citation: usize,
     lang: ChatLang,
 ) -> Result<ToolOutput> {
+    let (from, to) = q.range;
     let single_day = from == to;
     let (from, to) = (from.to_string(), to.to_string());
     // 主源是主库活动记录:不开截图/OCR 的用户也有完整时间线,电池暂停或
@@ -129,7 +135,6 @@ pub(in crate::ai::tools) async fn get_timeline(
 mod tests {
     use super::*;
     use crate::ai::tools::test_util::{ctx_with, day};
-    use crate::ai::tools::{execute, Query};
 
     /// 造一天 10 个小时 × 每小时 20 条活动的 INSERT 串(主库)。
     fn dense_day_sql() -> &'static str {
@@ -157,14 +162,8 @@ mod tests {
         // 泄漏 dense_day_sql 到 'static:测试进程内一次性,可接受
         let main: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
         let ctx = ctx_with("", main).await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline { range: day() },
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = TimelineQuery { range: day() };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
         // 披露:总数与"样本"措辞
         assert!(out.content.contains("共 200 条活动记录"), "{}", out.content);
         assert!(out.content.contains("样本"), "{}", out.content);
@@ -190,9 +189,8 @@ mod tests {
     async fn timeline_headers_localized_english() {
         let main: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
         let ctx = ctx_with("", main).await;
-        let out = execute(&ctx, &Query::GetTimeline { range: day() }, 1, ChatLang::En)
-            .await
-            .unwrap();
+        let q = TimelineQuery { range: day() };
+        let out = run(&ctx, &q, 1, ChatLang::En).await.unwrap();
         assert!(
             out.content.contains("200 activity records in this period"),
             "{}",
@@ -215,14 +213,8 @@ mod tests {
              ('2026-07-08T10:00:00+09:00','2026-07-08T10:05:00+09:00',300,'2026-07-08',10,'B','t2');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline { range: day() },
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = TimelineQuery { range: day() };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("共 2 条活动记录,全部列出"),
             "{}",
@@ -247,14 +239,8 @@ mod tests {
              ('2026-07-08T10:00:00+09:00','2026-07-08T10:30:00+09:00',1800,'2026-07-08',10,'secret.exe','diary');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline { range: day() },
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = TimelineQuery { range: day() };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("Visual Studio Code"),
             "{}",

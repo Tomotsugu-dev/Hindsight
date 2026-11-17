@@ -119,40 +119,9 @@ async fn execute(
     lang: ChatLang,
 ) -> Result<ToolOutput> {
     match call {
-        Query::SearchText { keywords, range } => {
-            search::search_text(ctx, keywords, *range, next_citation, lang).await
-        }
-        Query::QueryStats {
-            range,
-            apps,
-            title_keyword,
-            categories,
-            group_by,
-            top_n,
-            metric,
-            gap_minutes,
-            bucket,
-            bucket_auto_week,
-        } => {
-            stats::query_stats(
-                ctx,
-                *range,
-                apps,
-                title_keyword.as_deref(),
-                categories,
-                *group_by,
-                *top_n,
-                *metric,
-                *gap_minutes,
-                *bucket,
-                *bucket_auto_week,
-                lang,
-            )
-            .await
-        }
-        Query::GetTimeline { range } => {
-            timeline::get_timeline(ctx, *range, next_citation, lang).await
-        }
+        Query::SearchText(q) => search::run(ctx, q, next_citation, lang).await,
+        Query::QueryStats(q) => stats::run(ctx, q, lang).await,
+        Query::GetTimeline(q) => timeline::run(ctx, q, next_citation, lang).await,
     }
 }
 
@@ -245,6 +214,8 @@ fn truncate(s: &str, max_chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::kinds::search::SearchQuery;
+    use super::kinds::timeline::TimelineQuery;
     use super::test_util::{ctx_with, day};
     use super::*;
 
@@ -272,7 +243,7 @@ mod tests {
         .await;
         let out = execute(
             &ctx,
-            &Query::GetTimeline { range: day() },
+            &Query::GetTimeline(TimelineQuery { range: day() }),
             1,
             ChatLang::ZhHans,
         )
@@ -295,10 +266,10 @@ mod tests {
         .await;
         let out = execute(
             &ctx,
-            &Query::SearchText {
+            &Query::SearchText(SearchQuery {
                 keywords: vec!["keychron".into()],
                 range: None,
-            },
+            }),
             1,
             ChatLang::ZhHans,
         )
@@ -326,7 +297,7 @@ mod tests {
         .await;
         let out = execute(
             &ctx,
-            &Query::GetTimeline { range: day() },
+            &Query::GetTimeline(TimelineQuery { range: day() }),
             1,
             ChatLang::ZhHans,
         )
@@ -353,9 +324,8 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
-        let out = execute(&ctx, &Query::GetTimeline { range }, 1, ChatLang::ZhHans)
-            .await
-            .unwrap();
+        let q = Query::GetTimeline(TimelineQuery { range });
+        let out = execute(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("2 个活动日中 1 日有屏幕文字索引"),
             "{}",
@@ -377,10 +347,10 @@ mod tests {
         .await;
         let out = execute(
             &ctx,
-            &Query::SearchText {
+            &Query::SearchText(SearchQuery {
                 keywords: vec!["keychron".into()],
                 range: Some(day()),
-            },
+            }),
             1,
             ChatLang::ZhHans,
         )
@@ -433,7 +403,7 @@ mod tests {
 
         let out = execute(
             &ctx,
-            &Query::GetTimeline { range: (from, to) },
+            &Query::GetTimeline(TimelineQuery { range: (from, to) }),
             1,
             ChatLang::ZhHans,
         )
@@ -455,10 +425,10 @@ mod tests {
         if let Ok(kw) = std::env::var("CHAT_KW") {
             let out = execute(
                 &ctx,
-                &Query::SearchText {
+                &Query::SearchText(SearchQuery {
                     keywords: vec![kw.clone()],
                     range: Some((from, to)),
-                },
+                }),
                 1,
                 ChatLang::ZhHans,
             )

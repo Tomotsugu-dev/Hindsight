@@ -1,11 +1,68 @@
 //! query_stats：统计使用时长、使用次数，或最早和最近一次的时间。
 
 use chrono::NaiveDate;
+use serde::Deserialize;
 
-use crate::ai::tools::query::{Bucket, GroupBy, StatMetric};
 use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolOutput, RESULT_CHAR_BUDGET};
 use crate::error::Result;
 use crate::storage::{DbResult, SqliteResultExt};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StatsQuery {
+    pub range: (NaiveDate, NaiveDate),
+    pub apps: Vec<String>,
+    pub title_keyword: Option<String>,
+    /// 按分类名过滤(如"游戏")。与 bucket 正交——"游戏时间的周趋势"
+    /// 的正确姿势就是 categories=["游戏"] + bucket=week;没有它,模型只能
+    /// 靠猜应用名列举,认不出用户自定义归类的应用(实测漏算 2 小时)。
+    pub categories: Vec<String>,
+    pub group_by: GroupBy,
+    pub top_n: usize,
+    pub metric: StatMetric,
+    /// 会话计数用:相邻活动间隔超过这么多分钟就算一段新会话
+    pub gap_minutes: u32,
+    /// 趋势分桶(与 group_by 互斥,validate 拦)
+    pub bucket: Bucket,
+    /// bucket=Week 且由 Day 自动升级而来(范围 > BUCKET_DAY_MAX_DAYS):
+    /// 结果头部要向模型说明,免得它以为工具没按参数执行
+    pub bucket_auto_week: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupBy {
+    None,
+    App,
+    Title,
+    /// 按用户的应用分类(工作/娱乐…)分组;组→分类的指派 join 出来,与报表同口径
+    Category,
+}
+
+/// 统计口径:时长(默认)还是"用了几次/玩了几次"的会话次数。
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatMetric {
+    /// 累计使用时长(SUM duration_secs)
+    Duration,
+    /// 使用会话次数:相邻活动间隔超过 gap_minutes 就切一段
+    SessionCount,
+    /// 最早/最近一次记录的时间("第一次用 X 是什么时候"):
+    /// MIN/MAX 聚合,忽略分组与分桶,豁免常规日期跨度上限
+    FirstLast,
+}
+
+/// 趋势分桶:把范围切成时间桶看变化,与 group_by(排行)互斥。
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Bucket {
+    None,
+    /// 逐日;范围超 BUCKET_DAY_MAX_DAYS 天时 validate 自动升级为 Week
+    Day,
+    /// 逐周,周一为周起始(与报表口径一致),行首日期为该周周一
+    Week,
+    /// 按一天中的 0-23 时聚合(范围内所有天累计),看作息分布
+    HourOfDay,
+}
 
 /// 统计查询的基础 FROM 段(别名 a,与既有口径一致:裸活动表、不排 hidden 组)。
 const STATS_FROM: &str = "FROM activities a";
@@ -29,25 +86,24 @@ const STATS_FROM_CATEGORY: &str = "FROM activities a
      LEFT JOIN categories c
        ON c.id = COALESCE(NULLIF(g.category_id, 'none'), 'other') AND c.deleted_at IS NULL";
 
-#[allow(clippy::too_many_arguments)]
-pub(in crate::ai::tools) async fn query_stats(
+pub(in crate::ai::tools) async fn run(
     ctx: &ToolCtx,
-    (from, to): (NaiveDate, NaiveDate),
-    apps: &[String],
-    title_keyword: Option<&str>,
-    categories: &[String],
-    group_by: GroupBy,
-    top_n: usize,
-    metric: StatMetric,
-    gap_minutes: u32,
-    bucket: Bucket,
-    bucket_auto_week: bool,
+    q: &StatsQuery,
     lang: ChatLang,
 ) -> Result<ToolOutput> {
-    let (from, to) = (from.to_string(), to.to_string());
-    let apps: Vec<String> = apps.iter().map(|a| like_pattern(a)).collect();
-    let title_like = title_keyword.map(like_pattern);
-    let cats: Vec<String> = categories.iter().map(|c| like_pattern(c)).collect();
+    let (from, to) = (q.range.0.to_string(), q.range.1.to_string());
+    let apps: Vec<String> = q.apps.iter().map(|a| like_pattern(a)).collect();
+    let title_like = q.title_keyword.as_deref().map(like_pattern);
+    let cats: Vec<String> = q.categories.iter().map(|c| like_pattern(c)).collect();
+    let StatsQuery {
+        group_by,
+        top_n,
+        metric,
+        gap_minutes,
+        bucket,
+        bucket_auto_week,
+        ..
+    } = *q;
     let content = ctx
         .main
         .call(move |conn| {
@@ -413,7 +469,7 @@ fn query_bucket(
                 .map(|(b, n)| format!("{}: {}", label(b), lang.count_suffix(*n)))
                 .collect()
         }
-        StatMetric::FirstLast => unreachable!("first_last 在 query_stats 已先行分派"),
+        StatMetric::FirstLast => unreachable!("first_last 在 run 已先行分派"),
     };
     if lines.is_empty() {
         return Ok(lang.no_match(from, to));
@@ -488,7 +544,6 @@ fn count_sessions(rows: &[(String, String)], gap_secs: i64) -> usize {
 mod tests {
     use super::*;
     use crate::ai::tools::test_util::{ctx_with, day};
-    use crate::ai::tools::{execute, Query};
 
     #[test]
     fn count_sessions_gap_split() {
@@ -531,32 +586,26 @@ mod tests {
         }
         let main: &'static str = Box::leak(sql.into_boxed_str());
         let ctx = ctx_with("", main).await;
-        let out = execute(
-            &ctx,
-            &Query::QueryStats {
-                range: day(),
-                apps: vec![],
-                title_keyword: None,
-                group_by: GroupBy::App,
-                top_n: 5,
-                metric: StatMetric::Duration,
-                gap_minutes: 30,
-                bucket: Bucket::None,
-                bucket_auto_week: false,
-                categories: vec![],
-            },
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = StatsQuery {
+            range: day(),
+            apps: vec![],
+            title_keyword: None,
+            group_by: GroupBy::App,
+            top_n: 5,
+            metric: StatMetric::Duration,
+            gap_minutes: 30,
+            bucket: Bucket::None,
+            bucket_auto_week: false,
+            categories: vec![],
+        };
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(out.content.contains("共 8 组"), "{}", out.content);
         assert!(out.content.contains("前 5 组"), "{}", out.content);
     }
 
-    /// QueryStats 的全默认构造,测试逐项覆盖自己关心的字段。
-    fn stats_call(range: (NaiveDate, NaiveDate)) -> Query {
-        Query::QueryStats {
+    /// StatsQuery 的全默认构造,测试逐项覆盖自己关心的字段。
+    fn stats_call(range: (NaiveDate, NaiveDate)) -> StatsQuery {
+        StatsQuery {
             range,
             apps: vec![],
             title_keyword: None,
@@ -589,11 +638,9 @@ mod tests {
               ('g1','Work','cat1'), ('g2','Tiny','cat2');
             INSERT INTO categories(id, name) VALUES ('cat1','工作'), ('cat2','零星');";
         let ctx = ctx_with("", main).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats { group_by, .. } = &mut call {
-            *group_by = GroupBy::Category;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.group_by = GroupBy::Category;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("工作: 1 小时 0 分钟"),
             "{}",
@@ -617,11 +664,9 @@ mod tests {
             INSERT INTO app_group_members(process_name, group_id) VALUES ('steam','g1');
             INSERT INTO app_groups(id, display_name, category_id) VALUES ('g1','Steam','none');";
         let ctx = ctx_with("", main).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats { group_by, .. } = &mut call {
-            *group_by = GroupBy::Category;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.group_by = GroupBy::Category;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("other: 1 小时 0 分钟"),
             "{}",
@@ -645,11 +690,9 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 7, 6).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
-        let mut call = stats_call(range);
-        if let Query::QueryStats { bucket, .. } = &mut call {
-            *bucket = Bucket::Day;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(range);
+        q.bucket = Bucket::Day;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("逐日统计(2 个有记录的日子"),
             "{}",
@@ -686,11 +729,9 @@ mod tests {
             INSERT INTO categories(id, name) VALUES
               ('cat_game','游戏'), ('cat_browse','浏览');";
         let ctx = ctx_with("", main).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats { categories, .. } = &mut call {
-            *categories = vec!["游戏".into()];
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.categories = vec!["游戏".into()];
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("合计: 1 小时 0 分钟"),
             "{}",
@@ -713,11 +754,9 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
         );
-        let mut call = stats_call(range);
-        if let Query::QueryStats { bucket, .. } = &mut call {
-            *bucket = Bucket::Week;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(range);
+        q.bucket = Bucket::Week;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(out.content.contains("逐周统计(1 周"), "{}", out.content);
         assert!(
             out.content.contains("2026-07-06: 1 小时 0 分钟"),
@@ -743,11 +782,9 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
-        let mut call = stats_call(range);
-        if let Query::QueryStats { bucket, .. } = &mut call {
-            *bucket = Bucket::HourOfDay;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(range);
+        q.bucket = Bucket::HourOfDay;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("按一天中的小时聚合"),
             "{}",
@@ -770,11 +807,9 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
         );
-        let mut call = stats_call(range);
-        if let Query::QueryStats { metric, .. } = &mut call {
-            *metric = StatMetric::FirstLast;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(range);
+        q.metric = StatMetric::FirstLast;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(out.content.contains("共 2 条匹配活动"), "{}", out.content);
         assert!(
             out.content.contains("最早一次始于 2026-07-05 09:00"),
@@ -810,11 +845,9 @@ mod tests {
     #[tokio::test]
     async fn stats_session_count_total_uses_gap_and_wording() {
         let ctx = ctx_with("", SESSIONS_SQL).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats { metric, .. } = &mut call {
-            *metric = StatMetric::SessionCount;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.metric = StatMetric::SessionCount;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         // 总次数 + 间隔规则必须一起披露,模型才能向用户解释"次"的口径
         assert!(
             out.content.contains("使用会话次数: 6 次"),
@@ -827,17 +860,10 @@ mod tests {
 
         // gap 放大到 120 分钟:全流最大间隔 85 分钟 → 全并成 1 次。
         // 这证明 gap_minutes 真进了切分逻辑,不是只写进文案
-        let mut call = stats_call(day());
-        if let Query::QueryStats {
-            metric,
-            gap_minutes,
-            ..
-        } = &mut call
-        {
-            *metric = StatMetric::SessionCount;
-            *gap_minutes = 120;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.metric = StatMetric::SessionCount;
+        q.gap_minutes = 120;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("使用会话次数: 1 次"),
             "{}",
@@ -849,15 +875,10 @@ mod tests {
     #[tokio::test]
     async fn stats_session_count_grouped_sorts_count_desc_then_name_asc() {
         let ctx = ctx_with("", SESSIONS_SQL).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats {
-            metric, group_by, ..
-        } = &mut call
-        {
-            *metric = StatMetric::SessionCount;
-            *group_by = GroupBy::App;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.metric = StatMetric::SessionCount;
+        q.group_by = GroupBy::App;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         // 每组次数各自独立切分
         let beta = out.content.find("beta.exe: 3 次").expect(&out.content);
         let alpha = out.content.find("alpha.exe: 2 次").expect(&out.content);
@@ -872,19 +893,11 @@ mod tests {
     #[tokio::test]
     async fn stats_session_count_top_n_truncates_and_discloses_universe() {
         let ctx = ctx_with("", SESSIONS_SQL).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats {
-            metric,
-            group_by,
-            top_n,
-            ..
-        } = &mut call
-        {
-            *metric = StatMetric::SessionCount;
-            *group_by = GroupBy::App;
-            *top_n = 2;
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.metric = StatMetric::SessionCount;
+        q.group_by = GroupBy::App;
+        q.top_n = 2;
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         // universe 披露:让模型知道前 2 组之外还有第 3 组(2026-07-08 事故的同款教训)
         assert!(
             out.content.contains("共 3 组,按次数取前 2 组"),
@@ -912,11 +925,9 @@ mod tests {
               ('2026-07-08T13:00:00+09:00','2026-07-08T13:10:00+09:00',600,
                '2026-07-08', 13, 'gamma.exe', 'w');";
         let ctx = ctx_with("", main).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats { apps, .. } = &mut call {
-            *apps = vec!["alpha".into(), "beta".into()];
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.apps = vec!["alpha".into(), "beta".into()];
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("合计: 1 小时 30 分钟"),
             "{}",
@@ -947,19 +958,11 @@ mod tests {
               ('g1','Work','cat_work'), ('g2','WorkFun','cat_fun'), ('g3','Other','cat_work');
             INSERT INTO categories(id, name) VALUES ('cat_work','工作'), ('cat_fun','娱乐');";
         let ctx = ctx_with("", main).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats {
-            apps,
-            categories,
-            title_keyword,
-            ..
-        } = &mut call
-        {
-            *apps = vec!["work".into()];
-            *categories = vec!["工作".into()];
-            *title_keyword = Some("周报".into());
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.apps = vec!["work".into()];
+        q.categories = vec!["工作".into()];
+        q.title_keyword = Some("周报".into());
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("合计: 1 小时 0 分钟"),
             "{}",
@@ -980,11 +983,9 @@ mod tests {
               ('2026-07-08T11:00:00+09:00','2026-07-08T11:30:00+09:00',1800,
                '2026-07-08', 11, '100Xzapp.exe', 'w');";
         let ctx = ctx_with("", main).await;
-        let mut call = stats_call(day());
-        if let Query::QueryStats { apps, .. } = &mut call {
-            *apps = vec!["100%_a".into()];
-        }
-        let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
+        let mut q = stats_call(day());
+        q.apps = vec!["100%_a".into()];
+        let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
             out.content.contains("合计: 1 小时 0 分钟"),
             "{}",

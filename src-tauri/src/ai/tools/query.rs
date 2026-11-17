@@ -3,6 +3,9 @@
 use chrono::NaiveDate;
 use serde::Deserialize;
 
+use super::kinds::search::SearchQuery;
+use super::kinds::stats::{Bucket, GroupBy, StatMetric, StatsQuery};
+use super::kinds::timeline::TimelineQuery;
 use super::ChatLang;
 
 /// 分组统计 top-N 上限
@@ -13,68 +16,9 @@ const TOP_N_MAX: usize = 10;
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Query {
-    SearchText {
-        keywords: Vec<String>,
-        range: Option<(NaiveDate, NaiveDate)>,
-    },
-    QueryStats {
-        range: (NaiveDate, NaiveDate),
-        apps: Vec<String>,
-        title_keyword: Option<String>,
-        /// 按分类名过滤(如"游戏")。与 bucket 正交——"游戏时间的周趋势"
-        /// 的正确姿势就是 categories=["游戏"] + bucket=week;没有它,模型只能
-        /// 靠猜应用名列举,认不出用户自定义归类的应用(实测漏算 2 小时)。
-        categories: Vec<String>,
-        group_by: GroupBy,
-        top_n: usize,
-        metric: StatMetric,
-        /// 会话计数用:相邻活动间隔超过这么多分钟就算一段新会话
-        gap_minutes: u32,
-        /// 趋势分桶(与 group_by 互斥,validate 拦)
-        bucket: Bucket,
-        /// bucket=Week 且由 Day 自动升级而来(范围 > BUCKET_DAY_MAX_DAYS):
-        /// 结果头部要向模型说明,免得它以为工具没按参数执行
-        bucket_auto_week: bool,
-    },
-    GetTimeline {
-        range: (NaiveDate, NaiveDate),
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GroupBy {
-    None,
-    App,
-    Title,
-    /// 按用户的应用分类(工作/娱乐…)分组;组→分类的指派 join 出来,与报表同口径
-    Category,
-}
-
-/// 统计口径:时长(默认)还是"用了几次/玩了几次"的会话次数。
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StatMetric {
-    /// 累计使用时长(SUM duration_secs)
-    Duration,
-    /// 使用会话次数:相邻活动间隔超过 gap_minutes 就切一段
-    SessionCount,
-    /// 最早/最近一次记录的时间("第一次用 X 是什么时候"):
-    /// MIN/MAX 聚合,忽略分组与分桶,豁免常规日期跨度上限
-    FirstLast,
-}
-
-/// 趋势分桶:把范围切成时间桶看变化,与 group_by(排行)互斥。
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Bucket {
-    None,
-    /// 逐日;范围超 BUCKET_DAY_MAX_DAYS 天时 validate 自动升级为 Week
-    Day,
-    /// 逐周,周一为周起始(与报表口径一致),行首日期为该周周一
-    Week,
-    /// 按一天中的 0-23 时聚合(范围内所有天累计),看作息分布
-    HourOfDay,
+    SearchText(SearchQuery),
+    QueryStats(StatsQuery),
+    GetTimeline(TimelineQuery),
 }
 
 /// 逐日分桶的最大跨度:超过则自动按周汇总——60 天 ≈ 60 行是结果预算内
@@ -115,7 +59,7 @@ pub(super) fn validate(
         "search_text" => {
             let keywords = clean_keywords(&raw.keywords, lang)?;
             let range = parse_range_opt(raw, today, RANGE_MAX_DAYS, lang)?;
-            Ok(Query::SearchText { keywords, range })
+            Ok(Query::SearchText(SearchQuery { keywords, range }))
         }
         "query_stats" => {
             let metric = raw.metric.unwrap_or(StatMetric::Duration);
@@ -153,7 +97,7 @@ pub(super) fn validate(
             } else {
                 5
             };
-            Ok(Query::QueryStats {
+            Ok(Query::QueryStats(StatsQuery {
                 range,
                 apps,
                 title_keyword,
@@ -167,12 +111,12 @@ pub(super) fn validate(
                     .clamp(GAP_MIN, GAP_MAX),
                 bucket,
                 bucket_auto_week,
-            })
+            }))
         }
         "get_timeline" => {
             let range = parse_range_opt(raw, today, RANGE_MAX_DAYS, lang)?
                 .ok_or_else(|| lang.err_need_range("get_timeline"))?;
-            Ok(Query::GetTimeline { range })
+            Ok(Query::GetTimeline(TimelineQuery { range }))
         }
         other => Err(lang.err_unknown_tool(other)),
     }
@@ -300,7 +244,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
+            Query::QueryStats(q) => assert_eq!(q.top_n, TOP_N_MAX),
             _ => panic!(),
         }
     }
@@ -316,13 +260,9 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats {
-                metric,
-                gap_minutes,
-                ..
-            } => {
-                assert_eq!(metric, StatMetric::Duration);
-                assert_eq!(gap_minutes, GAP_DEFAULT_MIN);
+            Query::QueryStats(q) => {
+                assert_eq!(q.metric, StatMetric::Duration);
+                assert_eq!(q.gap_minutes, GAP_DEFAULT_MIN);
             }
             _ => panic!(),
         }
@@ -338,13 +278,9 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats {
-                metric,
-                gap_minutes,
-                ..
-            } => {
-                assert_eq!(metric, StatMetric::SessionCount);
-                assert_eq!(gap_minutes, GAP_MAX);
+            Query::QueryStats(q) => {
+                assert_eq!(q.metric, StatMetric::SessionCount);
+                assert_eq!(q.gap_minutes, GAP_MAX);
             }
             _ => panic!(),
         }
@@ -378,13 +314,9 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats {
-                bucket,
-                bucket_auto_week,
-                ..
-            } => {
-                assert_eq!(bucket, Bucket::Week);
-                assert!(bucket_auto_week);
+            Query::QueryStats(q) => {
+                assert_eq!(q.bucket, Bucket::Week);
+                assert!(q.bucket_auto_week);
             }
             _ => panic!(),
         }
@@ -399,13 +331,9 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats {
-                bucket,
-                bucket_auto_week,
-                ..
-            } => {
-                assert_eq!(bucket, Bucket::Day);
-                assert!(!bucket_auto_week);
+            Query::QueryStats(q) => {
+                assert_eq!(q.bucket, Bucket::Day);
+                assert!(!q.bucket_auto_week);
             }
             _ => panic!(),
         }
@@ -425,7 +353,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
+            Query::QueryStats(q) => assert_eq!(q.top_n, TOP_N_MAX),
             _ => panic!(),
         }
         // 显式给的仍然尊重
@@ -440,7 +368,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats { top_n, .. } => assert_eq!(top_n, 3),
+            Query::QueryStats(q) => assert_eq!(q.top_n, 3),
             _ => panic!(),
         }
     }
@@ -459,7 +387,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats { metric, .. } => assert_eq!(metric, StatMetric::FirstLast),
+            Query::QueryStats(q) => assert_eq!(q.metric, StatMetric::FirstLast),
             _ => panic!(),
         }
     }
@@ -489,8 +417,8 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::SearchText { keywords, .. } => {
-                assert_eq!(keywords, vec!["rust", "go", "zig"]);
+            Query::SearchText(q) => {
+                assert_eq!(q.keywords, vec!["rust", "go", "zig"]);
             }
             _ => panic!(),
         }
@@ -504,7 +432,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::SearchText { keywords, .. } => assert_eq!(keywords, vec!["a", "b"]),
+            Query::SearchText(q) => assert_eq!(q.keywords, vec!["a", "b"]),
             _ => panic!(),
         }
     }
@@ -532,7 +460,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::SearchText { keywords, .. } => assert_eq!(keywords.len(), 1),
+            Query::SearchText(q) => assert_eq!(q.keywords.len(), 1),
             _ => panic!(),
         }
 
@@ -578,12 +506,10 @@ mod tests {
         )
         .unwrap();
         match call {
-            Query::QueryStats {
-                apps, categories, ..
-            } => {
+            Query::QueryStats(q) => {
                 // take(5) 拿到 [" A ","","B","C","D"],清洗后 4 项;E/F 被截掉
-                assert_eq!(apps, vec!["A", "B", "C", "D"]);
-                assert_eq!(categories, vec!["游戏", "工作"]);
+                assert_eq!(q.apps, vec!["A", "B", "C", "D"]);
+                assert_eq!(q.categories, vec!["游戏", "工作"]);
             }
             _ => panic!(),
         }

@@ -11,18 +11,25 @@ use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
 use crate::storage::SqliteResultExt;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchQuery {
+    pub keywords: Vec<String>,
+    /// 不给就搜全部。
+    pub range: Option<(NaiveDate, NaiveDate)>,
+}
+
 /// 搜索命中数上限(服务端硬夹紧,模型无法调大)
 const SEARCH_LIMIT: usize = 8;
 /// 搜索的窗口标题层命中显示上限(屏幕文字索引之外的兜底证据层)
 const TITLE_LIMIT: usize = 8;
 
-pub(in crate::ai::tools) async fn search_text(
+pub(in crate::ai::tools) async fn run(
     ctx: &ToolCtx,
-    keywords: &[String],
-    range: Option<(NaiveDate, NaiveDate)>,
+    q: &SearchQuery,
     next_citation: usize,
     lang: ChatLang,
 ) -> Result<ToolOutput> {
+    let SearchQuery { keywords, range } = q;
     let fts = fts_literal(keywords);
     let first_kw = like_pattern(&keywords[0]);
     let (from, to) = match range {
@@ -218,7 +225,6 @@ pub(in crate::ai::tools) async fn search_text(
 mod tests {
     use super::*;
     use crate::ai::tools::test_util::{ctx_with, day};
-    use crate::ai::tools::{execute, Query};
 
     /// 跨层去重:标题命中落在已返回的屏幕文字会话时间段内 → 剔除,段外保留。
     #[tokio::test]
@@ -235,17 +241,11 @@ mod tests {
               'chrome','keychron 下单页');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::SearchText {
-                keywords: vec!["keychron".into()],
-                range: Some(day()),
-            },
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = SearchQuery {
+            keywords: vec!["keychron".into()],
+            range: Some(day()),
+        };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
         // FTS 层 1 条 + 标题层只剩段外的 11:00 那条
         assert!(out.content.contains("keychron 下单页"), "{}", out.content);
         assert!(!out.content.contains("keychron 评测页"), "{}", out.content);
@@ -267,17 +267,11 @@ mod tests {
         }
         let mem: &'static str = Box::leak(sql.into_boxed_str());
         let ctx = ctx_with(mem, "").await;
-        let out = execute(
-            &ctx,
-            &Query::SearchText {
-                keywords: vec!["keychron".into()],
-                range: None,
-            },
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = SearchQuery {
+            keywords: vec!["keychron".into()],
+            range: None,
+        };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
         assert!(out.content.contains("共 20 条命中"), "{}", out.content);
         assert!(out.content.contains("前 8 条"), "{}", out.content);
         assert_eq!(out.citations.len(), SEARCH_LIMIT);
