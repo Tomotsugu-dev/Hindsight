@@ -13,8 +13,7 @@ use chrono::NaiveDate;
 use serde::Serialize;
 
 use super::llm::{ChatLlm, StepOut, Turn};
-use super::tools::{self, Citation, ToolCtx};
-use crate::chat::lang::ChatLang;
+use crate::ai::tools::{self, ChatLang, Citation, ToolCtx};
 use crate::error::{Error, Result};
 
 /// 循环步数上限(每步 = 一次 LLM 调用;云端/本地同值起步,按 golden 集实测再分级)
@@ -743,7 +742,7 @@ mod loop_tests {
     // HINDSIGHT_DATA_DIR 解析两个库文件路径。因此夹具在唯一临时目录里先造出
     // 真实 SQLite 文件,再借 test_util 的进程级 env 锁,在"设 env → 打开 →
     // 恢复 env"的窗口内串行;连接开完后路径不再被读,锁即可释放。
-    // schema 与 chat::tools::behavior_tests 同口径(execute 的固定 SQL 只触
+    // schema 与 ai::tools::behavior_tests 同口径(execute 的固定 SQL 只触
     // 这些表/列);约定不跨文件共享 helper,故此处独立复制一份。
 
     const MAIN_SCHEMA: &str = "CREATE TABLE activities (

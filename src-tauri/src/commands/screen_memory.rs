@@ -194,7 +194,7 @@ pub async fn memory_search(
         .cloned()
         .collect();
     let first_word = words[0].clone();
-    let first_like = crate::chat::tools::like_pattern(&first_word);
+    let first_like = crate::ai::tools::like_pattern(&first_word);
 
     let (total, hits) =
         db.0.call(move |conn| {
@@ -214,10 +214,10 @@ pub async fn memory_search(
 
             let (total, rows): (i64, Vec<Row>) = if !long_words.is_empty() {
                 // FTS 缩集(长词) + 集合内 LIKE(短词,可为空)
-                let fts = crate::chat::tools::fts_literal(&long_words);
+                let fts = crate::ai::tools::fts_literal(&long_words);
                 let short_patterns: Vec<String> = short_words
                     .iter()
-                    .map(|w| crate::chat::tools::like_pattern(w))
+                    .map(|w| crate::ai::tools::like_pattern(w))
                     .collect();
                 // 参数 ?1 = FTS 词串,短词 LIKE 从 ?2 起编号
                 let short_cond = (0..short_patterns.len())
@@ -258,7 +258,7 @@ pub async fn memory_search(
                 // 全部是短词:别无选择,物化列 LIKE 全扫
                 let patterns: Vec<String> = words
                     .iter()
-                    .map(|w| crate::chat::tools::like_pattern(w))
+                    .map(|w| crate::ai::tools::like_pattern(w))
                     .collect();
                 let cond = (1..=patterns.len())
                     .map(|i| format!("s.text LIKE ?{i} ESCAPE '\\'"))

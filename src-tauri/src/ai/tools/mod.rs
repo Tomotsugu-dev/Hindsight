@@ -10,9 +10,11 @@
 //! 校验错误返回 `Err(String)`(中文短句)——engine 会把它回填给模型重试,
 //! 所以措辞要能指导模型改参数。
 
+mod lang;
+
 use chrono::NaiveDate;
 
-use super::lang::ChatLang;
+pub use self::lang::ChatLang;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
