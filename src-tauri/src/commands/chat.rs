@@ -16,10 +16,10 @@ use tauri::{Emitter, State};
 
 use super::screen_memory::MemoryState;
 use crate::ai::server::EngineSupervisor;
+use crate::ai::tools::Tools;
 use crate::chat::engine::{self, ChatAnswer};
 use crate::chat::llm::ChatLlm;
 use crate::chat::store::{self, ConversationMeta, StoredMessage};
-use crate::chat::tools::ToolCtx;
 use crate::memory::MemoryDb;
 use crate::repo::settings;
 use crate::storage::DbPool;
@@ -145,7 +145,7 @@ pub async fn chat_ask(
     }
     let db = require(&mem)?;
     // 回答语言:跟随提问语言优先,界面语言(前端 i18n 传入)兜底
-    let lang = crate::chat::lang::ChatLang::from_tag(locale.as_deref());
+    let lang = crate::ai::tools::ChatLang::from_tag(locale.as_deref());
     let ask_id = ask_id
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -200,7 +200,7 @@ pub async fn chat_regenerate(
     leaf_guid: Option<String>,
 ) -> Result<ChatAskResult, String> {
     let db = require(&mem)?;
-    let lang = crate::chat::lang::ChatLang::from_tag(locale.as_deref());
+    let lang = crate::ai::tools::ChatLang::from_tag(locale.as_deref());
     let ask_id = ask_id
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -243,7 +243,7 @@ async fn run_ask(
     inflight: &ChatInflight,
     conv_id: i64,
     input: AskInput,
-    lang: crate::chat::lang::ChatLang,
+    lang: crate::ai::tools::ChatLang,
     ask_id: String,
 ) -> Result<ChatAskResult, String> {
     // 注册 in-flight:同会话已有生成中的问答 → 明确报忙(本地引擎单槽,
@@ -369,8 +369,10 @@ async fn run_ask(
         )
     };
 
-    let ctx = ToolCtx::open_readonly().await.map_err(String::from)?;
     let today = chrono::Local::now().date_naive();
+    let tools = Tools::open_readonly(today, lang)
+        .await
+        .map_err(String::from)?;
     // 生成可被"停止"打断:cancel 分支丢弃生成 future——reqwest 连接随之断开,
     // llama-server 对断连会中止解码;云端同理。提问已落库,什么都不补写,
     // 会话呈"有问无答"可重问;guard 广播 ok=false 让各处视图清掉打字指示。
@@ -392,7 +394,7 @@ async fn run_ask(
                 },
             });
         }
-        r = engine::answer(&llm, &ctx, &question, &history, today, lang) => {
+        r = engine::answer(&llm, &tools, &question, &history, today, lang) => {
             r.map_err(String::from)?
         }
     };

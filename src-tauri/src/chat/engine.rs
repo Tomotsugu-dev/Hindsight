@@ -13,8 +13,8 @@ use chrono::NaiveDate;
 use serde::Serialize;
 
 use super::llm::{ChatLlm, StepOut, Turn};
-use super::tools::{self, Citation, ToolCtx};
-use crate::chat::lang::ChatLang;
+use crate::ai::model::ToolCall;
+use crate::ai::tools::{ChatLang, Citation, Tools};
 use crate::error::{Error, Result};
 
 /// 循环步数上限(每步 = 一次 LLM 调用;云端/本地同值起步,按 golden 集实测再分级)
@@ -215,7 +215,7 @@ impl RunUsage {
 
 pub async fn answer(
     llm: &ChatLlm,
-    ctx: &ToolCtx,
+    tools: &Tools,
     question: &str,
     history: &[HistoryTurn],
     today: NaiveDate,
@@ -314,34 +314,29 @@ pub async fn answer(
                 }
 
                 // 第②道墙:解析+校验;错误文案回填给模型自纠
-                let raw: tools::RawParams = match serde_json::from_value(args) {
-                    Ok(r) => r,
+                let call = ToolCall {
+                    id: call_id.clone(),
+                    name,
+                    arguments: args,
+                };
+                let query = match tools.validate(&call) {
+                    Ok(q) => q,
                     Err(e) => {
                         turns.push(Turn::ToolResult {
                             id: call_id,
-                            content: lang.args_format_err(&e),
-                        });
-                        continue;
-                    }
-                };
-                let call = match tools::validate(&name, &raw, today, lang) {
-                    Ok(c) => c,
-                    Err(msg) => {
-                        turns.push(Turn::ToolResult {
-                            id: call_id,
-                            content: lang.args_invalid(&msg),
+                            content: e.0,
                         });
                         continue;
                     }
                 };
 
                 // 第③④道墙内执行
-                match tools::execute(ctx, &call, citations.len() + 1, lang).await {
+                match tools.execute(&query, citations.len() + 1).await {
                     Ok(output) => {
                         citations.extend(output.citations);
                         turns.push(Turn::ToolResult {
                             id: call_id,
-                            content: output.for_llm,
+                            content: output.content,
                         });
                     }
                     Err(e) => {
@@ -673,8 +668,8 @@ mod tests {
                 .unwrap();
             ChatLlm::local(port, &model, thinking).unwrap()
         };
-        let ctx = ToolCtx::open_readonly().await.unwrap();
         let today = chrono::Local::now().date_naive();
+        let ctx = Tools::open_readonly(today, ChatLang::ZhHans).await.unwrap();
 
         // (问题, 历史) —— 第三条是省略式追问,靠历史做指代消解
         let follow_up_history = vec![
@@ -737,13 +732,13 @@ mod loop_tests {
     use serde_json::{json, Value};
     use std::sync::{Arc, Mutex};
 
-    // ── ToolCtx 夹具 ─────────────────────────────────────
+    // ── Tools 夹具 ───────────────────────────────────────
     //
-    // ToolCtx 的字段对 tools 模块私有,测试只能走 open_readonly()——它按
+    // Tools 的字段对 tools 模块私有,测试只能走 open_readonly()——它按
     // HINDSIGHT_DATA_DIR 解析两个库文件路径。因此夹具在唯一临时目录里先造出
     // 真实 SQLite 文件,再借 test_util 的进程级 env 锁,在"设 env → 打开 →
     // 恢复 env"的窗口内串行;连接开完后路径不再被读,锁即可释放。
-    // schema 与 chat::tools::behavior_tests 同口径(execute 的固定 SQL 只触
+    // schema 与 ai::tools::test_util 同口径(execute 的固定 SQL 只触
     // 这些表/列);约定不跨文件共享 helper,故此处独立复制一份。
 
     const MAIN_SCHEMA: &str = "CREATE TABLE activities (
@@ -776,7 +771,7 @@ mod loop_tests {
     // 每个 #[tokio::test] 是独立的单线程 runtime,持锁跨 await 不会自死锁;
     // 其它测试线程阻塞等锁正是想要的串行语义。
     #[allow(clippy::await_holding_lock)]
-    async fn fixture_ctx(with_schema: bool, main_sql: &str) -> ToolCtx {
+    async fn fixture_ctx(with_schema: bool, main_sql: &str) -> Tools {
         let dir = std::env::temp_dir().join(format!(
             "hindsight-chat-engine-test-{}",
             uuid::Uuid::new_v4()
@@ -797,7 +792,7 @@ mod loop_tests {
         }
         drop(main);
         drop(mem);
-        let ctx = ToolCtx::open_readonly().await;
+        let ctx = Tools::open_readonly(today(), ChatLang::ZhHans).await;
         match prev {
             Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
             None => std::env::remove_var("HINDSIGHT_DATA_DIR"),

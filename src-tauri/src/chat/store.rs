@@ -10,7 +10,7 @@
 use serde::Serialize;
 
 use super::engine::HistoryTurn;
-use super::tools::Citation;
+use crate::ai::tools::Citation;
 use crate::error::Result;
 use crate::memory::MemoryDb;
 use crate::storage::SqliteResultExt;
