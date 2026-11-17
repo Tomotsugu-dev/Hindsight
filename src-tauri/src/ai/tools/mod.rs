@@ -51,8 +51,10 @@ impl ToolCtx {
 }
 
 /// 校验通过后的工具调用——只可能是这三种,未知工具在解析层就被拒。
+// 分支名跟工具名一一对应，所以有一个叫 QueryStats。
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum ToolCall {
+pub enum Query {
     SearchText {
         keywords: Vec<String>,
         range: Option<(NaiveDate, NaiveDate)>,
@@ -126,7 +128,7 @@ const GAP_DEFAULT_MIN: u32 = 30;
 const GAP_MIN: u32 = 5;
 const GAP_MAX: u32 = 240;
 
-/// 模型给出的原始参数(两种适配器统一走这个宽松壳,校验后变 [`ToolCall`])。
+/// 模型给出的原始参数(两种适配器统一走这个宽松壳,校验后变 [`Query`])。
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct RawParams {
@@ -150,12 +152,12 @@ pub fn validate(
     raw: &RawParams,
     today: NaiveDate,
     lang: ChatLang,
-) -> std::result::Result<ToolCall, String> {
+) -> std::result::Result<Query, String> {
     match name {
         "search_text" => {
             let keywords = clean_keywords(&raw.keywords, lang)?;
             let range = parse_range_opt(raw, today, RANGE_MAX_DAYS, lang)?;
-            Ok(ToolCall::SearchText { keywords, range })
+            Ok(Query::SearchText { keywords, range })
         }
         "query_stats" => {
             let metric = raw.metric.unwrap_or(StatMetric::Duration);
@@ -193,7 +195,7 @@ pub fn validate(
             } else {
                 5
             };
-            Ok(ToolCall::QueryStats {
+            Ok(Query::QueryStats {
                 range,
                 apps,
                 title_keyword,
@@ -212,7 +214,7 @@ pub fn validate(
         "get_timeline" => {
             let range = parse_range_opt(raw, today, RANGE_MAX_DAYS, lang)?
                 .ok_or_else(|| lang.err_need_range("get_timeline"))?;
-            Ok(ToolCall::GetTimeline { range })
+            Ok(Query::GetTimeline { range })
         }
         other => Err(lang.err_unknown_tool(other)),
     }
@@ -312,22 +314,22 @@ pub struct Citation {
 
 /// 工具执行结果:给模型看的紧凑文本 + 给前端的结构化引用。
 pub struct ToolOutput {
-    pub for_llm: String,
+    pub content: String,
     pub citations: Vec<Citation>,
 }
 
 /// 第③道墙:固定查询执行。`next_citation` 是引用编号的起点(engine 维护全局序)。
 pub async fn execute(
     ctx: &ToolCtx,
-    call: &ToolCall,
+    call: &Query,
     next_citation: usize,
     lang: ChatLang,
 ) -> Result<ToolOutput> {
     match call {
-        ToolCall::SearchText { keywords, range } => {
+        Query::SearchText { keywords, range } => {
             search_text(ctx, keywords, *range, next_citation, lang).await
         }
-        ToolCall::QueryStats {
+        Query::QueryStats {
             range,
             apps,
             title_keyword,
@@ -355,7 +357,7 @@ pub async fn execute(
             )
             .await
         }
-        ToolCall::GetTimeline { range } => get_timeline(ctx, *range, next_citation, lang).await,
+        Query::GetTimeline { range } => get_timeline(ctx, *range, next_citation, lang).await,
     }
 }
 
@@ -610,8 +612,8 @@ async fn search_text(
     if lines.is_empty() && title_lines.is_empty() {
         sections.push(lang.search_no_hit().to_string());
     }
-    let for_llm = truncate(&sections.join("\n"), RESULT_CHAR_BUDGET);
-    Ok(ToolOutput { for_llm, citations })
+    let content = truncate(&sections.join("\n"), RESULT_CHAR_BUDGET);
+    Ok(ToolOutput { content, citations })
 }
 
 /// 统计查询的基础 FROM 段(别名 a,与既有口径一致:裸活动表、不排 hidden 组)。
@@ -655,7 +657,7 @@ async fn query_stats(
     let apps: Vec<String> = apps.iter().map(|a| like_pattern(a)).collect();
     let title_like = title_keyword.map(like_pattern);
     let cats: Vec<String> = categories.iter().map(|c| like_pattern(c)).collect();
-    let for_llm = ctx
+    let content = ctx
         .main
         .call(move |conn| {
             // 动态拼的只有 WHERE 的占位段与 GROUP BY/分桶维度,全部来自白名单枚举,
@@ -748,7 +750,7 @@ async fn query_stats(
         })
         .await?;
     Ok(ToolOutput {
-        for_llm: truncate(&for_llm, RESULT_CHAR_BUDGET),
+        content: truncate(&content, RESULT_CHAR_BUDGET),
         citations: Vec::new(),
     })
 }
@@ -1181,7 +1183,7 @@ async fn get_timeline(
             frame_path: shot.clone(),
         });
     }
-    let for_llm = if lines.is_empty() {
+    let content = if lines.is_empty() {
         format!("{coverage}\n{}", lang.timeline_empty())
     } else {
         // 头部先声明总量与覆盖范围:样本 ≠ 全量,让模型据此下结论
@@ -1200,7 +1202,7 @@ async fn get_timeline(
             RESULT_CHAR_BUDGET,
         )
     };
-    Ok(ToolOutput { for_llm, citations })
+    Ok(ToolOutput { content, citations })
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {
@@ -1286,7 +1288,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
+            Query::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
             _ => panic!(),
         }
     }
@@ -1302,7 +1304,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats {
+            Query::QueryStats {
                 metric,
                 gap_minutes,
                 ..
@@ -1324,7 +1326,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats {
+            Query::QueryStats {
                 metric,
                 gap_minutes,
                 ..
@@ -1391,7 +1393,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats {
+            Query::QueryStats {
                 bucket,
                 bucket_auto_week,
                 ..
@@ -1412,7 +1414,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats {
+            Query::QueryStats {
                 bucket,
                 bucket_auto_week,
                 ..
@@ -1438,7 +1440,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
+            Query::QueryStats { top_n, .. } => assert_eq!(top_n, TOP_N_MAX),
             _ => panic!(),
         }
         // 显式给的仍然尊重
@@ -1453,7 +1455,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats { top_n, .. } => assert_eq!(top_n, 3),
+            Query::QueryStats { top_n, .. } => assert_eq!(top_n, 3),
             _ => panic!(),
         }
     }
@@ -1472,7 +1474,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats { metric, .. } => assert_eq!(metric, StatMetric::FirstLast),
+            Query::QueryStats { metric, .. } => assert_eq!(metric, StatMetric::FirstLast),
             _ => panic!(),
         }
     }
@@ -1502,7 +1504,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::SearchText { keywords, .. } => {
+            Query::SearchText { keywords, .. } => {
                 assert_eq!(keywords, vec!["rust", "go", "zig"]);
             }
             _ => panic!(),
@@ -1517,7 +1519,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::SearchText { keywords, .. } => assert_eq!(keywords, vec!["a", "b"]),
+            Query::SearchText { keywords, .. } => assert_eq!(keywords, vec!["a", "b"]),
             _ => panic!(),
         }
     }
@@ -1545,7 +1547,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::SearchText { keywords, .. } => assert_eq!(keywords.len(), 1),
+            Query::SearchText { keywords, .. } => assert_eq!(keywords.len(), 1),
             _ => panic!(),
         }
 
@@ -1591,7 +1593,7 @@ mod tests {
         )
         .unwrap();
         match call {
-            ToolCall::QueryStats {
+            Query::QueryStats {
                 apps, categories, ..
             } => {
                 // take(5) 拿到 [" A ","","B","C","D"],清洗后 4 项;E/F 被截掉
@@ -1689,18 +1691,18 @@ mod behavior_tests {
         let ctx = ctx_with("", main).await;
         let out = execute(
             &ctx,
-            &ToolCall::GetTimeline { range: day() },
+            &Query::GetTimeline { range: day() },
             1,
             ChatLang::ZhHans,
         )
         .await
         .unwrap();
         // 披露:总数与"样本"措辞
-        assert!(out.for_llm.contains("共 200 条活动记录"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("样本"), "{}", out.for_llm);
+        assert!(out.content.contains("共 200 条活动记录"), "{}", out.content);
+        assert!(out.content.contains("样本"), "{}", out.content);
         // 覆盖:10 个小时全部出现(旧实现只会给最早的 50 条 = 前 3 个小时)
         let hours: std::collections::BTreeSet<&str> = out
-            .for_llm
+            .content
             .lines()
             .filter(|l| l.starts_with('['))
             .filter_map(|l| l.split("] ").nth(1))
@@ -1710,7 +1712,7 @@ mod behavior_tests {
         // 每小时至多 3 条
         for h in 9..19 {
             let prefix = format!("] {h:02}:");
-            let n = out.for_llm.lines().filter(|l| l.contains(&prefix)).count();
+            let n = out.content.lines().filter(|l| l.contains(&prefix)).count();
             assert!(n <= 3, "{h} 点出现 {n} 条");
         }
         assert!(out.citations.len() <= TIMELINE_LIMIT);
@@ -1720,22 +1722,17 @@ mod behavior_tests {
     async fn timeline_headers_localized_english() {
         let main: &'static str = Box::leak(dense_day_sql().to_string().into_boxed_str());
         let ctx = ctx_with("", main).await;
-        let out = execute(
-            &ctx,
-            &ToolCall::GetTimeline { range: day() },
-            1,
-            ChatLang::En,
-        )
-        .await
-        .unwrap();
+        let out = execute(&ctx, &Query::GetTimeline { range: day() }, 1, ChatLang::En)
+            .await
+            .unwrap();
         assert!(
-            out.for_llm.contains("200 activity records in this period"),
+            out.content.contains("200 activity records in this period"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(out.for_llm.contains("sample"), "{}", out.for_llm);
+        assert!(out.content.contains("sample"), "{}", out.content);
         // 骨架(覆盖行 + 头部行)不应残留中文;正文标题是用户数据,语言不限
-        for skel in out.for_llm.lines().take(2) {
+        for skel in out.content.lines().take(2) {
             assert!(!skel.contains("活动") && !skel.contains("覆盖"), "{skel}");
         }
     }
@@ -1752,18 +1749,18 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::GetTimeline { range: day() },
+            &Query::GetTimeline { range: day() },
             1,
             ChatLang::ZhHans,
         )
         .await
         .unwrap();
         assert!(
-            out.for_llm.contains("共 2 条活动记录,全部列出"),
+            out.content.contains("共 2 条活动记录,全部列出"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(!out.for_llm.contains("样本"));
+        assert!(!out.content.contains("样本"));
         assert_eq!(out.citations.len(), 2);
     }
 
@@ -1784,19 +1781,19 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::GetTimeline { range: day() },
+            &Query::GetTimeline { range: day() },
             1,
             ChatLang::ZhHans,
         )
         .await
         .unwrap();
         assert!(
-            out.for_llm.contains("Visual Studio Code"),
+            out.content.contains("Visual Studio Code"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(!out.for_llm.contains("secret"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("共 1 条活动记录"), "{}", out.for_llm);
+        assert!(!out.content.contains("secret"), "{}", out.content);
+        assert!(out.content.contains("共 1 条活动记录"), "{}", out.content);
     }
 
     // ── 覆盖披露边界(设计矩阵 A/B/C/G)──────────────────
@@ -1813,14 +1810,14 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::GetTimeline { range: day() },
+            &Query::GetTimeline { range: day() },
             1,
             ChatLang::ZhHans,
         )
         .await
         .unwrap();
-        assert!(out.for_llm.contains("共 1 条活动记录"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("均无屏幕文字索引"), "{}", out.for_llm);
+        assert!(out.content.contains("共 1 条活动记录"), "{}", out.content);
+        assert!(out.content.contains("均无屏幕文字索引"), "{}", out.content);
     }
 
     /// A(搜索面):索引为空时关键词靠窗口标题层兜底命中。
@@ -1836,7 +1833,7 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::SearchText {
+            &Query::SearchText {
                 keywords: vec!["keychron".into()],
                 range: None,
             },
@@ -1845,9 +1842,9 @@ mod behavior_tests {
         )
         .await
         .unwrap();
-        assert!(out.for_llm.contains("窗口标题命中 1 条"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("均无屏幕文字索引"), "{}", out.for_llm);
-        assert!(!out.for_llm.contains("没有命中"), "{}", out.for_llm);
+        assert!(out.content.contains("窗口标题命中 1 条"), "{}", out.content);
+        assert!(out.content.contains("均无屏幕文字索引"), "{}", out.content);
+        assert!(!out.content.contains("没有命中"), "{}", out.content);
         assert_eq!(out.citations.len(), 1);
         assert_eq!(out.citations[0].frame_path.as_deref(), Some("shots/a.jpg"));
     }
@@ -1867,14 +1864,14 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::GetTimeline { range: day() },
+            &Query::GetTimeline { range: day() },
             1,
             ChatLang::ZhHans,
         )
         .await
         .unwrap();
-        assert!(out.for_llm.contains("3 帧截图待识别"), "{}", out.for_llm);
-        assert!(!out.for_llm.contains("未开启"), "{}", out.for_llm);
+        assert!(out.content.contains("3 帧截图待识别"), "{}", out.content);
+        assert!(!out.content.contains("未开启"), "{}", out.content);
     }
 
     /// C:时有时无的用户——分母是"活动日",分子是"有索引的日"。
@@ -1894,13 +1891,13 @@ mod behavior_tests {
             NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
-        let out = execute(&ctx, &ToolCall::GetTimeline { range }, 1, ChatLang::ZhHans)
+        let out = execute(&ctx, &Query::GetTimeline { range }, 1, ChatLang::ZhHans)
             .await
             .unwrap();
         assert!(
-            out.for_llm.contains("2 个活动日中 1 日有屏幕文字索引"),
+            out.content.contains("2 个活动日中 1 日有屏幕文字索引"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -1918,7 +1915,7 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::SearchText {
+            &Query::SearchText {
                 keywords: vec!["keychron".into()],
                 range: Some(day()),
             },
@@ -1927,11 +1924,11 @@ mod behavior_tests {
         )
         .await
         .unwrap();
-        assert!(out.for_llm.contains("没有命中"), "{}", out.for_llm);
+        assert!(out.content.contains("没有命中"), "{}", out.content);
         assert!(
-            out.for_llm.contains("1 个活动日中 1 日有屏幕文字索引"),
+            out.content.contains("1 个活动日中 1 日有屏幕文字索引"),
             "{}",
-            out.for_llm
+            out.content
         );
         assert!(out.citations.is_empty());
     }
@@ -1953,7 +1950,7 @@ mod behavior_tests {
         .await;
         let out = execute(
             &ctx,
-            &ToolCall::SearchText {
+            &Query::SearchText {
                 keywords: vec!["keychron".into()],
                 range: Some(day()),
             },
@@ -1963,8 +1960,8 @@ mod behavior_tests {
         .await
         .unwrap();
         // FTS 层 1 条 + 标题层只剩段外的 11:00 那条
-        assert!(out.for_llm.contains("keychron 下单页"), "{}", out.for_llm);
-        assert!(!out.for_llm.contains("keychron 评测页"), "{}", out.for_llm);
+        assert!(out.content.contains("keychron 下单页"), "{}", out.content);
+        assert!(!out.content.contains("keychron 评测页"), "{}", out.content);
         assert_eq!(out.citations.len(), 2);
         // 编号连续:FTS 层 [1],标题层 [2]
         assert_eq!(out.citations[1].index, 2);
@@ -1985,7 +1982,7 @@ mod behavior_tests {
         let ctx = ctx_with(mem, "").await;
         let out = execute(
             &ctx,
-            &ToolCall::SearchText {
+            &Query::SearchText {
                 keywords: vec!["keychron".into()],
                 range: None,
             },
@@ -1994,8 +1991,8 @@ mod behavior_tests {
         )
         .await
         .unwrap();
-        assert!(out.for_llm.contains("共 20 条命中"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("前 8 条"), "{}", out.for_llm);
+        assert!(out.content.contains("共 20 条命中"), "{}", out.content);
+        assert!(out.content.contains("前 8 条"), "{}", out.content);
         assert_eq!(out.citations.len(), SEARCH_LIMIT);
     }
 
@@ -2015,7 +2012,7 @@ mod behavior_tests {
         let ctx = ctx_with("", main).await;
         let out = execute(
             &ctx,
-            &ToolCall::QueryStats {
+            &Query::QueryStats {
                 range: day(),
                 apps: vec![],
                 title_keyword: None,
@@ -2032,13 +2029,13 @@ mod behavior_tests {
         )
         .await
         .unwrap();
-        assert!(out.for_llm.contains("共 8 组"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("前 5 组"), "{}", out.for_llm);
+        assert!(out.content.contains("共 8 组"), "{}", out.content);
+        assert!(out.content.contains("前 5 组"), "{}", out.content);
     }
 
     /// QueryStats 的全默认构造,测试逐项覆盖自己关心的字段。
-    fn stats_call(range: (NaiveDate, NaiveDate)) -> ToolCall {
-        ToolCall::QueryStats {
+    fn stats_call(range: (NaiveDate, NaiveDate)) -> Query {
+        Query::QueryStats {
             range,
             apps: vec![],
             title_keyword: None,
@@ -2072,17 +2069,17 @@ mod behavior_tests {
             INSERT INTO categories(id, name) VALUES ('cat1','工作'), ('cat2','零星');";
         let ctx = ctx_with("", main).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats { group_by, .. } = &mut call {
+        if let Query::QueryStats { group_by, .. } = &mut call {
             *group_by = GroupBy::Category;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("工作: 1 小时 0 分钟"),
+            out.content.contains("工作: 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(out.for_llm.contains("other: 30 分钟"), "{}", out.for_llm);
-        assert!(!out.for_llm.contains("零星"), "{}", out.for_llm);
+        assert!(out.content.contains("other: 30 分钟"), "{}", out.content);
+        assert!(!out.content.contains("零星"), "{}", out.content);
     }
 
     #[tokio::test]
@@ -2100,16 +2097,16 @@ mod behavior_tests {
             INSERT INTO app_groups(id, display_name, category_id) VALUES ('g1','Steam','none');";
         let ctx = ctx_with("", main).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats { group_by, .. } = &mut call {
+        if let Query::QueryStats { group_by, .. } = &mut call {
             *group_by = GroupBy::Category;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("other: 1 小时 0 分钟"),
+            out.content.contains("other: 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(!out.for_llm.contains("none"), "{}", out.for_llm);
+        assert!(!out.content.contains("none"), "{}", out.content);
     }
 
     #[tokio::test]
@@ -2128,25 +2125,25 @@ mod behavior_tests {
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
         let mut call = stats_call(range);
-        if let ToolCall::QueryStats { bucket, .. } = &mut call {
+        if let Query::QueryStats { bucket, .. } = &mut call {
             *bucket = Bucket::Day;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("逐日统计(2 个有记录的日子"),
+            out.content.contains("逐日统计(2 个有记录的日子"),
             "{}",
-            out.for_llm
+            out.content
         );
         // 行首带本地化星期(07-06 周一/07-08 周三),模型不用自己换算
         assert!(
-            out.for_llm.contains("2026-07-06(周一): 40 分钟"),
+            out.content.contains("2026-07-06(周一): 40 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
         assert!(
-            out.for_llm.contains("2026-07-08(周三): 1 小时 0 分钟"),
+            out.content.contains("2026-07-08(周三): 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -2169,14 +2166,14 @@ mod behavior_tests {
               ('cat_game','游戏'), ('cat_browse','浏览');";
         let ctx = ctx_with("", main).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats { categories, .. } = &mut call {
+        if let Query::QueryStats { categories, .. } = &mut call {
             *categories = vec!["游戏".into()];
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("合计: 1 小时 0 分钟"),
+            out.content.contains("合计: 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -2196,18 +2193,18 @@ mod behavior_tests {
             NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
         );
         let mut call = stats_call(range);
-        if let ToolCall::QueryStats { bucket, .. } = &mut call {
+        if let Query::QueryStats { bucket, .. } = &mut call {
             *bucket = Bucket::Week;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
-        assert!(out.for_llm.contains("逐周统计(1 周"), "{}", out.for_llm);
+        assert!(out.content.contains("逐周统计(1 周"), "{}", out.content);
         assert!(
-            out.for_llm.contains("2026-07-06: 1 小时 0 分钟"),
+            out.content.contains("2026-07-06: 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
         // 非自动升级:不出现自动改周的说明
-        assert!(!out.for_llm.contains("自动改为按周"), "{}", out.for_llm);
+        assert!(!out.content.contains("自动改为按周"), "{}", out.content);
     }
 
     #[tokio::test]
@@ -2226,16 +2223,16 @@ mod behavior_tests {
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
         let mut call = stats_call(range);
-        if let ToolCall::QueryStats { bucket, .. } = &mut call {
+        if let Query::QueryStats { bucket, .. } = &mut call {
             *bucket = Bucket::HourOfDay;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("按一天中的小时聚合"),
+            out.content.contains("按一天中的小时聚合"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(out.for_llm.contains("09:00: 40 分钟"), "{}", out.for_llm);
+        assert!(out.content.contains("09:00: 40 分钟"), "{}", out.content);
     }
 
     #[tokio::test]
@@ -2253,20 +2250,20 @@ mod behavior_tests {
             NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
         );
         let mut call = stats_call(range);
-        if let ToolCall::QueryStats { metric, .. } = &mut call {
+        if let Query::QueryStats { metric, .. } = &mut call {
             *metric = StatMetric::FirstLast;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
-        assert!(out.for_llm.contains("共 2 条匹配活动"), "{}", out.for_llm);
+        assert!(out.content.contains("共 2 条匹配活动"), "{}", out.content);
         assert!(
-            out.for_llm.contains("最早一次始于 2026-07-05 09:00"),
+            out.content.contains("最早一次始于 2026-07-05 09:00"),
             "{}",
-            out.for_llm
+            out.content
         );
         assert!(
-            out.for_llm.contains("最近一次止于 2026-07-08 21:00"),
+            out.content.contains("最近一次止于 2026-07-08 21:00"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -2293,24 +2290,24 @@ mod behavior_tests {
     async fn stats_session_count_total_uses_gap_and_wording() {
         let ctx = ctx_with("", SESSIONS_SQL).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats { metric, .. } = &mut call {
+        if let Query::QueryStats { metric, .. } = &mut call {
             *metric = StatMetric::SessionCount;
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         // 总次数 + 间隔规则必须一起披露,模型才能向用户解释"次"的口径
         assert!(
-            out.for_llm.contains("使用会话次数: 6 次"),
+            out.content.contains("使用会话次数: 6 次"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(out.for_llm.contains("间隔≥30 分钟"), "{}", out.for_llm);
+        assert!(out.content.contains("间隔≥30 分钟"), "{}", out.content);
         // 统计类结果没有证据卡
         assert!(out.citations.is_empty());
 
         // gap 放大到 120 分钟:全流最大间隔 85 分钟 → 全并成 1 次。
         // 这证明 gap_minutes 真进了切分逻辑,不是只写进文案
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats {
+        if let Query::QueryStats {
             metric,
             gap_minutes,
             ..
@@ -2321,18 +2318,18 @@ mod behavior_tests {
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("使用会话次数: 1 次"),
+            out.content.contains("使用会话次数: 1 次"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(out.for_llm.contains("间隔≥120 分钟"), "{}", out.for_llm);
+        assert!(out.content.contains("间隔≥120 分钟"), "{}", out.content);
     }
 
     #[tokio::test]
     async fn stats_session_count_grouped_sorts_count_desc_then_name_asc() {
         let ctx = ctx_with("", SESSIONS_SQL).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats {
+        if let Query::QueryStats {
             metric, group_by, ..
         } = &mut call
         {
@@ -2341,21 +2338,21 @@ mod behavior_tests {
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         // 每组次数各自独立切分
-        let beta = out.for_llm.find("beta.exe: 3 次").expect(&out.for_llm);
-        let alpha = out.for_llm.find("alpha.exe: 2 次").expect(&out.for_llm);
-        let zeta = out.for_llm.find("zeta.exe: 2 次").expect(&out.for_llm);
+        let beta = out.content.find("beta.exe: 3 次").expect(&out.content);
+        let alpha = out.content.find("alpha.exe: 2 次").expect(&out.content);
+        let zeta = out.content.find("zeta.exe: 2 次").expect(&out.content);
         // 次数降序;同为 2 次的 alpha/zeta 按名字升序——排序稳定,模型两次问答不见"名次漂移"
-        assert!(beta < alpha && alpha < zeta, "{}", out.for_llm);
+        assert!(beta < alpha && alpha < zeta, "{}", out.content);
         // 3 组 ≤ top_n=5:全量列出,头部不出现"取前 N 组"的截断措辞
-        assert!(out.for_llm.contains("使用会话次数"), "{}", out.for_llm);
-        assert!(!out.for_llm.contains("取前"), "{}", out.for_llm);
+        assert!(out.content.contains("使用会话次数"), "{}", out.content);
+        assert!(!out.content.contains("取前"), "{}", out.content);
     }
 
     #[tokio::test]
     async fn stats_session_count_top_n_truncates_and_discloses_universe() {
         let ctx = ctx_with("", SESSIONS_SQL).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats {
+        if let Query::QueryStats {
             metric,
             group_by,
             top_n,
@@ -2369,14 +2366,14 @@ mod behavior_tests {
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         // universe 披露:让模型知道前 2 组之外还有第 3 组(2026-07-08 事故的同款教训)
         assert!(
-            out.for_llm.contains("共 3 组,按次数取前 2 组"),
+            out.content.contains("共 3 组,按次数取前 2 组"),
             "{}",
-            out.for_llm
+            out.content
         );
-        assert!(out.for_llm.contains("beta.exe: 3 次"), "{}", out.for_llm);
-        assert!(out.for_llm.contains("alpha.exe: 2 次"), "{}", out.for_llm);
+        assert!(out.content.contains("beta.exe: 3 次"), "{}", out.content);
+        assert!(out.content.contains("alpha.exe: 2 次"), "{}", out.content);
         // 同次数并列时名字靠后的 zeta 被截掉
-        assert!(!out.for_llm.contains("zeta.exe"), "{}", out.for_llm);
+        assert!(!out.content.contains("zeta.exe"), "{}", out.content);
     }
 
     // ── apps 过滤的参数绑定 ─────────────────────────────
@@ -2395,14 +2392,14 @@ mod behavior_tests {
                '2026-07-08', 13, 'gamma.exe', 'w');";
         let ctx = ctx_with("", main).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats { apps, .. } = &mut call {
+        if let Query::QueryStats { apps, .. } = &mut call {
             *apps = vec!["alpha".into(), "beta".into()];
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("合计: 1 小时 30 分钟"),
+            out.content.contains("合计: 1 小时 30 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -2430,7 +2427,7 @@ mod behavior_tests {
             INSERT INTO categories(id, name) VALUES ('cat_work','工作'), ('cat_fun','娱乐');";
         let ctx = ctx_with("", main).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats {
+        if let Query::QueryStats {
             apps,
             categories,
             title_keyword,
@@ -2443,9 +2440,9 @@ mod behavior_tests {
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("合计: 1 小时 0 分钟"),
+            out.content.contains("合计: 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -2463,14 +2460,14 @@ mod behavior_tests {
                '2026-07-08', 11, '100Xzapp.exe', 'w');";
         let ctx = ctx_with("", main).await;
         let mut call = stats_call(day());
-        if let ToolCall::QueryStats { apps, .. } = &mut call {
+        if let Query::QueryStats { apps, .. } = &mut call {
             *apps = vec!["100%_a".into()];
         }
         let out = execute(&ctx, &call, 1, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.for_llm.contains("合计: 1 小时 0 分钟"),
+            out.content.contains("合计: 1 小时 0 分钟"),
             "{}",
-            out.for_llm
+            out.content
         );
     }
 
@@ -2512,7 +2509,7 @@ mod behavior_tests {
 
         let out = execute(
             &ctx,
-            &ToolCall::GetTimeline { range: (from, to) },
+            &Query::GetTimeline { range: (from, to) },
             1,
             ChatLang::ZhHans,
         )
@@ -2524,7 +2521,7 @@ mod behavior_tests {
             .filter(|c| c.frame_path.is_some())
             .count();
         println!("\n── get_timeline({from} ~ {to}) ──────────────");
-        println!("{}", out.for_llm);
+        println!("{}", out.content);
         println!(
             "(引用 {} 条,其中带证据帧 {} 条)",
             out.citations.len(),
@@ -2534,7 +2531,7 @@ mod behavior_tests {
         if let Ok(kw) = std::env::var("CHAT_KW") {
             let out = execute(
                 &ctx,
-                &ToolCall::SearchText {
+                &Query::SearchText {
                     keywords: vec![kw.clone()],
                     range: Some((from, to)),
                 },
@@ -2544,7 +2541,7 @@ mod behavior_tests {
             .await
             .unwrap();
             println!("\n── search_text(\"{kw}\", {from} ~ {to}) ──────");
-            println!("{}", out.for_llm);
+            println!("{}", out.content);
             println!("(引用 {} 条)", out.citations.len());
         }
     }

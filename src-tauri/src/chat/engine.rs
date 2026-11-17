@@ -340,7 +340,7 @@ pub async fn answer(
                         citations.extend(output.citations);
                         turns.push(Turn::ToolResult {
                             id: call_id,
-                            content: output.for_llm,
+                            content: output.content,
                         });
                     }
                     Err(e) => {
