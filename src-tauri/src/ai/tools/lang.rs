@@ -1,4 +1,5 @@
-//! 聊天用的语言 `ChatLang`，以及工具结果和参数报错的多语言文字。
+//! 聊天用的语言 `ChatLang`，以及时间线、用量两个工具的多语言文字。
+//! 别的工具文字和共用的句子在 JSON 里，读法见 [`super::text`]；
 //! 聊天自己的文字在 [`crate::chat::lang`]。
 //!
 //! 为什么工具骨架也要本地化:模型"读"的资料若全是中文(头部/无命中提示/
@@ -40,52 +41,6 @@ impl ChatLang {
             Self::Es
         } else {
             Self::En
-        }
-    }
-
-    /// pub(crate):逐日分桶的结果行也要带本地化星期([`crate::ai::tools`])——
-    /// 实测模型自己换算两周前是星期几会成列出错。
-    pub(crate) fn weekday(self, iso: &str) -> &'static str {
-        let i = iso.parse::<usize>().unwrap_or(7) - 1; // %u: 1=周一
-        match self {
-            Self::ZhHans => ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][i],
-            Self::ZhHant => ["週一", "週二", "週三", "週四", "週五", "週六", "週日"][i],
-            Self::En => [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-            ][i],
-            Self::Ja => [
-                "月曜日",
-                "火曜日",
-                "水曜日",
-                "木曜日",
-                "金曜日",
-                "土曜日",
-                "日曜日",
-            ][i],
-            Self::Pt => [
-                "segunda-feira",
-                "terça-feira",
-                "quarta-feira",
-                "quinta-feira",
-                "sexta-feira",
-                "sábado",
-                "domingo",
-            ][i],
-            Self::Es => [
-                "lunes",
-                "martes",
-                "miércoles",
-                "jueves",
-                "viernes",
-                "sábado",
-                "domingo",
-            ][i],
         }
     }
 
@@ -428,169 +383,7 @@ impl ChatLang {
         }
     }
 
-    pub fn fmt_secs(self, secs: i64) -> String {
-        let h = secs / 3600;
-        let m = (secs % 3600) / 60;
-        match self {
-            Self::ZhHans => {
-                if h > 0 {
-                    format!("{h} 小时 {m} 分钟")
-                } else {
-                    format!("{m} 分钟")
-                }
-            }
-            Self::ZhHant => {
-                if h > 0 {
-                    format!("{h} 小時 {m} 分鐘")
-                } else {
-                    format!("{m} 分鐘")
-                }
-            }
-            Self::En => {
-                if h > 0 {
-                    format!("{h} hr {m} min")
-                } else {
-                    format!("{m} min")
-                }
-            }
-            Self::Ja => {
-                if h > 0 {
-                    format!("{h}時間{m}分")
-                } else {
-                    format!("{m}分")
-                }
-            }
-            Self::Pt => {
-                if h > 0 {
-                    format!("{h} h {m} min")
-                } else {
-                    format!("{m} min")
-                }
-            }
-            Self::Es => {
-                if h > 0 {
-                    format!("{h} h {m} min")
-                } else {
-                    format!("{m} min")
-                }
-            }
-        }
-    }
-
-    // ── 参数校验错误(回填给模型自纠) ────────────────────
-
-    pub fn args_format_err(self, e: &impl std::fmt::Display) -> String {
-        match self {
-            Self::ZhHans => format!("参数格式错误: {e}"),
-            Self::ZhHant => format!("參數格式錯誤: {e}"),
-            Self::En => format!("Malformed arguments: {e}"),
-            Self::Ja => format!("引数の形式が不正です: {e}"),
-            Self::Pt => format!("Argumentos malformados: {e}"),
-            Self::Es => format!("Argumentos con formato incorrecto: {e}"),
-        }
-    }
-
-    pub fn args_invalid(self, msg: &str) -> String {
-        match self {
-            Self::ZhHans => format!("参数校验未通过: {msg}"),
-            Self::ZhHant => format!("參數校驗未通過: {msg}"),
-            Self::En => format!("Argument validation failed: {msg}"),
-            Self::Ja => format!("引数の検証に失敗しました: {msg}"),
-            Self::Pt => format!("Falha na validação dos argumentos: {msg}"),
-            Self::Es => format!("Falló la validación de los argumentos: {msg}"),
-        }
-    }
-
-    /// `known` 是能用的工具名，由登记处给。
-    pub fn err_unknown_tool(self, other: &str, known: &str) -> String {
-        match self {
-            Self::ZhHans => format!("未知工具 {other},只能用 {known}"),
-            Self::ZhHant => format!("未知工具 {other},只能用 {known}"),
-            Self::En => format!("Unknown tool {other}; only {known} are available"),
-            Self::Ja => format!("不明なツール {other}。{known} のみ使用できます"),
-            Self::Pt => {
-                format!("Ferramenta desconhecida {other}; apenas {known} estão disponíveis")
-            }
-            Self::Es => format!("Herramienta desconocida {other}; solo están disponibles {known}"),
-        }
-    }
-
-    pub fn err_need_range(self, tool: &str) -> String {
-        match self {
-            Self::ZhHans => format!("{tool} 需要 date_from 和 date_to(YYYY-MM-DD)"),
-            Self::ZhHant => format!("{tool} 需要 date_from 和 date_to(YYYY-MM-DD)"),
-            Self::En => format!("{tool} requires date_from and date_to (YYYY-MM-DD)"),
-            Self::Ja => format!("{tool} には date_from と date_to(YYYY-MM-DD)が必要です"),
-            Self::Pt => format!("{tool} requer date_from e date_to (YYYY-MM-DD)"),
-            Self::Es => format!("{tool} requiere date_from y date_to (YYYY-MM-DD)"),
-        }
-    }
-
-    pub fn err_bad_date(self, field: &str, val: &str) -> String {
-        match self {
-            Self::ZhHans => format!("{field} 不是有效日期: {val}"),
-            Self::ZhHant => format!("{field} 不是有效日期: {val}"),
-            Self::En => format!("{field} is not a valid date: {val}"),
-            Self::Ja => format!("{field} は有効な日付ではありません: {val}"),
-            Self::Pt => format!("{field} não é uma data válida: {val}"),
-            Self::Es => format!("{field} no es una fecha válida: {val}"),
-        }
-    }
-
-    pub fn err_from_after_to(self) -> &'static str {
-        match self {
-            Self::ZhHans => "date_from 晚于 date_to",
-            Self::ZhHant => "date_from 晚於 date_to",
-            Self::En => "date_from is later than date_to",
-            Self::Ja => "date_from が date_to より後になっています",
-            Self::Pt => "date_from é posterior a date_to",
-            Self::Es => "date_from es posterior a date_to",
-        }
-    }
-
-    pub fn err_range_too_long(self) -> &'static str {
-        match self {
-            Self::ZhHans => "时间跨度超过 366 天,请缩小范围",
-            Self::ZhHant => "時間跨度超過 366 天,請縮小範圍",
-            Self::En => "The range exceeds 366 days; please narrow it",
-            Self::Ja => "期間が 366 日を超えています。範囲を狭めてください",
-            Self::Pt => "O intervalo excede 366 dias; reduza-o",
-            Self::Es => "El intervalo supera los 366 días; redúcelo",
-        }
-    }
-
-    pub fn err_from_in_future(self) -> &'static str {
-        match self {
-            Self::ZhHans => "date_from 在未来",
-            Self::ZhHant => "date_from 在未來",
-            Self::En => "date_from is in the future",
-            Self::Ja => "date_from が未来の日付です",
-            Self::Pt => "date_from está no futuro",
-            Self::Es => "date_from está en el futuro",
-        }
-    }
-
-    pub fn err_keywords_empty(self) -> &'static str {
-        match self {
-            Self::ZhHans => "keywords 不能为空",
-            Self::ZhHant => "keywords 不能為空",
-            Self::En => "keywords must not be empty",
-            Self::Ja => "keywords を空にはできません",
-            Self::Pt => "keywords não pode estar vazio",
-            Self::Es => "keywords no puede estar vacío",
-        }
-    }
-
-    pub fn err_item_too_long(self, field: &str) -> String {
-        match self {
-            Self::ZhHans => format!("{field} 里有超过 64 字符的项"),
-            Self::ZhHant => format!("{field} 裡有超過 64 字元的項"),
-            Self::En => format!("{field} contains an item longer than 64 characters"),
-            Self::Ja => format!("{field} に 64 文字を超える項目があります"),
-            Self::Pt => format!("{field} contém um item com mais de 64 caracteres"),
-            Self::Es => format!("{field} contiene un elemento de más de 64 caracteres"),
-        }
-    }
+    // ── 用量工具的参数报错 ────────────────────────────
 
     pub fn err_title_kw_too_long(self) -> &'static str {
         match self {
@@ -611,28 +404,6 @@ impl ChatLang {
             Self::Ja => "bucket と group_by は併用できません。推移は bucket、ランキングは group_by を使い、どちらか一方を外してください",
             Self::Pt => "bucket e group_by não podem ser combinados: use bucket para tendências, group_by para rankings — remova um deles",
             Self::Es => "bucket y group_by no se pueden combinar: usa bucket para tendencias y group_by para rankings — quita uno de los dos",
-        }
-    }
-
-    pub fn err_too_many_items(self, field: &str, max: usize) -> String {
-        match self {
-            Self::ZhHans => format!("{field} 最多 {max} 个"),
-            Self::ZhHant => format!("{field} 最多 {max} 個"),
-            Self::En => format!("{field} takes at most {max} items"),
-            Self::Ja => format!("{field} は {max} 個までです"),
-            Self::Pt => format!("{field} aceita no máximo {max} itens"),
-            Self::Es => format!("{field} admite como máximo {max} elementos"),
-        }
-    }
-
-    pub fn err_limit_range(self, max: usize) -> String {
-        match self {
-            Self::ZhHans => format!("limit 要在 1 到 {max} 之间"),
-            Self::ZhHant => format!("limit 要在 1 到 {max} 之間"),
-            Self::En => format!("limit must be between 1 and {max}"),
-            Self::Ja => format!("limit は 1 から {max} の間にしてください"),
-            Self::Pt => format!("limit deve estar entre 1 e {max}"),
-            Self::Es => format!("limit debe estar entre 1 y {max}"),
         }
     }
 }
@@ -658,29 +429,12 @@ mod tests {
             // 静态文案:非空即可
             for s in [
                 lang.timeline_empty(),
-                lang.err_from_after_to(),
-                lang.err_range_too_long(),
-                lang.err_from_in_future(),
-                lang.err_keywords_empty(),
                 lang.err_title_kw_too_long(),
                 lang.err_bucket_with_group(),
             ] {
                 assert!(!s.is_empty(), "{lang:?} 有空文案");
             }
-            // 七天星期全枚举(越界回退不 panic 由 weekday 内部保证,此处只走合法值)
-            for d in 1..=7 {
-                assert!(!lang.weekday(&d.to_string()).is_empty());
-            }
             // 插值类:参数必须真的出现在产物里
-            assert!(lang.args_format_err(&"boom").contains("boom"));
-            assert!(lang.args_invalid("bad-arg").contains("bad-arg"));
-            let unknown = lang.err_unknown_tool("nope", "a / b");
-            assert!(unknown.contains("nope") && unknown.contains("a / b"));
-            assert!(lang.err_need_range("query_stats").contains("query_stats"));
-            assert!(lang
-                .err_bad_date("date_from", "26-07")
-                .contains("date_from"));
-            assert!(lang.err_item_too_long("apps").contains("apps"));
             let h = lang.timeline_header_sampled(120, "2026-07-01", "2026-07-07", 40, 7);
             assert!(h.contains("120") && h.contains("40"), "{lang:?}: {h}");
             assert!(lang.timeline_header_all(9).contains('9'));
@@ -725,16 +479,6 @@ mod tests {
                 "{lang:?}: {fl}"
             );
             assert!(lang.count_suffix(3).contains('3'));
-            let many = lang.err_too_many_items("keywords", 3);
-            assert!(
-                many.contains("keywords") && many.contains('3'),
-                "{lang:?}: {many}"
-            );
-            assert!(lang.err_limit_range(20).contains("20"));
-            // fmt_secs 的三个量级形态
-            assert!(!lang.fmt_secs(59).is_empty());
-            assert!(!lang.fmt_secs(61 * 60).is_empty());
-            assert!(!lang.fmt_secs(3 * 3600 + 5 * 60).is_empty());
         }
     }
 

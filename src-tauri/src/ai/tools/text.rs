@@ -1,7 +1,8 @@
 //! 工具文字的读法：一句话一个键，6 种语言挨在一起。
 //!
 //! 每个工具的句子放在它旁边的 `lang/工具名.json`，读成一个结构体，一句话一个字段。
-//! 几个工具共用的句子放在 `lang/common.json`，见 [`COMMON`]。
+//! 几个工具共用的句子放在 `lang/common.json`，见 [`COMMON`]；时长、星期、参数报错
+//! 写成 `ChatLang` 的方法，也在这个文件里。
 
 use std::fmt::Display;
 use std::sync::LazyLock;
@@ -95,11 +96,121 @@ pub(super) struct Common {
     pub(super) param_limit: Text,
     /// 没列全时的最后一行：还有几个，怎么看更多。
     pub(super) more: Text,
+    /// 时长，有小时的。
+    duration_hours: Text,
+    /// 时长，不到一小时的。
+    duration_minutes: Text,
+    monday: Text,
+    tuesday: Text,
+    wednesday: Text,
+    thursday: Text,
+    friday: Text,
+    saturday: Text,
+    sunday: Text,
+    args_format_err: Text,
+    args_invalid: Text,
+    err_unknown_tool: Text,
+    err_need_range: Text,
+    err_bad_date: Text,
+    err_from_after_to: Text,
+    err_range_too_long: Text,
+    err_from_in_future: Text,
+    err_keywords_empty: Text,
+    err_item_too_long: Text,
+    err_too_many_items: Text,
+    err_limit_range: Text,
 }
 
 const COMMON_JSON: &str = include_str!("lang/common.json");
 
 pub(super) static COMMON: LazyLock<Common> = LazyLock::new(|| load(COMMON_JSON));
+
+/// 几个工具共用的句子，从 `lang/common.json` 读。
+impl ChatLang {
+    /// 时长写到分钟：1 小时 4 分钟、38 分钟。
+    pub(super) fn fmt_secs(self, secs: i64) -> String {
+        let (h, m) = (secs / 3600, (secs % 3600) / 60);
+        if h > 0 {
+            COMMON.duration_hours.fill(self, &[("h", &h), ("m", &m)])
+        } else {
+            COMMON.duration_minutes.fill(self, &[("m", &m)])
+        }
+    }
+
+    /// 星期几。`iso` 是 1 到 7，1 是星期一；别的值算星期日。
+    ///
+    /// 用量工具逐日的行和聊天的系统提示词都用：模型自己算星期几常出错。
+    pub(crate) fn weekday(self, iso: &str) -> &'static str {
+        let c = &*COMMON;
+        let day = match iso {
+            "1" => &c.monday,
+            "2" => &c.tuesday,
+            "3" => &c.wednesday,
+            "4" => &c.thursday,
+            "5" => &c.friday,
+            "6" => &c.saturday,
+            _ => &c.sunday,
+        };
+        day.get(self)
+    }
+
+    /// 参数读不懂，`e` 是读的时候报的错。
+    pub(super) fn args_format_err(self, e: &impl Display) -> String {
+        COMMON.args_format_err.fill(self, &[("e", e)])
+    }
+
+    /// 参数读懂了，但值不合法。
+    pub(super) fn args_invalid(self, msg: &str) -> String {
+        COMMON.args_invalid.fill(self, &[("msg", &msg)])
+    }
+
+    /// `known` 是能用的工具名，由登记处给。
+    pub(super) fn err_unknown_tool(self, other: &str, known: &str) -> String {
+        COMMON
+            .err_unknown_tool
+            .fill(self, &[("other", &other), ("known", &known)])
+    }
+
+    pub(super) fn err_need_range(self, tool: &str) -> String {
+        COMMON.err_need_range.fill(self, &[("tool", &tool)])
+    }
+
+    pub(super) fn err_bad_date(self, field: &str, val: &str) -> String {
+        COMMON
+            .err_bad_date
+            .fill(self, &[("field", &field), ("val", &val)])
+    }
+
+    pub(super) fn err_from_after_to(self) -> &'static str {
+        COMMON.err_from_after_to.get(self)
+    }
+
+    pub(super) fn err_range_too_long(self) -> &'static str {
+        COMMON.err_range_too_long.get(self)
+    }
+
+    pub(super) fn err_from_in_future(self) -> &'static str {
+        COMMON.err_from_in_future.get(self)
+    }
+
+    pub(super) fn err_keywords_empty(self) -> &'static str {
+        COMMON.err_keywords_empty.get(self)
+    }
+
+    pub(super) fn err_item_too_long(self, field: &str) -> String {
+        COMMON.err_item_too_long.fill(self, &[("field", &field)])
+    }
+
+    pub(super) fn err_too_many_items(self, field: &str, max: usize) -> String {
+        COMMON
+            .err_too_many_items
+            .fill(self, &[("field", &field), ("max", &max)])
+    }
+
+    pub(super) fn err_limit_range(self, max: usize) -> String {
+        COMMON.err_limit_range.fill(self, &[("max", &max)])
+    }
+}
 
 /// 检查每句话的 6 种语言用的占位符一样。每个 JSON 的测试都调它。
 #[cfg(test)]
@@ -207,5 +318,59 @@ mod tests {
             r#"{"more": {"zh-Hans": "还有 {rest} 个", "zh-Hant": "還有 {rest} 個",
                 "en": "{n} more", "ja": "{rest}", "pt": "{rest}", "es": "{rest}"}}"#,
         );
+    }
+
+    #[test]
+    fn durations_show_hours_only_when_there_are_some() {
+        let zh = ChatLang::ZhHans;
+        assert_eq!(zh.fmt_secs(59), "0 分钟");
+        assert_eq!(zh.fmt_secs(38 * 60), "38 分钟");
+        assert_eq!(zh.fmt_secs(64 * 60), "1 小时 4 分钟");
+        assert_eq!(ChatLang::En.fmt_secs(3 * 3600 + 5 * 60), "3 hr 5 min");
+        assert_eq!(ChatLang::Ja.fmt_secs(5 * 60), "5分");
+    }
+
+    #[test]
+    fn weekday_counts_from_monday_and_falls_back_to_sunday() {
+        let names: Vec<&str> = (1..=7)
+            .map(|d| ChatLang::ZhHans.weekday(&d.to_string()))
+            .collect();
+        assert_eq!(
+            names,
+            ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+        );
+        assert_eq!(ChatLang::En.weekday("3"), "Wednesday");
+        // 认不出的值不 panic
+        for bad in ["0", "8", "x"] {
+            assert_eq!(ChatLang::ZhHans.weekday(bad), "周日", "{bad}");
+        }
+    }
+
+    #[test]
+    fn errors_fill_their_arguments_in_every_language() {
+        for lang in LANGS {
+            for s in [
+                lang.err_from_after_to(),
+                lang.err_range_too_long(),
+                lang.err_from_in_future(),
+                lang.err_keywords_empty(),
+            ] {
+                assert!(!s.is_empty(), "{lang:?}");
+            }
+            assert!(lang.args_format_err(&"boom").contains("boom"));
+            assert!(lang.args_invalid("bad-arg").contains("bad-arg"));
+            let unknown = lang.err_unknown_tool("nope", "a / b");
+            assert!(unknown.contains("nope") && unknown.contains("a / b"));
+            assert!(lang.err_need_range("query_stats").contains("query_stats"));
+            let date = lang.err_bad_date("date_from", "26-07");
+            assert!(date.contains("date_from") && date.contains("26-07"));
+            assert!(lang.err_item_too_long("apps").contains("apps"));
+            let many = lang.err_too_many_items("keywords", 3);
+            assert!(
+                many.contains("keywords") && many.contains('3'),
+                "{lang:?}: {many}"
+            );
+            assert!(lang.err_limit_range(20).contains("20"));
+        }
     }
 }
