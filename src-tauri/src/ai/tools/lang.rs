@@ -671,14 +671,17 @@ impl ChatLang {
         }
     }
 
-    pub fn err_unknown_tool(self, other: &str) -> String {
+    /// `known` 是能用的工具名，由登记处给。
+    pub fn err_unknown_tool(self, other: &str, known: &str) -> String {
         match self {
-            Self::ZhHans => format!("未知工具 {other},只能用 search_text / query_stats / get_timeline"),
-            Self::ZhHant => format!("未知工具 {other},只能用 search_text / query_stats / get_timeline"),
-            Self::En => format!("Unknown tool {other}; only search_text / query_stats / get_timeline are available"),
-            Self::Ja => format!("不明なツール {other}。search_text / query_stats / get_timeline のみ使用できます"),
-            Self::Pt => format!("Ferramenta desconhecida {other}; apenas search_text / query_stats / get_timeline estão disponíveis"),
-            Self::Es => format!("Herramienta desconocida {other}; solo están disponibles search_text / query_stats / get_timeline"),
+            Self::ZhHans => format!("未知工具 {other},只能用 {known}"),
+            Self::ZhHant => format!("未知工具 {other},只能用 {known}"),
+            Self::En => format!("Unknown tool {other}; only {known} are available"),
+            Self::Ja => format!("不明なツール {other}。{known} のみ使用できます"),
+            Self::Pt => {
+                format!("Ferramenta desconhecida {other}; apenas {known} estão disponíveis")
+            }
+            Self::Es => format!("Herramienta desconocida {other}; solo están disponibles {known}"),
         }
     }
 
@@ -820,7 +823,8 @@ mod tests {
             // 插值类:参数必须真的出现在产物里
             assert!(lang.args_format_err(&"boom").contains("boom"));
             assert!(lang.args_invalid("bad-arg").contains("bad-arg"));
-            assert!(lang.err_unknown_tool("nope").contains("nope"));
+            let unknown = lang.err_unknown_tool("nope", "a / b");
+            assert!(unknown.contains("nope") && unknown.contains("a / b"));
             assert!(lang.err_need_range("query_stats").contains("query_stats"));
             assert!(lang
                 .err_bad_date("date_from", "26-07")

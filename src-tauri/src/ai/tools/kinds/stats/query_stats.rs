@@ -2,8 +2,16 @@
 
 use chrono::NaiveDate;
 use serde::Deserialize;
+use serde_json::{json, Value};
 
-use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolOutput, RESULT_CHAR_BUDGET};
+use crate::ai::model::ToolSpec;
+use crate::ai::tools::kinds::params::{
+    clean_names, date_schema, invalid, names_schema, parse_range, read_args, spec,
+};
+use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::{
+    like_pattern, truncate, ChatLang, ToolCtx, ToolError, ToolOutput, RESULT_CHAR_BUDGET,
+};
 use crate::error::Result;
 use crate::storage::{DbResult, SqliteResultExt};
 
@@ -64,6 +72,137 @@ pub enum Bucket {
     HourOfDay,
 }
 
+/// 模型传来的参数，检查之前。
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Args {
+    date_from: Option<String>,
+    date_to: Option<String>,
+    apps: Vec<String>,
+    categories: Vec<String>,
+    title_keyword: Option<String>,
+    group_by: Option<GroupBy>,
+    top_n: Option<usize>,
+    metric: Option<StatMetric>,
+    gap_minutes: Option<u32>,
+    bucket: Option<Bucket>,
+}
+
+/// 常规查询的日期跨度上限(一年);first_last 口径的宽限见 [`FIRST_LAST_MAX_DAYS`]。
+const RANGE_MAX_DAYS: i64 = 366;
+/// first_last(MIN/MAX 聚合)的跨度上限:名义上限,只防荒谬输入。
+const FIRST_LAST_MAX_DAYS: i64 = 36600;
+/// 分组统计 top-N 上限
+const TOP_N_MAX: usize = 10;
+/// 逐日分桶的最大跨度:超过则自动按周汇总——60 天 ≈ 60 行是结果预算内
+/// 能完整放下、模型也读得过来的上限。
+const BUCKET_DAY_MAX_DAYS: i64 = 60;
+/// 会话计数的间隔默认值与夹紧区间(分钟)。
+const GAP_DEFAULT_MIN: u32 = 30;
+const GAP_MIN: u32 = 5;
+const GAP_MAX: u32 = 240;
+
+impl Tool for StatsQuery {
+    const NAME: &'static str = "query_stats";
+
+    fn spec() -> ToolSpec {
+        spec(
+            Self::NAME,
+            "统计应用/内容的使用时长或使用次数。可按应用名过滤(apps)、按分类名过滤(categories)、按窗口标题关键词过滤(title_keyword,如视频名),可分组排行(group_by,含按用户分类的工作/娱乐口径),可分桶看趋势(bucket)。问'用了多久/花了多少时间'用默认(metric=duration);问'启动/打开/玩了几次'用 metric=session_count;问'第一次/最近一次用X是什么时候'用 metric=first_last(此口径 date_from 可给很早的日期,如 2020-01-01)。问某类活动(如游戏)的趋势用 categories+bucket,不要自己列举应用名——用户归类过的应用你未必认识。",
+            json!({"type": "object", "properties": {
+                "date_from": date_schema("起始日期"),
+                "date_to": date_schema("结束日期"),
+                "apps": names_schema("应用名过滤,可选", 5),
+                "categories": names_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", 5),
+                "title_keyword": {"type": "string", "maxLength": 64, "description": "窗口标题关键词过滤,可选"},
+                "group_by": {"type": "string", "enum": ["none", "app", "title", "category"], "description": "分组维度,默认 none;category=按用户设置的应用分类(工作/娱乐/游戏等)分组"},
+                "top_n": {"type": "integer", "minimum": 1, "maximum": 10, "description": "分组时取前 N,默认 5"},
+                "metric": {"type": "string", "enum": ["duration", "session_count", "first_last"], "description": "统计口径:duration=累计时长(默认);session_count=使用会话次数;first_last=最早与最近一次记录的时间(忽略分组/分桶)"},
+                "gap_minutes": {"type": "integer", "minimum": 5, "maximum": 240, "description": "会话计数用:相邻活动间隔超过这么多分钟算一段新会话,默认 30。仅用户明确说'离开X分钟以上算一次'时才填"},
+                "bucket": {"type": "string", "enum": ["none", "day", "week", "hour_of_day"], "description": "趋势分桶,与 group_by 互斥:day=逐日(最多 60 天,更长自动按周);week=逐周(行首日期为周一);hour_of_day=按一天 0-23 时聚合看作息分布"}
+            }, "required": ["date_from", "date_to"]}),
+        )
+    }
+
+    fn parse(
+        args: &Value,
+        today: NaiveDate,
+        lang: ChatLang,
+    ) -> std::result::Result<Self, ToolError> {
+        let args: Args = read_args(args, lang)?;
+        check(&args, today, lang).map_err(|msg| invalid(&msg, lang))
+    }
+
+    async fn execute(
+        &self,
+        ctx: &ToolCtx,
+        _next_citation: usize,
+        lang: ChatLang,
+    ) -> Result<ToolOutput> {
+        run(ctx, self, lang).await
+    }
+}
+
+/// 检查参数的值，补上默认值。不合法时返回原因。
+fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<StatsQuery, String> {
+    let metric = args.metric.unwrap_or(StatMetric::Duration);
+    // first_last 是 MIN/MAX 聚合,大范围也便宜——豁免常规跨度上限,
+    // 否则"我第一次用 X 是什么时候"这类必须给多年范围的问题会被拒
+    let max_days = if metric == StatMetric::FirstLast {
+        FIRST_LAST_MAX_DAYS
+    } else {
+        RANGE_MAX_DAYS
+    };
+    let range = parse_range(
+        args.date_from.as_deref(),
+        args.date_to.as_deref(),
+        today,
+        max_days,
+        lang,
+    )?
+    .ok_or_else(|| lang.err_need_range(StatsQuery::NAME))?;
+    let apps = clean_names(&args.apps, 5, "apps", lang)?;
+    let categories = clean_names(&args.categories, 5, "categories", lang)?;
+    let title_keyword = match args.title_keyword.as_deref().map(str::trim) {
+        Some("") | None => None,
+        Some(t) if t.chars().count() <= 64 => Some(t.to_string()),
+        Some(_) => return Err(lang.err_title_kw_too_long().into()),
+    };
+    let group_by = args.group_by.unwrap_or(GroupBy::None);
+    let mut bucket = args.bucket.unwrap_or(Bucket::None);
+    // 分桶(趋势)与分组(排行)是两种输出形态,叠加会变成矩阵、吃穿结果预算
+    if bucket != Bucket::None && group_by != GroupBy::None {
+        return Err(lang.err_bucket_with_group().into());
+    }
+    let mut bucket_auto_week = false;
+    if bucket == Bucket::Day && (range.1 - range.0).num_days() > BUCKET_DAY_MAX_DAYS {
+        bucket = Bucket::Week;
+        bucket_auto_week = true;
+    }
+    // 分类分组的组数天然少(内置+自定义十几个),默认 top-5 会截掉小类
+    // (实测漏了"其他/设计")——未显式给 top_n 时放宽到上限
+    let top_n_default = if group_by == GroupBy::Category {
+        TOP_N_MAX
+    } else {
+        5
+    };
+    Ok(StatsQuery {
+        range,
+        apps,
+        title_keyword,
+        categories,
+        group_by,
+        top_n: args.top_n.unwrap_or(top_n_default).clamp(1, TOP_N_MAX),
+        metric,
+        gap_minutes: args
+            .gap_minutes
+            .unwrap_or(GAP_DEFAULT_MIN)
+            .clamp(GAP_MIN, GAP_MAX),
+        bucket,
+        bucket_auto_week,
+    })
+}
+
 /// 统计查询的基础 FROM 段(别名 a,与既有口径一致:裸活动表、不排 hidden 组)。
 const STATS_FROM: &str = "FROM activities a";
 /// FROM clause for grouping by category: activity → group → category, two joins.
@@ -86,11 +225,7 @@ const STATS_FROM_CATEGORY: &str = "FROM activities a
      LEFT JOIN categories c
        ON c.id = COALESCE(NULLIF(g.category_id, 'none'), 'other') AND c.deleted_at IS NULL";
 
-pub(in crate::ai::tools) async fn run(
-    ctx: &ToolCtx,
-    q: &StatsQuery,
-    lang: ChatLang,
-) -> Result<ToolOutput> {
+async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput> {
     let (from, to) = (q.range.0.to_string(), q.range.1.to_string());
     let apps: Vec<String> = q.apps.iter().map(|a| like_pattern(a)).collect();
     let title_like = q.title_keyword.as_deref().map(like_pattern);
@@ -544,6 +679,201 @@ fn count_sessions(rows: &[(String, String)], gap_secs: i64) -> usize {
 mod tests {
     use super::*;
     use crate::ai::tools::test_util::{ctx_with, day};
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
+    }
+
+    /// 解析 query_stats 的参数；不合法时返回给模型看的原因。
+    fn parse_args(args: Value) -> std::result::Result<StatsQuery, String> {
+        StatsQuery::parse(&args, today(), ChatLang::ZhHans).map_err(|e| e.0)
+    }
+
+    #[test]
+    fn parse_needs_a_range() {
+        let e = parse_args(json!({"date_from": "2026-07-01"})).unwrap_err();
+        assert!(e.contains("query_stats"), "{e}");
+    }
+
+    #[test]
+    fn parse_rejects_bad_ranges() {
+        let e = parse_args(json!({"date_from": "2026-07-10", "date_to": "2026-07-01"}));
+        assert!(e.unwrap_err().contains("晚于"));
+        let e = parse_args(json!({"date_from": "2026-08-01", "date_to": "2026-08-02"}));
+        assert!(e.unwrap_err().contains("未来"));
+        let e = parse_args(json!({"date_from": "2020-01-01", "date_to": "2026-07-01"}));
+        assert!(e.unwrap_err().contains("366"));
+    }
+
+    #[test]
+    fn parse_first_last_allows_ranges_over_a_year() {
+        // 同样的多年范围：duration 被拒(上一个测试)，first_last 放行
+        let q = parse_args(json!({
+            "date_from": "2020-01-01", "date_to": "2026-07-01", "metric": "first_last"
+        }))
+        .unwrap();
+        assert_eq!(q.metric, StatMetric::FirstLast);
+    }
+
+    #[test]
+    fn parse_fills_metric_and_gap_defaults_and_clamps_gap() {
+        let q = parse_args(json!({"date_from": "2026-07-01", "date_to": "2026-07-05"})).unwrap();
+        assert_eq!(q.metric, StatMetric::Duration);
+        assert_eq!(q.gap_minutes, GAP_DEFAULT_MIN);
+        assert_eq!(q.group_by, GroupBy::None);
+        assert_eq!(q.bucket, Bucket::None);
+        assert_eq!(q.top_n, 5);
+
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05",
+            "metric": "session_count", "gap_minutes": 9999
+        }))
+        .unwrap();
+        assert_eq!(q.metric, StatMetric::SessionCount);
+        assert_eq!(q.gap_minutes, GAP_MAX);
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "gap_minutes": 1
+        }))
+        .unwrap();
+        assert_eq!(q.gap_minutes, GAP_MIN);
+    }
+
+    #[test]
+    fn parse_clamps_top_n() {
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05",
+            "group_by": "app", "top_n": 9999
+        }))
+        .unwrap();
+        assert_eq!(q.top_n, TOP_N_MAX);
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05",
+            "group_by": "app", "top_n": 0
+        }))
+        .unwrap();
+        assert_eq!(q.top_n, 1);
+    }
+
+    #[test]
+    fn parse_category_group_defaults_to_max_top_n() {
+        // 分类总数少,未显式给 top_n 时放宽到上限(默认 5 实测截掉了小分类)
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "group_by": "category"
+        }))
+        .unwrap();
+        assert_eq!(q.top_n, TOP_N_MAX);
+        // 显式给的仍然尊重
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05",
+            "group_by": "category", "top_n": 3
+        }))
+        .unwrap();
+        assert_eq!(q.top_n, 3);
+    }
+
+    #[test]
+    fn parse_rejects_bucket_with_group() {
+        let e = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05",
+            "group_by": "app", "bucket": "day"
+        }))
+        .unwrap_err();
+        assert!(e.contains("不能同时使用"), "{e}");
+    }
+
+    #[test]
+    fn parse_turns_a_long_day_bucket_into_weeks() {
+        // 90 天的逐日请求 → 自动改逐周,并带 auto 标志(结果头部要向模型说明)
+        let q = parse_args(json!({
+            "date_from": "2026-04-01", "date_to": "2026-06-30", "bucket": "day"
+        }))
+        .unwrap();
+        assert_eq!(q.bucket, Bucket::Week);
+        assert!(q.bucket_auto_week);
+        // 60 天以内保持逐日
+        let q = parse_args(json!({
+            "date_from": "2026-06-01", "date_to": "2026-07-01", "bucket": "day"
+        }))
+        .unwrap();
+        assert_eq!(q.bucket, Bucket::Day);
+        assert!(!q.bucket_auto_week);
+    }
+
+    #[test]
+    fn parse_cleans_apps_and_categories_and_caps_them_at_five() {
+        // 先取前 5 个再丢空的：[" A ","","B","C","D"] 清洗后剩 4 个，E、F 被截掉
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05",
+            "apps": [" A ", "", "B", "C", "D", "E", "F"],
+            "categories": ["  游戏 ", "", "工作"]
+        }))
+        .unwrap();
+        assert_eq!(q.apps, ["A", "B", "C", "D"]);
+        assert_eq!(q.categories, ["游戏", "工作"]);
+    }
+
+    #[test]
+    fn parse_names_the_field_whose_item_is_too_long() {
+        let long = "x".repeat(65);
+        let e = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "apps": [long.clone()]
+        }))
+        .unwrap_err();
+        assert!(e.contains("apps"), "{e}");
+        let e = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "categories": [long]
+        }))
+        .unwrap_err();
+        assert!(e.contains("categories"), "{e}");
+    }
+
+    #[test]
+    fn parse_trims_title_keyword_and_drops_a_blank_one() {
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "title_keyword": "  rust  "
+        }))
+        .unwrap();
+        assert_eq!(q.title_keyword.as_deref(), Some("rust"));
+        let q = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "title_keyword": "   "
+        }))
+        .unwrap();
+        assert_eq!(q.title_keyword, None);
+        // 按字符数算：64 个可以，65 个不合法
+        let ok = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "title_keyword": "字".repeat(64)
+        }));
+        assert!(ok.is_ok());
+        let e = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "title_keyword": "字".repeat(65)
+        }))
+        .unwrap_err();
+        assert!(e.contains("title_keyword"), "{e}");
+    }
+
+    #[test]
+    fn parse_rejects_an_unknown_metric_as_a_format_error() {
+        let e = parse_args(json!({
+            "date_from": "2026-07-01", "date_to": "2026-07-05", "metric": "speed"
+        }))
+        .unwrap_err();
+        assert!(e.starts_with("参数格式错误"), "{e}");
+    }
+
+    /// 本机的 grammar 从同一份定义生成，长度和条数的限制要写在定义里。
+    #[test]
+    fn spec_carries_the_limits() {
+        let spec = StatsQuery::spec();
+        assert_eq!(spec.name, "query_stats");
+        assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
+        let props = &spec.parameters["properties"];
+        assert_eq!(props["apps"]["maxItems"], 5);
+        assert_eq!(props["categories"]["maxItems"], 5);
+        assert_eq!(props["title_keyword"]["maxLength"], 64);
+        assert_eq!(props["top_n"]["maximum"], TOP_N_MAX);
+        assert_eq!(props["gap_minutes"]["minimum"], GAP_MIN);
+        assert_eq!(props["gap_minutes"]["maximum"], GAP_MAX);
+    }
 
     #[test]
     fn count_sessions_gap_split() {

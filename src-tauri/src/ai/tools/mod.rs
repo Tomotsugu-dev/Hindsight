@@ -12,8 +12,6 @@
 
 mod kinds;
 mod lang;
-mod query;
-mod spec;
 #[cfg(test)]
 mod test_util;
 
@@ -21,10 +19,8 @@ use chrono::NaiveDate;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
-use self::kinds::{read::timeline, search::text, stats::query_stats};
+pub use self::kinds::Query;
 pub use self::lang::ChatLang;
-pub use self::query::Query;
-use self::query::RawParams;
 use crate::ai::model::{ToolCall, ToolSpec};
 use crate::error::Result;
 use crate::storage::{Connection, SqliteResultExt};
@@ -57,20 +53,17 @@ impl Tools {
 
     /// 给模型看的工具列表。
     pub fn specs() -> Vec<ToolSpec> {
-        spec::specs()
+        kinds::specs()
     }
 
     /// 检查模型发来的调用：参数读不读得懂，值合不合法。
     pub fn validate(&self, call: &ToolCall) -> std::result::Result<Query, ToolError> {
-        let raw: RawParams = serde_json::from_value(call.arguments.clone())
-            .map_err(|e| ToolError(self.lang.args_format_err(&e)))?;
-        query::validate(&call.name, &raw, self.today, self.lang)
-            .map_err(|msg| ToolError(self.lang.args_invalid(&msg)))
+        kinds::parse(call, self.today, self.lang)
     }
 
     /// 执行检查过的调用。引用编号从 `next_citation` 开始。
     pub async fn execute(&self, query: &Query, next_citation: usize) -> Result<ToolOutput> {
-        execute(&self.ctx, query, next_citation, self.lang).await
+        query.execute(&self.ctx, next_citation, self.lang).await
     }
 }
 
@@ -108,20 +101,6 @@ impl ToolCtx {
         let main = Connection::open_with_flags(crate::storage::db_path()?, flags).await?;
         let mem = Connection::open_with_flags(crate::memory::memory_db_path()?, flags).await?;
         Ok(Self { main, mem })
-    }
-}
-
-/// 第③道墙:固定查询执行。`next_citation` 是引用编号的起点(engine 维护全局序)。
-async fn execute(
-    ctx: &ToolCtx,
-    call: &Query,
-    next_citation: usize,
-    lang: ChatLang,
-) -> Result<ToolOutput> {
-    match call {
-        Query::SearchText(q) => text::run(ctx, q, next_citation, lang).await,
-        Query::QueryStats(q) => query_stats::run(ctx, q, lang).await,
-        Query::GetTimeline(q) => timeline::run(ctx, q, next_citation, lang).await,
     }
 }
 
@@ -219,6 +198,11 @@ mod tests {
     use super::test_util::{ctx_with, day};
     use super::*;
 
+    /// 用中文执行一次检查过的调用，引用从 1 编号。
+    async fn run(ctx: &ToolCtx, q: Query) -> ToolOutput {
+        q.execute(ctx, 1, ChatLang::ZhHans).await.unwrap()
+    }
+
     #[test]
     fn fts_injection_neutralized() {
         // 模型想夹带 FTS 语法/引号 → 全部变成字面量
@@ -241,14 +225,7 @@ mod tests {
              ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline(TimelineQuery { range: day() }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let out = run(&ctx, Query::GetTimeline(TimelineQuery { range: day() })).await;
         assert!(out.content.contains("共 1 条活动记录"), "{}", out.content);
         assert!(out.content.contains("均无屏幕文字索引"), "{}", out.content);
     }
@@ -264,17 +241,11 @@ mod tests {
               'chrome','keychron K3 发货通知','shots/a.jpg');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::SearchText(SearchQuery {
-                keywords: vec!["keychron".into()],
-                range: None,
-            }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = Query::SearchText(SearchQuery {
+            keywords: vec!["keychron".into()],
+            range: None,
+        });
+        let out = run(&ctx, q).await;
         assert!(out.content.contains("窗口标题命中 1 条"), "{}", out.content);
         assert!(out.content.contains("均无屏幕文字索引"), "{}", out.content);
         assert!(!out.content.contains("没有命中"), "{}", out.content);
@@ -295,14 +266,7 @@ mod tests {
              ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline(TimelineQuery { range: day() }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let out = run(&ctx, Query::GetTimeline(TimelineQuery { range: day() })).await;
         assert!(out.content.contains("3 帧截图待识别"), "{}", out.content);
         assert!(!out.content.contains("未开启"), "{}", out.content);
     }
@@ -324,8 +288,7 @@ mod tests {
             NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
             NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
         );
-        let q = Query::GetTimeline(TimelineQuery { range });
-        let out = execute(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
+        let out = run(&ctx, Query::GetTimeline(TimelineQuery { range })).await;
         assert!(
             out.content.contains("2 个活动日中 1 日有屏幕文字索引"),
             "{}",
@@ -345,17 +308,11 @@ mod tests {
              ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','notes');",
         )
         .await;
-        let out = execute(
-            &ctx,
-            &Query::SearchText(SearchQuery {
-                keywords: vec!["keychron".into()],
-                range: Some(day()),
-            }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
+        let q = Query::SearchText(SearchQuery {
+            keywords: vec!["keychron".into()],
+            range: Some(day()),
+        });
+        let out = run(&ctx, q).await;
         assert!(out.content.contains("没有命中"), "{}", out.content);
         assert!(
             out.content.contains("1 个活动日中 1 日有屏幕文字索引"),
@@ -401,14 +358,11 @@ mod tests {
             ToolCtx::open_readonly().await.unwrap()
         };
 
-        let out = execute(
+        let out = run(
             &ctx,
-            &Query::GetTimeline(TimelineQuery { range: (from, to) }),
-            1,
-            ChatLang::ZhHans,
+            Query::GetTimeline(TimelineQuery { range: (from, to) }),
         )
-        .await
-        .unwrap();
+        .await;
         let with_frame = out
             .citations
             .iter()
@@ -423,17 +377,11 @@ mod tests {
         );
 
         if let Ok(kw) = std::env::var("CHAT_KW") {
-            let out = execute(
-                &ctx,
-                &Query::SearchText(SearchQuery {
-                    keywords: vec![kw.clone()],
-                    range: Some((from, to)),
-                }),
-                1,
-                ChatLang::ZhHans,
-            )
-            .await
-            .unwrap();
+            let q = Query::SearchText(SearchQuery {
+                keywords: vec![kw.clone()],
+                range: Some((from, to)),
+            });
+            let out = run(&ctx, q).await;
             println!("\n── search_text(\"{kw}\", {from} ~ {to}) ──────");
             println!("{}", out.content);
             println!("(引用 {} 条)", out.citations.len());

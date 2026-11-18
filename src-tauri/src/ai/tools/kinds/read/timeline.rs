@@ -2,9 +2,14 @@
 
 use chrono::NaiveDate;
 use rusqlite::params;
+use serde::Deserialize;
+use serde_json::{json, Value};
 
+use crate::ai::model::ToolSpec;
+use crate::ai::tools::kinds::params::{date_schema, invalid, parse_range, read_args, spec};
+use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::{
-    coverage_line, truncate, ChatLang, Citation, ToolCtx, ToolOutput, ACTIVITY_WHERE,
+    coverage_line, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
     RESULT_CHAR_BUDGET,
 };
 use crate::error::Result;
@@ -16,12 +21,73 @@ pub struct TimelineQuery {
     pub range: (NaiveDate, NaiveDate),
 }
 
+/// 模型传来的参数，检查之前。
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Args {
+    date_from: Option<String>,
+    date_to: Option<String>,
+}
+
+/// 日期跨度上限：一年。
+const RANGE_MAX_DAYS: i64 = 366;
+
+impl Tool for TimelineQuery {
+    const NAME: &'static str = "get_timeline";
+
+    fn spec() -> ToolSpec {
+        spec(
+            Self::NAME,
+            "按小时抽样列出某时段的屏幕活动会话(时间、应用、标题),回答'某天/某下午在干什么'。返回头部标注总条数与覆盖范围,正文是抽样代表,不是全量。",
+            json!({"type": "object", "properties": {
+                "date_from": date_schema("起始日期"),
+                "date_to": date_schema("结束日期")
+            }, "required": ["date_from", "date_to"]}),
+        )
+    }
+
+    fn parse(
+        args: &Value,
+        today: NaiveDate,
+        lang: ChatLang,
+    ) -> std::result::Result<Self, ToolError> {
+        let args: Args = read_args(args, lang)?;
+        check(&args, today, lang).map_err(|msg| invalid(&msg, lang))
+    }
+
+    async fn execute(
+        &self,
+        ctx: &ToolCtx,
+        next_citation: usize,
+        lang: ChatLang,
+    ) -> Result<ToolOutput> {
+        run(ctx, self, next_citation, lang).await
+    }
+}
+
+/// 检查参数的值。不合法时返回原因。
+fn check(
+    args: &Args,
+    today: NaiveDate,
+    lang: ChatLang,
+) -> std::result::Result<TimelineQuery, String> {
+    let range = parse_range(
+        args.date_from.as_deref(),
+        args.date_to.as_deref(),
+        today,
+        RANGE_MAX_DAYS,
+        lang,
+    )?
+    .ok_or_else(|| lang.err_need_range(TimelineQuery::NAME))?;
+    Ok(TimelineQuery { range })
+}
+
 /// 时间线会话数上限
 const TIMELINE_LIMIT: usize = 50;
 /// 每个小时桶最多取几条代表活动(按时长选)。
 const TIMELINE_PER_HOUR: i64 = 3;
 
-pub(in crate::ai::tools) async fn run(
+async fn run(
     ctx: &ToolCtx,
     q: &TimelineQuery,
     next_citation: usize,
@@ -135,6 +201,41 @@ pub(in crate::ai::tools) async fn run(
 mod tests {
     use super::*;
     use crate::ai::tools::test_util::{ctx_with, day};
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
+    }
+
+    #[test]
+    fn parse_reads_the_range() {
+        let args = json!({"date_from": "2026-07-01", "date_to": "2026-07-05"});
+        let q = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(q.range.0, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
+        assert_eq!(q.range.1, today());
+    }
+
+    #[test]
+    fn parse_needs_a_range() {
+        // 只给一头等于没给；时间线必须有范围
+        let args = json!({"date_from": "2026-07-01"});
+        let e = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap_err();
+        assert!(e.0.contains("get_timeline"), "{}", e.0);
+    }
+
+    #[test]
+    fn parse_rejects_a_range_over_a_year() {
+        let args = json!({"date_from": "2020-01-01", "date_to": "2026-07-01"});
+        let e = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap_err();
+        assert!(e.0.contains("366"), "{}", e.0);
+    }
+
+    #[test]
+    fn spec_requires_both_dates() {
+        let spec = TimelineQuery::spec();
+        assert_eq!(spec.name, "get_timeline");
+        assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
+        assert_eq!(spec.parameters["properties"]["date_from"]["maxLength"], 10);
+    }
 
     /// 造一天 10 个小时 × 每小时 20 条活动的 INSERT 串(主库)。
     fn dense_day_sql() -> &'static str {

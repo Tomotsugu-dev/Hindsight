@@ -2,10 +2,17 @@
 
 use chrono::NaiveDate;
 use rusqlite::params;
+use serde::Deserialize;
+use serde_json::{json, Value};
 
+use crate::ai::model::ToolSpec;
+use crate::ai::tools::kinds::params::{
+    clean_keywords, date_schema, invalid, names_schema, parse_range, read_args, spec,
+};
+use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::{
-    coverage_line, fts_literal, like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolOutput,
-    ACTIVITY_WHERE, RESULT_CHAR_BUDGET,
+    coverage_line, fts_literal, like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError,
+    ToolOutput, ACTIVITY_WHERE, RESULT_CHAR_BUDGET,
 };
 use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
@@ -18,12 +25,75 @@ pub struct SearchQuery {
     pub range: Option<(NaiveDate, NaiveDate)>,
 }
 
+/// 模型传来的参数，检查之前。
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Args {
+    keywords: Vec<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+}
+
+/// 日期跨度上限：一年。
+const RANGE_MAX_DAYS: i64 = 366;
+
+impl Tool for SearchQuery {
+    const NAME: &'static str = "search_text";
+
+    fn spec() -> ToolSpec {
+        spec(
+            Self::NAME,
+            "全文搜索屏幕上出现过的文字(聊天/网页/代码/订单等,逐字索引)。返回头部标注总命中数,正文为相关度最高的若干条。没命中时换同义词、英文或更短的词重试。",
+            json!({"type": "object", "properties": {
+                "keywords": names_schema("1-3 个关键词,逐字匹配", 3),
+                "date_from": date_schema("起始日期,可选"),
+                "date_to": date_schema("结束日期,可选")
+            }, "required": ["keywords"]}),
+        )
+    }
+
+    fn parse(
+        args: &Value,
+        today: NaiveDate,
+        lang: ChatLang,
+    ) -> std::result::Result<Self, ToolError> {
+        let args: Args = read_args(args, lang)?;
+        check(&args, today, lang).map_err(|msg| invalid(&msg, lang))
+    }
+
+    async fn execute(
+        &self,
+        ctx: &ToolCtx,
+        next_citation: usize,
+        lang: ChatLang,
+    ) -> Result<ToolOutput> {
+        run(ctx, self, next_citation, lang).await
+    }
+}
+
+/// 检查参数的值。不合法时返回原因。
+fn check(
+    args: &Args,
+    today: NaiveDate,
+    lang: ChatLang,
+) -> std::result::Result<SearchQuery, String> {
+    let keywords = clean_keywords(&args.keywords, lang)?;
+    let range = parse_range(
+        args.date_from.as_deref(),
+        args.date_to.as_deref(),
+        today,
+        RANGE_MAX_DAYS,
+        lang,
+    )?;
+    Ok(SearchQuery { keywords, range })
+}
+
 /// 搜索命中数上限(服务端硬夹紧,模型无法调大)
 const SEARCH_LIMIT: usize = 8;
 /// 搜索的窗口标题层命中显示上限(屏幕文字索引之外的兜底证据层)
 const TITLE_LIMIT: usize = 8;
 
-pub(in crate::ai::tools) async fn run(
+async fn run(
     ctx: &ToolCtx,
     q: &SearchQuery,
     next_citation: usize,
@@ -225,6 +295,59 @@ pub(in crate::ai::tools) async fn run(
 mod tests {
     use super::*;
     use crate::ai::tools::test_util::{ctx_with, day};
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
+    }
+
+    #[test]
+    fn parse_cleans_keywords_and_reads_the_range() {
+        let q = SearchQuery::parse(
+            &json!({"keywords": ["  rust  ", "go"], "date_from": "2026-07-01", "date_to": "2026-07-02"}),
+            today(),
+            ChatLang::ZhHans,
+        )
+        .unwrap();
+        assert_eq!(q.keywords, ["rust", "go"]);
+        assert_eq!(
+            q.range.unwrap().1,
+            NaiveDate::from_ymd_opt(2026, 7, 2).unwrap()
+        );
+    }
+
+    #[test]
+    fn parse_rejects_blank_keywords_as_invalid() {
+        let e =
+            SearchQuery::parse(&json!({"keywords": [" "]}), today(), ChatLang::ZhHans).unwrap_err();
+        assert!(
+            e.0.starts_with("参数校验未通过") && e.0.contains("不能为空"),
+            "{}",
+            e.0
+        );
+    }
+
+    #[test]
+    fn parse_names_keywords_when_one_is_too_long() {
+        let args = json!({"keywords": ["x".repeat(65)]});
+        let e = SearchQuery::parse(&args, today(), ChatLang::ZhHans).unwrap_err();
+        assert!(e.0.contains("keywords") && e.0.contains("64"), "{}", e.0);
+    }
+
+    #[test]
+    fn parse_without_a_range_searches_all_dates() {
+        let args = json!({"keywords": ["rust"], "date_from": "2026-07-01"});
+        let q = SearchQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(q.range, None);
+    }
+
+    /// 本机的 grammar 从同一份说明生成，条数和长度的限制要写在说明里。
+    #[test]
+    fn spec_carries_the_limits() {
+        let props = SearchQuery::spec().parameters["properties"].clone();
+        assert_eq!(props["keywords"]["maxItems"], 3);
+        assert_eq!(props["keywords"]["items"]["maxLength"], 64);
+        assert_eq!(props["date_from"]["maxLength"], 10);
+    }
 
     /// 跨层去重:标题命中落在已返回的屏幕文字会话时间段内 → 剔除,段外保留。
     #[tokio::test]
