@@ -14,13 +14,16 @@ mod kinds;
 mod lang;
 #[cfg(test)]
 mod test_util;
+mod visible;
 
 use chrono::NaiveDate;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use tokio::sync::OnceCell;
 
 pub use self::kinds::Query;
 pub use self::lang::ChatLang;
+use self::visible::Visibility;
 use crate::ai::model::{ToolCall, ToolSpec};
 use crate::error::Result;
 use crate::storage::{Connection, SqliteResultExt};
@@ -99,6 +102,8 @@ pub struct ToolOutput {
 struct ToolCtx {
     main: Connection,
     mem: Connection,
+    /// 记忆库里哪些能给 AI 看。第一次用时从主库读。
+    visible: OnceCell<Visibility>,
 }
 
 impl ToolCtx {
@@ -108,7 +113,20 @@ impl ToolCtx {
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let main = Connection::open_with_flags(crate::storage::db_path()?, flags).await?;
         let mem = Connection::open_with_flags(crate::memory::memory_db_path()?, flags).await?;
-        Ok(Self { main, mem })
+        Ok(Self {
+            main,
+            mem,
+            visible: OnceCell::new(),
+        })
+    }
+
+    /// 记忆库里哪些能给 AI 看。一个问题里只从主库读一次。
+    ///
+    /// 读失败时，用到它的工具执行失败，不会给出没筛过的数据。
+    async fn visible(&self) -> Result<&Visibility> {
+        self.visible
+            .get_or_try_init(|| Visibility::load(&self.main))
+            .await
     }
 }
 
@@ -125,14 +143,6 @@ impl ToolCtx {
 const ACTIVITY_WHERE: &str = "WHERE a.local_date BETWEEN ?1 AND ?2
        AND g.category_id IS NOT 'hidden'
        AND a.excluded = 0";
-
-/// 主库里 AI 能看到的活动。配 [`from_stats_category_sql`] 用，它给出别名 `a` 和 `c`。
-///
-/// 跟统计页一样：「不计入统计」分类和已忽略的窗口不算。「隐私」分类本来不记录，
-/// 但删除失败时旧数据会留在库里，所以也去掉。
-///
-/// [`from_stats_category_sql`]: crate::repo::sql::from_stats_category_sql
-const MAIN_VISIBLE: &str = "c.id IS NOT 'hidden' AND c.id IS NOT 'private' AND a.excluded = 0";
 
 /// 覆盖披露:范围内活动日数(主库)、其中有屏幕文字索引的日数与待识别帧数(记忆库)。
 /// 拼在 timeline/search 结果最前——"没搜到"究竟是"屏幕上没出现过"还是"索引不全",
@@ -396,6 +406,7 @@ mod tests {
             ToolCtx {
                 main,
                 mem: empty.mem,
+                visible: OnceCell::new(),
             }
         } else {
             ToolCtx::open_readonly().await.unwrap()

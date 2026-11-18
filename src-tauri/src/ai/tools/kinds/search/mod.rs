@@ -1,8 +1,9 @@
 //! 找：按关键词找 X 出现在哪。
 //!
-//! 两个搜索工具的参数一样，都是 [`SearchParams`]。
+//! 两个搜索工具的参数一样，都是 [`SearchParams`]；结果都是一个窗口一行，由 [`write_list`] 写。
 
 pub(in crate::ai::tools) mod activity;
+pub(in crate::ai::tools) mod ocr;
 pub(in crate::ai::tools) mod text;
 
 use chrono::NaiveDate;
@@ -10,7 +11,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::params::{clean_names, date_schema, invalid, names_schema, parse_range, read_args};
-use crate::ai::tools::{ChatLang, ToolError};
+use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
 /// 关键词最多几个。
 const KEYWORDS_MAX: usize = 3;
@@ -106,6 +107,70 @@ fn names(raw: &[String], max: usize, field: &str, lang: ChatLang) -> Result<Vec<
         return Err(lang.err_too_many_items(field, max));
     }
     Ok(out)
+}
+
+/// 列表里的一个窗口：一行字和它的证据。
+struct Row {
+    /// 编号后面的部分。
+    line: String,
+    /// 编号由 [`write_list`] 填。
+    citation: Citation,
+}
+
+/// 写成给模型看的文字：`head`，列表前的一行，一个窗口一行，没列全时再写一行。
+///
+/// `count` 是全部命中的窗口数，`rows` 是要列的。编号从 `next_citation` 开始。
+/// 文字超过 `max_chars` 时少列几个，不截断某一行。
+fn write_list(
+    head: Vec<String>,
+    list_head: impl Fn(usize) -> String,
+    rows: Vec<Row>,
+    count: usize,
+    next_citation: usize,
+    max_chars: usize,
+    lang: ChatLang,
+) -> ToolOutput {
+    // 给列表前后的两行留位置。按最大的数算，实际写出来只会更短
+    let reserved = [list_head(rows.len()), lang.search_more(count)];
+    let mut used: usize = head
+        .iter()
+        .chain(&reserved)
+        .map(|s| s.chars().count() + 1)
+        .sum();
+    let mut lines = Vec::new();
+    let mut citations = Vec::new();
+    for Row { line, mut citation } in rows {
+        let index = next_citation + citations.len();
+        let line = format!("[{index}] {line}");
+        used += line.chars().count() + 1;
+        if used > max_chars {
+            break;
+        }
+        citation.index = index;
+        lines.push(line);
+        citations.push(citation);
+    }
+    let mut out = head;
+    if !lines.is_empty() {
+        out.push(list_head(lines.len()));
+        out.append(&mut lines);
+    }
+    let rest = count - citations.len();
+    if rest > 0 {
+        out.push(lang.search_more(rest));
+    }
+    ToolOutput {
+        content: out.join("\n"),
+        citations,
+    }
+}
+
+/// 不给日期就搜全部：换成一个包住所有日期的范围，SQL 只要一种写法。
+fn date_bounds(range: Option<(NaiveDate, NaiveDate)>) -> (String, String) {
+    match range {
+        Some((from, to)) => (from.to_string(), to.to_string()),
+        None => ("0000-01-01".to_string(), "9999-12-31".to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -206,6 +271,92 @@ mod tests {
     fn parse_reports_a_wrong_type_as_a_format_error() {
         let e = parse(json!({"keywords": "报销"})).unwrap_err();
         assert!(e.starts_with("参数格式错误"), "{e}");
+    }
+
+    fn rows(lines: &[&str]) -> Vec<Row> {
+        lines
+            .iter()
+            .map(|line| Row {
+                line: line.to_string(),
+                citation: Citation {
+                    index: 0,
+                    app: "app".into(),
+                    title: line.to_string(),
+                    started_ts: String::new(),
+                    ended_ts: String::new(),
+                    frame_path: None,
+                },
+            })
+            .collect()
+    }
+
+    fn list_head(n: usize) -> String {
+        format!("列 {n} 个：")
+    }
+
+    fn write(rows: Vec<Row>, count: usize, max_chars: usize) -> ToolOutput {
+        let head = vec!["开头".to_string()];
+        write_list(head, list_head, rows, count, 4, max_chars, ChatLang::ZhHans)
+    }
+
+    #[test]
+    fn write_list_numbers_from_next_citation_and_says_what_is_left() {
+        let out = write(rows(&["a", "b", "c"]), 5, 4000);
+        let more = ChatLang::ZhHans.search_more(2);
+        let expected = [
+            "开头",
+            "列 3 个：",
+            "[4] a",
+            "[5] b",
+            "[6] c",
+            more.as_str(),
+        ];
+        assert_eq!(out.content, expected.join("\n"));
+        let indexes: Vec<usize> = out.citations.iter().map(|c| c.index).collect();
+        assert_eq!(indexes, [4, 5, 6]);
+    }
+
+    #[test]
+    fn write_list_has_no_last_line_when_everything_is_listed() {
+        let out = write(rows(&["a", "b"]), 2, 4000);
+        assert_eq!(out.content, "开头\n列 2 个：\n[4] a\n[5] b");
+    }
+
+    #[test]
+    fn write_list_lists_fewer_instead_of_cutting_a_line() {
+        let all = write(rows(&["aaaa", "bbbb", "cccc"]), 3, 4000);
+        // 留出最后一行的位置后，只放得下两行
+        let reserved = ChatLang::ZhHans.search_more(3).chars().count() + 1;
+        let max_chars = "开头\n列 3 个：\n[4] aaaa\n[5] bbbb\n".chars().count() + reserved;
+        let out = write(rows(&["aaaa", "bbbb", "cccc"]), 3, max_chars);
+        assert!(out.content.chars().count() <= max_chars, "{}", out.content);
+        assert_eq!(out.citations.len(), 2);
+        assert!(out.content.contains("列 2 个：\n[4] aaaa\n[5] bbbb\n"));
+        assert!(out.content.ends_with(&ChatLang::ZhHans.search_more(1)));
+        assert_eq!(all.citations.len(), 3);
+    }
+
+    #[test]
+    fn write_list_without_room_keeps_only_the_head_and_the_count() {
+        let out = write(rows(&["a"]), 1, 10);
+        assert_eq!(
+            out.content,
+            format!("开头\n{}", ChatLang::ZhHans.search_more(1))
+        );
+        assert!(out.citations.is_empty());
+    }
+
+    #[test]
+    fn no_dates_means_every_date() {
+        assert_eq!(
+            date_bounds(None),
+            ("0000-01-01".into(), "9999-12-31".into())
+        );
+        let d = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+        assert_eq!(
+            date_bounds(Some((d, d))),
+            ("2026-07-01".into(), "2026-07-01".into())
+        );
     }
 
     /// 本机的 grammar 从同一份格式生成，条数和长度的限制要写在格式里。

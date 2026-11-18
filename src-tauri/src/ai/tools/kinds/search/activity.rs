@@ -3,12 +3,13 @@
 use chrono::NaiveDate;
 use serde_json::Value;
 
-use super::SearchParams;
+use super::{date_bounds, write_list, Row, SearchParams};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::visible::MAIN_VISIBLE;
 use crate::ai::tools::{
-    like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, MAIN_VISIBLE,
+    like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
 };
 use crate::error::Result;
 use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
@@ -112,11 +113,7 @@ impl Found {
 
 /// 查主库里标题有全部关键词、AI 能看到的活动，一个窗口一行。
 async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Found> {
-    // 不给日期就搜全部：换成一个包住所有日期的范围，SQL 只要一种写法
-    let (from, to) = match p.range {
-        Some((f, t)) => (f.to_string(), t.to_string()),
-        None => ("0000-01-01".to_string(), "9999-12-31".to_string()),
-    };
+    let (from, to) = date_bounds(p.range);
     // 前两个给网站规则，后两个给活动
     let mut binds = vec![from.clone(), to.clone(), from, to];
     let mut conds = String::new();
@@ -197,9 +194,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Found> {
     Ok(Found::new(all, p.limit))
 }
 
-/// 写成给模型看的文字，列出来的每个窗口配一条证据。
-///
-/// 文字超过 `max_chars` 时少列几个，不截断某一行。
+/// 写成给模型看的文字，列出来的每个窗口配一条证据：最近一次命中的那条记录和它的截图。
 fn render(
     p: &SearchParams,
     found: &Found,
@@ -215,49 +210,39 @@ fn render(
             citations: Vec::new(),
         };
     };
-    let mut out = vec![
+    let head = vec![
         lang.titles_head(&kw, found.count, &lang.fmt_secs(found.secs)),
         lang.titles_span(&minute(first_at), first, &minute(last_at), last),
     ];
-    // 给列表前后的两行留位置。按最大的数算，实际写出来只会更短
-    let list_head = lang.titles_list_head(found.windows.len());
-    let more = lang.titles_more(found.count);
-    let mut used: usize = [&out[0], &out[1], &list_head, &more]
+    let rows = found
+        .windows
         .iter()
-        .map(|s| s.chars().count() + 1)
-        .sum();
-    let mut lines = Vec::new();
-    let mut citations = Vec::new();
-    for w in &found.windows {
-        let index = next_citation + citations.len();
-        let usage = lang.titles_use(&lang.fmt_secs(w.secs), w.days);
-        let line = format!("[{index}] {} | {usage}", window(w));
-        used += line.chars().count() + 1;
-        if used > max_chars {
-            break;
-        }
-        lines.push(line);
-        citations.push(Citation {
-            index,
-            app: w.app.clone(),
-            title: w.title.clone(),
-            started_ts: w.last.0.clone(),
-            ended_ts: w.last.1.clone(),
-            frame_path: w.screenshot.clone(),
-        });
-    }
-    if !lines.is_empty() {
-        out.push(lang.titles_list_head(lines.len()));
-        out.append(&mut lines);
-    }
-    let rest = found.count - citations.len();
-    if rest > 0 {
-        out.push(lang.titles_more(rest));
-    }
-    ToolOutput {
-        content: out.join("\n"),
-        citations,
-    }
+        .map(|w| Row {
+            line: format!(
+                "{} | {}",
+                window(w),
+                lang.titles_use(&lang.fmt_secs(w.secs), w.days)
+            ),
+            citation: Citation {
+                index: 0,
+                app: w.app.clone(),
+                title: w.title.clone(),
+                started_ts: w.last.0.clone(),
+                ended_ts: w.last.1.clone(),
+                frame_path: w.screenshot.clone(),
+            },
+        })
+        .collect();
+    let list_head = |n| lang.titles_list_head(n);
+    write_list(
+        head,
+        list_head,
+        rows,
+        found.count,
+        next_citation,
+        max_chars,
+        lang,
+    )
 }
 
 /// 一个窗口写成「应用 | 标题」，标题最多 60 字。
@@ -621,7 +606,7 @@ mod tests {
         assert!(out.content.contains("按时长列前 2 个"), "{}", out.content);
         assert!(out.content.contains("报销 第0页") && out.content.contains("报销 第1页"));
         assert!(!out.content.contains("报销 第2页"), "{}", out.content);
-        assert!(out.content.ends_with(&ChatLang::ZhHans.titles_more(3)));
+        assert!(out.content.ends_with(&ChatLang::ZhHans.search_more(3)));
         assert_eq!(out.citations.len(), 2);
     }
 
@@ -640,7 +625,7 @@ mod tests {
         assert_eq!(lines, shown);
         assert!(out
             .content
-            .ends_with(&ChatLang::ZhHans.titles_more(5 - shown)));
+            .ends_with(&ChatLang::ZhHans.search_more(5 - shown)));
     }
 
     #[tokio::test]

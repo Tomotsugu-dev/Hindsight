@@ -647,7 +647,7 @@ impl ChatLang {
         }
     }
 
-    // ── search_titles ────────────────────────────────
+    // ── 两个搜索工具共用 ──────────────────────────────
 
     /// 把关键词写进句子：「报销」「7月」。
     pub fn quote_keywords(self, keywords: &[String]) -> String {
@@ -662,6 +662,32 @@ impl ChatLang {
                 .join(", "),
         }
     }
+
+    /// 没列全时的最后一行：还有几个，怎么看更多。
+    pub fn search_more(self, rest: usize) -> String {
+        match self {
+            Self::ZhHans => format!(
+                "还有 {rest} 个没列。要看更多，把 limit 调大，或者缩小日期范围、按应用或分类过滤。"
+            ),
+            Self::ZhHant => format!(
+                "還有 {rest} 個沒列。要看更多，把 limit 調大，或者縮小日期範圍、按應用或分類過濾。"
+            ),
+            Self::En => format!(
+                "{rest} more not listed. To see more, raise limit, narrow the dates, or filter by apps or categories."
+            ),
+            Self::Ja => format!(
+                "ほかに {rest} 個あります。もっと見るには limit を増やすか、日付を絞るか、アプリやカテゴリで絞り込んでください。"
+            ),
+            Self::Pt => format!(
+                "Mais {rest} não listadas. Para ver mais, aumente limit, reduza as datas ou filtre por apps ou categorias."
+            ),
+            Self::Es => format!(
+                "Faltan {rest} por listar. Para ver más, sube limit, acota las fechas o filtra por apps o categorías."
+            ),
+        }
+    }
+
+    // ── search_titles ────────────────────────────────
 
     /// 开头第一句：命中了几个窗口，一共多久。
     pub fn titles_head(self, kw: &str, count: usize, dur: &str) -> String {
@@ -718,30 +744,6 @@ impl ChatLang {
         }
     }
 
-    /// 没列全时的最后一行：还有几个，怎么看更多。
-    pub fn titles_more(self, rest: usize) -> String {
-        match self {
-            Self::ZhHans => format!(
-                "还有 {rest} 个没列。要看更多，把 limit 调大，或者缩小日期范围、按应用或分类过滤。"
-            ),
-            Self::ZhHant => format!(
-                "還有 {rest} 個沒列。要看更多，把 limit 調大，或者縮小日期範圍、按應用或分類過濾。"
-            ),
-            Self::En => format!(
-                "{rest} more not listed. To see more, raise limit, narrow the dates, or filter by apps or categories."
-            ),
-            Self::Ja => format!(
-                "ほかに {rest} 個あります。もっと見るには limit を増やすか、日付を絞るか、アプリやカテゴリで絞り込んでください。"
-            ),
-            Self::Pt => format!(
-                "Mais {rest} não listadas. Para ver mais, aumente limit, reduza as datas ou filtre por apps ou categorias."
-            ),
-            Self::Es => format!(
-                "Faltan {rest} por listar. Para ver más, sube limit, acota las fechas o filtra por apps o categorías."
-            ),
-        }
-    }
-
     /// 没有命中。
     pub fn titles_none(self, kw: &str) -> String {
         match self {
@@ -763,6 +765,76 @@ impl ChatLang {
             Self::Es => format!(
                 "Ninguna ventana tiene {kw} en el título. Prueba otras palabras o usa search_screen_text para buscar texto que apareció en pantalla."
             ),
+        }
+    }
+
+    // ── search_screen_text ───────────────────────────
+
+    /// 开头：几个窗口的屏幕上出现过关键词。说明只是出现过，不算时间。
+    pub fn screen_head(self, kw: &str, count: usize) -> String {
+        match self {
+            Self::ZhHans => {
+                format!("屏幕上出现过{kw}的窗口：{count} 个。只说明出现过，不算时间。")
+            }
+            Self::ZhHant => {
+                format!("螢幕上出現過{kw}的視窗：{count} 個。只說明出現過，不算時間。")
+            }
+            Self::En => format!(
+                "Windows where {kw} appeared on screen: {count}. This only shows that it appeared; it does not count time."
+            ),
+            Self::Ja => format!(
+                "画面に{kw}が表示されたウィンドウ：{count} 個。表示されたことだけを示し、時間は数えません。"
+            ),
+            Self::Pt => format!(
+                "Janelas em que {kw} apareceu na tela: {count}. Isso só mostra que apareceu; não conta tempo."
+            ),
+            Self::Es => format!(
+                "Ventanas en las que {kw} apareció en pantalla: {count}. Solo indica que apareció; no cuenta tiempo."
+            ),
+        }
+    }
+
+    /// 列表前的一行。
+    pub fn screen_list_head(self, n: usize) -> String {
+        match self {
+            Self::ZhHans => format!("按最近一次列前 {n} 个："),
+            Self::ZhHant => format!("按最近一次列前 {n} 個："),
+            Self::En => format!("The {n} most recent:"),
+            Self::Ja => format!("新しい順に {n} 個："),
+            Self::Pt => format!("As {n} mais recentes:"),
+            Self::Es => format!("Las {n} más recientes:"),
+        }
+    }
+
+    /// 没有命中。
+    pub fn screen_none(self, kw: &str) -> String {
+        match self {
+            Self::ZhHans => format!("屏幕上没有出现过{kw}。可以换更短的词、同义词或英文。"),
+            Self::ZhHant => format!("螢幕上沒有出現過{kw}。可以換更短的詞、同義詞或英文。"),
+            Self::En => {
+                format!("{kw} did not appear on screen. Try a shorter word, a synonym, or English.")
+            }
+            Self::Ja => {
+                format!("画面に{kw}は表示されていません。短い語、同義語、英語を試してください。")
+            }
+            Self::Pt => format!(
+                "{kw} não apareceu na tela. Tente uma palavra mais curta, um sinônimo ou inglês."
+            ),
+            Self::Es => format!(
+                "{kw} no apareció en pantalla. Prueba una palabra más corta, un sinónimo o inglés."
+            ),
+        }
+    }
+
+    /// 记忆库里一段屏幕文字都没有。
+    pub fn screen_no_index(self) -> &'static str {
+        match self {
+            Self::ZhHans => "没有屏幕文字索引：屏幕记忆没开，或者截图还没识别。",
+            Self::ZhHant => "沒有螢幕文字索引：螢幕記憶沒開，或者截圖還沒辨識。",
+            Self::En => "There is no screen text index: screen memory is off, or no screenshot has been read yet.",
+            Self::Ja => "画面テキストの索引がありません。スクリーンメモリがオフか、スクリーンショットがまだ読み取られていません。",
+            Self::Pt => "Não há índice de texto da tela: a memória de tela está desligada ou nenhuma captura foi lida ainda.",
+            Self::Es => "No hay índice de texto de pantalla: la memoria de pantalla está desactivada o aún no se ha leído ninguna captura.",
         }
     }
 
@@ -1037,7 +1109,13 @@ mod tests {
                     "{lang:?}: {u}"
                 );
             }
-            assert!(lang.titles_more(4).contains('4'));
+            assert!(lang.search_more(4).contains('4'));
+            // search_screen_text
+            let sh = lang.screen_head("KW", 14);
+            assert!(sh.contains("KW") && sh.contains("14"), "{lang:?}: {sh}");
+            assert!(lang.screen_list_head(8).contains('8'));
+            assert!(lang.screen_none("KW").contains("KW"));
+            assert!(!lang.screen_no_index().is_empty());
             let none = lang.titles_none("KW");
             assert!(none.contains("KW") && none.contains("search_screen_text"));
             let many = lang.err_too_many_items("keywords", 3);

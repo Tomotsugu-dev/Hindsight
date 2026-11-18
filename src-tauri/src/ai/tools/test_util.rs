@@ -5,6 +5,9 @@
 
 use chrono::NaiveDate;
 
+use tokio::sync::OnceCell;
+
+use super::visible::Visibility;
 use super::ToolCtx;
 use crate::storage::Connection;
 
@@ -52,18 +55,24 @@ pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> T
     })
     .await
     .unwrap();
-    ToolCtx { main, mem }
+    // 这里的主库没有设置表，读不出可见范围：什么都给看
+    ToolCtx {
+        main,
+        mem,
+        visible: OnceCell::from(Visibility::default()),
+    }
 }
 
 /// 用 `main` 和一个新的记忆库组一个 `ToolCtx`。两个库都跑过真实的建表。
 ///
-/// `main` 用 [`fresh_test_pool`](crate::repo::test_util::fresh_test_pool) 开，
-/// 先用 repo 的函数造好分组、分类、网站规则。
+/// `main` 用 [`fresh_test_pool`](crate::repo::test_util::fresh_test_pool) 开。
+/// 可见范围第一次用时才读，分组、分类、忽略规则要在那之前造好。
 pub(super) async fn real_ctx(main: &crate::storage::DbPool) -> ToolCtx {
     let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
     ToolCtx {
         main: main.0.clone(),
         mem: mem.0,
+        visible: OnceCell::new(),
     }
 }
 
