@@ -15,6 +15,7 @@
 | [方法](2-methods.md) | 单次生成、工具循环、Agent 流水线的共同约定 |
 | [模型选择和配置](3-settings.md) | 在页面上选模型，参数自动算，高级设置 |
 | [AI 怎么读数据](3-data-access.md) | 给模型看什么，不给看什么：`ReportContext`、`Tools`、`AiDataPolicy` |
+| [工具](tools/0-overview.md) | 模型能调的工具：一次调用怎么走，共用的规矩，每个工具查什么 |
 | [日报](1-daily-report.md) | 一次日报怎么走，模型读到的材料（#245），用工具写日报的两种方法 |
 | [Apple FM](4-apple-fm.md) | 本机的 Apple Foundation Models（#247） |
 | [MCP server](1-mcp-server.md) | 让外部 Agent 读 Hindsight 的数据，写回日报（#259） |
