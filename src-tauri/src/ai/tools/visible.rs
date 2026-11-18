@@ -1,7 +1,7 @@
 //! AI 能看到哪些数据。规则只写在这里，工具照着用。
 //!
 //! 主库的活动带着分组和「已忽略」标记，条件直接写成 SQL，见 [`MAIN_VISIBLE`]。
-//! 记忆库只有进程名和窗口标题，要用主库里的分组、分类和忽略规则来判断，见 [`Visibility`]。
+//! 记忆库只有进程名和窗口标题，要用主库里的分组、分类和忽略规则写出条件，见 [`Visibility`]。
 
 use std::collections::HashMap;
 
@@ -9,6 +9,7 @@ use rusqlite::OptionalExtension;
 
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::error::Result;
+use crate::memory::search::SessionFilter;
 use crate::repo::settings::Settings;
 use crate::storage::{Connection, SqliteResultExt};
 
@@ -93,15 +94,38 @@ impl Visibility {
         Ok(visibility)
     }
 
-    /// 记忆库里的一段屏幕文字能不能给 AI 看。
+    /// 搜屏幕文字时只要哪些段：AI 能看的，再按 `apps` 和 `categories` 筛。
     ///
+    /// `processes` 是记忆库里有屏幕文字的进程名。`apps`、`categories` 是空的就不按它筛。
     /// 跟主库一样：「不计入统计」「隐私」分类里的应用、命中忽略规则的窗口都不给看。
     /// 记忆库没有网站，网站规则用不上。
-    pub(super) fn shows_screen(&self, process: &str, title: &str) -> bool {
-        let category = self.category_id(process);
-        category != "hidden"
-            && category != "private"
-            && !is_excluded(process, title, &self.ignore_rules)
+    pub(super) fn screen_filter(
+        &self,
+        processes: Vec<String>,
+        apps: &[String],
+        categories: &[String],
+    ) -> SessionFilter {
+        let apps = processes
+            .into_iter()
+            .filter(|p| {
+                self.shows_app(p)
+                    && (apps.is_empty() || apps.iter().any(|a| self.is_app(p, a)))
+                    && (categories.is_empty() || categories.iter().any(|c| self.in_category(p, c)))
+            })
+            .collect();
+        // 只忽略某些标题的规则写成条件；整个应用都忽略的，上面已经去掉了
+        let hidden_windows = self
+            .ignore_rules
+            .iter()
+            .filter_map(|r| {
+                let word = r.title_keyword.as_deref()?.trim();
+                (!word.is_empty()).then(|| (r.process_name.trim().to_string(), word.to_string()))
+            })
+            .collect();
+        SessionFilter {
+            apps,
+            hidden_windows,
+        }
     }
 
     /// 应用的显示名。没分组就是进程名。
@@ -111,13 +135,22 @@ impl Visibility {
             .map_or(process, |g| g.display_name.as_str())
     }
 
+    /// 这个应用的屏幕文字能不能给 AI 看：不在「不计入统计」「隐私」分类里，也没有被整个忽略。
+    fn shows_app(&self, process: &str) -> bool {
+        let category = self.category_id(process);
+        // 标题是空的，只有不看标题的规则能命中
+        category != "hidden"
+            && category != "private"
+            && !is_excluded(process, "", &self.ignore_rules)
+    }
+
     /// 进程名或显示名里有没有 `pattern`。英文不分大小写。
-    pub(super) fn is_app(&self, process: &str, pattern: &str) -> bool {
+    fn is_app(&self, process: &str, pattern: &str) -> bool {
         contains(process, pattern) || contains(self.display_name(process), pattern)
     }
 
     /// 应用所在分类的名字或 id 里有没有 `pattern`。英文不分大小写。
-    pub(super) fn in_category(&self, process: &str, pattern: &str) -> bool {
+    fn in_category(&self, process: &str, pattern: &str) -> bool {
         let id = self.category_id(process);
         let name = self.categories.get(id).map_or("", String::as_str);
         contains(id, pattern) || contains(name, pattern)
@@ -146,7 +179,7 @@ mod tests {
     use crate::repo::test_util::fresh_test_pool;
 
     /// 主库：Code 和 Code.exe 在「编程」的同一个分组里；secret 不计入统计；Signal 隐私；
-    /// 忽略 Terminal 里标题有 download 的窗口。
+    /// 忽略 Terminal 里标题有 download 的窗口、整个 Zoom；Slack 的规则关键词是空白。
     async fn loaded() -> Visibility {
         let pool = fresh_test_pool().await;
         pool.0
@@ -163,7 +196,9 @@ mod tests {
                          ('secret.exe', 'g-secret'), ('Signal', 'g-signal'),
                          ('old.exe', 'g-old'), ('plain.exe', 'g-none');
                      UPDATE settings_store SET data = json_set(data, '$.ignoreRules',
-                         json('[{"processName": "Terminal", "titleKeyword": "download"}]'))
+                         json('[{"processName": "Terminal", "titleKeyword": " download "},
+                                {"processName": "Zoom"},
+                                {"processName": "Slack", "titleKeyword": "  "}]'))
                      WHERE id = 1;"#,
                 )
                 .db()
@@ -173,16 +208,43 @@ mod tests {
         Visibility::load(&pool.0).await.unwrap()
     }
 
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
     #[tokio::test]
-    async fn hides_hidden_private_and_ignored_windows() {
+    async fn the_filter_drops_hidden_private_and_wholly_ignored_apps() {
         let v = loaded().await;
-        assert!(!v.shows_screen("secret.exe", "anything"));
-        assert!(!v.shows_screen("Signal", "chat"));
-        // 忽略规则跟采集用的是同一个函数：进程名一样、标题里有关键词，不分大小写
-        assert!(!v.shows_screen("Terminal", "Download videos"));
-        assert!(v.shows_screen("Terminal", "vim main.rs"));
-        assert!(v.shows_screen("Code.exe", "main.rs"));
-        assert!(v.shows_screen("unknown.exe", "main.rs"));
+        let processes = names(&[
+            "secret.exe",
+            "Signal",
+            "Zoom",
+            "Terminal",
+            "Slack",
+            "Code.exe",
+            "unknown.exe",
+            "",
+        ]);
+        let f = v.screen_filter(processes, &[], &[]);
+        assert_eq!(f.apps, ["Terminal", "Slack", "Code.exe", "unknown.exe", ""]);
+        // 只忽略某些标题的规则写成条件，关键词去掉前后空白；空白关键词的规则什么都不忽略
+        assert_eq!(
+            f.hidden_windows,
+            [("Terminal".to_string(), "download".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_filter_keeps_only_the_asked_apps_and_categories() {
+        let v = loaded().await;
+        let all = names(&["Code.exe", "Code", "notepad"]);
+        let f = v.screen_filter(all.clone(), &names(&["visual studio"]), &[]);
+        assert_eq!(f.apps, ["Code.exe", "Code"]);
+        let f = v.screen_filter(all.clone(), &[], &names(&["其他"]));
+        assert_eq!(f.apps, ["notepad"]);
+        // 应用和分类都给时，两个都要满足
+        let f = v.screen_filter(all, &names(&["code"]), &names(&["其他"]));
+        assert!(f.apps.is_empty());
     }
 
     #[tokio::test]
@@ -225,6 +287,8 @@ mod tests {
             .await
             .unwrap();
         let v = Visibility::load(&pool.0).await.unwrap();
-        assert!(v.shows_screen("Terminal", "Download videos"));
+        let f = v.screen_filter(names(&["Terminal"]), &[], &[]);
+        assert_eq!(f.apps, ["Terminal"]);
+        assert!(f.hidden_windows.is_empty());
     }
 }

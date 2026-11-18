@@ -9,15 +9,16 @@ use rusqlite::{params, OptionalExtension};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{date_bounds, quote_keywords, write_list, Row, SearchParams};
+use super::{quote_keywords, write_list, Row, SearchParams};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::text::{load, Text};
 use crate::ai::tools::{
-    fts_literal, like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
+    like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
 };
 use crate::error::Result;
+use crate::memory::search::{find_sessions, session_apps};
 use crate::memory::snippet::snippet;
 use crate::storage::{DbResult, SqliteResultExt};
 
@@ -31,8 +32,6 @@ const TITLE_MAX_CHARS: usize = 60;
 const SNIPPET_MAX_CHARS: usize = 120;
 /// 片段在关键词前面留几个字。
 const SNIPPET_BEFORE_CHARS: usize = 20;
-/// 关键词至少有这么多字，才能用全文索引找。更短的只能一段段比对。
-const FTS_MIN_CHARS: usize = 3;
 
 /// `lang/ocr.json` 里的句子。
 #[derive(Debug, Deserialize)]
@@ -114,102 +113,38 @@ struct ScreenWindow {
     screenshot_ts: String,
 }
 
-/// 记忆库里命中的一个窗口和它最近的一段。
-struct Hit {
-    process: String,
-    title: String,
-    started: String,
-    session: i64,
-}
-
 /// 查记忆库里屏幕文字或标题有全部关键词、AI 能看到的段，一个窗口一行，最近的在前。
 ///
 /// 记忆库里一段屏幕文字都没有时，返回 `None`。
 async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
-    let (from, to) = date_bounds(p.range);
-    let mut binds = vec![from, to];
-    let mut conds = String::new();
-    for k in &p.keywords {
-        // 关键词在文字里或者标题里都算
-        if k.chars().count() >= FTS_MIN_CHARS {
-            conds.push_str(
-                " AND (s.id IN (SELECT rowid FROM text_sessions_fts
-                                WHERE text_sessions_fts MATCH ?)
-                       OR s.title LIKE ? ESCAPE '\\')",
-            );
-            binds.push(fts_literal(std::slice::from_ref(k)));
-        } else {
-            conds.push_str(" AND (s.text LIKE ? ESCAPE '\\' OR s.title LIKE ? ESCAPE '\\')");
-            binds.push(like_pattern(k));
-        }
-        binds.push(like_pattern(k));
-    }
-    let sql = format!(
-        "SELECT process, title, started_ts, id FROM (
-             SELECT COALESCE(s.app_id, '') AS process, COALESCE(s.title, '') AS title,
-                    s.started_ts, s.id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY s.app_id, s.title ORDER BY s.started_ts DESC
-                    ) AS rn
-             FROM text_sessions s
-             WHERE s.local_date BETWEEN ? AND ?{conds}
-         ) WHERE rn = 1
-         ORDER BY started_ts DESC"
-    );
-    let hits = ctx
-        .mem
-        .call(move |conn| {
-            let any: bool = conn
-                .query_row("SELECT EXISTS (SELECT 1 FROM text_sessions)", [], |r| {
-                    r.get(0)
-                })
-                .db()?;
-            if !any {
-                return Ok(None);
-            }
-            let mut stmt = conn.prepare(&sql).db()?;
-            let hits = stmt
-                .query_map(rusqlite::params_from_iter(binds.iter()), |r| {
-                    Ok(Hit {
-                        process: r.get(0)?,
-                        title: r.get(1)?,
-                        started: r.get(2)?,
-                        session: r.get(3)?,
-                    })
-                })
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?;
-            Ok(Some(hits))
-        })
-        .await?;
-    let Some(hits) = hits else {
+    let processes = ctx.mem.call(|conn| session_apps(conn)).await?;
+    if processes.is_empty() {
         return Ok(None);
-    };
-
-    // 记忆库没有分组和分类，可见范围、应用和分类按主库的设置在这里筛
+    }
+    // 可见范围、应用和分类按主库的设置写成条件，在 SQL 里筛
     let v = ctx.visible().await?;
+    let filter = v.screen_filter(processes, &p.apps, &p.categories);
+    let (keywords, range) = (p.keywords.clone(), p.range);
+    let spans = ctx
+        .mem
+        .call(move |conn| find_sessions(conn, &keywords, range, Some(&filter)))
+        .await?;
+
+    // 按应用加标题分组：段从近到远，每组先遇到的就是最近一段。
+    // 同一个分组的几个进程名算一个应用
     let mut seen = HashSet::new();
     let mut picked = Vec::new();
-    for hit in hits {
-        if !v.shows_screen(&hit.process, &hit.title)
-            || !p.apps.is_empty() && !p.apps.iter().any(|a| v.is_app(&hit.process, a))
-            || !p.categories.is_empty()
-                && !p.categories.iter().any(|c| v.in_category(&hit.process, c))
-        {
-            continue;
-        }
-        let app = v.display_name(&hit.process).to_string();
-        // 同一个分组的几个进程名算一个应用。先来的那段更近
-        if seen.insert((app.clone(), hit.title.clone())) {
-            picked.push((app, hit));
+    for span in spans {
+        let app = v.display_name(&span.app_id).to_string();
+        if seen.insert((app.clone(), span.title.clone())) {
+            picked.push((app, span));
         }
     }
     let count = picked.len();
     picked.truncate(p.limit);
 
     let keywords = p.keywords.clone();
-    let sessions: Vec<i64> = picked.iter().map(|(_, hit)| hit.session).collect();
+    let sessions: Vec<i64> = picked.iter().map(|(_, span)| span.id).collect();
     let lines = ctx
         .mem
         .call(move |conn| {
@@ -222,14 +157,14 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
     let windows = picked
         .into_iter()
         .zip(lines)
-        .map(|((app, hit), line)| {
+        .map(|((app, span), line)| {
             let (screenshot, screenshot_ts) = match line.shot {
                 Some((path, ts)) => (Some(path), ts),
-                None => (None, hit.started),
+                None => (None, span.started_ts),
             };
             ScreenWindow {
                 app,
-                title: hit.title,
+                title: span.title,
                 line: line.text,
                 screenshot,
                 screenshot_ts,

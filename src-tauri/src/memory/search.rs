@@ -102,6 +102,21 @@ pub fn find_sessions(
     Ok(spans)
 }
 
+/// 记忆库里有屏幕文字的进程名。没有进程名的段算作空字符串。
+///
+/// 工具用它算出 [`SessionFilter::apps`]：哪些进程的段能给 AI 看。
+pub fn session_apps(conn: &Connection) -> DbResult<Vec<String>> {
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT COALESCE(app_id, '') FROM text_sessions")
+        .db()?;
+    let apps = stmt
+        .query_map([], |r| r.get(0))
+        .db()?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .db()?;
+    Ok(apps)
+}
+
 #[cfg(test)]
 mod tests {
     use rusqlite::params;
@@ -315,5 +330,27 @@ mod tests {
             titles(&db, &["报销"], None, Some(filter)).await,
             ["", "download", "vim"]
         );
+    }
+
+    #[tokio::test]
+    async fn session_apps_lists_each_app_once() {
+        let db = db_with(&[
+            seg("2026-07-01T09:00", "Code", "a", "x"),
+            seg("2026-07-01T10:00", "Code", "b", "y"),
+            Seg {
+                start: "2026-07-01T11:00",
+                app: None,
+                title: None,
+                text: "z",
+            },
+        ])
+        .await;
+
+        let mut apps = db.0.call(|c| session_apps(c)).await.unwrap();
+        apps.sort();
+        assert_eq!(apps, ["", "Code"]);
+
+        let empty = MemoryDb::open_in_memory().await.unwrap();
+        assert!(empty.0.call(|c| session_apps(c)).await.unwrap().is_empty());
     }
 }
