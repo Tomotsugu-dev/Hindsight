@@ -1,0 +1,26 @@
+{
+  "quote": {
+    "zh-Hans": "「{keyword}」",
+    "zh-Hant": "「{keyword}」",
+    "en": "\"{keyword}\"",
+    "ja": "「{keyword}」",
+    "pt": "\"{keyword}\"",
+    "es": "\"{keyword}\""
+  },
+  "quote_sep": {
+    "zh-Hans": "",
+    "zh-Hant": "",
+    "en": ", ",
+    "ja": "",
+    "pt": ", ",
+    "es": ", "
+  },
+  "more": {
+    "zh-Hans": "还有 {rest} 个没列。要看更多，把 limit 调大，或者缩小日期范围、按应用或分类过滤。",
+    "zh-Hant": "還有 {rest} 個沒列。要看更多，把 limit 調大，或者縮小日期範圍、按應用或分類過濾。",
+    "en": "{rest} more not listed. To see more, raise limit, narrow the dates, or filter by apps or categories.",
+    "ja": "ほかに {rest} 個あります。もっと見るには limit を増やすか、日付を絞るか、アプリやカテゴリで絞り込んでください。",
+    "pt": "Mais {rest} não listadas. Para ver mais, aumente limit, reduza as datas ou filtre por apps ou categorias.",
+    "es": "Faltan {rest} por listar. Para ver más, sube limit, acota las fechas o filtra por apps o categorías."
+  }
+}

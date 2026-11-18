@@ -1,12 +1,16 @@
 //! search_titles：按关键词搜窗口标题。回答什么时候看过 X、在哪个窗口、看了多久。
 
+use std::sync::LazyLock;
+
 use chrono::NaiveDate;
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::{date_bounds, write_list, Row, SearchParams};
+use super::{date_bounds, quote_keywords, write_list, Row, SearchParams};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::text::{load, Text};
 use crate::ai::tools::visible::MAIN_VISIBLE;
 use crate::ai::tools::{
     like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
@@ -21,6 +25,28 @@ pub struct ActivityQuery(pub SearchParams);
 
 /// 每行的标题最多几个字。
 const TITLE_MAX_CHARS: usize = 60;
+
+/// `lang/activity.json` 里的句子。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ActivityText {
+    /// 开头第一句：命中了几个窗口，一共多久。
+    head: Text,
+    /// 开头第二句：最早、最近一次开始的时刻和窗口。
+    span: Text,
+    /// 列表前的一行。
+    list_head: Text,
+    /// 一个窗口用了多久，只在一天里出现过。
+    use_one_day: Text,
+    /// 一个窗口用了多久，在几天里出现过。
+    use_days: Text,
+    /// 没有命中。
+    none: Text,
+}
+
+const TEXT_JSON: &str = include_str!("lang/activity.json");
+
+static TEXT: LazyLock<ActivityText> = LazyLock::new(|| load(TEXT_JSON));
 
 impl Tool for ActivityQuery {
     const NAME: &'static str = "search_titles";
@@ -202,27 +228,33 @@ fn render(
     max_chars: usize,
     lang: ChatLang,
 ) -> ToolOutput {
-    let kw = lang.quote_keywords(&p.keywords);
+    let kw = quote_keywords(&p.keywords, lang);
     // 有命中才有最早、最近一次
     let (Some((first_at, first)), Some((last_at, last))) = (&found.first, &found.last) else {
         return ToolOutput {
-            content: lang.titles_none(&kw),
+            content: TEXT.none.fill(lang, &[("kw", &kw)]),
             citations: Vec::new(),
         };
     };
+    let dur = lang.fmt_secs(found.secs);
     let head = vec![
-        lang.titles_head(&kw, found.count, &lang.fmt_secs(found.secs)),
-        lang.titles_span(&minute(first_at), first, &minute(last_at), last),
+        TEXT.head
+            .fill(lang, &[("kw", &kw), ("count", &found.count), ("dur", &dur)]),
+        TEXT.span.fill(
+            lang,
+            &[
+                ("first_at", &minute(first_at)),
+                ("first", first),
+                ("last_at", &minute(last_at)),
+                ("last", last),
+            ],
+        ),
     ];
     let rows = found
         .windows
         .iter()
         .map(|w| Row {
-            line: format!(
-                "{} | {}",
-                window(w),
-                lang.titles_use(&lang.fmt_secs(w.secs), w.days)
-            ),
+            line: format!("{} | {}", window(w), use_line(w, lang)),
             citation: Citation {
                 index: 0,
                 app: w.app.clone(),
@@ -233,7 +265,7 @@ fn render(
             },
         })
         .collect();
-    let list_head = |n| lang.titles_list_head(n);
+    let list_head = |n: usize| TEXT.list_head.fill(lang, &[("n", &n)]);
     write_list(
         head,
         list_head,
@@ -250,6 +282,16 @@ fn window(w: &WindowUse) -> String {
     format!("{} | {}", w.app, truncate(&w.title, TITLE_MAX_CHARS))
 }
 
+/// 一个窗口用了多久、在几天里出现过。
+fn use_line(w: &WindowUse, lang: ChatLang) -> String {
+    let text = if w.days == 1 {
+        &TEXT.use_one_day
+    } else {
+        &TEXT.use_days
+    };
+    text.fill(lang, &[("dur", &lang.fmt_secs(w.secs)), ("days", &w.days)])
+}
+
 /// 时刻写到分钟：2026-07-08 09:00。
 fn minute(ts: &str) -> String {
     ts.get(..16).unwrap_or(ts).replacen('T', " ", 1)
@@ -261,8 +303,10 @@ mod tests {
     use rusqlite::params;
     use serde_json::json;
 
+    use super::super::more;
     use super::*;
     use crate::ai::tools::test_util::real_ctx;
+    use crate::ai::tools::text::assert_same_placeholders;
     use crate::repo::categories::assign_app;
     use crate::repo::test_util::fresh_test_pool;
     use crate::storage::DbPool;
@@ -606,7 +650,7 @@ mod tests {
         assert!(out.content.contains("按时长列前 2 个"), "{}", out.content);
         assert!(out.content.contains("报销 第0页") && out.content.contains("报销 第1页"));
         assert!(!out.content.contains("报销 第2页"), "{}", out.content);
-        assert!(out.content.ends_with(&ChatLang::ZhHans.search_more(3)));
+        assert!(out.content.ends_with(&more(3, ChatLang::ZhHans)));
         assert_eq!(out.citations.len(), 2);
     }
 
@@ -623,9 +667,7 @@ mod tests {
         // 每条证据都有一行，没列的写在最后
         let lines = out.content.lines().filter(|l| l.starts_with('[')).count();
         assert_eq!(lines, shown);
-        assert!(out
-            .content
-            .ends_with(&ChatLang::ZhHans.search_more(5 - shown)));
+        assert!(out.content.ends_with(&more(5 - shown, ChatLang::ZhHans)));
     }
 
     #[tokio::test]
@@ -648,7 +690,10 @@ mod tests {
         add(&pool, "2026-07-01T09:00", 10, "app", "别的").await;
 
         let out = output(&pool, json!({"keywords": ["报销", "7月"]}), 4000).await;
-        assert_eq!(out.content, ChatLang::ZhHans.titles_none("「报销」「7月」"));
+        assert_eq!(
+            out.content,
+            "没有标题里有「报销」「7月」的窗口。可以换个词，或者用 search_screen_text 找屏幕上出现过的字。"
+        );
         assert!(out.citations.is_empty());
     }
 
@@ -680,6 +725,28 @@ mod tests {
             out.content
         );
         assert!(out.content.contains("10 min on 1 day"), "{}", out.content);
+    }
+
+    #[tokio::test]
+    async fn english_uses_the_plural_for_more_than_one_day() {
+        let pool = fresh_test_pool().await;
+        add(&pool, "2026-07-01T09:00", 10, "app", "报销").await;
+        add(&pool, "2026-07-02T09:00", 10, "app", "报销").await;
+        let ctx = real_ctx(&pool).await;
+
+        let q = query(json!({"keywords": ["报销"]}));
+        let out = q.execute(&ctx, 1, 4000, ChatLang::En).await.unwrap();
+        assert!(
+            out.content.contains("20 min over 2 days"),
+            "{}",
+            out.content
+        );
+    }
+
+    #[test]
+    fn text_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TEXT);
+        assert_same_placeholders(TEXT_JSON);
     }
 
     #[test]

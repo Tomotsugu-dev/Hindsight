@@ -1,0 +1,201 @@
+//! 工具文字的读法：一句话一个键，6 种语言挨在一起。
+//!
+//! 每个工具的句子放在它旁边的 `lang/工具名.json`，读成一个结构体，一句话一个字段。
+//! 几个工具共用的句子放在 `lang/common.json`，见 [`COMMON`]。
+
+use std::fmt::Display;
+use std::sync::LazyLock;
+
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+
+use super::ChatLang;
+
+/// 一句话的 6 种语言。少一种、多一种，都读取失败。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Text {
+    #[serde(rename = "zh-Hans")]
+    zh_hans: String,
+    #[serde(rename = "zh-Hant")]
+    zh_hant: String,
+    en: String,
+    ja: String,
+    pt: String,
+    es: String,
+}
+
+impl Text {
+    /// 这种语言的句子。
+    pub(super) fn get(&self, lang: ChatLang) -> &str {
+        match lang {
+            ChatLang::ZhHans => &self.zh_hans,
+            ChatLang::ZhHant => &self.zh_hant,
+            ChatLang::En => &self.en,
+            ChatLang::Ja => &self.ja,
+            ChatLang::Pt => &self.pt,
+            ChatLang::Es => &self.es,
+        }
+    }
+
+    /// 这种语言的句子，`{名字}` 换成 `args` 里同名的值。
+    ///
+    /// 只扫一遍：值里的 `{名字}` 不会再被换掉。`args` 里没有的名字原样留着。
+    pub(super) fn fill(&self, lang: ChatLang, args: &[(&str, &dyn Display)]) -> String {
+        let mut out = String::new();
+        let mut rest = self.get(lang);
+        while let Some(open) = rest.find('{') {
+            out.push_str(&rest[..open]);
+            let after = &rest[open + 1..];
+            let value = after.find('}').and_then(|close| {
+                let name = &after[..close];
+                let (_, value) = args.iter().find(|(n, _)| *n == name)?;
+                Some((close, value))
+            });
+            match value {
+                Some((close, value)) => {
+                    out.push_str(&value.to_string());
+                    rest = &after[close + 1..];
+                }
+                None => {
+                    out.push('{');
+                    rest = after;
+                }
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+}
+
+/// 读一个 JSON 里的句子。
+///
+/// JSON 编进了程序，每个 JSON 都有测试读一遍，所以这里不会失败。
+pub(super) fn load<T: DeserializeOwned>(json: &str) -> T {
+    serde_json::from_str(json).expect("工具文字的 JSON 读不懂，测试应该先发现")
+}
+
+/// `lang/common.json` 里的句子：几个工具共用的。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Common {
+    /// 一个关键词加上引号。
+    pub(super) quote: Text,
+    /// 几个加了引号的关键词之间。
+    pub(super) quote_sep: Text,
+    /// 没列全时的最后一行：还有几个，怎么看更多。
+    pub(super) more: Text,
+}
+
+const COMMON_JSON: &str = include_str!("lang/common.json");
+
+pub(super) static COMMON: LazyLock<Common> = LazyLock::new(|| load(COMMON_JSON));
+
+/// 检查每句话的 6 种语言用的占位符一样。每个 JSON 的测试都调它。
+#[cfg(test)]
+pub(super) fn assert_same_placeholders(json: &str) {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn placeholders(s: &str) -> BTreeSet<&str> {
+        s.split('{')
+            .skip(1)
+            .filter_map(|part| part.split_once('}').map(|(name, _)| name))
+            .filter(|name| {
+                !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c == '_')
+            })
+            .collect()
+    }
+
+    let all: BTreeMap<String, BTreeMap<String, String>> = serde_json::from_str(json).unwrap();
+    for (key, langs) in &all {
+        let zh = placeholders(&langs["zh-Hans"]);
+        for (lang, s) in langs {
+            assert_eq!(
+                placeholders(s),
+                zh,
+                "{key} 的 {lang} 和 zh-Hans 占位符不一样"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LANGS: [ChatLang; 6] = [
+        ChatLang::ZhHans,
+        ChatLang::ZhHant,
+        ChatLang::En,
+        ChatLang::Ja,
+        ChatLang::Pt,
+        ChatLang::Es,
+    ];
+
+    fn text(zh: &str, en: &str) -> Text {
+        Text {
+            zh_hans: zh.into(),
+            zh_hant: zh.into(),
+            en: en.into(),
+            ja: zh.into(),
+            pt: en.into(),
+            es: en.into(),
+        }
+    }
+
+    #[test]
+    fn get_picks_the_language() {
+        let t: Text = load(
+            r#"{"zh-Hans": "简", "zh-Hant": "繁", "en": "en",
+                "ja": "日", "pt": "pt", "es": "es"}"#,
+        );
+        let got: Vec<&str> = LANGS.iter().map(|&l| t.get(l)).collect();
+        assert_eq!(got, ["简", "繁", "en", "日", "pt", "es"]);
+    }
+
+    #[test]
+    fn a_missing_or_extra_language_fails_to_read() {
+        let five = r#"{"zh-Hans": "a", "zh-Hant": "a", "en": "a", "ja": "a", "pt": "a"}"#;
+        assert!(serde_json::from_str::<Text>(five).is_err());
+        let seven = r#"{"zh-Hans": "a", "zh-Hant": "a", "en": "a", "ja": "a",
+                        "pt": "a", "es": "a", "fr": "a"}"#;
+        assert!(serde_json::from_str::<Text>(seven).is_err());
+    }
+
+    #[test]
+    fn fill_replaces_each_name_with_its_value() {
+        let t = text("还有 {rest} 个，共 {dur}", "{rest} more, {dur}");
+        let args: [(&str, &dyn Display); 2] = [("rest", &3), ("dur", &"5 分钟")];
+        assert_eq!(t.fill(ChatLang::ZhHans, &args), "还有 3 个，共 5 分钟");
+        assert_eq!(t.fill(ChatLang::En, &args), "3 more, 5 分钟");
+    }
+
+    #[test]
+    fn fill_does_not_replace_names_inside_values() {
+        // 关键词是模型给的，里面可能正好有 {count}
+        let t = text("{kw}：{count} 个", "{kw}: {count}");
+        let out = t.fill(ChatLang::ZhHans, &[("kw", &"「{count}」"), ("count", &2)]);
+        assert_eq!(out, "「{count}」：2 个");
+    }
+
+    #[test]
+    fn fill_keeps_unknown_names_and_lone_braces() {
+        let t = text("{a} {b} { c", "");
+        assert_eq!(t.fill(ChatLang::ZhHans, &[("a", &1)]), "1 {b} { c");
+    }
+
+    #[test]
+    fn common_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&COMMON);
+        assert_same_placeholders(COMMON_JSON);
+    }
+
+    #[test]
+    #[should_panic(expected = "占位符不一样")]
+    fn different_placeholders_are_caught() {
+        assert_same_placeholders(
+            r#"{"more": {"zh-Hans": "还有 {rest} 个", "zh-Hant": "還有 {rest} 個",
+                "en": "{n} more", "ja": "{rest}", "pt": "{rest}", "es": "{rest}"}}"#,
+        );
+    }
+}

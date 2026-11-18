@@ -14,6 +14,7 @@ mod kinds;
 mod lang;
 #[cfg(test)]
 mod test_util;
+mod text;
 mod visible;
 
 use chrono::NaiveDate;

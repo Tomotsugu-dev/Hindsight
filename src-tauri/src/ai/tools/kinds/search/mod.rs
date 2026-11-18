@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::params::{clean_names, date_schema, invalid, names_schema, parse_range, read_args};
+use crate::ai::tools::text::COMMON;
 use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
 /// 关键词最多几个。
@@ -130,7 +131,7 @@ fn write_list(
     lang: ChatLang,
 ) -> ToolOutput {
     // 给列表前后的两行留位置。按最大的数算，实际写出来只会更短
-    let reserved = [list_head(rows.len()), lang.search_more(count)];
+    let reserved = [list_head(rows.len()), more(count, lang)];
     let mut used: usize = head
         .iter()
         .chain(&reserved)
@@ -156,12 +157,26 @@ fn write_list(
     }
     let rest = count - citations.len();
     if rest > 0 {
-        out.push(lang.search_more(rest));
+        out.push(more(rest, lang));
     }
     ToolOutput {
         content: out.join("\n"),
         citations,
     }
+}
+
+/// 把关键词写进句子：「报销」「7月」。
+fn quote_keywords(keywords: &[String], lang: ChatLang) -> String {
+    let quoted: Vec<String> = keywords
+        .iter()
+        .map(|k| COMMON.quote.fill(lang, &[("keyword", k)]))
+        .collect();
+    quoted.join(COMMON.quote_sep.get(lang))
+}
+
+/// 没列全时的最后一行：还有 `rest` 个没列，怎么看更多。
+fn more(rest: usize, lang: ChatLang) -> String {
+    COMMON.more.fill(lang, &[("rest", &rest)])
 }
 
 /// 不给日期就搜全部：换成一个包住所有日期的范围，SQL 只要一种写法。
@@ -301,14 +316,14 @@ mod tests {
     #[test]
     fn write_list_numbers_from_next_citation_and_says_what_is_left() {
         let out = write(rows(&["a", "b", "c"]), 5, 4000);
-        let more = ChatLang::ZhHans.search_more(2);
+        let last = more(2, ChatLang::ZhHans);
         let expected = [
             "开头",
             "列 3 个：",
             "[4] a",
             "[5] b",
             "[6] c",
-            more.as_str(),
+            last.as_str(),
         ];
         assert_eq!(out.content, expected.join("\n"));
         let indexes: Vec<usize> = out.citations.iter().map(|c| c.index).collect();
@@ -325,23 +340,20 @@ mod tests {
     fn write_list_lists_fewer_instead_of_cutting_a_line() {
         let all = write(rows(&["aaaa", "bbbb", "cccc"]), 3, 4000);
         // 留出最后一行的位置后，只放得下两行
-        let reserved = ChatLang::ZhHans.search_more(3).chars().count() + 1;
+        let reserved = more(3, ChatLang::ZhHans).chars().count() + 1;
         let max_chars = "开头\n列 3 个：\n[4] aaaa\n[5] bbbb\n".chars().count() + reserved;
         let out = write(rows(&["aaaa", "bbbb", "cccc"]), 3, max_chars);
         assert!(out.content.chars().count() <= max_chars, "{}", out.content);
         assert_eq!(out.citations.len(), 2);
         assert!(out.content.contains("列 2 个：\n[4] aaaa\n[5] bbbb\n"));
-        assert!(out.content.ends_with(&ChatLang::ZhHans.search_more(1)));
+        assert!(out.content.ends_with(&more(1, ChatLang::ZhHans)));
         assert_eq!(all.citations.len(), 3);
     }
 
     #[test]
     fn write_list_without_room_keeps_only_the_head_and_the_count() {
         let out = write(rows(&["a"]), 1, 10);
-        assert_eq!(
-            out.content,
-            format!("开头\n{}", ChatLang::ZhHans.search_more(1))
-        );
+        assert_eq!(out.content, format!("开头\n{}", more(1, ChatLang::ZhHans)));
         assert!(out.citations.is_empty());
     }
 
@@ -372,5 +384,12 @@ mod tests {
         assert_eq!(props["limit"]["minimum"], 1);
         assert_eq!(props["limit"]["maximum"], LIMIT_MAX);
         assert_eq!(props["date_from"]["maxLength"], 10);
+    }
+
+    #[test]
+    fn keywords_are_quoted_in_the_prompt_language() {
+        let kws = vec!["报销".to_string(), "7月".to_string()];
+        assert_eq!(quote_keywords(&kws, ChatLang::ZhHans), "「报销」「7月」");
+        assert_eq!(quote_keywords(&kws, ChatLang::En), "\"报销\", \"7月\"");
     }
 }

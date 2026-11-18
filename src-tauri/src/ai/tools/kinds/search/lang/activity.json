@@ -1,0 +1,50 @@
+{
+  "head": {
+    "zh-Hans": "标题里有{kw}的窗口：{count} 个，共 {dur}。",
+    "zh-Hant": "標題裡有{kw}的視窗：{count} 個，共 {dur}。",
+    "en": "Windows with {kw} in the title: {count}, {dur} in total.",
+    "ja": "タイトルに{kw}を含むウィンドウ：{count} 個、合計 {dur}。",
+    "pt": "Janelas com {kw} no título: {count}, {dur} no total.",
+    "es": "Ventanas con {kw} en el título: {count}, {dur} en total."
+  },
+  "span": {
+    "zh-Hans": "最早 {first_at}（{first}），最近 {last_at}（{last}）。",
+    "zh-Hant": "最早 {first_at}（{first}），最近 {last_at}（{last}）。",
+    "en": "Earliest {first_at} ({first}); latest {last_at} ({last}).",
+    "ja": "最初は {first_at}（{first}）、直近は {last_at}（{last}）。",
+    "pt": "Primeira vez {first_at} ({first}); última vez {last_at} ({last}).",
+    "es": "Primera vez {first_at} ({first}); última vez {last_at} ({last})."
+  },
+  "list_head": {
+    "zh-Hans": "按时长列前 {n} 个：",
+    "zh-Hant": "按時長列前 {n} 個：",
+    "en": "Top {n} by time:",
+    "ja": "時間の長い順に {n} 個：",
+    "pt": "As {n} primeiras por tempo:",
+    "es": "Las {n} primeras por tiempo:"
+  },
+  "use_one_day": {
+    "zh-Hans": "共 {dur}，{days} 天",
+    "zh-Hant": "共 {dur}，{days} 天",
+    "en": "{dur} on {days} day",
+    "ja": "合計 {dur}、{days} 日",
+    "pt": "{dur} em {days} dia",
+    "es": "{dur} en {days} día"
+  },
+  "use_days": {
+    "zh-Hans": "共 {dur}，{days} 天",
+    "zh-Hant": "共 {dur}，{days} 天",
+    "en": "{dur} over {days} days",
+    "ja": "合計 {dur}、{days} 日",
+    "pt": "{dur} em {days} dias",
+    "es": "{dur} en {days} días"
+  },
+  "none": {
+    "zh-Hans": "没有标题里有{kw}的窗口。可以换个词，或者用 search_screen_text 找屏幕上出现过的字。",
+    "zh-Hant": "沒有標題裡有{kw}的視窗。可以換個詞，或者用 search_screen_text 找螢幕上出現過的字。",
+    "en": "No window has {kw} in the title. Try other words, or use search_screen_text to find text that was on screen.",
+    "ja": "タイトルに{kw}を含むウィンドウはありません。別の語を試すか、search_screen_text で画面に表示された文字を探してください。",
+    "pt": "Nenhuma janela tem {kw} no título. Tente outras palavras ou use search_screen_text para achar textos que apareceram na tela.",
+    "es": "Ninguna ventana tiene {kw} en el título. Prueba otras palabras o usa search_screen_text para buscar texto que apareció en pantalla."
+  }
+}

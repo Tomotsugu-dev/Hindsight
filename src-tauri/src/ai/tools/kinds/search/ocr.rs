@@ -1,15 +1,18 @@
 //! search_screen_text：按关键词搜屏幕上识别出的文字。回答 X 在哪些窗口的屏幕上出现过。
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
 use chrono::NaiveDate;
 use rusqlite::{params, OptionalExtension};
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::{date_bounds, write_list, Row, SearchParams};
+use super::{date_bounds, quote_keywords, write_list, Row, SearchParams};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::text::{load, Text};
 use crate::ai::tools::{
     fts_literal, like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
 };
@@ -29,6 +32,24 @@ const SNIPPET_MAX_CHARS: usize = 120;
 const SNIPPET_BEFORE_CHARS: usize = 20;
 /// 关键词至少有这么多字，才能用全文索引找。更短的只能一段段比对。
 const FTS_MIN_CHARS: usize = 3;
+
+/// `lang/ocr.json` 里的句子。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OcrText {
+    /// 开头：几个窗口的屏幕上出现过关键词。说明只是出现过，不算时间。
+    head: Text,
+    /// 列表前的一行。
+    list_head: Text,
+    /// 没有命中。
+    none: Text,
+    /// 记忆库里一段屏幕文字都没有。
+    no_index: Text,
+}
+
+const TEXT_JSON: &str = include_str!("lang/ocr.json");
+
+static TEXT: LazyLock<OcrText> = LazyLock::new(|| load(TEXT_JSON));
 
 impl Tool for OcrQuery {
     const NAME: &'static str = "search_screen_text";
@@ -58,7 +79,7 @@ impl Tool for OcrQuery {
     ) -> Result<ToolOutput> {
         let Some(found) = find(ctx, &self.0).await? else {
             return Ok(ToolOutput {
-                content: lang.screen_no_index().to_string(),
+                content: TEXT.no_index.get(lang).to_string(),
                 citations: Vec::new(),
             });
         };
@@ -264,14 +285,16 @@ fn render(
     max_chars: usize,
     lang: ChatLang,
 ) -> ToolOutput {
-    let kw = lang.quote_keywords(&p.keywords);
+    let kw = quote_keywords(&p.keywords, lang);
     if found.count == 0 {
         return ToolOutput {
-            content: lang.screen_none(&kw),
+            content: TEXT.none.fill(lang, &[("kw", &kw)]),
             citations: Vec::new(),
         };
     }
-    let head = vec![lang.screen_head(&kw, found.count)];
+    let head = vec![TEXT
+        .head
+        .fill(lang, &[("kw", &kw), ("count", &found.count)])];
     let rows = found
         .windows
         .iter()
@@ -293,7 +316,7 @@ fn render(
             },
         })
         .collect();
-    let list_head = |n| lang.screen_list_head(n);
+    let list_head = |n: usize| TEXT.list_head.fill(lang, &[("n", &n)]);
     write_list(
         head,
         list_head,
@@ -309,8 +332,10 @@ fn render(
 mod tests {
     use serde_json::json;
 
+    use super::super::more;
     use super::*;
     use crate::ai::tools::test_util::real_ctx;
+    use crate::ai::tools::text::assert_same_placeholders;
     use crate::repo::test_util::fresh_test_pool;
     use crate::storage::DbPool;
 
@@ -638,7 +663,7 @@ mod tests {
         let out = output(&ctx, json!({"keywords": ["报销"], "limit": 2}), 4000).await;
         assert!(out.content.contains("：5 个"), "{}", out.content);
         assert!(out.content.contains("[1] app | 第5天") && out.content.contains("[2] app | 第4天"));
-        assert!(out.content.ends_with(&ChatLang::ZhHans.search_more(3)));
+        assert!(out.content.ends_with(&more(3, ChatLang::ZhHans)));
         assert_eq!(out.citations.len(), 2);
     }
 
@@ -662,9 +687,7 @@ mod tests {
         assert!(out.content.chars().count() <= max_chars, "{}", out.content);
         let shown = out.citations.len();
         assert!(0 < shown && shown < 5, "{shown}: {}", out.content);
-        assert!(out
-            .content
-            .ends_with(&ChatLang::ZhHans.search_more(5 - shown)));
+        assert!(out.content.ends_with(&more(5 - shown, ChatLang::ZhHans)));
     }
 
     #[tokio::test]
@@ -673,7 +696,10 @@ mod tests {
         add(&ctx, "2026-07-01T09:00", "app", "笔记", &["别的"]).await;
 
         let out = output(&ctx, json!({"keywords": ["报销"]}), 4000).await;
-        assert_eq!(out.content, ChatLang::ZhHans.screen_none("「报销」"));
+        assert_eq!(
+            out.content,
+            "屏幕上没有出现过「报销」。可以换更短的词、同义词或英文。"
+        );
         assert!(out.citations.is_empty());
     }
 
@@ -682,7 +708,10 @@ mod tests {
         let ctx = real_ctx(&main_db().await).await;
 
         let out = output(&ctx, json!({"keywords": ["报销"]}), 4000).await;
-        assert_eq!(out.content, ChatLang::ZhHans.screen_no_index());
+        assert_eq!(
+            out.content,
+            "没有屏幕文字索引：屏幕记忆没开，或者截图还没识别。"
+        );
         assert!(out.citations.is_empty());
     }
 
@@ -707,6 +736,12 @@ mod tests {
 
         let q = query(json!({"keywords": ["报销"]}));
         assert!(q.execute(&ctx, 1, 4000, ChatLang::ZhHans).await.is_err());
+    }
+
+    #[test]
+    fn text_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TEXT);
+        assert_same_placeholders(TEXT_JSON);
     }
 
     #[test]
