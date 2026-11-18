@@ -2,11 +2,14 @@
 //!
 //! 定时触发与调试页观测后续接。
 
+use rusqlite::{params, OptionalExtension};
 use tauri::State;
 
+use crate::ai::tools::like_pattern;
+use crate::memory::search::find_sessions;
 use crate::memory::snippet::snippet;
 use crate::memory::{digest, MemoryDb};
-use crate::storage::{DbPool, SqliteResultExt};
+use crate::storage::{DbPool, DbResult, SqliteResultExt};
 
 /// 记忆库句柄的 managed state。None = 启动时打开失败(帧登记同样停用),
 /// 命令层对 None 返回明确错误而不是 panic。
@@ -115,16 +118,9 @@ fn truncate_chars(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
 }
 
-/// 全文搜索屏幕记忆(搜索页):按空白拆词、隐式 AND,命中会话按时间倒序分页。
+/// 全文搜索屏幕记忆(搜索页):按空白拆词、隐式 AND,命中的段按时间倒序分页。
 ///
-/// 两条路径:
-/// - 全部词 ≥ 3 字符 → FTS trigram 索引(快路径)
-/// - 含短词(中文双字词很常见)→ trigram 对 <3 字符的查询词拿不出任何结果,
-///   整个查询退化为物化列 `text` 的 LIKE 全扫——会话行数万级、文本列几十 KB
-///   级,毫秒内完成,可接受
-///
-/// 每条命中附"首个命中词所在行的首现帧"(session_lines 行级留痕),前端用它
-/// 定位到具体截图与时刻。
+/// 每个词出现在段的文字或窗口标题里都算,见 [`find_sessions`]。
 #[tauri::command]
 pub async fn memory_search(
     mem: State<'_, MemoryState>,
@@ -145,145 +141,63 @@ pub async fn memory_search(
         });
     }
     // limit 上限防前端手滑一次拉全库;offset 由"加载更多"翻页
-    let limit = i64::from(limit.unwrap_or(30).min(200));
-    let offset = i64::from(offset.unwrap_or(0));
-    // 混合路径:≥3 字符的词走 trigram FTS 缩小集合,短词(<3,trigram 拿不出
-    // 结果)只在该集合内 LIKE 过滤。仅当全部是短词时才退化为全表 LIKE 扫——
-    // 文本永久保留,全扫成本随库龄线性涨,能靠 FTS 缩集就绝不全扫。
-    let long_words: Vec<String> = words
-        .iter()
-        .filter(|w| w.chars().count() >= 3)
-        .cloned()
-        .collect();
-    let short_words: Vec<String> = words
-        .iter()
-        .filter(|w| w.chars().count() < 3)
-        .cloned()
-        .collect();
-    let first_word = words[0].clone();
-    let first_like = crate::ai::tools::like_pattern(&first_word);
-
-    let (total, hits) =
-        db.0.call(move |conn| {
-            type Row = (i64, String, String, String, String, String);
-            let row_of = |r: &rusqlite::Row<'_>| -> rusqlite::Result<Row> {
-                Ok((
-                    r.get(0)?,
-                    r.get(1)?,
-                    r.get(2)?,
-                    r.get(3)?,
-                    r.get(4)?,
-                    r.get(5)?,
-                ))
-            };
-            const SELECT_COLS: &str = "s.id, COALESCE(s.app_id,''), COALESCE(s.title,''), \
-                                       s.started_ts, s.ended_ts, s.text";
-
-            let (total, rows): (i64, Vec<Row>) = if !long_words.is_empty() {
-                // FTS 缩集(长词) + 集合内 LIKE(短词,可为空)
-                let fts = crate::ai::tools::fts_literal(&long_words);
-                let short_patterns: Vec<String> = short_words
-                    .iter()
-                    .map(|w| crate::ai::tools::like_pattern(w))
-                    .collect();
-                // 参数 ?1 = FTS 词串,短词 LIKE 从 ?2 起编号
-                let short_cond = (0..short_patterns.len())
-                    .map(|i| format!(" AND s.text LIKE ?{} ESCAPE '\\'", i + 2))
-                    .collect::<String>();
-                let mut bind: Vec<&dyn rusqlite::ToSql> = vec![&fts];
-                for p in &short_patterns {
-                    bind.push(p);
-                }
-                let total = conn
-                    .query_row(
-                        &format!(
-                            "SELECT COUNT(*)
-                             FROM text_sessions_fts
-                             JOIN text_sessions s ON s.id = text_sessions_fts.rowid
-                             WHERE text_sessions_fts MATCH ?1{short_cond}"
-                        ),
-                        bind.as_slice(),
-                        |r| r.get(0),
-                    )
-                    .db()?;
-                let mut stmt = conn
-                    .prepare(&format!(
-                        "SELECT {SELECT_COLS}
-                         FROM text_sessions_fts
-                         JOIN text_sessions s ON s.id = text_sessions_fts.rowid
-                         WHERE text_sessions_fts MATCH ?1{short_cond}
-                         ORDER BY s.started_ts DESC LIMIT {limit} OFFSET {offset}"
-                    ))
-                    .db()?;
-                let rows = stmt
-                    .query_map(bind.as_slice(), row_of)
-                    .db()?
-                    .collect::<rusqlite::Result<Vec<_>>>()
-                    .db()?;
-                (total, rows)
-            } else {
-                // 全部是短词:别无选择,物化列 LIKE 全扫
-                let patterns: Vec<String> = words
-                    .iter()
-                    .map(|w| crate::ai::tools::like_pattern(w))
-                    .collect();
-                let cond = (1..=patterns.len())
-                    .map(|i| format!("s.text LIKE ?{i} ESCAPE '\\'"))
-                    .collect::<Vec<_>>()
-                    .join(" AND ");
-                let total = conn
-                    .query_row(
-                        &format!("SELECT COUNT(*) FROM text_sessions s WHERE {cond}"),
-                        rusqlite::params_from_iter(patterns.iter()),
-                        |r| r.get(0),
-                    )
-                    .db()?;
-                let mut stmt = conn
-                    .prepare(&format!(
-                        "SELECT {SELECT_COLS} FROM text_sessions s WHERE {cond}
-                         ORDER BY s.started_ts DESC LIMIT {limit} OFFSET {offset}"
-                    ))
-                    .db()?;
-                let rows = stmt
-                    .query_map(rusqlite::params_from_iter(patterns.iter()), row_of)
-                    .db()?
-                    .collect::<rusqlite::Result<Vec<_>>>()
-                    .db()?;
-                (total, rows)
-            };
-
-            // 每条命中补证据帧:该会话里第一条含首词的行的首现帧(同 chat 搜索工具口径)
-            let mut hits = Vec::with_capacity(rows.len());
-            for (id, app, title, started_ts, ended_ts, text) in rows {
-                let frame: Option<(String, String)> = conn
-                    .query_row(
-                        "SELECT first_path, first_ts FROM session_lines
-                         WHERE session_id = ?1 AND text LIKE ?2 ESCAPE '\\' LIMIT 1",
-                        rusqlite::params![id, first_like],
-                        |r| Ok((r.get(0)?, r.get(1)?)),
-                    )
-                    .ok();
-                hits.push(MemorySearchHit {
-                    session_id: id,
-                    app,
-                    title,
-                    started_ts,
-                    ended_ts,
-                    snippet: snippet(
-                        &text,
-                        &first_word,
-                        SNIPPET_BEFORE_CHARS,
-                        SNIPPET_AFTER_CHARS,
-                    ),
-                    frame_path: frame.as_ref().map(|(p, _)| p.clone()),
-                    frame_ts: frame.map(|(_, t)| t),
-                });
-            }
-            Ok((total as u64, hits))
-        })
+    let limit = limit.unwrap_or(30).min(200) as usize;
+    let offset = offset.unwrap_or(0) as usize;
+    db.0.call(move |conn| search_page(conn, &words, limit, offset))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+}
 
+/// 搜一页:全部命中的段数,和从 `offset` 起的 `limit` 段。
+///
+/// 每段的片段和证据帧跟着第一个出现在文字里的词:帧是这个词所在行第一次出现时的截图。
+/// 词都只在标题里时,片段从头截,没有帧。
+fn search_page(
+    conn: &rusqlite::Connection,
+    words: &[String],
+    limit: usize,
+    offset: usize,
+) -> DbResult<MemorySearchResp> {
+    let spans = find_sessions(conn, words, None, None)?;
+    let total = spans.len() as u64;
+    let mut hits = Vec::new();
+    for s in spans.into_iter().skip(offset).take(limit) {
+        let text: String = conn
+            .query_row(
+                "SELECT text FROM text_sessions WHERE id = ?1",
+                params![s.id],
+                |r| r.get(0),
+            )
+            .db()?;
+        let mut word = "";
+        let mut frame: Option<(String, String)> = None;
+        for w in words {
+            frame = conn
+                .query_row(
+                    "SELECT first_path, first_ts FROM session_lines
+                     WHERE session_id = ?1 AND text LIKE ?2 ESCAPE '\\'
+                     ORDER BY line_no LIMIT 1",
+                    params![s.id, like_pattern(w)],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()
+                .db()?;
+            if frame.is_some() {
+                word = w;
+                break;
+            }
+        }
+        hits.push(MemorySearchHit {
+            session_id: s.id,
+            app: s.app_id,
+            title: s.title,
+            started_ts: s.started_ts,
+            ended_ts: s.ended_ts,
+            snippet: snippet(&text, word, SNIPPET_BEFORE_CHARS, SNIPPET_AFTER_CHARS),
+            frame_path: frame.as_ref().map(|(p, _)| p.clone()),
+            frame_ts: frame.map(|(_, t)| t),
+        });
+    }
     Ok(MemorySearchResp { total, hits })
 }
 
@@ -435,4 +349,91 @@ pub async fn memory_pending_stats(
         total: unregistered + pending_ocr,
         digest_running: digest::is_running(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 加一段屏幕文字。第 n 行第一次出现在截图 shots/<段>-<n>.jpg 上。
+    async fn add(db: &MemoryDb, start: &str, title: &str, lines: &[&str]) {
+        let ts = format!("{start}:00+09:00");
+        let date = start[..10].to_string();
+        let title = title.to_string();
+        let lines: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        db.0.call(move |c| {
+            c.execute(
+                "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
+                 VALUES (?1, ?2, ?2, 'app', ?3, ?4)",
+                params![date, ts, title, lines.join("\n")],
+            )
+            .db()?;
+            let id = c.last_insert_rowid();
+            for (n, line) in lines.iter().enumerate() {
+                c.execute(
+                    "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![id, n as i64, line, format!("shots/{id}-{n}.jpg"), ts],
+                )
+                .db()?;
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn page(db: &MemoryDb, words: &[&str], limit: usize, offset: usize) -> MemorySearchResp {
+        let words: Vec<String> = words.iter().map(|w| w.to_string()).collect();
+        db.0.call(move |c| search_page(c, &words, limit, offset))
+            .await
+            .unwrap()
+    }
+
+    fn titles(resp: &MemorySearchResp) -> Vec<&str> {
+        resp.hits.iter().map(|h| h.title.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn pages_newest_first_and_counts_every_hit() {
+        let db = MemoryDb::open_in_memory().await.unwrap();
+        add(&db, "2026-07-01T09:00", "一", &["报销"]).await;
+        add(&db, "2026-07-02T09:00", "二", &["报销"]).await;
+        add(&db, "2026-07-03T09:00", "三", &["报销"]).await;
+
+        let first = page(&db, &["报销"], 2, 0).await;
+        assert_eq!(first.total, 3);
+        assert_eq!(titles(&first), ["三", "二"]);
+        let rest = page(&db, &["报销"], 2, 2).await;
+        assert_eq!(rest.total, 3);
+        assert_eq!(titles(&rest), ["一"]);
+    }
+
+    #[tokio::test]
+    async fn a_word_in_the_title_counts_and_the_snippet_follows_the_word_in_the_text() {
+        let db = MemoryDb::open_in_memory().await.unwrap();
+        let long = format!("{}请提交报销单", "前".repeat(30));
+        add(&db, "2026-07-01T09:00", "财务群", &["闲聊", &long]).await;
+        add(&db, "2026-07-01T10:00", "家人群", &["报销"]).await;
+
+        // 「财务群」只在标题里，片段和帧跟着「报销」
+        let resp = page(&db, &["财务群", "报销"], 30, 0).await;
+        assert_eq!(titles(&resp), ["财务群"]);
+        let hit = &resp.hits[0];
+        // 词前面留 20 个字
+        assert_eq!(hit.snippet, format!("…{}请提交报销单", "前".repeat(17)));
+        assert_eq!(hit.frame_path.as_deref(), Some("shots/1-1.jpg"));
+        assert_eq!(hit.frame_ts.as_deref(), Some("2026-07-01T09:00:00+09:00"));
+    }
+
+    #[tokio::test]
+    async fn words_only_in_the_title_have_no_frame() {
+        let db = MemoryDb::open_in_memory().await.unwrap();
+        add(&db, "2026-07-01T09:00", "财务群", &["第一行", "第二行"]).await;
+
+        let resp = page(&db, &["财务群"], 30, 0).await;
+        assert_eq!(resp.hits[0].snippet, "第一行 第二行");
+        assert_eq!(resp.hits[0].frame_path, None);
+        assert_eq!(resp.hits[0].frame_ts, None);
+    }
 }

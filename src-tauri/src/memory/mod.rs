@@ -10,6 +10,7 @@ pub mod digest;
 pub mod frames;
 pub mod resident;
 pub mod scheduled;
+pub mod search;
 pub mod sessions;
 pub(crate) mod snippet;
 
