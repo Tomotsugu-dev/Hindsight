@@ -1,7 +1,8 @@
-//! AI 能看到哪些数据。规则只写在这里，工具照着用。
+//! AI 能看到哪些数据。规则只写在这里，用数据的地方照着过滤。
 //!
-//! 主库的活动带着分组和「已忽略」标记，条件直接写成 SQL，见 [`MAIN_VISIBLE`]。
-//! 记忆库只有进程名和窗口标题，要用主库里的分组、分类和忽略规则写出条件，见 [`Visibility`]。
+//! 主库的活动带着分组和「已忽略」标记，条件直接写成 SQL，见 [`AiDataPolicy::main_sql`]。
+//! 记忆库只有进程名和窗口标题，要用主库里的分组、分类和忽略规则写出条件，
+//! 见 [`AiDataPolicy::screen_filter`]。
 
 use std::collections::HashMap;
 
@@ -13,21 +14,15 @@ use crate::memory::search::SessionFilter;
 use crate::repo::settings::Settings;
 use crate::storage::{Connection, SqliteResultExt};
 
-/// 主库里 AI 能看到的活动。配 [`from_stats_category_sql`] 用，它给出别名 `a` 和 `c`。
-///
-/// 跟统计页一样：「不计入统计」分类和已忽略的窗口不算。「隐私」分类本来不记录，
-/// 但删除失败时旧数据会留在库里，所以也去掉。
-///
-/// [`from_stats_category_sql`]: crate::repo::sql::from_stats_category_sql
-pub(super) const MAIN_VISIBLE: &str =
-    "c.id IS NOT 'hidden' AND c.id IS NOT 'private' AND a.excluded = 0";
+/// 主库里 AI 能看到的活动，见 [`AiDataPolicy::main_sql`]。
+const MAIN_SQL: &str = "c.id IS NOT 'hidden' AND c.id IS NOT 'private' AND a.excluded = 0";
 
 /// 没分类的应用算进这个分类，跟统计页一样。
 const OTHER: &str = "other";
 
-/// 主库里，记忆库要用的设置：分组、分类和忽略规则。每个问题开始时读一次。
+/// AI 能看到什么。每个问题从主库的设置生成一次。
 #[derive(Debug, Default)]
-pub(super) struct Visibility {
+pub struct AiDataPolicy {
     /// 进程名 → 它所在的分组。
     groups: HashMap<String, Group>,
     /// 没删除的分类：id → 名字。
@@ -42,10 +37,10 @@ struct Group {
     category_id: Option<String>,
 }
 
-impl Visibility {
+impl AiDataPolicy {
     /// 从主库读分组、分类和忽略规则。
-    pub(super) async fn load(main: &Connection) -> Result<Self> {
-        let visibility = main
+    pub async fn load(main: &Connection) -> Result<Self> {
+        let policy = main
             .call(|conn| {
                 let mut stmt = conn
                     .prepare(
@@ -91,7 +86,18 @@ impl Visibility {
                 })
             })
             .await?;
-        Ok(visibility)
+        Ok(policy)
+    }
+
+    /// 主库里 AI 能看到的活动，写成 SQL 条件。配 [`from_stats_category_sql`] 用，
+    /// 它给出别名 `a` 和 `c`。
+    ///
+    /// 跟统计页一样：「不计入统计」分类和已忽略的窗口不算。「隐私」分类本来不记录，
+    /// 但删除失败时旧数据会留在库里，所以也去掉。
+    ///
+    /// [`from_stats_category_sql`]: crate::repo::sql::from_stats_category_sql
+    pub fn main_sql(&self) -> &'static str {
+        MAIN_SQL
     }
 
     /// 搜屏幕文字时只要哪些段：AI 能看的，再按 `apps` 和 `categories` 筛。
@@ -99,7 +105,7 @@ impl Visibility {
     /// `processes` 是记忆库里有屏幕文字的进程名。`apps`、`categories` 是空的就不按它筛。
     /// 跟主库一样：「不计入统计」「隐私」分类里的应用、命中忽略规则的窗口都不给看。
     /// 记忆库没有网站，网站规则用不上。
-    pub(super) fn screen_filter(
+    pub fn screen_filter(
         &self,
         processes: Vec<String>,
         apps: &[String],
@@ -129,7 +135,7 @@ impl Visibility {
     }
 
     /// 应用的显示名。没分组就是进程名。
-    pub(super) fn display_name<'a>(&'a self, process: &'a str) -> &'a str {
+    pub fn display_name<'a>(&'a self, process: &'a str) -> &'a str {
         self.groups
             .get(process)
             .map_or(process, |g| g.display_name.as_str())
@@ -180,7 +186,7 @@ mod tests {
 
     /// 主库：Code 和 Code.exe 在「编程」的同一个分组里；secret 不计入统计；Signal 隐私；
     /// 忽略 Terminal 里标题有 download 的窗口、整个 Zoom；Slack 的规则关键词是空白。
-    async fn loaded() -> Visibility {
+    async fn loaded() -> AiDataPolicy {
         let pool = fresh_test_pool().await;
         pool.0
             .call(|c| {
@@ -205,7 +211,7 @@ mod tests {
             })
             .await
             .unwrap();
-        Visibility::load(&pool.0).await.unwrap()
+        AiDataPolicy::load(&pool.0).await.unwrap()
     }
 
     fn names(list: &[&str]) -> Vec<String> {
@@ -286,7 +292,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let v = Visibility::load(&pool.0).await.unwrap();
+        let v = AiDataPolicy::load(&pool.0).await.unwrap();
         let f = v.screen_filter(names(&["Terminal"]), &[], &[]);
         assert_eq!(f.apps, ["Terminal"]);
         assert!(f.hidden_windows.is_empty());

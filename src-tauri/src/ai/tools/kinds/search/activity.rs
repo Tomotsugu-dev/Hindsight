@@ -11,7 +11,6 @@ use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::text::{load, Text};
-use crate::ai::tools::visible::MAIN_VISIBLE;
 use crate::ai::tools::{
     like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
 };
@@ -179,7 +178,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Found> {
                     a.started_at, a.ended_at, a.duration_secs AS secs, a.local_date,
                     NULLIF(a.screenshot_path, '') AS shot
              {from_sql}
-             WHERE a.local_date BETWEEN ? AND ? AND {MAIN_VISIBLE}{conds}
+             WHERE a.local_date BETWEEN ? AND ? AND {visible}{conds}
          ),
          windows AS (
              SELECT app, title, SUM(secs) AS secs, COUNT(DISTINCT local_date) AS days,
@@ -198,6 +197,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Found> {
          ORDER BY w.secs DESC, l.started_at DESC",
         with = host_rule_with_sql("activities"),
         from_sql = from_stats_category_sql("activities"),
+        visible = ctx.policy().await?.main_sql(),
     );
     let all = ctx
         .main

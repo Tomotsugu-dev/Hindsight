@@ -15,7 +15,6 @@ mod lang;
 #[cfg(test)]
 mod test_util;
 mod text;
-mod visible;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -23,8 +22,8 @@ use tokio::sync::OnceCell;
 
 pub use self::kinds::Query;
 pub use self::lang::ChatLang;
-use self::visible::Visibility;
 use crate::ai::model::{ToolCall, ToolSpec};
+use crate::ai::policy::AiDataPolicy;
 use crate::error::Result;
 use crate::storage::Connection;
 
@@ -102,8 +101,8 @@ pub struct ToolOutput {
 struct ToolCtx {
     main: Connection,
     mem: Connection,
-    /// 记忆库里哪些能给 AI 看。第一次用时从主库读。
-    visible: OnceCell<Visibility>,
+    /// AI 能看到什么。第一次用时从主库读。
+    policy: OnceCell<AiDataPolicy>,
 }
 
 impl ToolCtx {
@@ -116,16 +115,16 @@ impl ToolCtx {
         Ok(Self {
             main,
             mem,
-            visible: OnceCell::new(),
+            policy: OnceCell::new(),
         })
     }
 
-    /// 记忆库里哪些能给 AI 看。一个问题里只从主库读一次。
+    /// AI 能看到什么。一个问题里只从主库读一次。
     ///
     /// 读失败时，用到它的工具执行失败，不会给出没筛过的数据。
-    async fn visible(&self) -> Result<&Visibility> {
-        self.visible
-            .get_or_try_init(|| Visibility::load(&self.main))
+    async fn policy(&self) -> Result<&AiDataPolicy> {
+        self.policy
+            .get_or_try_init(|| AiDataPolicy::load(&self.main))
             .await
     }
 }
@@ -252,7 +251,7 @@ mod tests {
             ToolCtx {
                 main,
                 mem: empty.mem,
-                visible: OnceCell::new(),
+                policy: OnceCell::new(),
             }
         } else {
             ToolCtx::open_readonly().await.unwrap()

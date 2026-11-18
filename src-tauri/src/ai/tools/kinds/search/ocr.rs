@@ -121,9 +121,9 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
     if processes.is_empty() {
         return Ok(None);
     }
-    // 可见范围、应用和分类按主库的设置写成条件，在 SQL 里筛
-    let v = ctx.visible().await?;
-    let filter = v.screen_filter(processes, &p.apps, &p.categories);
+    // 可见范围、应用和分类由 AiDataPolicy 写成条件，在 SQL 里筛
+    let policy = ctx.policy().await?;
+    let filter = policy.screen_filter(processes, &p.apps, &p.categories);
     let (keywords, range) = (p.keywords.clone(), p.range);
     let spans = ctx
         .mem
@@ -135,7 +135,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
     let mut seen = HashSet::new();
     let mut picked = Vec::new();
     for span in spans {
-        let app = v.display_name(&span.app_id).to_string();
+        let app = policy.display_name(&span.app_id).to_string();
         if seen.insert((app.clone(), span.title.clone())) {
             picked.push((app, span));
         }

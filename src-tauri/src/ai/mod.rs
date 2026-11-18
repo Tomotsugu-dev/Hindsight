@@ -32,6 +32,7 @@ pub mod ocr_supervisor;
 pub mod ocr_vision;
 pub mod ocr_worker;
 pub mod platform;
+pub mod policy;
 pub mod prompt;
 pub mod providers;
 pub mod recommended;
