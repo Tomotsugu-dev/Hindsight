@@ -25,7 +25,7 @@ use crate::ai::model::{ToolCall, ToolSpec};
 use crate::error::Result;
 use crate::storage::{Connection, SqliteResultExt};
 
-/// 给模型查库用的三个工具：给模型看的说明、检查模型发来的调用、执行。
+/// 给模型查库用的工具：给模型看的说明、检查模型发来的调用、执行。
 ///
 /// 一次提问开一个：检查日期要用 `today`，结果和报错的文字按 `lang` 写。
 pub struct Tools {
@@ -125,6 +125,14 @@ impl ToolCtx {
 const ACTIVITY_WHERE: &str = "WHERE a.local_date BETWEEN ?1 AND ?2
        AND g.category_id IS NOT 'hidden'
        AND a.excluded = 0";
+
+/// 主库里 AI 能看到的活动。配 [`from_stats_category_sql`] 用，它给出别名 `a` 和 `c`。
+///
+/// 跟统计页一样：「不计入统计」分类和已忽略的窗口不算。「隐私」分类本来不记录，
+/// 但删除失败时旧数据会留在库里，所以也去掉。
+///
+/// [`from_stats_category_sql`]: crate::repo::sql::from_stats_category_sql
+const MAIN_VISIBLE: &str = "c.id IS NOT 'hidden' AND c.id IS NOT 'private' AND a.excluded = 0";
 
 /// 覆盖披露:范围内活动日数(主库)、其中有屏幕文字索引的日数与待识别帧数(记忆库)。
 /// 拼在 timeline/search 结果最前——"没搜到"究竟是"屏幕上没出现过"还是"索引不全",

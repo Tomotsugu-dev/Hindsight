@@ -12,6 +12,7 @@ use chrono::NaiveDate;
 use serde_json::Value;
 
 use self::read::timeline::TimelineQuery;
+use self::search::activity::ActivityQuery;
 use self::search::text::SearchQuery;
 use self::stats::query_stats::StatsQuery;
 use super::{ChatLang, ToolCtx, ToolError, ToolOutput};
@@ -50,6 +51,7 @@ trait Tool: Sized {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Query {
+    SearchActivity(ActivityQuery),
     SearchText(SearchQuery),
     QueryStats(StatsQuery),
     GetTimeline(TimelineQuery),
@@ -58,6 +60,7 @@ pub enum Query {
 /// 给模型看的全部工具。
 pub(super) fn specs() -> Vec<ToolSpec> {
     vec![
+        ActivityQuery::spec(),
         SearchQuery::spec(),
         StatsQuery::spec(),
         TimelineQuery::spec(),
@@ -72,6 +75,7 @@ pub(super) fn parse(
 ) -> std::result::Result<Query, ToolError> {
     let args = &call.arguments;
     match call.name.as_str() {
+        ActivityQuery::NAME => ActivityQuery::parse(args, today, lang).map(Query::SearchActivity),
         SearchQuery::NAME => SearchQuery::parse(args, today, lang).map(Query::SearchText),
         StatsQuery::NAME => StatsQuery::parse(args, today, lang).map(Query::QueryStats),
         TimelineQuery::NAME => TimelineQuery::parse(args, today, lang).map(Query::GetTimeline),
@@ -93,6 +97,7 @@ impl Query {
         lang: ChatLang,
     ) -> Result<ToolOutput> {
         match self {
+            Self::SearchActivity(q) => q.execute(ctx, next_citation, max_chars, lang).await,
             Self::SearchText(q) => q.execute(ctx, next_citation, max_chars, lang).await,
             Self::QueryStats(q) => q.execute(ctx, next_citation, max_chars, lang).await,
             Self::GetTimeline(q) => q.execute(ctx, next_citation, max_chars, lang).await,
@@ -121,7 +126,7 @@ mod tests {
         let e = parse(&call("drop_table", Value::Null), today(), ChatLang::ZhHans).unwrap_err();
         assert!(e.0.contains("未知工具 drop_table"), "{}", e.0);
         assert!(
-            e.0.contains("search_text / query_stats / get_timeline"),
+            e.0.contains("search_titles / search_text / query_stats / get_timeline"),
             "{}",
             e.0
         );
@@ -131,7 +136,15 @@ mod tests {
     #[test]
     fn every_spec_name_reaches_its_tool() {
         let names: Vec<String> = specs().into_iter().map(|s| s.name).collect();
-        assert_eq!(names, ["search_text", "query_stats", "get_timeline"]);
+        assert_eq!(
+            names,
+            [
+                "search_titles",
+                "search_text",
+                "query_stats",
+                "get_timeline"
+            ]
+        );
         for name in &names {
             if let Err(e) = parse(
                 &call(name, serde_json::json!({})),

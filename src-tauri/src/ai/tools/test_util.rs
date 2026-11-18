@@ -55,6 +55,18 @@ pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> T
     ToolCtx { main, mem }
 }
 
+/// 用 `main` 和一个新的记忆库组一个 `ToolCtx`。两个库都跑过真实的建表。
+///
+/// `main` 用 [`fresh_test_pool`](crate::repo::test_util::fresh_test_pool) 开，
+/// 先用 repo 的函数造好分组、分类、网站规则。
+pub(super) async fn real_ctx(main: &crate::storage::DbPool) -> ToolCtx {
+    let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
+    ToolCtx {
+        main: main.0.clone(),
+        mem: mem.0,
+    }
+}
+
 pub(super) fn day() -> (NaiveDate, NaiveDate) {
     let d = NaiveDate::from_ymd_opt(2026, 7, 8).unwrap();
     (d, d)

@@ -647,6 +647,125 @@ impl ChatLang {
         }
     }
 
+    // ── search_titles ────────────────────────────────
+
+    /// 把关键词写进句子：「报销」「7月」。
+    pub fn quote_keywords(self, keywords: &[String]) -> String {
+        match self {
+            Self::ZhHans | Self::ZhHant | Self::Ja => {
+                keywords.iter().map(|k| format!("「{k}」")).collect()
+            }
+            Self::En | Self::Pt | Self::Es => keywords
+                .iter()
+                .map(|k| format!("\"{k}\""))
+                .collect::<Vec<_>>()
+                .join(", "),
+        }
+    }
+
+    /// 开头第一句：命中了几个窗口，一共多久。
+    pub fn titles_head(self, kw: &str, count: usize, dur: &str) -> String {
+        match self {
+            Self::ZhHans => format!("标题里有{kw}的窗口：{count} 个，共 {dur}。"),
+            Self::ZhHant => format!("標題裡有{kw}的視窗：{count} 個，共 {dur}。"),
+            Self::En => format!("Windows with {kw} in the title: {count}, {dur} in total."),
+            Self::Ja => format!("タイトルに{kw}を含むウィンドウ：{count} 個、合計 {dur}。"),
+            Self::Pt => format!("Janelas com {kw} no título: {count}, {dur} no total."),
+            Self::Es => format!("Ventanas con {kw} en el título: {count}, {dur} en total."),
+        }
+    }
+
+    /// 开头第二句：最早、最近一次开始的时刻和窗口。
+    pub fn titles_span(self, first_at: &str, first: &str, last_at: &str, last: &str) -> String {
+        match self {
+            Self::ZhHans | Self::ZhHant => {
+                format!("最早 {first_at}（{first}），最近 {last_at}（{last}）。")
+            }
+            Self::En => format!("Earliest {first_at} ({first}); latest {last_at} ({last})."),
+            Self::Ja => format!("最初は {first_at}（{first}）、直近は {last_at}（{last}）。"),
+            Self::Pt => {
+                format!("Primeira vez {first_at} ({first}); última vez {last_at} ({last}).")
+            }
+            Self::Es => {
+                format!("Primera vez {first_at} ({first}); última vez {last_at} ({last}).")
+            }
+        }
+    }
+
+    /// 列表前的一行。
+    pub fn titles_list_head(self, n: usize) -> String {
+        match self {
+            Self::ZhHans => format!("按时长列前 {n} 个："),
+            Self::ZhHant => format!("按時長列前 {n} 個："),
+            Self::En => format!("Top {n} by time:"),
+            Self::Ja => format!("時間の長い順に {n} 個："),
+            Self::Pt => format!("As {n} primeiras por tempo:"),
+            Self::Es => format!("Las {n} primeras por tiempo:"),
+        }
+    }
+
+    /// 一个窗口用了多久、在几天里出现过。
+    pub fn titles_use(self, dur: &str, days: usize) -> String {
+        match self {
+            Self::ZhHans | Self::ZhHant => format!("共 {dur}，{days} 天"),
+            Self::En if days == 1 => format!("{dur} on 1 day"),
+            Self::En => format!("{dur} over {days} days"),
+            Self::Ja => format!("合計 {dur}、{days} 日"),
+            Self::Pt if days == 1 => format!("{dur} em 1 dia"),
+            Self::Pt => format!("{dur} em {days} dias"),
+            Self::Es if days == 1 => format!("{dur} en 1 día"),
+            Self::Es => format!("{dur} en {days} días"),
+        }
+    }
+
+    /// 没列全时的最后一行：还有几个，怎么看更多。
+    pub fn titles_more(self, rest: usize) -> String {
+        match self {
+            Self::ZhHans => format!(
+                "还有 {rest} 个没列。要看更多，把 limit 调大，或者缩小日期范围、按应用或分类过滤。"
+            ),
+            Self::ZhHant => format!(
+                "還有 {rest} 個沒列。要看更多，把 limit 調大，或者縮小日期範圍、按應用或分類過濾。"
+            ),
+            Self::En => format!(
+                "{rest} more not listed. To see more, raise limit, narrow the dates, or filter by apps or categories."
+            ),
+            Self::Ja => format!(
+                "ほかに {rest} 個あります。もっと見るには limit を増やすか、日付を絞るか、アプリやカテゴリで絞り込んでください。"
+            ),
+            Self::Pt => format!(
+                "Mais {rest} não listadas. Para ver mais, aumente limit, reduza as datas ou filtre por apps ou categorias."
+            ),
+            Self::Es => format!(
+                "Faltan {rest} por listar. Para ver más, sube limit, acota las fechas o filtra por apps o categorías."
+            ),
+        }
+    }
+
+    /// 没有命中。
+    pub fn titles_none(self, kw: &str) -> String {
+        match self {
+            Self::ZhHans => format!(
+                "没有标题里有{kw}的窗口。可以换个词，或者用 search_screen_text 找屏幕上出现过的字。"
+            ),
+            Self::ZhHant => format!(
+                "沒有標題裡有{kw}的視窗。可以換個詞，或者用 search_screen_text 找螢幕上出現過的字。"
+            ),
+            Self::En => format!(
+                "No window has {kw} in the title. Try other words, or use search_screen_text to find text that was on screen."
+            ),
+            Self::Ja => format!(
+                "タイトルに{kw}を含むウィンドウはありません。別の語を試すか、search_screen_text で画面に表示された文字を探してください。"
+            ),
+            Self::Pt => format!(
+                "Nenhuma janela tem {kw} no título. Tente outras palavras ou use search_screen_text para achar textos que apareceram na tela."
+            ),
+            Self::Es => format!(
+                "Ninguna ventana tiene {kw} en el título. Prueba otras palabras o usa search_screen_text para buscar texto que apareció en pantalla."
+            ),
+        }
+    }
+
     // ── 参数校验错误(回填给模型自纠) ────────────────────
 
     pub fn args_format_err(self, e: &impl std::fmt::Display) -> String {
@@ -783,6 +902,28 @@ impl ChatLang {
             Self::Es => "bucket y group_by no se pueden combinar: usa bucket para tendencias y group_by para rankings — quita uno de los dos",
         }
     }
+
+    pub fn err_too_many_items(self, field: &str, max: usize) -> String {
+        match self {
+            Self::ZhHans => format!("{field} 最多 {max} 个"),
+            Self::ZhHant => format!("{field} 最多 {max} 個"),
+            Self::En => format!("{field} takes at most {max} items"),
+            Self::Ja => format!("{field} は {max} 個までです"),
+            Self::Pt => format!("{field} aceita no máximo {max} itens"),
+            Self::Es => format!("{field} admite como máximo {max} elementos"),
+        }
+    }
+
+    pub fn err_limit_range(self, max: usize) -> String {
+        match self {
+            Self::ZhHans => format!("limit 要在 1 到 {max} 之间"),
+            Self::ZhHant => format!("limit 要在 1 到 {max} 之間"),
+            Self::En => format!("limit must be between 1 and {max}"),
+            Self::Ja => format!("limit は 1 から {max} の間にしてください"),
+            Self::Pt => format!("limit deve estar entre 1 e {max}"),
+            Self::Es => format!("limit debe estar entre 1 y {max}"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -878,6 +1019,33 @@ mod tests {
                 "{lang:?}: {fl}"
             );
             assert!(lang.count_suffix(3).contains('3'));
+            // search_titles
+            let kw = lang.quote_keywords(&["报销".into(), "7月".into()]);
+            assert!(kw.contains("报销") && kw.contains("7月"), "{lang:?}: {kw}");
+            let th = lang.titles_head("KW", 12, "3h");
+            assert!(th.contains("KW") && th.contains("12") && th.contains("3h"));
+            let ts = lang.titles_span("07-01 10:02", "A | x", "07-08 15:55", "B | y");
+            assert!(
+                ts.contains("07-01 10:02") && ts.contains("B | y"),
+                "{lang:?}: {ts}"
+            );
+            assert!(lang.titles_list_head(8).contains('8'));
+            for days in [1, 2] {
+                let u = lang.titles_use("38m", days);
+                assert!(
+                    u.contains("38m") && u.contains(&days.to_string()),
+                    "{lang:?}: {u}"
+                );
+            }
+            assert!(lang.titles_more(4).contains('4'));
+            let none = lang.titles_none("KW");
+            assert!(none.contains("KW") && none.contains("search_screen_text"));
+            let many = lang.err_too_many_items("keywords", 3);
+            assert!(
+                many.contains("keywords") && many.contains('3'),
+                "{lang:?}: {many}"
+            );
+            assert!(lang.err_limit_range(20).contains("20"));
             // fmt_secs 的三个量级形态
             assert!(!lang.fmt_secs(59).is_empty());
             assert!(!lang.fmt_secs(61 * 60).is_empty());

@@ -453,7 +453,10 @@ mod http_tests {
         // Default 也给足思考预算:DeepSeek 默认思考,1024 会被思考链打满
         assert_eq!(body["max_completion_tokens"], 12_288);
         assert!(body.get("max_tokens").is_none());
-        assert_eq!(body["tools"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            body["tools"].as_array().unwrap().len(),
+            Tools::specs().len()
+        );
         let msgs = body["messages"].as_array().unwrap();
         assert_eq!(msgs.len(), 7, "system + 6 条 turn");
         assert_eq!(msgs[0]["role"], "system");
