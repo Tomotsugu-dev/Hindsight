@@ -3,9 +3,9 @@
 use chrono::NaiveDate;
 use serde::Deserialize;
 
-use super::kinds::search::SearchQuery;
-use super::kinds::stats::{Bucket, GroupBy, StatMetric, StatsQuery};
-use super::kinds::timeline::TimelineQuery;
+use super::kinds::read::timeline::TimelineQuery;
+use super::kinds::search::text::SearchQuery;
+use super::kinds::stats::query_stats::{Bucket, GroupBy, StatMetric, StatsQuery};
 use super::ChatLang;
 
 /// 分组统计 top-N 上限

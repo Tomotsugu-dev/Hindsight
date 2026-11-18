@@ -21,7 +21,7 @@ use chrono::NaiveDate;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
-use self::kinds::{search, stats, timeline};
+use self::kinds::{read::timeline, search::text, stats::query_stats};
 pub use self::lang::ChatLang;
 pub use self::query::Query;
 use self::query::RawParams;
@@ -119,8 +119,8 @@ async fn execute(
     lang: ChatLang,
 ) -> Result<ToolOutput> {
     match call {
-        Query::SearchText(q) => search::run(ctx, q, next_citation, lang).await,
-        Query::QueryStats(q) => stats::run(ctx, q, lang).await,
+        Query::SearchText(q) => text::run(ctx, q, next_citation, lang).await,
+        Query::QueryStats(q) => query_stats::run(ctx, q, lang).await,
         Query::GetTimeline(q) => timeline::run(ctx, q, next_citation, lang).await,
     }
 }
@@ -214,8 +214,8 @@ fn truncate(s: &str, max_chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::kinds::search::SearchQuery;
-    use super::kinds::timeline::TimelineQuery;
+    use super::kinds::read::timeline::TimelineQuery;
+    use super::kinds::search::text::SearchQuery;
     use super::test_util::{ctx_with, day};
     use super::*;
 
