@@ -4,6 +4,7 @@
 
 use tauri::State;
 
+use crate::memory::snippet::snippet;
 use crate::memory::{digest, MemoryDb};
 use crate::storage::{DbPool, SqliteResultExt};
 
@@ -112,40 +113,6 @@ const SNIPPET_AFTER_CHARS: usize = 60;
 /// 按字符数截断(不切坏 UTF-8 边界)。
 fn truncate_chars(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
-}
-
-/// 大小写不敏感(仅 ASCII fold,CJK 原样)的子串定位,返回字符索引。
-/// O(n·m) 滑窗:text 物化列最多几十 KB、m ≤ 64,毫秒内,不值得上索引结构。
-fn find_ci(hay: &[char], needle: &str) -> Option<usize> {
-    let needle: Vec<char> = needle.chars().map(|c| c.to_ascii_lowercase()).collect();
-    if needle.is_empty() || hay.len() < needle.len() {
-        return None;
-    }
-    (0..=hay.len() - needle.len()).find(|&i| {
-        hay[i..i + needle.len()]
-            .iter()
-            .zip(&needle)
-            .all(|(a, b)| a.to_ascii_lowercase() == *b)
-    })
-}
-
-/// 命中上下文:定位首个词,前后各截一段;两端被截断时补省略号。
-/// 会话文本是 OCR 行拼接,换行统一成空格便于单行展示。
-fn make_snippet(text: &str, word: &str) -> String {
-    let flat = text.replace(['\n', '\r'], " ");
-    let chars: Vec<char> = flat.chars().collect();
-    let hit = find_ci(&chars, word).unwrap_or(0);
-    let start = hit.saturating_sub(SNIPPET_BEFORE_CHARS);
-    let end = (hit + word.chars().count() + SNIPPET_AFTER_CHARS).min(chars.len());
-    let mut out = String::new();
-    if start > 0 {
-        out.push('…');
-    }
-    out.extend(&chars[start..end]);
-    if end < chars.len() {
-        out.push('…');
-    }
-    out
 }
 
 /// 全文搜索屏幕记忆(搜索页):按空白拆词、隐式 AND,命中会话按时间倒序分页。
@@ -302,7 +269,12 @@ pub async fn memory_search(
                     title,
                     started_ts,
                     ended_ts,
-                    snippet: make_snippet(&text, &first_word),
+                    snippet: snippet(
+                        &text,
+                        &first_word,
+                        SNIPPET_BEFORE_CHARS,
+                        SNIPPET_AFTER_CHARS,
+                    ),
                     frame_path: frame.as_ref().map(|(p, _)| p.clone()),
                     frame_ts: frame.map(|(_, t)| t),
                 });
