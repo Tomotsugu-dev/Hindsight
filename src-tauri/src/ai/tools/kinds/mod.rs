@@ -34,10 +34,13 @@ trait Tool: Sized {
     ) -> std::result::Result<Self, ToolError>;
 
     /// 查库，写成文字和证据。引用编号从 `next_citation` 开始。
+    ///
+    /// 文字最多 `max_chars` 字：按它算能列几条，放不下就少列。
     async fn execute(
         &self,
         ctx: &ToolCtx,
         next_citation: usize,
+        max_chars: usize,
         lang: ChatLang,
     ) -> Result<ToolOutput>;
 }
@@ -86,12 +89,13 @@ impl Query {
         &self,
         ctx: &ToolCtx,
         next_citation: usize,
+        max_chars: usize,
         lang: ChatLang,
     ) -> Result<ToolOutput> {
         match self {
-            Self::SearchText(q) => q.execute(ctx, next_citation, lang).await,
-            Self::QueryStats(q) => q.execute(ctx, next_citation, lang).await,
-            Self::GetTimeline(q) => q.execute(ctx, next_citation, lang).await,
+            Self::SearchText(q) => q.execute(ctx, next_citation, max_chars, lang).await,
+            Self::QueryStats(q) => q.execute(ctx, next_citation, max_chars, lang).await,
+            Self::GetTimeline(q) => q.execute(ctx, next_citation, max_chars, lang).await,
         }
     }
 }

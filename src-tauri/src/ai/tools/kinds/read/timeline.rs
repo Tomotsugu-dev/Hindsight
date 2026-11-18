@@ -10,7 +10,6 @@ use crate::ai::tools::kinds::params::{date_schema, invalid, parse_range, read_ar
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::{
     coverage_line, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
-    RESULT_CHAR_BUDGET,
 };
 use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
@@ -59,6 +58,7 @@ impl Tool for TimelineQuery {
         &self,
         ctx: &ToolCtx,
         next_citation: usize,
+        _max_chars: usize,
         lang: ChatLang,
     ) -> Result<ToolOutput> {
         run(ctx, self, next_citation, lang).await
@@ -189,10 +189,7 @@ async fn run(
             ),
             _ => lang.timeline_header_all(total),
         };
-        truncate(
-            &format!("{coverage}\n{header}\n{}", lines.join("\n")),
-            RESULT_CHAR_BUDGET,
-        )
+        format!("{coverage}\n{header}\n{}", lines.join("\n"))
     };
     Ok(ToolOutput { content, citations })
 }

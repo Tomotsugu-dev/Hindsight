@@ -21,6 +21,8 @@ use crate::error::{Error, Result};
 const MAX_STEPS: u32 = 6;
 /// LLM 步骤连续失败(网络/解析)容忍次数
 const MAX_LLM_FAILURES: u32 = 2;
+/// 一条工具结果最多多少字。按本机模型 8K 的上下文定，云端模型也先用这个值。
+const TOOL_RESULT_MAX_CHARS: usize = 4000;
 
 /// 一次问答的产出。
 #[derive(Debug, Serialize)]
@@ -331,7 +333,10 @@ pub async fn answer(
                 };
 
                 // 第③④道墙内执行
-                match tools.execute(&query, citations.len() + 1).await {
+                match tools
+                    .execute(&query, citations.len() + 1, TOOL_RESULT_MAX_CHARS)
+                    .await
+                {
                     Ok(output) => {
                         citations.extend(output.citations);
                         turns.push(Turn::ToolResult {

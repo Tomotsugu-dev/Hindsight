@@ -25,9 +25,6 @@ use crate::ai::model::{ToolCall, ToolSpec};
 use crate::error::Result;
 use crate::storage::{Connection, SqliteResultExt};
 
-/// 单工具返回给模型的结果字符上限——超出截断,防止一个大会话吃光上下文。
-const RESULT_CHAR_BUDGET: usize = 4000;
-
 /// 给模型查库用的三个工具：给模型看的说明、检查模型发来的调用、执行。
 ///
 /// 一次提问开一个：检查日期要用 `today`，结果和报错的文字按 `lang` 写。
@@ -61,9 +58,20 @@ impl Tools {
         kinds::parse(call, self.today, self.lang)
     }
 
-    /// 执行检查过的调用。引用编号从 `next_citation` 开始。
-    pub async fn execute(&self, query: &Query, next_citation: usize) -> Result<ToolOutput> {
-        query.execute(&self.ctx, next_citation, self.lang).await
+    /// 执行检查过的调用。引用编号从 `next_citation` 开始，文字最多 `max_chars` 字。
+    ///
+    /// 工具按 `max_chars` 少列几条；这里再截一次，工具算错了也超不过。
+    pub async fn execute(
+        &self,
+        query: &Query,
+        next_citation: usize,
+        max_chars: usize,
+    ) -> Result<ToolOutput> {
+        let mut out = query
+            .execute(&self.ctx, next_citation, max_chars, self.lang)
+            .await?;
+        out.content = truncate(&out.content, max_chars);
+        Ok(out)
     }
 }
 
@@ -198,9 +206,36 @@ mod tests {
     use super::test_util::{ctx_with, day};
     use super::*;
 
-    /// 用中文执行一次检查过的调用，引用从 1 编号。
+    /// 用中文执行一次检查过的调用，引用从 1 编号，文字最多 4000 字。
     async fn run(ctx: &ToolCtx, q: Query) -> ToolOutput {
-        q.execute(ctx, 1, ChatLang::ZhHans).await.unwrap()
+        q.execute(ctx, 1, 4000, ChatLang::ZhHans).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn execute_cuts_the_text_at_max_chars() {
+        let ctx = ctx_with(
+            "",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
+        )
+        .await;
+        let tools = Tools {
+            ctx,
+            today: day().1,
+            lang: ChatLang::ZhHans,
+        };
+        let q = Query::GetTimeline(TimelineQuery { range: day() });
+
+        let full = tools.execute(&q, 1, 4000).await.unwrap();
+        assert!(full.content.chars().count() > 20, "{}", full.content);
+        assert!(!full.content.ends_with('…'), "{}", full.content);
+
+        // 超了就截到 20 字，再加一个省略号；证据不截
+        let cut = tools.execute(&q, 1, 20).await.unwrap();
+        assert_eq!(cut.content.chars().count(), 21, "{}", cut.content);
+        assert!(cut.content.ends_with('…'), "{}", cut.content);
+        assert_eq!(cut.citations.len(), full.citations.len());
     }
 
     #[test]

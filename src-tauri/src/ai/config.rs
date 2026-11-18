@@ -177,7 +177,7 @@ impl AiConfig {
     }
     /// chat 引擎的每槽 ctx:全局 `ctx_size` 兜底,但不低于 8192——
     /// 旧配置里的小 ctx(为多槽段总结调的 2048/4096)对单槽聊天会立刻溢出:
-    /// 工具结果预算(tools.rs RESULT_CHAR_BUDGET=4000 字符/条)按 ~8K 窗口设计。
+    /// 工具结果预算(chat/engine.rs TOOL_RESULT_MAX_CHARS=4000 字符/条)按 ~8K 窗口设计。
     /// `None` = 维持引擎默认([`crate::ai::server::DEFAULT_CTX_SIZE`],同为 8K)。
     /// 自动总结的**有效**时间点:新列表优先,空则回落旧单时刻字段;
     /// 两者都空 = 尽快模式(调用方据 is_empty 判定)。

@@ -9,9 +9,7 @@ use crate::ai::tools::kinds::params::{
     clean_names, date_schema, invalid, names_schema, parse_range, read_args, spec,
 };
 use crate::ai::tools::kinds::Tool;
-use crate::ai::tools::{
-    like_pattern, truncate, ChatLang, ToolCtx, ToolError, ToolOutput, RESULT_CHAR_BUDGET,
-};
+use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolError, ToolOutput};
 use crate::error::Result;
 use crate::storage::{DbResult, SqliteResultExt};
 
@@ -137,6 +135,7 @@ impl Tool for StatsQuery {
         &self,
         ctx: &ToolCtx,
         _next_citation: usize,
+        _max_chars: usize,
         lang: ChatLang,
     ) -> Result<ToolOutput> {
         run(ctx, self, lang).await
@@ -332,7 +331,7 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
         })
         .await?;
     Ok(ToolOutput {
-        content: truncate(&content, RESULT_CHAR_BUDGET),
+        content,
         citations: Vec::new(),
     })
 }
