@@ -4,7 +4,6 @@
 
 pub(in crate::ai::tools) mod activity;
 pub(in crate::ai::tools) mod ocr;
-pub(in crate::ai::tools) mod text;
 
 use chrono::NaiveDate;
 use serde::Deserialize;

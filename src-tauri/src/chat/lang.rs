@@ -25,10 +25,7 @@ impl ChatLang {
                  且编号必须真正支撑该句(统计数字来自 query_stats 时不要借搜索结果的编号)。\n\
                  5. 可用简洁的 Markdown 排版(加粗/列表/表格),不要用标题层级。\n\
                  6. 回答语言:跟随用户提问的语言;无法判断时用简体中文。\n\
-                 7. 简洁作答;时长换算成小时分钟;提到日期让用户可核对。\n\
-                 8. 结果开头的\"覆盖情况\"决定措辞:只有范围内所有活动日都有屏幕文字索引\
-                 且没有待识别帧时,搜索无命中才能说\"屏幕上没出现过\";覆盖不全时要说\
-                 \"已索引的部分里没找到\",并可建议用户开启截图与屏幕文字识别(或等识别完成)。"
+                 7. 简洁作答;时长换算成小时分钟;提到日期让用户可核对。"
             ),
             Self::ZhHant => format!(
                 "你是使用者的螢幕記憶助手:使用者電腦上的活動記錄和螢幕文字都被索引,\
@@ -42,10 +39,7 @@ impl ChatLang {
                  且編號必須真正支撐該句(統計數字來自 query_stats 時不要借搜尋結果的編號)。\n\
                  5. 可用簡潔的 Markdown 排版(粗體/清單/表格),不要用標題層級。\n\
                  6. 回答語言:跟隨使用者提問的語言;無法判斷時用繁體中文。\n\
-                 7. 簡潔作答;時長換算成小時分鐘;提到日期讓使用者可核對。\n\
-                 8. 結果開頭的「覆蓋情況」決定措辭:只有範圍內所有活動日都有螢幕文字索引\
-                 且沒有待識別幀時,搜尋無命中才能說「螢幕上沒出現過」;覆蓋不全時要說\
-                 「已索引的部分裡沒找到」,並可建議使用者開啟截圖與螢幕文字識別(或等識別完成)。"
+                 7. 簡潔作答;時長換算成小時分鐘;提到日期讓使用者可核對。"
             ),
             Self::En => format!(
                 "You are the user's screen-memory assistant: activity records and on-screen \
@@ -67,13 +61,7 @@ impl ChatLang {
                  6. Language: reply in the language of the user's question; if unclear, reply \
                  in English.\n\
                  7. Be concise; express durations in hours and minutes; mention dates so the \
-                 user can verify.\n\
-                 8. The \"Coverage\" line at the top of each result governs your wording: only \
-                 when every active day in the range has a screen-text index and no frames \
-                 await recognition may a search miss be stated as \"it never appeared on \
-                 screen\"; with partial coverage, say it was \"not found in the indexed part\", \
-                 and you may suggest enabling screenshots and screen-text recognition (or \
-                 waiting for recognition to finish)."
+                 user can verify."
             ),
             Self::Ja => format!(
                 "あなたはユーザーのスクリーンメモリーアシスタントです。ユーザーの PC 上の\
@@ -90,12 +78,7 @@ impl ChatLang {
                  番号を流用しない)。\n\
                  5. 簡潔な Markdown(太字/リスト/表)は可。見出しは使わない。\n\
                  6. 言語:ユーザーの質問の言語に合わせて回答する。判断できない場合は日本語で。\n\
-                 7. 簡潔に。時間は「時間・分」に換算し、日付を添えて検証できるようにする。\n\
-                 8. 各結果冒頭の「カバレッジ」行が言い回しを決める。範囲内のすべての活動日に\
-                 画面テキスト索引があり、認識待ちフレームがない場合に限り、検索ヒットなしを\
-                 「画面に表示されたことがない」と言ってよい。カバレッジが不完全な場合は\
-                 「索引済みの範囲では見つからなかった」と述べ、スクリーンショットと画面テキスト\
-                 認識の有効化(または認識完了を待つこと)を提案してもよい。"
+                 7. 簡潔に。時間は「時間・分」に換算し、日付を添えて検証できるようにする。"
             ),
             Self::Pt => format!(
                 "Você é o assistente de memória de tela do usuário: os registros de atividade \
@@ -117,13 +100,7 @@ impl ChatLang {
                  6. Idioma: responda no idioma da pergunta do usuário; em caso de dúvida, \
                  responda em português.\n\
                  7. Seja conciso; expresse durações em horas e minutos; mencione datas para \
-                 que o usuário possa verificar.\n\
-                 8. A linha \"Cobertura\" no início de cada resultado governa sua redação: \
-                 somente quando todos os dias ativos do intervalo têm índice de texto de tela \
-                 e nenhum quadro aguarda reconhecimento você pode afirmar que algo \"nunca \
-                 apareceu na tela\"; com cobertura parcial, diga que \"não foi encontrado na \
-                 parte indexada\" e pode sugerir ativar capturas e reconhecimento de texto de \
-                 tela (ou aguardar o reconhecimento terminar)."
+                 que o usuário possa verificar."
             ),
             Self::Es => format!(
                 "Eres el asistente de memoria de pantalla del usuario: los registros de \
@@ -148,14 +125,7 @@ impl ChatLang {
                  6. Idioma: responde en el idioma de la pregunta del usuario; si no está \
                  claro, responde en español.\n\
                  7. Sé conciso; expresa las duraciones en horas y minutos; menciona las fechas \
-                 para que el usuario pueda verificarlas.\n\
-                 8. La línea «Cobertura» al principio de cada resultado rige tu redacción: \
-                 solo cuando todos los días activos del intervalo tienen índice de texto de \
-                 pantalla y no queda ningún fotograma por reconocer puedes afirmar que algo \
-                 «nunca apareció en pantalla»; con cobertura parcial, di que «no se encontró \
-                 en la parte indexada», y puedes sugerir activar las capturas y el \
-                 reconocimiento de texto de pantalla (o esperar a que termine el \
-                 reconocimiento)."
+                 para que el usuario pueda verificarlas."
             ),
         }
     }
@@ -338,13 +308,13 @@ mod tests {
             }
             // 插值类:参数必须真的出现在产物里
             assert!(lang.system_prompt(today).contains("2026-07-26"), "{lang:?}");
-            // 规则数对齐:恒 8 条固定规则;历史使用守则不进 system_prompt
+            // 规则数对齐:恒 7 条固定规则;历史使用守则不进 system_prompt
             // (它在 history_replay_note,由 engine 仅在兜底分支追加)。
             // 任何语言臂漏改/多改规则条目,这里立刻红。
             let sp = lang.system_prompt(today);
             assert!(
-                sp.contains("\n8. ") && !sp.contains("\n9. "),
-                "{lang:?} system_prompt 应恰含 1-8 条规则"
+                sp.contains("\n7. ") && !sp.contains("\n8. "),
+                "{lang:?} system_prompt 应恰含 1-7 条规则"
             );
             assert!(!lang.history_replay_note().is_empty(), "{lang:?}");
             assert!(

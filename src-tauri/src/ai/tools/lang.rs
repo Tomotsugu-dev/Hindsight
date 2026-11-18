@@ -143,176 +143,6 @@ impl ChatLang {
         }
     }
 
-    /// 覆盖披露行——拼在 timeline/search 结果最前。三个数字的口径:
-    /// 活动日数来自主库(有没有用电脑),索引日数/待识别帧来自记忆库。
-    /// "没搜到"究竟是"屏幕上没出现过"还是"索引不全",模型只有靠这行才能区分
-    /// (措辞约束见 system_prompt 第 8 条)。
-    pub fn coverage_line(self, activity_days: i64, covered_days: i64, pending: i64) -> String {
-        if activity_days == 0 {
-            return match self {
-                Self::ZhHans => "覆盖情况:该范围内没有活动记录。".into(),
-                Self::ZhHant => "覆蓋情況:該範圍內沒有活動記錄。".into(),
-                Self::En => "Coverage: no activity records in this range.".into(),
-                Self::Ja => "カバレッジ:この範囲に活動記録はありません。".into(),
-                Self::Pt => "Cobertura: nenhum registro de atividade neste intervalo.".into(),
-                Self::Es => "Cobertura: no hay registros de actividad en este intervalo.".into(),
-            };
-        }
-        if covered_days == 0 && pending == 0 {
-            // 一帧都没有:索引从未建立(未开截图/屏幕文字识别),与"识别中"分开表述
-            return match self {
-                Self::ZhHans => format!(
-                    "覆盖情况:范围内 {activity_days} 个活动日均无屏幕文字索引(可能未开启截图或屏幕文字识别)。"
-                ),
-                Self::ZhHant => format!(
-                    "覆蓋情況:範圍內 {activity_days} 個活動日均無螢幕文字索引(可能未開啟截圖或螢幕文字識別)。"
-                ),
-                Self::En => format!(
-                    "Coverage: none of the {activity_days} active day(s) in this range have a screen-text index (screenshots or screen-text recognition may be off)."
-                ),
-                Self::Ja => format!(
-                    "カバレッジ:範囲内の活動日 {activity_days} 日はいずれも画面テキスト索引がありません(スクリーンショットまたは画面テキスト認識が無効の可能性があります)。"
-                ),
-                Self::Pt => format!(
-                    "Cobertura: nenhum dos {activity_days} dia(s) ativo(s) neste intervalo tem índice de texto de tela (capturas ou reconhecimento de texto podem estar desativados)."
-                ),
-                Self::Es => format!(
-                    "Cobertura: ninguno de los {activity_days} día(s) activo(s) de este intervalo tiene índice de texto de pantalla (puede que las capturas o el reconocimiento de texto estén desactivados)."
-                ),
-            };
-        }
-        let base = match self {
-            Self::ZhHans => format!(
-                "覆盖情况:范围内 {activity_days} 个活动日中 {covered_days} 日有屏幕文字索引"
-            ),
-            Self::ZhHant => format!(
-                "覆蓋情況:範圍內 {activity_days} 個活動日中 {covered_days} 日有螢幕文字索引"
-            ),
-            Self::En => format!(
-                "Coverage: {covered_days} of {activity_days} active day(s) in this range have a screen-text index"
-            ),
-            Self::Ja => format!(
-                "カバレッジ:範囲内の活動日 {activity_days} 日のうち {covered_days} 日に画面テキスト索引があります"
-            ),
-            Self::Pt => format!(
-                "Cobertura: {covered_days} de {activity_days} dia(s) ativo(s) neste intervalo têm índice de texto de tela"
-            ),
-            Self::Es => format!(
-                "Cobertura: {covered_days} de {activity_days} día(s) activo(s) de este intervalo tienen índice de texto de pantalla"
-            ),
-        };
-        if pending > 0 {
-            match self {
-                Self::ZhHans => format!("{base},另有 {pending} 帧截图待识别。"),
-                Self::ZhHant => format!("{base},另有 {pending} 幀截圖待識別。"),
-                Self::En => format!("{base}, with {pending} frame(s) still awaiting recognition."),
-                Self::Ja => format!("{base}。ほかに認識待ちのフレームが {pending} 件あります。"),
-                Self::Pt => format!("{base}, com {pending} quadro(s) aguardando reconhecimento."),
-                Self::Es => {
-                    format!("{base}, y quedan {pending} fotograma(s) por reconocer.")
-                }
-            }
-        } else {
-            match self {
-                Self::ZhHans | Self::ZhHant | Self::Ja => format!("{base}。"),
-                Self::En | Self::Pt | Self::Es => format!("{base}."),
-            }
-        }
-    }
-
-    /// 搜索的窗口标题层小节头。标题命中 ≠ 屏幕文字命中:只说明该时段用过
-    /// 相关窗口,没有屏幕内文字片段可引用——措辞里必须讲清这个差别。
-    pub fn search_title_header(self, total: i64, shown: usize) -> String {
-        if total as usize > shown {
-            match self {
-                Self::ZhHans => format!(
-                    "窗口标题命中 {total} 条,显示最近 {shown} 条(标题匹配说明当时用过相关窗口,无屏幕内文字片段):"
-                ),
-                Self::ZhHant => format!(
-                    "視窗標題命中 {total} 條,顯示最近 {shown} 條(標題匹配說明當時用過相關視窗,無螢幕內文字片段):"
-                ),
-                Self::En => format!(
-                    "{total} window-title match(es); showing the {shown} most recent (a title match means the window was in use — no on-screen text snippet available):"
-                ),
-                Self::Ja => format!(
-                    "ウィンドウタイトルのヒットは {total} 件。直近の {shown} 件を表示します(タイトル一致は当該ウィンドウを使っていたことを示すのみで、画面内テキストの抜粋はありません):"
-                ),
-                Self::Pt => format!(
-                    "{total} correspondência(s) de título de janela; mostrando as {shown} mais recentes (uma correspondência de título indica que a janela estava em uso — sem trecho de texto da tela):"
-                ),
-                Self::Es => format!(
-                    "{total} coincidencia(s) en títulos de ventana; se muestran las {shown} más recientes (una coincidencia de título solo indica que la ventana estaba en uso — sin fragmento de texto de la pantalla):"
-                ),
-            }
-        } else {
-            match self {
-                Self::ZhHans => format!(
-                    "窗口标题命中 {total} 条(标题匹配说明当时用过相关窗口,无屏幕内文字片段):"
-                ),
-                Self::ZhHant => format!(
-                    "視窗標題命中 {total} 條(標題匹配說明當時用過相關視窗,無螢幕內文字片段):"
-                ),
-                Self::En => format!(
-                    "{total} window-title match(es) (a title match means the window was in use — no on-screen text snippet available):"
-                ),
-                Self::Ja => format!(
-                    "ウィンドウタイトルのヒットは {total} 件(タイトル一致は当該ウィンドウを使っていたことを示すのみで、画面内テキストの抜粋はありません):"
-                ),
-                Self::Pt => format!(
-                    "{total} correspondência(s) de título de janela (uma correspondência de título indica que a janela estava em uso — sem trecho de texto da tela):"
-                ),
-                Self::Es => format!(
-                    "{total} coincidencia(s) en títulos de ventana (una coincidencia de título solo indica que la ventana estaba en uso — sin fragmento de texto de la pantalla):"
-                ),
-            }
-        }
-    }
-
-    pub fn search_no_hit(self) -> &'static str {
-        match self {
-            Self::ZhHans => "没有命中。可尝试换关键词(同义词/英文/更短的词)再搜。",
-            Self::ZhHant => "沒有命中。可嘗試換關鍵字(同義詞/英文/更短的詞)再搜。",
-            Self::En => "No hits. Try different keywords (synonyms, another language, or shorter terms).",
-            Self::Ja => "ヒットしませんでした。別のキーワード(類義語/英語/より短い語)で再検索してください。",
-            Self::Pt => "Nenhum resultado. Tente outras palavras-chave (sinônimos, outro idioma ou termos mais curtos).",
-            Self::Es => "Ningún resultado. Prueba con otras palabras clave (sinónimos, otro idioma o términos más cortos).",
-        }
-    }
-
-    pub fn search_header(self, total: i64, shown: usize) -> String {
-        if total as usize > shown {
-            match self {
-                Self::ZhHans => format!(
-                    "共 {total} 条命中,按相关度展示前 {shown} 条(需要更全可加日期范围收窄):"
-                ),
-                Self::ZhHant => format!(
-                    "共 {total} 條命中,按相關度展示前 {shown} 條(需要更全可加日期範圍收窄):"
-                ),
-                Self::En => format!(
-                    "{total} total hits; showing the top {shown} by relevance (narrow with a date range for better coverage):"
-                ),
-                Self::Ja => format!(
-                    "計 {total} 件ヒット。関連度上位 {shown} 件を表示します(より網羅的に見るには日付範囲で絞り込んでください):"
-                ),
-                Self::Pt => format!(
-                    "{total} resultados no total; mostrando os {shown} mais relevantes (restrinja com um intervalo de datas para mais cobertura):"
-                ),
-                Self::Es => format!(
-                    "{total} resultados en total; se muestran los {shown} más relevantes (acota con un intervalo de fechas para tener más cobertura):"
-                ),
-            }
-        } else {
-            match self {
-                Self::ZhHans => format!("共 {total} 条命中:"),
-                Self::ZhHant => format!("共 {total} 條命中:"),
-                Self::En => format!("{total} hits:"),
-                Self::Ja => format!("計 {total} 件ヒット:"),
-                Self::Pt => format!("{total} resultados:"),
-                Self::Es => format!("{total} resultados:"),
-            }
-        }
-    }
-
     pub fn stats_total(self, from: &str, to: &str, dur: &str) -> String {
         match self {
             Self::ZhHans => format!("{from} ~ {to} 合计: {dur}"),
@@ -1019,7 +849,6 @@ mod tests {
             // 静态文案:非空即可
             for s in [
                 lang.timeline_empty(),
-                lang.search_no_hit(),
                 lang.err_from_after_to(),
                 lang.err_range_too_long(),
                 lang.err_from_in_future(),
@@ -1046,10 +875,6 @@ mod tests {
             let h = lang.timeline_header_sampled(120, "2026-07-01", "2026-07-07", 40, 7);
             assert!(h.contains("120") && h.contains("40"), "{lang:?}: {h}");
             assert!(lang.timeline_header_all(9).contains('9'));
-            let cov = lang.coverage_line(30, 12, 3);
-            assert!(cov.contains("12") && cov.contains('3'), "{lang:?}: {cov}");
-            assert!(lang.search_title_header(88, 10).contains("88"));
-            assert!(lang.search_header(77, 5).contains("77"));
             assert!(lang
                 .stats_total("2026-07-01", "2026-07-07", "1h")
                 .contains("1h"));

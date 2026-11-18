@@ -990,7 +990,7 @@ mod loop_tests {
     async fn invalid_tool_args_are_fed_back_for_self_correction() {
         let ctx = fixture_ctx(true, "").await;
         let (port, log) = spawn_scripted_openai(vec![
-            resp_tool_call("c1", "search_text", &json!({"keywords": 42})),
+            resp_tool_call("c1", "search_titles", &json!({"keywords": 42})),
             resp_tool_call("c2", "query_stats", &json!({"date_from": "2026-07-01"})),
             resp_final("没查到相关记录。"),
         ])

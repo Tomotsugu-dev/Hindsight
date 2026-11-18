@@ -9,7 +9,7 @@ use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::{date_schema, invalid, parse_range, read_args, spec};
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::{
-    coverage_line, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
+    truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
 };
 use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
@@ -97,8 +97,7 @@ async fn run(
     let single_day = from == to;
     let (from, to) = (from.to_string(), to.to_string());
     // 主源是主库活动记录:不开截图/OCR 的用户也有完整时间线,电池暂停或
-    // 待识别积压造成的索引空窗也不再啃掉时段尾巴;屏幕文字层的有无由覆盖行披露。
-    let coverage = coverage_line(ctx, &from, &to, lang).await?;
+    // 待识别积压造成的索引空窗也不再啃掉时段尾巴。
     let (total, span, rows) = ctx
         .main
         .call(move |conn| {
@@ -176,7 +175,7 @@ async fn run(
         });
     }
     let content = if lines.is_empty() {
-        format!("{coverage}\n{}", lang.timeline_empty())
+        lang.timeline_empty().to_string()
     } else {
         // 头部先声明总量与覆盖范围:样本 ≠ 全量,让模型据此下结论
         let header = match &span {
@@ -189,7 +188,7 @@ async fn run(
             ),
             _ => lang.timeline_header_all(total),
         };
-        format!("{coverage}\n{header}\n{}", lines.join("\n"))
+        format!("{header}\n{}", lines.join("\n"))
     };
     Ok(ToolOutput { content, citations })
 }
@@ -295,10 +294,18 @@ mod tests {
             out.content
         );
         assert!(out.content.contains("sample"), "{}", out.content);
-        // 骨架(覆盖行 + 头部行)不应残留中文;正文标题是用户数据,语言不限
-        for skel in out.content.lines().take(2) {
-            assert!(!skel.contains("活动") && !skel.contains("覆盖"), "{skel}");
-        }
+        // 头部行不应残留中文;正文标题是用户数据,语言不限
+        let head = out.content.lines().next().unwrap();
+        assert!(!head.contains("活动"), "{head}");
+    }
+
+    #[tokio::test]
+    async fn an_empty_range_says_so_without_anything_else() {
+        let ctx = ctx_with("", "").await;
+        let q = TimelineQuery { range: day() };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
+        assert_eq!(out.content, ChatLang::ZhHans.timeline_empty());
+        assert!(out.citations.is_empty());
     }
 
     #[tokio::test]

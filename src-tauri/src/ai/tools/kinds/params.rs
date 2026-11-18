@@ -46,15 +46,6 @@ pub(super) fn parse_range(
     Ok(Some((from, to)))
 }
 
-/// 检查关键词：最多取前 3 个，去掉首尾空白，空的丢掉。一个都不剩就不合法。
-pub(super) fn clean_keywords(raw: &[String], lang: ChatLang) -> Result<Vec<String>, String> {
-    let out = clean_names(raw, 3, "keywords", lang)?;
-    if out.is_empty() {
-        return Err(lang.err_keywords_empty().into());
-    }
-    Ok(out)
-}
-
 /// 检查一列名字：最多取前 `max_items` 个，去掉首尾空白，空的丢掉。
 ///
 /// 先取前几个、再丢空的，所以空的也占名额。某个超过 64 字就不合法，原因里写出 `field`。
@@ -132,25 +123,6 @@ mod tests {
         assert_eq!(only_from, Ok(None));
         let both = range(" 2026-07-01 ", "2026-07-05").unwrap().unwrap();
         assert_eq!(both.0, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
-    }
-
-    #[test]
-    fn blank_only_keywords_rejected() {
-        // 全是空白，清洗后为空——必须报「不能为空」，否则空的搜索条件会在 SQL 层才出错
-        let e = clean_keywords(&[" ".into(), "".into()], ChatLang::ZhHans).unwrap_err();
-        assert!(e.contains("不能为空"), "{e}");
-    }
-
-    #[test]
-    fn keywords_taken_three_then_trimmed() {
-        let kws: Vec<String> = ["  rust  ", "go", "zig", "c"].map(String::from).into();
-        assert_eq!(
-            clean_keywords(&kws, ChatLang::ZhHans).unwrap(),
-            ["rust", "go", "zig"]
-        );
-        // 先取前 3 个再丢空的：空白也占名额，第 4 个词不会补进来
-        let kws: Vec<String> = [" ", "a", "b", "c"].map(String::from).into();
-        assert_eq!(clean_keywords(&kws, ChatLang::ZhHans).unwrap(), ["a", "b"]);
     }
 
     #[test]

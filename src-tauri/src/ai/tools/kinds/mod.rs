@@ -14,7 +14,6 @@ use serde_json::Value;
 use self::read::timeline::TimelineQuery;
 use self::search::activity::ActivityQuery;
 use self::search::ocr::OcrQuery;
-use self::search::text::SearchQuery;
 use self::stats::query_stats::StatsQuery;
 use super::{ChatLang, ToolCtx, ToolError, ToolOutput};
 use crate::ai::model::{ToolCall, ToolSpec};
@@ -54,7 +53,6 @@ trait Tool: Sized {
 pub enum Query {
     SearchActivity(ActivityQuery),
     SearchOcr(OcrQuery),
-    SearchText(SearchQuery),
     QueryStats(StatsQuery),
     GetTimeline(TimelineQuery),
 }
@@ -64,7 +62,6 @@ pub(super) fn specs() -> Vec<ToolSpec> {
     vec![
         ActivityQuery::spec(),
         OcrQuery::spec(),
-        SearchQuery::spec(),
         StatsQuery::spec(),
         TimelineQuery::spec(),
     ]
@@ -80,7 +77,6 @@ pub(super) fn parse(
     match call.name.as_str() {
         ActivityQuery::NAME => ActivityQuery::parse(args, today, lang).map(Query::SearchActivity),
         OcrQuery::NAME => OcrQuery::parse(args, today, lang).map(Query::SearchOcr),
-        SearchQuery::NAME => SearchQuery::parse(args, today, lang).map(Query::SearchText),
         StatsQuery::NAME => StatsQuery::parse(args, today, lang).map(Query::QueryStats),
         TimelineQuery::NAME => TimelineQuery::parse(args, today, lang).map(Query::GetTimeline),
         other => {
@@ -103,7 +99,6 @@ impl Query {
         match self {
             Self::SearchActivity(q) => q.execute(ctx, next_citation, max_chars, lang).await,
             Self::SearchOcr(q) => q.execute(ctx, next_citation, max_chars, lang).await,
-            Self::SearchText(q) => q.execute(ctx, next_citation, max_chars, lang).await,
             Self::QueryStats(q) => q.execute(ctx, next_citation, max_chars, lang).await,
             Self::GetTimeline(q) => q.execute(ctx, next_citation, max_chars, lang).await,
         }
@@ -131,9 +126,7 @@ mod tests {
         let e = parse(&call("drop_table", Value::Null), today(), ChatLang::ZhHans).unwrap_err();
         assert!(e.0.contains("未知工具 drop_table"), "{}", e.0);
         assert!(
-            e.0.contains(
-                "search_titles / search_screen_text / search_text / query_stats / get_timeline"
-            ),
+            e.0.contains("search_titles / search_screen_text / query_stats / get_timeline"),
             "{}",
             e.0
         );
@@ -148,7 +141,6 @@ mod tests {
             [
                 "search_titles",
                 "search_screen_text",
-                "search_text",
                 "query_stats",
                 "get_timeline"
             ]
