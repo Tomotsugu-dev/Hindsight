@@ -103,13 +103,13 @@ const GAP_MAX: u32 = 240;
 impl Tool for StatsQuery {
     const NAME: &'static str = "query_stats";
 
-    fn spec() -> ToolSpec {
+    fn spec(_lang: ChatLang) -> ToolSpec {
         spec(
             Self::NAME,
             "统计应用/内容的使用时长或使用次数。可按应用名过滤(apps)、按分类名过滤(categories)、按窗口标题关键词过滤(title_keyword,如视频名),可分组排行(group_by,含按用户分类的工作/娱乐口径),可分桶看趋势(bucket)。问'用了多久/花了多少时间'用默认(metric=duration);问'启动/打开/玩了几次'用 metric=session_count;问'第一次/最近一次用X是什么时候'用 metric=first_last(此口径 date_from 可给很早的日期,如 2020-01-01)。问某类活动(如游戏)的趋势用 categories+bucket,不要自己列举应用名——用户归类过的应用你未必认识。",
             json!({"type": "object", "properties": {
-                "date_from": date_schema("起始日期"),
-                "date_to": date_schema("结束日期"),
+                "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
+                "date_to": date_schema("结束日期,格式 YYYY-MM-DD"),
                 "apps": names_schema("应用名过滤,可选", 5),
                 "categories": names_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", 5),
                 "title_keyword": {"type": "string", "maxLength": 64, "description": "窗口标题关键词过滤,可选"},
@@ -862,7 +862,7 @@ mod tests {
     /// 本机的 grammar 从同一份定义生成，长度和条数的限制要写在定义里。
     #[test]
     fn spec_carries_the_limits() {
-        let spec = StatsQuery::spec();
+        let spec = StatsQuery::spec(ChatLang::ZhHans);
         assert_eq!(spec.name, "query_stats");
         assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
         let props = &spec.parameters["properties"];

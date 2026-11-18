@@ -258,10 +258,11 @@ pub async fn answer(
     let mut seen_calls: std::collections::HashSet<String> = Default::default();
     let mut llm_failures = 0u32;
     let mut steps = 0u32;
+    let specs = tools.specs();
 
     while steps < MAX_STEPS {
         steps += 1;
-        let out = match llm.step(&system, &turns).await {
+        let out = match llm.step(&system, &turns, &specs).await {
             Ok((o, usage)) => {
                 llm_failures = 0;
                 usage_total.add(usage);
@@ -358,7 +359,7 @@ pub async fn answer(
 
     // 步数耗尽:带着已有证据强制作答(最后一次 LLM 机会)
     turns.push(Turn::User(lang.steps_exhausted().to_string()));
-    match llm.step(&system, &turns).await {
+    match llm.step(&system, &turns, &specs).await {
         Ok((StepOut::Final(text), usage)) => {
             let (text, cited) = bind_citations(&text, &citations);
             usage_total.add(usage);

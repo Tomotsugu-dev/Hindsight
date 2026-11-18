@@ -30,6 +30,10 @@ const TITLE_MAX_CHARS: usize = 60;
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ActivityText {
+    /// 给模型看的工具说明。
+    description: Text,
+    /// 给模型看的关键词参数说明。
+    keywords: Text,
     /// 开头第一句：命中了几个窗口，一共多久。
     head: Text,
     /// 开头第二句：最早、最近一次开始的时刻和窗口。
@@ -51,11 +55,11 @@ static TEXT: LazyLock<ActivityText> = LazyLock::new(|| load(TEXT_JSON));
 impl Tool for ActivityQuery {
     const NAME: &'static str = "search_titles";
 
-    fn spec() -> ToolSpec {
+    fn spec(lang: ChatLang) -> ToolSpec {
         spec(
             Self::NAME,
-            "按关键词搜窗口标题,回答什么时候看过 X、在哪个窗口、看了多久。返回命中的窗口数、总时长、最早和最近一次,再按时长列出窗口。只搜标题;屏幕上出现过的字用 search_screen_text 搜。",
-            SearchParams::schema("1-3 个关键词,每个都出现在标题里才算命中;英文不分大小写"),
+            TEXT.description.get(lang),
+            SearchParams::schema(TEXT.keywords.get(lang), lang),
         )
     }
 
@@ -751,9 +755,25 @@ mod tests {
 
     #[test]
     fn spec_points_to_the_screen_text_tool() {
-        let spec = ActivityQuery::spec();
+        let spec = ActivityQuery::spec(ChatLang::ZhHans);
         assert_eq!(spec.name, "search_titles");
         assert!(spec.description.contains("search_screen_text"));
         assert_eq!(spec.parameters["required"], json!(["keywords"]));
+    }
+
+    #[test]
+    fn spec_is_written_in_the_prompt_language() {
+        let spec = ActivityQuery::spec(ChatLang::En);
+        assert_eq!(spec.name, "search_titles");
+        assert!(spec.description.starts_with("Search window titles"));
+        let props = &spec.parameters["properties"];
+        assert!(props["keywords"]["description"]
+            .as_str()
+            .unwrap()
+            .starts_with("1-3 keywords"));
+        assert_eq!(
+            props["limit"]["description"],
+            "How many to list at most, default 8"
+        );
     }
 }

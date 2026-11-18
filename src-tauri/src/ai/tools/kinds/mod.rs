@@ -24,8 +24,8 @@ trait Tool: Sized {
     /// 给模型看的工具名。
     const NAME: &'static str;
 
-    /// 给模型看的说明和参数格式。
-    fn spec() -> ToolSpec;
+    /// 给模型看的说明和参数格式，按提示词语言写。
+    fn spec(lang: ChatLang) -> ToolSpec;
 
     /// 解析、检查模型传来的参数。不合法时，原因写给模型看。
     fn parse(
@@ -57,13 +57,13 @@ pub enum Query {
     GetTimeline(TimelineQuery),
 }
 
-/// 给模型看的全部工具。
-pub(super) fn specs() -> Vec<ToolSpec> {
+/// 给模型看的全部工具，说明按 `lang` 写。
+pub(super) fn specs(lang: ChatLang) -> Vec<ToolSpec> {
     vec![
-        ActivityQuery::spec(),
-        OcrQuery::spec(),
-        StatsQuery::spec(),
-        TimelineQuery::spec(),
+        ActivityQuery::spec(lang),
+        OcrQuery::spec(lang),
+        StatsQuery::spec(lang),
+        TimelineQuery::spec(lang),
     ]
 }
 
@@ -80,7 +80,7 @@ pub(super) fn parse(
         StatsQuery::NAME => StatsQuery::parse(args, today, lang).map(Query::QueryStats),
         TimelineQuery::NAME => TimelineQuery::parse(args, today, lang).map(Query::GetTimeline),
         other => {
-            let known: Vec<String> = specs().into_iter().map(|s| s.name).collect();
+            let known: Vec<String> = specs(lang).into_iter().map(|s| s.name).collect();
             let msg = lang.err_unknown_tool(other, &known.join(" / "));
             Err(params::invalid(&msg, lang))
         }
@@ -135,7 +135,10 @@ mod tests {
     /// 名单漏写一行时，这个测试会失败：说明里的每个工具名都要能交给对应的工具解析。
     #[test]
     fn every_spec_name_reaches_its_tool() {
-        let names: Vec<String> = specs().into_iter().map(|s| s.name).collect();
+        let names: Vec<String> = specs(ChatLang::ZhHans)
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
         assert_eq!(
             names,
             [

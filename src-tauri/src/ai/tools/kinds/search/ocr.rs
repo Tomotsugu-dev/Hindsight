@@ -37,6 +37,10 @@ const FTS_MIN_CHARS: usize = 3;
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OcrText {
+    /// 给模型看的工具说明。
+    description: Text,
+    /// 给模型看的关键词参数说明。
+    keywords: Text,
     /// 开头：几个窗口的屏幕上出现过关键词。说明只是出现过，不算时间。
     head: Text,
     /// 列表前的一行。
@@ -54,11 +58,11 @@ static TEXT: LazyLock<OcrText> = LazyLock::new(|| load(TEXT_JSON));
 impl Tool for OcrQuery {
     const NAME: &'static str = "search_screen_text";
 
-    fn spec() -> ToolSpec {
+    fn spec(lang: ChatLang) -> ToolSpec {
         spec(
             Self::NAME,
-            "按关键词搜屏幕上识别出的文字(聊天、网页、文档、代码、订单号等),回答 X 在哪些窗口的屏幕上出现过。每个关键词出现在屏幕文字或窗口标题里都算。只说明出现过,不说明用户在看,也不算时间;要时间和时长用 search_titles。没命中时换更短的词、同义词或英文。",
-            SearchParams::schema("1-3 个关键词,每个都出现在屏幕文字或窗口标题里才算命中"),
+            TEXT.description.get(lang),
+            SearchParams::schema(TEXT.keywords.get(lang), lang),
         )
     }
 
@@ -746,9 +750,22 @@ mod tests {
 
     #[test]
     fn spec_points_to_the_titles_tool() {
-        let spec = OcrQuery::spec();
+        let spec = OcrQuery::spec(ChatLang::ZhHans);
         assert_eq!(spec.name, "search_screen_text");
         assert!(spec.description.contains("search_titles"));
         assert_eq!(spec.parameters["required"], json!(["keywords"]));
+    }
+
+    #[test]
+    fn spec_is_written_in_the_prompt_language() {
+        let spec = OcrQuery::spec(ChatLang::Ja);
+        assert_eq!(spec.name, "search_screen_text");
+        assert!(spec.description.starts_with("画面から読み取った文字"));
+        assert!(spec.description.contains("search_titles"));
+        let date = &spec.parameters["properties"]["date_from"]["description"];
+        assert_eq!(
+            date,
+            "開始日、任意。日付がなければ全期間を検索。形式 YYYY-MM-DD"
+        );
     }
 }

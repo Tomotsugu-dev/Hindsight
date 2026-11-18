@@ -83,6 +83,16 @@ pub(super) struct Common {
     pub(super) quote: Text,
     /// 几个加了引号的关键词之间。
     pub(super) quote_sep: Text,
+    /// 搜索工具的参数说明：起始日期。
+    pub(super) param_date_from: Text,
+    /// 搜索工具的参数说明：结束日期。
+    pub(super) param_date_to: Text,
+    /// 搜索工具的参数说明：只搜哪些应用。
+    pub(super) param_apps: Text,
+    /// 搜索工具的参数说明：只搜哪些分类。
+    pub(super) param_categories: Text,
+    /// 搜索工具的参数说明：最多列几个。
+    pub(super) param_limit: Text,
     /// 没列全时的最后一行：还有几个，怎么看更多。
     pub(super) more: Text,
 }

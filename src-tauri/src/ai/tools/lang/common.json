@@ -15,6 +15,46 @@
     "pt": ", ",
     "es": ", "
   },
+  "param_date_from": {
+    "zh-Hans": "起始日期,可选;不给日期就搜全部,格式 YYYY-MM-DD",
+    "zh-Hant": "起始日期,可選;不給日期就搜全部,格式 YYYY-MM-DD",
+    "en": "Start date, optional; without dates, search all dates. Format YYYY-MM-DD",
+    "ja": "開始日、任意。日付がなければ全期間を検索。形式 YYYY-MM-DD",
+    "pt": "Data inicial, opcional; sem datas, busca em todas. Formato YYYY-MM-DD",
+    "es": "Fecha inicial, opcional; sin fechas, busca en todas. Formato YYYY-MM-DD"
+  },
+  "param_date_to": {
+    "zh-Hans": "结束日期,可选,格式 YYYY-MM-DD",
+    "zh-Hant": "結束日期,可選,格式 YYYY-MM-DD",
+    "en": "End date, optional. Format YYYY-MM-DD",
+    "ja": "終了日、任意。形式 YYYY-MM-DD",
+    "pt": "Data final, opcional. Formato YYYY-MM-DD",
+    "es": "Fecha final, opcional. Formato YYYY-MM-DD"
+  },
+  "param_apps": {
+    "zh-Hans": "只搜这些应用,可选",
+    "zh-Hant": "只搜這些應用,可選",
+    "en": "Only search these apps, optional",
+    "ja": "これらのアプリだけを検索、任意",
+    "pt": "Buscar só nestes apps, opcional",
+    "es": "Buscar solo en estas apps, opcional"
+  },
+  "param_categories": {
+    "zh-Hans": "只搜这些分类里的应用(如'游戏'),可选",
+    "zh-Hant": "只搜這些分類裡的應用(如'遊戲'),可選",
+    "en": "Only search apps in these categories (e.g. 'Games'), optional",
+    "ja": "これらのカテゴリのアプリだけを検索（例：'ゲーム'）、任意",
+    "pt": "Buscar só apps destas categorias (ex.: 'Jogos'), opcional",
+    "es": "Buscar solo apps de estas categorías (p. ej. 'Juegos'), opcional"
+  },
+  "param_limit": {
+    "zh-Hans": "最多列几个,默认 {n}",
+    "zh-Hant": "最多列幾個,預設 {n}",
+    "en": "How many to list at most, default {n}",
+    "ja": "最大でいくつ並べるか、既定は {n}",
+    "pt": "Quantas listar no máximo, padrão {n}",
+    "es": "Cuántas listar como máximo, por defecto {n}"
+  },
   "more": {
     "zh-Hans": "还有 {rest} 个没列。要看更多，把 limit 调大，或者缩小日期范围、按应用或分类过滤。",
     "zh-Hant": "還有 {rest} 個沒列。要看更多，把 limit 調大，或者縮小日期範圍、按應用或分類過濾。",

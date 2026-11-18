@@ -78,9 +78,9 @@ pub(super) fn spec(name: &str, description: &str, parameters: Value) -> ToolSpec
     }
 }
 
-/// 参数格式：一个日期。
+/// 参数格式：一个日期。`desc` 里要写明格式 YYYY-MM-DD。
 pub(super) fn date_schema(desc: &str) -> Value {
-    json!({"type": "string", "maxLength": 10, "description": format!("{desc},格式 YYYY-MM-DD")})
+    json!({"type": "string", "maxLength": 10, "description": desc})
 }
 
 /// 参数格式：一列名字，每个最多 64 字。

@@ -51,9 +51,9 @@ impl Tools {
         })
     }
 
-    /// 给模型看的工具列表。
-    pub fn specs() -> Vec<ToolSpec> {
-        kinds::specs()
+    /// 给模型看的工具列表，说明按提示词语言写。
+    pub fn specs(&self) -> Vec<ToolSpec> {
+        kinds::specs(self.lang)
     }
 
     /// 检查模型发来的调用：参数读不读得懂，值合不合法。

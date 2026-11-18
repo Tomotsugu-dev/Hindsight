@@ -3,10 +3,9 @@
 use serde_json::Value;
 
 use crate::ai::model::{
-    Carry, LanguageModel, LanguageModelOps, Message, Reasoning, Request, ToolCall, Usage,
+    Carry, LanguageModel, LanguageModelOps, Message, Reasoning, Request, ToolCall, ToolSpec, Usage,
 };
 use crate::ai::providers::chat_completions::ChatCompletionsModel;
-use crate::ai::tools::Tools;
 use crate::error::Result;
 
 /// 一次模型调用的 token 用量。服务没报的项记 0。
@@ -160,12 +159,17 @@ impl ChatLlm {
         Ok((r.text, r.usage.into()))
     }
 
-    /// 跑一步：模型调一个工具，或者作答。
-    pub async fn step(&self, system: &str, turns: &[Turn]) -> Result<(StepOut, TokenUsage)> {
+    /// 跑一步：模型调 `tools` 里的一个工具，或者作答。
+    pub async fn step(
+        &self,
+        system: &str,
+        turns: &[Turn],
+        tools: &[ToolSpec],
+    ) -> Result<(StepOut, TokenUsage)> {
         let req = Request {
             system: system.to_string(),
             messages: turns.iter().map(Turn::to_message).collect(),
-            tools: Tools::specs(),
+            tools: tools.to_vec(),
             reasoning: self.reasoning,
             max_output_tokens: MAX_ANSWER_TOKENS,
             temperature: None,
@@ -276,6 +280,15 @@ mod http_tests {
         vec![Turn::User("q".into())]
     }
 
+    /// 测试用的工具列表：有一个工具，请求里就会带上工具。
+    fn specs() -> Vec<ToolSpec> {
+        vec![ToolSpec {
+            name: "get_timeline".into(),
+            description: "时间线".into(),
+            parameters: json!({"type": "object", "properties": {}}),
+        }]
+    }
+
     /// deepseek + Off 的请求体带上 thinking.type=disabled。
     #[tokio::test]
     async fn step_cloud_sends_thinking_field_for_deepseek() {
@@ -293,7 +306,9 @@ mod http_tests {
             Reasoning::Off,
         )
         .unwrap();
-        llm.step("s", &[Turn::User("问".into())]).await.unwrap();
+        llm.step("s", &[Turn::User("问".into())], &specs())
+            .await
+            .unwrap();
         let raw = rx.await.unwrap();
         assert!(
             raw.contains(r#""thinking":{"type":"disabled"}"#),
@@ -314,7 +329,7 @@ mod http_tests {
         .to_string();
         let (port, _rx) = spawn_http_once("200 OK", body).await;
         let (out, usage) = cloud_client(port)
-            .step("系统提示", &[Turn::User("我今天干了啥".into())])
+            .step("系统提示", &[Turn::User("我今天干了啥".into())], &specs())
             .await
             .unwrap();
         match out {
@@ -349,7 +364,7 @@ mod http_tests {
         .to_string();
         let (port, _rx) = spawn_http_once("200 OK", body).await;
         let (out, usage) = cloud_client(port)
-            .step("s", &[Turn::User("统计一下".into())])
+            .step("s", &[Turn::User("统计一下".into())], &specs())
             .await
             .unwrap();
         let StepOut::Call {
@@ -387,7 +402,7 @@ mod http_tests {
         .to_string();
         let (port, _rx) = spawn_http_once("200 OK", body).await;
         let (out, usage) = cloud_client(port)
-            .step("s", &[Turn::User("搜".into())])
+            .step("s", &[Turn::User("搜".into())], &specs())
             .await
             .unwrap();
         let StepOut::Call { name, args, .. } = out else {
@@ -437,7 +452,10 @@ mod http_tests {
                 content: "搜索结果".into(),
             },
         ];
-        cloud_client(port).step("系统人设", &turns).await.unwrap();
+        cloud_client(port)
+            .step("系统人设", &turns, &specs())
+            .await
+            .unwrap();
 
         let req = rx.await.unwrap();
         let head_end = req.find("\r\n\r\n").unwrap();
@@ -453,10 +471,7 @@ mod http_tests {
         // Default 也给足思考预算:DeepSeek 默认思考,1024 会被思考链打满
         assert_eq!(body["max_completion_tokens"], 12_288);
         assert!(body.get("max_tokens").is_none());
-        assert_eq!(
-            body["tools"].as_array().unwrap().len(),
-            Tools::specs().len()
-        );
+        assert_eq!(body["tools"].as_array().unwrap().len(), specs().len());
         let msgs = body["messages"].as_array().unwrap();
         assert_eq!(msgs.len(), 7, "system + 6 条 turn");
         assert_eq!(msgs[0]["role"], "system");
@@ -482,7 +497,7 @@ mod http_tests {
         )
         .await;
         let err = cloud_client(port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -499,7 +514,7 @@ mod http_tests {
         let limited = || Reply::json(429, json!({"error": {"message": "rate limited"}}));
         let server = FakeServer::start((0..6).map(|_| limited()).collect()).await;
         let err = cloud_client(server.port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -512,7 +527,7 @@ mod http_tests {
         let (port, _rx) =
             spawn_http_once("500 Internal Server Error", "上游模型服务不可用".into()).await;
         let err = cloud_client(port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -528,7 +543,7 @@ mod http_tests {
         let body = "a".repeat(400);
         let (port, _rx) = spawn_http_once("500 Internal Server Error", body).await;
         let err = cloud_client(port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -541,7 +556,7 @@ mod http_tests {
         let tricky = format!("{}错误详情继续", "x".repeat(299));
         let (port, _rx) = spawn_http_once("500 Internal Server Error", tricky).await;
         let err = cloud_client(port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -555,7 +570,7 @@ mod http_tests {
         let page = || Reply::html(200, "<html>Bad Gateway</html>");
         let server = FakeServer::start(vec![page(), page(), page()]).await;
         let err = cloud_client(server.port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -576,7 +591,7 @@ mod http_tests {
         {
             let (port, _rx) = spawn_http_once("200 OK", body.clone()).await;
             let err = cloud_client(port)
-                .step("s", &ask())
+                .step("s", &ask(), &specs())
                 .await
                 .unwrap_err()
                 .to_string();
@@ -589,7 +604,7 @@ mod http_tests {
     async fn step_cloud_connection_refused_maps_to_connection_failed() {
         let port = free_local_port();
         let err = cloud_client(port)
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -605,7 +620,7 @@ mod http_tests {
         let turns = ask();
         let r = tokio::time::timeout(
             std::time::Duration::from_millis(500),
-            client.step("s", &turns),
+            client.step("s", &turns, &specs()),
         )
         .await;
         assert!(r.is_err(), "不回包时 500ms 内不应有任何结果");
@@ -626,7 +641,10 @@ mod http_tests {
             ),
         ])
         .await;
-        let (out, _) = cloud_client(server.port).step("s", &ask()).await.unwrap();
+        let (out, _) = cloud_client(server.port)
+            .step("s", &ask(), &specs())
+            .await
+            .unwrap();
         assert!(matches!(out, StepOut::Final(ref t) if t == "好"), "{out:?}");
         let got = server.received();
         assert_eq!(got.len(), 2, "只重发一次");
@@ -640,8 +658,11 @@ mod http_tests {
         let server = FakeServer::start(vec![Reply::Hang]).await;
         let llm = cloud_client(server.port);
         let turns = ask();
-        let r = tokio::time::timeout(std::time::Duration::from_millis(300), llm.step("s", &turns))
-            .await;
+        let r = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            llm.step("s", &turns, &specs()),
+        )
+        .await;
         assert!(r.is_err(), "服务端不回包时不该有结果");
         assert!(
             server
@@ -671,7 +692,10 @@ mod http_tests {
             true,
         )])
         .await;
-        let (out, usage) = cloud_client(server.port).step("s", &ask()).await.unwrap();
+        let (out, usage) = cloud_client(server.port)
+            .step("s", &ask(), &specs())
+            .await
+            .unwrap();
         let StepOut::Call {
             name,
             args,
@@ -700,7 +724,10 @@ mod http_tests {
             true,
         )])
         .await;
-        let (out, _) = cloud_client(server.port).step("s", &ask()).await.unwrap();
+        let (out, _) = cloud_client(server.port)
+            .step("s", &ask(), &specs())
+            .await
+            .unwrap();
         let StepOut::Call { id, carry, .. } = out else {
             panic!("应是工具调用: {out:?}");
         };
@@ -717,7 +744,10 @@ mod http_tests {
         )
         .split_inside("上")])
         .await;
-        let (out, _) = cloud_client(server.port).step("s", &ask()).await.unwrap();
+        let (out, _) = cloud_client(server.port)
+            .step("s", &ask(), &specs())
+            .await
+            .unwrap();
         assert!(
             matches!(out, StepOut::Final(ref t) if t == "上午"),
             "{out:?}"
@@ -732,7 +762,10 @@ mod http_tests {
             Reply::sse(&[json!({"choices": [{"delta": {"content": "好"}}]})], true),
         ])
         .await;
-        let (out, _) = cloud_client(server.port).step("s", &ask()).await.unwrap();
+        let (out, _) = cloud_client(server.port)
+            .step("s", &ask(), &specs())
+            .await
+            .unwrap();
         assert!(matches!(out, StepOut::Final(ref t) if t == "好"), "{out:?}");
         assert_eq!(server.received().len(), 2);
     }
@@ -743,7 +776,7 @@ mod http_tests {
         let server = FakeServer::start(vec![Reply::json(500, json!({"error": "boom"}))]).await;
         let err = ChatLlm::local(server.port, "m", Reasoning::Off)
             .unwrap()
-            .step("s", &ask())
+            .step("s", &ask(), &specs())
             .await
             .unwrap_err()
             .to_string();
@@ -770,13 +803,13 @@ mod http_tests {
         ])
         .await;
         let llm = ChatLlm::local(server.port, "m", Reasoning::Default).unwrap();
-        let (out, _) = llm.step("s", &ask()).await.unwrap();
+        let (out, _) = llm.step("s", &ask(), &specs()).await.unwrap();
         let StepOut::Call { name, args, id, .. } = out else {
             panic!("应是工具调用: {out:?}");
         };
         assert_eq!((name.as_str(), id.as_str()), ("search_text", "call_1"));
         assert_eq!(args, json!({"keywords": ["报销"]}));
-        let (out, _) = llm.step("s", &ask()).await.unwrap();
+        let (out, _) = llm.step("s", &ask(), &specs()).await.unwrap();
         assert!(
             matches!(out, StepOut::Final(ref t) if t == "找到了"),
             "{out:?}"

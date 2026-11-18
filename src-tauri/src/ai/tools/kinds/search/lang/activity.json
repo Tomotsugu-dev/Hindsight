@@ -1,4 +1,20 @@
 {
+  "description": {
+    "zh-Hans": "按关键词搜窗口标题,回答什么时候看过 X、在哪个窗口、看了多久。返回命中的窗口数、总时长、最早和最近一次,再按时长列出窗口。只搜标题;屏幕上出现过的字用 search_screen_text 搜。",
+    "zh-Hant": "按關鍵詞搜視窗標題,回答什麼時候看過 X、在哪個視窗、看了多久。返回命中的視窗數、總時長、最早和最近一次,再按時長列出視窗。只搜標題;螢幕上出現過的字用 search_screen_text 搜。",
+    "en": "Search window titles by keyword to answer when the user looked at X, in which window, and for how long. Returns the number of matching windows, the total time, and the first and latest time, then lists the windows by time. Searches titles only; use search_screen_text for text that was on screen.",
+    "ja": "キーワードでウィンドウのタイトルを検索し、いつ X を見たか、どのウィンドウで、どれくらいの時間かに答えます。該当するウィンドウの数、合計時間、最初と直近を返し、時間の長い順にウィンドウを並べます。タイトルだけを検索します。画面に表示された文字は search_screen_text で検索してください。",
+    "pt": "Busca títulos de janelas por palavra-chave para responder quando o usuário viu X, em qual janela e por quanto tempo. Retorna o número de janelas, o tempo total e a primeira e a última vez, e depois lista as janelas por tempo. Busca só nos títulos; para textos que apareceram na tela, use search_screen_text.",
+    "es": "Busca títulos de ventanas por palabra clave para responder cuándo el usuario vio X, en qué ventana y durante cuánto tiempo. Devuelve el número de ventanas, el tiempo total y la primera y la última vez, y luego lista las ventanas por tiempo. Solo busca en los títulos; para texto que apareció en pantalla, usa search_screen_text."
+  },
+  "keywords": {
+    "zh-Hans": "1-3 个关键词,每个都出现在标题里才算命中;英文不分大小写",
+    "zh-Hant": "1-3 個關鍵詞,每個都出現在標題裡才算命中;英文不分大小寫",
+    "en": "1-3 keywords. A window matches only if every keyword is in its title. English ignores case",
+    "ja": "キーワード 1〜3 個。すべてがタイトルに含まれる場合だけ該当。英字の大文字と小文字は区別しない",
+    "pt": "1 a 3 palavras-chave. Uma janela só conta se todas estiverem no título. Maiúsculas e minúsculas não importam",
+    "es": "1 a 3 palabras clave. Una ventana solo cuenta si todas están en el título. No distingue mayúsculas de minúsculas"
+  },
   "head": {
     "zh-Hans": "标题里有{kw}的窗口：{count} 个，共 {dur}。",
     "zh-Hant": "標題裡有{kw}的視窗：{count} 個，共 {dur}。",

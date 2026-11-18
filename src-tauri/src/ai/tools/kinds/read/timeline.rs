@@ -34,13 +34,13 @@ const RANGE_MAX_DAYS: i64 = 366;
 impl Tool for TimelineQuery {
     const NAME: &'static str = "get_timeline";
 
-    fn spec() -> ToolSpec {
+    fn spec(_lang: ChatLang) -> ToolSpec {
         spec(
             Self::NAME,
             "按小时抽样列出某时段的屏幕活动会话(时间、应用、标题),回答'某天/某下午在干什么'。返回头部标注总条数与覆盖范围,正文是抽样代表,不是全量。",
             json!({"type": "object", "properties": {
-                "date_from": date_schema("起始日期"),
-                "date_to": date_schema("结束日期")
+                "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
+                "date_to": date_schema("结束日期,格式 YYYY-MM-DD")
             }, "required": ["date_from", "date_to"]}),
         )
     }
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn spec_requires_both_dates() {
-        let spec = TimelineQuery::spec();
+        let spec = TimelineQuery::spec(ChatLang::ZhHans);
         assert_eq!(spec.name, "get_timeline");
         assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
         assert_eq!(spec.parameters["properties"]["date_from"]["maxLength"], 10);

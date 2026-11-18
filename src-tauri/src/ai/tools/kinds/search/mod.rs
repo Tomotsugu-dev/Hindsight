@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::params::{clean_names, date_schema, invalid, names_schema, parse_range, read_args};
-use crate::ai::tools::text::COMMON;
+use crate::ai::tools::text::{Text, COMMON};
 use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
 /// 关键词最多几个。
@@ -56,16 +56,17 @@ impl SearchParams {
         check(&args, today, lang).map_err(|msg| invalid(&msg, lang))
     }
 
-    /// 给模型看的参数格式。`keywords_desc` 写关键词在哪里比对。
-    fn schema(keywords_desc: &str) -> Value {
+    /// 给模型看的参数格式，说明按 `lang` 写。`keywords_desc` 写关键词在哪里比对。
+    fn schema(keywords_desc: &str, lang: ChatLang) -> Value {
+        let names = |text: &Text| names_schema(text.get(lang), NAMES_MAX as u32);
         json!({"type": "object", "properties": {
             "keywords": names_schema(keywords_desc, KEYWORDS_MAX as u32),
-            "date_from": date_schema("起始日期,可选;不给日期就搜全部"),
-            "date_to": date_schema("结束日期,可选"),
-            "apps": names_schema("只搜这些应用,可选", NAMES_MAX as u32),
-            "categories": names_schema("只搜这些分类里的应用(如'游戏'),可选", NAMES_MAX as u32),
+            "date_from": date_schema(COMMON.param_date_from.get(lang)),
+            "date_to": date_schema(COMMON.param_date_to.get(lang)),
+            "apps": names(&COMMON.param_apps),
+            "categories": names(&COMMON.param_categories),
             "limit": {"type": "integer", "minimum": 1, "maximum": LIMIT_MAX,
-                      "description": format!("最多列几个,默认 {LIMIT_DEFAULT}")}
+                      "description": COMMON.param_limit.fill(lang, &[("n", &LIMIT_DEFAULT)])}
         }, "required": ["keywords"]})
     }
 }
@@ -373,7 +374,7 @@ mod tests {
     /// 本机的 grammar 从同一份格式生成，条数和长度的限制要写在格式里。
     #[test]
     fn schema_carries_the_limits() {
-        let s = SearchParams::schema("关键词");
+        let s = SearchParams::schema("关键词", ChatLang::ZhHans);
         assert_eq!(s["required"], json!(["keywords"]));
         let props = &s["properties"];
         assert_eq!(props["keywords"]["maxItems"], KEYWORDS_MAX);
