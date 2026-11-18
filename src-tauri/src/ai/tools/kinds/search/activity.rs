@@ -241,24 +241,30 @@ fn render(
         };
     };
     let dur = lang.fmt_secs(found.secs);
-    let head = vec![
-        TEXT.head
-            .fill(lang, &[("kw", &kw), ("count", &found.count), ("dur", &dur)]),
-        TEXT.span.fill(
-            lang,
-            &[
-                ("first_at", &minute(first_at)),
-                ("first", first),
-                ("last_at", &minute(last_at)),
-                ("last", last),
-            ],
-        ),
-    ];
+    let head = |n: usize| {
+        let mut lines = vec![
+            TEXT.head
+                .fill(lang, &[("kw", &kw), ("count", &found.count), ("dur", &dur)]),
+            TEXT.span.fill(
+                lang,
+                &[
+                    ("first_at", &minute(first_at)),
+                    ("first", first),
+                    ("last_at", &minute(last_at)),
+                    ("last", last),
+                ],
+            ),
+        ];
+        if n > 0 {
+            lines.push(TEXT.list_head.fill(lang, &[("n", &n)]));
+        }
+        lines
+    };
     let rows = found
         .windows
         .iter()
         .map(|w| Row {
-            line: format!("{} | {}", window(w), use_line(w, lang)),
+            line: format!("{}｜{}", window(w), use_line(w, lang)),
             citation: Citation {
                 index: 0,
                 app: w.app.clone(),
@@ -269,16 +275,7 @@ fn render(
             },
         })
         .collect();
-    let list_head = |n: usize| TEXT.list_head.fill(lang, &[("n", &n)]);
-    write_list(
-        head,
-        list_head,
-        rows,
-        found.count,
-        next_citation,
-        max_chars,
-        lang,
-    )
+    write_list(head, rows, found.count, next_citation, max_chars, lang)
 }
 
 /// 一个窗口写成「应用 | 标题」，标题最多 60 字。
@@ -296,9 +293,9 @@ fn use_line(w: &WindowUse, lang: ChatLang) -> String {
     text.fill(lang, &[("dur", &lang.fmt_secs(w.secs)), ("days", &w.days)])
 }
 
-/// 时刻写到分钟：2026-07-08 09:00。
+/// 时刻写到分钟，不写年：07-08 09:00。
 fn minute(ts: &str) -> String {
-    ts.get(..16).unwrap_or(ts).replacen('T', " ", 1)
+    ts.get(5..16).unwrap_or(ts).replacen('T', " ", 1)
 }
 
 #[cfg(test)]
@@ -483,12 +480,13 @@ mod tests {
         .await;
 
         let out = output(&pool, json!({"keywords": ["报销"]}), 4000).await;
+        // 格式照 activity.md 第 1 节的例子
         let expected = [
             "标题里有「报销」的窗口：2 个，共 1 小时 42 分钟。",
-            "最早 2026-07-01 10:02（EXCEL.EXE | 报销单_7月.xlsx），最近 2026-07-08 15:55（EXCEL.EXE | 报销单_7月.xlsx）。",
+            "最早 07-01 10:02（EXCEL.EXE | 报销单_7月.xlsx），最近 07-08 15:55（EXCEL.EXE | 报销单_7月.xlsx）。",
             "按时长列前 2 个：",
-            "[1] chrome | 报销单填写说明 - Wiki | 共 1 小时 4 分钟，1 天",
-            "[2] EXCEL.EXE | 报销单_7月.xlsx | 共 38 分钟，2 天",
+            "[1] chrome | 报销单填写说明 - Wiki｜共 1 小时 4 分钟，1 天",
+            "[2] EXCEL.EXE | 报销单_7月.xlsx｜共 38 分钟，2 天",
         ];
         assert_eq!(out.content, expected.join("\n"));
         assert_eq!(out.citations.len(), 2);
@@ -683,7 +681,7 @@ mod tests {
         let out = output(&pool, json!({"keywords": ["报销"]}), 4000).await;
         let line = out.content.lines().find(|l| l.starts_with("[1]")).unwrap();
         let cut = truncate(&long, TITLE_MAX_CHARS);
-        assert!(line.contains(&format!("app | {cut} |")), "{line}");
+        assert!(line.contains(&format!("app | {cut}｜")), "{line}");
         // 证据卡用完整的标题
         assert_eq!(out.citations[0].title, long);
     }

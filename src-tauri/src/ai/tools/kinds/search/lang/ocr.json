@@ -23,13 +23,13 @@
     "pt": "Janelas em que {kw} apareceu na tela: {count}. Isso só mostra que apareceu; não conta tempo.",
     "es": "Ventanas en las que {kw} apareció en pantalla: {count}. Solo indica que apareció; no cuenta tiempo."
   },
-  "list_head": {
-    "zh-Hans": "按最近一次列前 {n} 个：",
-    "zh-Hant": "按最近一次列前 {n} 個：",
-    "en": "The {n} most recent:",
-    "ja": "新しい順に {n} 個：",
-    "pt": "As {n} mais recentes:",
-    "es": "Las {n} más recientes:"
+  "head_with_list": {
+    "zh-Hans": "屏幕上出现过{kw}的窗口：{count} 个。只说明出现过，不算时间。按最近一次列前 {n} 个：",
+    "zh-Hant": "螢幕上出現過{kw}的視窗：{count} 個。只說明出現過，不算時間。按最近一次列前 {n} 個：",
+    "en": "Windows where {kw} appeared on screen: {count}. This only shows that it appeared; it does not count time. The {n} most recent:",
+    "ja": "画面に{kw}が表示されたウィンドウ：{count} 個。表示されたことだけを示し、時間は数えません。新しい順に {n} 個：",
+    "pt": "Janelas em que {kw} apareceu na tela: {count}. Isso só mostra que apareceu; não conta tempo. As {n} mais recentes:",
+    "es": "Ventanas en las que {kw} apareció en pantalla: {count}. Solo indica que apareció; no cuenta tiempo. Las {n} más recientes:"
   },
   "none": {
     "zh-Hans": "屏幕上没有出现过{kw}。可以换更短的词、同义词或英文。",

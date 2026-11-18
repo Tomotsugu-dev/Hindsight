@@ -118,24 +118,23 @@ struct Row {
     citation: Citation,
 }
 
-/// 写成给模型看的文字：`head`，列表前的一行，一个窗口一行，没列全时再写一行。
+/// 写成给模型看的文字：开头，一个窗口一行，没列全时再写一行。
 ///
+/// `head(n)` 写开头的几行，`n` 是列了几个，一个都没列时是 0。
 /// `count` 是全部命中的窗口数，`rows` 是要列的。编号从 `next_citation` 开始。
 /// 文字超过 `max_chars` 时少列几个，不截断某一行。
 fn write_list(
-    head: Vec<String>,
-    list_head: impl Fn(usize) -> String,
+    head: impl Fn(usize) -> Vec<String>,
     rows: Vec<Row>,
     count: usize,
     next_citation: usize,
     max_chars: usize,
     lang: ChatLang,
 ) -> ToolOutput {
-    // 给列表前后的两行留位置。按最大的数算，实际写出来只会更短
-    let reserved = [list_head(rows.len()), more(count, lang)];
-    let mut used: usize = head
+    // 给开头和最后一行留位置。按最大的数算，实际写出来只会更短
+    let mut used: usize = head(rows.len())
         .iter()
-        .chain(&reserved)
+        .chain([&more(count, lang)])
         .map(|s| s.chars().count() + 1)
         .sum();
     let mut lines = Vec::new();
@@ -151,11 +150,8 @@ fn write_list(
         lines.push(line);
         citations.push(citation);
     }
-    let mut out = head;
-    if !lines.is_empty() {
-        out.push(list_head(lines.len()));
-        out.append(&mut lines);
-    }
+    let mut out = head(lines.len());
+    out.append(&mut lines);
     let rest = count - citations.len();
     if rest > 0 {
         out.push(more(rest, lang));
@@ -305,13 +301,25 @@ mod tests {
             .collect()
     }
 
-    fn list_head(n: usize) -> String {
-        format!("列 {n} 个：")
+    /// 开头一行；列了几个的话，再写一行列了几个。
+    fn head(n: usize) -> Vec<String> {
+        let mut lines = vec!["开头".to_string()];
+        if n > 0 {
+            lines.push(format!("列 {n} 个："));
+        }
+        lines
     }
 
     fn write(rows: Vec<Row>, count: usize, max_chars: usize) -> ToolOutput {
-        let head = vec!["开头".to_string()];
-        write_list(head, list_head, rows, count, 4, max_chars, ChatLang::ZhHans)
+        write_list(head, rows, count, 4, max_chars, ChatLang::ZhHans)
+    }
+
+    #[test]
+    fn the_last_line_says_how_to_see_more() {
+        assert_eq!(
+            more(6, ChatLang::ZhHans),
+            "还有 6 个没列。要看更多，多列几个，或者缩小日期范围、按应用或分类过滤。"
+        );
     }
 
     #[test]

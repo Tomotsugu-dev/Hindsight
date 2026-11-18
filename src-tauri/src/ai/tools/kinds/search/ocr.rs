@@ -1,6 +1,7 @@
 //! search_screen_text：按关键词搜屏幕上识别出的文字。回答 X 在哪些窗口的屏幕上出现过。
 
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::sync::LazyLock;
 
 use chrono::NaiveDate;
@@ -41,10 +42,10 @@ struct OcrText {
     description: Text,
     /// 给模型看的关键词参数说明。
     keywords: Text,
-    /// 开头：几个窗口的屏幕上出现过关键词。说明只是出现过，不算时间。
+    /// 开头：几个窗口的屏幕上出现过关键词。说明只是出现过，不算时间。一个都没列时用。
     head: Text,
-    /// 列表前的一行。
-    list_head: Text,
+    /// 同 `head`，后面接着写按最近一次列了几个。
+    head_with_list: Text,
     /// 没有命中。
     none: Text,
     /// 记忆库里一段屏幕文字都没有。
@@ -296,15 +297,23 @@ fn render(
             citations: Vec::new(),
         };
     }
-    let head = vec![TEXT
-        .head
-        .fill(lang, &[("kw", &kw), ("count", &found.count)])];
+    // 开头和「按最近一次列前 N 个」写在同一行
+    let head = |n: usize| {
+        let line = if n > 0 {
+            let args: [(&str, &dyn Display); 3] = [("kw", &kw), ("count", &found.count), ("n", &n)];
+            TEXT.head_with_list.fill(lang, &args)
+        } else {
+            TEXT.head
+                .fill(lang, &[("kw", &kw), ("count", &found.count)])
+        };
+        vec![line]
+    };
     let rows = found
         .windows
         .iter()
         .map(|w| Row {
             line: format!(
-                "{} | {} | {}",
+                "{} | {}｜{}",
                 w.app,
                 truncate(&w.title, TITLE_MAX_CHARS),
                 w.line
@@ -320,16 +329,7 @@ fn render(
             },
         })
         .collect();
-    let list_head = |n: usize| TEXT.list_head.fill(lang, &[("n", &n)]);
-    write_list(
-        head,
-        list_head,
-        rows,
-        found.count,
-        next_citation,
-        max_chars,
-        lang,
-    )
+    write_list(head, rows, found.count, next_citation, max_chars, lang)
 }
 
 #[cfg(test)]
@@ -642,11 +642,11 @@ mod tests {
         .await;
 
         let out = output(&ctx, json!({"keywords": ["报销"]}), 4000).await;
+        // 格式照 ocr.md 第 1 节的例子
         let expected = [
-            "屏幕上出现过「报销」的窗口：2 个。只说明出现过，不算时间。",
-            "按最近一次列前 2 个：",
-            "[1] Visual Studio Code | main.rs | // 报销",
-            "[2] WeChat | 财务群 | 请提交报销单",
+            "屏幕上出现过「报销」的窗口：2 个。只说明出现过，不算时间。按最近一次列前 2 个：",
+            "[1] Visual Studio Code | main.rs｜// 报销",
+            "[2] WeChat | 财务群｜请提交报销单",
         ];
         assert_eq!(out.content, expected.join("\n"));
         let c = &out.citations[1];
@@ -692,6 +692,21 @@ mod tests {
         let shown = out.citations.len();
         assert!(0 < shown && shown < 5, "{shown}: {}", out.content);
         assert!(out.content.ends_with(&more(5 - shown, ChatLang::ZhHans)));
+    }
+
+    #[tokio::test]
+    async fn without_room_for_any_window_the_head_has_no_list_part() {
+        let ctx = real_ctx(&main_db().await).await;
+        add(&ctx, "2026-07-01T09:00", "app", "笔记", &["报销"]).await;
+
+        // 放得下开头和最后一行，放不下一个窗口
+        let out = output(&ctx, json!({"keywords": ["报销"]}), 90).await;
+        let expected = [
+            "屏幕上出现过「报销」的窗口：1 个。只说明出现过，不算时间。",
+            &more(1, ChatLang::ZhHans),
+        ];
+        assert_eq!(out.content, expected.join("\n"));
+        assert!(out.citations.is_empty());
     }
 
     #[tokio::test]
