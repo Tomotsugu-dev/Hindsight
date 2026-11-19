@@ -1,6 +1,10 @@
-//! 工具文字的读法：一句话一个键，6 种语言挨在一起。
+//! This module reads the JSON files of tool text into structs. It also gets a sentence in one
+//! language and fills in its placeholders.
 //!
-//! 句子放在读它的那个文件旁边的 `lang/*.json` 里，读成一个结构体，一句话一个字段。
+//! In the JSON, each sentence has one key, and the key holds the sentence in 6 languages. Each
+//! JSON file sits in a `lang/` folder next to the file that reads it. `time.json` is the
+//! exception: it sits in this folder. Each JSON file is read into one struct, with one field per
+//! sentence.
 
 use std::fmt::Display;
 
@@ -9,7 +13,8 @@ use serde::Deserialize;
 
 use super::ChatLang;
 
-/// 一句话的 6 种语言。少一种、多一种，都读取失败。
+/// `Text` holds one sentence in 6 languages. Reading fails if the JSON has one language too few
+/// or too many.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(in crate::ai::tools) struct Text {
@@ -24,7 +29,7 @@ pub(in crate::ai::tools) struct Text {
 }
 
 impl Text {
-    /// 这种语言的句子。
+    /// Returns the sentence for `lang`.
     pub(in crate::ai::tools) fn get(&self, lang: ChatLang) -> &str {
         match lang {
             ChatLang::ZhHans => &self.zh_hans,
@@ -36,9 +41,10 @@ impl Text {
         }
     }
 
-    /// 这种语言的句子，`{名字}` 换成 `args` 里同名的值。
+    /// Replaces each `{name}` in the sentence for `lang` with the value of the same name in
+    /// `args`, and returns the result.
     ///
-    /// 只扫一遍：值里的 `{名字}` 不会再被换掉。`args` 里没有的名字原样留着。
+    /// It scans the sentence once, so a `{name}` inside a value is not replaced.
     pub(in crate::ai::tools) fn fill(
         &self,
         lang: ChatLang,
@@ -70,14 +76,17 @@ impl Text {
     }
 }
 
-/// 读一个 JSON 里的句子。
+/// Reads JSON into the text struct `T`, and panics if it cannot.
 ///
-/// JSON 编进了程序，每个 JSON 都有测试读一遍，所以这里不会失败。
+/// The JSON is built into the program, and a test reads each file, so this does not panic at
+/// run time.
 pub(in crate::ai::tools) fn load<T: DeserializeOwned>(json: &str) -> T {
     serde_json::from_str(json).expect("工具文字的 JSON 读不懂，测试应该先发现")
 }
 
-/// 检查每句话的 6 种语言用的占位符一样。每个 JSON 的测试都调它。
+/// 检查每句话的 6 种语言用的占位符一样，以 zh-Hans 为准。每个 JSON 的测试都调它。
+///
+/// 只有 `{}` 里全是小写字母和下划线的才算占位符。
 #[cfg(test)]
 pub(in crate::ai::tools) fn assert_same_placeholders(json: &str) {
     use std::collections::{BTreeMap, BTreeSet};
