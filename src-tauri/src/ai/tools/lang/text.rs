@@ -81,7 +81,7 @@ impl Text {
 /// The JSON is built into the program, and a test reads each file, so this does not panic at
 /// run time.
 pub(in crate::ai::tools) fn load<T: DeserializeOwned>(json: &str) -> T {
-    serde_json::from_str(json).expect("工具文字的 JSON 读不懂，测试应该先发现")
+    serde_json::from_str(json).expect("built-in tool text JSON should match its struct")
 }
 
 /// 检查每句话的 6 种语言用的占位符一样，以 zh-Hans 为准。每个 JSON 的测试都调它。
