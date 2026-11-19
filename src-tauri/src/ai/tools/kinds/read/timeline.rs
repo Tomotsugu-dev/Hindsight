@@ -28,9 +28,6 @@ struct Args {
     date_to: Option<String>,
 }
 
-/// 日期跨度上限：一年。
-const RANGE_MAX_DAYS: i64 = 366;
-
 impl Tool for TimelineQuery {
     const NAME: &'static str = "get_timeline";
 
@@ -75,7 +72,6 @@ fn check(
         args.date_from.as_deref(),
         args.date_to.as_deref(),
         today,
-        RANGE_MAX_DAYS,
         lang,
     )?
     .ok_or_else(|| lang.err_need_range(TimelineQuery::NAME))?;
@@ -224,10 +220,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_rejects_a_range_over_a_year() {
+    fn parse_takes_a_range_of_any_length() {
         let args = json!({"date_from": "2020-01-01", "date_to": "2026-07-01"});
-        let e = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap_err();
-        assert!(e.0.contains("366"), "{}", e.0);
+        assert!(TimelineQuery::parse(&args, today(), ChatLang::ZhHans).is_ok());
+        // 只给结束：从最早算起，不会因为跨度被拒
+        let args = json!({"date_to": "2026-07-01"});
+        let q = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(q.range.1, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
     }
 
     #[test]

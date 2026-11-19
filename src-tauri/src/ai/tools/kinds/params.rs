@@ -21,13 +21,12 @@ pub(super) fn invalid(msg: &str, lang: ChatLang) -> ToolError {
 /// Checks a date range and returns its first and last day, both included.
 ///
 /// With only a start, the range ends today. With only an end, it starts at the earliest date.
-/// With neither, it returns `None`. A bad format, a start after today, a start after the end,
-/// or a span over `max_days` is rejected with a reason written for the model.
+/// With neither, it returns `None`. A bad format, a start after today, or a start after the end
+/// is rejected with a reason written for the model.
 pub(super) fn parse_range(
     date_from: Option<&str>,
     date_to: Option<&str>,
     today: NaiveDate,
-    max_days: i64,
     lang: ChatLang,
 ) -> Result<Option<(NaiveDate, NaiveDate)>, String> {
     const EARLIEST: NaiveDate = NaiveDate::from_ymd_opt(0, 1, 1).unwrap();
@@ -52,9 +51,6 @@ pub(super) fn parse_range(
     }
     if from > to {
         return Err(lang.err_from_after_to().into());
-    }
-    if (to - from).num_days() > max_days {
-        return Err(lang.err_range_too_long().into());
     }
     Ok(Some((from, to)))
 }
@@ -163,8 +159,8 @@ impl ChatLang {
         ERRORS.err_from_after_to.get(self)
     }
 
-    pub(super) fn err_range_too_long(self) -> &'static str {
-        ERRORS.err_range_too_long.get(self)
+    pub(super) fn err_range_too_long(self, max_days: i64) -> String {
+        ERRORS.err_range_too_long.fill(self, &[("max", &max_days)])
     }
 
     pub(super) fn err_from_in_future(self) -> &'static str {
@@ -214,7 +210,6 @@ mod tests {
         for lang in langs {
             for s in [
                 lang.err_from_after_to(),
-                lang.err_range_too_long(),
                 lang.err_from_in_future(),
                 lang.err_keywords_empty(),
             ] {
@@ -234,6 +229,7 @@ mod tests {
                 "{lang:?}: {many}"
             );
             assert!(lang.err_limit_range(20).contains("20"));
+            assert!(lang.err_range_too_long(366).contains("366"));
         }
     }
 
@@ -242,31 +238,32 @@ mod tests {
     }
 
     fn range(from: &str, to: &str) -> Result<Option<(NaiveDate, NaiveDate)>, String> {
-        parse_range(Some(from), Some(to), today(), 366, ChatLang::ZhHans)
+        parse_range(Some(from), Some(to), today(), ChatLang::ZhHans)
     }
 
     #[test]
-    fn range_rejects_reversed_future_and_too_long() {
+    fn range_rejects_reversed_future_and_bad_format() {
         assert!(range("2026-07-03", "2026-07-01")
             .unwrap_err()
             .contains("晚于"));
         assert!(range("2026-08-01", "2026-08-02")
             .unwrap_err()
             .contains("未来"));
-        assert!(range("2020-01-01", "2026-07-01")
-            .unwrap_err()
-            .contains("366"));
         assert!(range("2026/07/01", "2026-07-02")
             .unwrap_err()
             .contains("date_from"));
     }
 
     #[test]
+    fn range_has_no_span_limit() {
+        assert!(range("2020-01-01", "2026-07-01").is_ok());
+    }
+
+    #[test]
     fn range_with_one_end_leaves_the_other_open() {
         let d = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
-        let open = |from: Option<&str>, to: Option<&str>| {
-            parse_range(from, to, today(), i64::MAX, ChatLang::ZhHans)
-        };
+        let open =
+            |from: Option<&str>, to: Option<&str>| parse_range(from, to, today(), ChatLang::ZhHans);
         // 只给开始：到今天为止；只给结束：从最早算起；都没给：没有范围
         assert_eq!(
             open(Some("2026-07-01"), None),
@@ -280,9 +277,6 @@ mod tests {
         // 给的那一头照样检查；只给开始又在未来，报的是「在未来」
         assert!(open(Some("2026-08-01"), None).unwrap_err().contains("未来"));
         assert!(open(None, Some("7/1")).unwrap_err().contains("date_to"));
-        // 有跨度上限时，只给结束会超出上限
-        let capped = parse_range(None, Some("2026-07-01"), today(), 366, ChatLang::ZhHans);
-        assert!(capped.unwrap_err().contains("366"));
         let both = range(" 2026-07-01 ", "2026-07-05").unwrap().unwrap();
         assert_eq!(both.0, d("2026-07-01"));
     }

@@ -48,12 +48,12 @@
     "es": "date_from es posterior a date_to"
   },
   "err_range_too_long": {
-    "zh-Hans": "时间跨度超过 366 天,请缩小范围",
-    "zh-Hant": "時間跨度超過 366 天,請縮小範圍",
-    "en": "The range exceeds 366 days; please narrow it",
-    "ja": "期間が 366 日を超えています。範囲を狭めてください",
-    "pt": "O intervalo excede 366 dias; reduza-o",
-    "es": "El intervalo supera los 366 días; redúcelo"
+    "zh-Hans": "bucket 为 day 或 week 时,时间跨度不能超过 {max} 天。请缩小范围,或者不分桶",
+    "zh-Hant": "bucket 為 day 或 week 時,時間跨度不能超過 {max} 天。請縮小範圍,或者不分桶",
+    "en": "With bucket day or week, the range cannot exceed {max} days. Narrow it, or drop bucket",
+    "ja": "bucket が day か week のとき、期間は {max} 日までです。範囲を狭めるか、bucket を外してください",
+    "pt": "Com bucket day ou week, o intervalo não pode passar de {max} dias. Reduza-o ou remova bucket",
+    "es": "Con bucket day o week, el intervalo no puede superar {max} días. Redúcelo o quita bucket"
   },
   "err_from_in_future": {
     "zh-Hans": "date_from 在未来",

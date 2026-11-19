@@ -53,7 +53,7 @@ pub enum StatMetric {
     /// 使用会话次数:相邻活动间隔超过 gap_minutes 就切一段
     SessionCount,
     /// 最早/最近一次记录的时间("第一次用 X 是什么时候"):
-    /// MIN/MAX 聚合,忽略分组与分桶,豁免常规日期跨度上限
+    /// MIN/MAX 聚合,忽略分组与分桶
     FirstLast,
 }
 
@@ -86,15 +86,13 @@ struct Args {
     bucket: Option<Bucket>,
 }
 
-/// 常规查询的日期跨度上限(一年);first_last 口径的宽限见 [`FIRST_LAST_MAX_DAYS`]。
-const RANGE_MAX_DAYS: i64 = 366;
-/// first_last(MIN/MAX 聚合)的跨度上限:名义上限,只防荒谬输入。
-const FIRST_LAST_MAX_DAYS: i64 = 36600;
 /// 分组统计 top-N 上限
 const TOP_N_MAX: usize = 10;
 /// 逐日分桶的最大跨度:超过则自动按周汇总——60 天 ≈ 60 行是结果预算内
 /// 能完整放下、模型也读得过来的上限。
 const BUCKET_DAY_MAX_DAYS: i64 = 60;
+/// 按天、按周分桶时的最大跨度：按周最多 53 行。
+const BUCKET_MAX_DAYS: i64 = 366;
 /// 会话计数的间隔默认值与夹紧区间(分钟)。
 const GAP_DEFAULT_MIN: u32 = 30;
 const GAP_MIN: u32 = 5;
@@ -145,18 +143,10 @@ impl Tool for StatsQuery {
 /// 检查参数的值，补上默认值。不合法时返回原因。
 fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<StatsQuery, String> {
     let metric = args.metric.unwrap_or(StatMetric::Duration);
-    // first_last 是 MIN/MAX 聚合,大范围也便宜——豁免常规跨度上限,
-    // 否则"我第一次用 X 是什么时候"这类必须给多年范围的问题会被拒
-    let max_days = if metric == StatMetric::FirstLast {
-        FIRST_LAST_MAX_DAYS
-    } else {
-        RANGE_MAX_DAYS
-    };
     let range = parse_range(
         args.date_from.as_deref(),
         args.date_to.as_deref(),
         today,
-        max_days,
         lang,
     )?
     .ok_or_else(|| lang.err_need_range(StatsQuery::NAME))?;
@@ -174,9 +164,14 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<S
         return Err(lang.err_bucket_with_group().into());
     }
     let mut bucket_auto_week = false;
-    if bucket == Bucket::Day && (range.1 - range.0).num_days() > BUCKET_DAY_MAX_DAYS {
+    let span = (range.1 - range.0).num_days();
+    if bucket == Bucket::Day && span > BUCKET_DAY_MAX_DAYS {
         bucket = Bucket::Week;
         bucket_auto_week = true;
+    }
+    // first_last 不看分桶
+    if bucket == Bucket::Week && metric != StatMetric::FirstLast && span > BUCKET_MAX_DAYS {
+        return Err(lang.err_range_too_long(BUCKET_MAX_DAYS));
     }
     // 分类分组的组数天然少(内置+自定义十几个),默认 top-5 会截掉小类
     // (实测漏了"其他/设计")——未显式给 top_n 时放宽到上限
@@ -706,18 +701,31 @@ mod tests {
         assert!(e.unwrap_err().contains("晚于"));
         let e = parse_args(json!({"date_from": "2026-08-01", "date_to": "2026-08-02"}));
         assert!(e.unwrap_err().contains("未来"));
-        let e = parse_args(json!({"date_from": "2020-01-01", "date_to": "2026-07-01"}));
-        assert!(e.unwrap_err().contains("366"));
     }
 
     #[test]
-    fn parse_first_last_allows_ranges_over_a_year() {
-        // 同样的多年范围：duration 被拒(上一个测试)，first_last 放行
-        let q = parse_args(json!({
-            "date_from": "2020-01-01", "date_to": "2026-07-01", "metric": "first_last"
+    fn parse_limits_the_span_only_for_day_and_week_buckets() {
+        // 不分桶、按小时分桶：跨好几年也可以，只给结束也可以
+        assert!(parse_args(json!({"date_from": "2020-01-01", "date_to": "2026-07-01"})).is_ok());
+        assert!(parse_args(json!({"date_to": "2026-07-01"})).is_ok());
+        assert!(parse_args(json!({
+            "date_from": "2020-01-01", "date_to": "2026-07-01", "bucket": "hour_of_day"
         }))
-        .unwrap();
-        assert_eq!(q.metric, StatMetric::FirstLast);
+        .is_ok());
+        // 按天、按周：一天或一周一行，超过 366 天被拒
+        for bucket in ["day", "week"] {
+            let e = parse_args(json!({
+                "date_from": "2020-01-01", "date_to": "2026-07-01", "bucket": bucket
+            }))
+            .unwrap_err();
+            assert!(e.contains("366"), "{bucket}: {e}");
+        }
+        // first_last 不看分桶
+        assert!(parse_args(json!({
+            "date_from": "2020-01-01", "date_to": "2026-07-01",
+            "bucket": "week", "metric": "first_last"
+        }))
+        .is_ok());
     }
 
     #[test]
