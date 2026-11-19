@@ -316,7 +316,7 @@ pub async fn answer(
                     continue;
                 }
 
-                // 第②道墙:解析+校验;错误文案回填给模型自纠
+                // 参数不合法时，原因回给模型，让它改了再调
                 let call = ToolCall {
                     id: call_id.clone(),
                     name,
@@ -333,7 +333,6 @@ pub async fn answer(
                     }
                 };
 
-                // 第③④道墙内执行
                 match tools
                     .execute(&query, citations.len() + 1, TOOL_RESULT_MAX_CHARS)
                     .await

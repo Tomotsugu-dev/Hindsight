@@ -1,15 +1,3 @@
-//! Chat 工具执行层——四道墙的 ②③④(①grammar 在 llm 适配器)。
-//!
-//! 安全模型:LLM 没有任何写能力、没有任何 SQL 表面。
-//! - ② 语义校验:工具名白名单、日期可解析且 from≤to、
-//!   关键词长度封顶、FTS 词强制字符串字面量、LIKE 通配符转义、limit 服务端检查;
-//! - ③ 固定查询:每个工具一条写死的参数化 SQL,LLM 只填空;
-//! - ④ 只读连接:主库与记忆库都以 SQLITE_OPEN_READ_ONLY 打开,
-//!   前三道全被穿透时写操作在 SQLite 层直接报错。
-//!
-//! 校验错误包成 [`ToolError`]——engine 会把它回填给模型重试,
-//! 所以措辞要能指导模型改参数。
-
 mod kinds;
 mod lang;
 #[cfg(test)]
@@ -97,7 +85,7 @@ pub struct ToolOutput {
     pub citations: Vec<Citation>,
 }
 
-/// 只读工具上下文——第④道墙。两个库都是 READ_ONLY 连接。
+/// 两个库的只读连接。
 struct ToolCtx {
     main: Connection,
     mem: Connection,
