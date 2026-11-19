@@ -1,0 +1,26 @@
+{
+  "empty": {
+    "zh-Hans": "该时段没有活动记录。",
+    "zh-Hant": "該時段沒有活動記錄。",
+    "en": "No activity records in this period.",
+    "ja": "この期間には活動記録がありません。",
+    "pt": "Nenhum registro de atividade neste período.",
+    "es": "No hay registros de actividad en este periodo."
+  },
+  "header_sampled": {
+    "zh-Hans": "该时段共 {total} 条活动记录,覆盖 {first} ~ {last}。以下为按小时抽样的 {shown} 条(每小时至多 {per_hour} 条,取时长最长;这是样本不是全量,时段总体结论以本行的总数与覆盖范围为准):",
+    "zh-Hant": "該時段共 {total} 條活動記錄,涵蓋 {first} ~ {last}。以下為按小時抽樣的 {shown} 條(每小時至多 {per_hour} 條,取時長最長;這是樣本不是全量,時段整體結論以本行的總數與涵蓋範圍為準):",
+    "en": "{total} activity records in this period, spanning {first} ~ {last}. Below are {shown} sampled entries (up to {per_hour} per hour, longest first; this is a sample, not the full list — base period-level conclusions on the total and span in this line):",
+    "ja": "この期間の活動記録は計 {total} 件({first} ~ {last})。以下は 1 時間あたり最大 {per_hour} 件(時間の長い順)で抽出した {shown} 件のサンプルです。全量ではないため、期間全体の結論はこの行の総数と範囲を基準にしてください:",
+    "pt": "{total} registros de atividade neste período, abrangendo {first} ~ {last}. Abaixo, {shown} entradas amostradas (até {per_hour} por hora, maiores durações primeiro; é uma amostra, não a lista completa — baseie conclusões do período no total e na abrangência desta linha):",
+    "es": "{total} registros de actividad en este periodo, que abarcan {first} ~ {last}. A continuación, {shown} entradas muestreadas (hasta {per_hour} por hora, las de mayor duración primero; es una muestra, no la lista completa — basa las conclusiones del periodo en el total y el alcance de esta línea):"
+  },
+  "header_all": {
+    "zh-Hans": "该时段共 {total} 条活动记录,全部列出:",
+    "zh-Hant": "該時段共 {total} 條活動記錄,全部列出:",
+    "en": "{total} activity records in this period, all listed:",
+    "ja": "この期間の活動記録は計 {total} 件。すべて列挙します:",
+    "pt": "{total} registros de atividade neste período, todos listados:",
+    "es": "{total} registros de actividad en este periodo, todos listados:"
+  }
+}

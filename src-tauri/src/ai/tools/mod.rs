@@ -1,52 +1,36 @@
-//! Chat 工具执行层——四道墙的 ②③④(①grammar 在 llm 适配器)。
-//!
-//! 安全模型:LLM 没有任何写能力、没有任何 SQL 表面。
-//! - ② 语义校验:工具名白名单、日期可解析且 from≤to 且跨度≤366 天、
-//!   关键词长度封顶、FTS 词强制字符串字面量、LIKE 通配符转义、limit 服务端夹紧;
-//! - ③ 固定查询:每个工具一条写死的参数化 SQL,LLM 只填空;
-//! - ④ 只读连接:主库与记忆库都以 SQLITE_OPEN_READ_ONLY 打开,
-//!   前三道全被穿透时写操作在 SQLite 层直接报错。
-//!
-//! 校验错误包成 [`ToolError`]——engine 会把它回填给模型重试,
-//! 所以措辞要能指导模型改参数。
-
 mod kinds;
 mod lang;
-mod query;
-mod spec;
 #[cfg(test)]
 mod test_util;
 
 use chrono::NaiveDate;
-use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use tokio::sync::OnceCell;
 
-use self::kinds::{search, stats, timeline};
+pub use self::kinds::Query;
 pub use self::lang::ChatLang;
-pub use self::query::Query;
-use self::query::RawParams;
 use crate::ai::model::{ToolCall, ToolSpec};
+use crate::ai::policy::AiDataPolicy;
 use crate::error::Result;
-use crate::storage::{Connection, SqliteResultExt};
+use crate::storage::Connection;
 
-/// 单工具返回给模型的结果字符上限——超出截断,防止一个大会话吃光上下文。
-const RESULT_CHAR_BUDGET: usize = 4000;
-
-/// 给模型查库用的三个工具：给模型看的说明、检查模型发来的调用、执行。
+/// The tools the model uses to query the database: it gives the tool descriptions, checks each
+/// call from the model, and runs it.
 ///
-/// 一次提问开一个：检查日期要用 `today`，结果和报错的文字按 `lang` 写。
+/// Open one per question. The date, the language, and what the AI may see hold only for that
+/// question.
 pub struct Tools {
     ctx: ToolCtx,
     today: NaiveDate,
     lang: ChatLang,
 }
 
-/// 调用不合法的原因，写给模型看。
+/// Why a tool call was rejected.
 #[derive(Debug)]
 pub struct ToolError(pub String);
 
 impl Tools {
-    /// 打开主库和记忆库的只读连接。
+    /// Opens read-only connections to the main database and the memory database.
     pub async fn open_readonly(today: NaiveDate, lang: ChatLang) -> Result<Self> {
         Ok(Self {
             ctx: ToolCtx::open_readonly().await?,
@@ -55,27 +39,40 @@ impl Tools {
         })
     }
 
-    /// 给模型看的工具列表。
-    pub fn specs() -> Vec<ToolSpec> {
-        spec::specs()
+    /// Lists the tools for the model, with descriptions in the prompt language.
+    pub fn specs(&self) -> Vec<ToolSpec> {
+        kinds::specs(self.lang)
     }
 
-    /// 检查模型发来的调用：参数读不读得懂，值合不合法。
+    /// Checks a call from the model: whether its arguments can be read, and whether their values
+    /// are valid.
     pub fn validate(&self, call: &ToolCall) -> std::result::Result<Query, ToolError> {
-        let raw: RawParams = serde_json::from_value(call.arguments.clone())
-            .map_err(|e| ToolError(self.lang.args_format_err(&e)))?;
-        query::validate(&call.name, &raw, self.today, self.lang)
-            .map_err(|msg| ToolError(self.lang.args_invalid(&msg)))
+        kinds::parse(call, self.today, self.lang)
     }
 
-    /// 执行检查过的调用。引用编号从 `next_citation` 开始。
-    pub async fn execute(&self, query: &Query, next_citation: usize) -> Result<ToolOutput> {
-        execute(&self.ctx, query, next_citation, self.lang).await
+    /// Runs a checked call.
+    ///
+    /// Citations are numbered from `next_citation`. Text over `max_chars` characters is cut, and
+    /// "…" is added at the end. The search tools list fewer rows to stay within `max_chars`. The
+    /// timeline and stats tools do not, so only this cut limits them.
+    pub async fn execute(
+        &self,
+        query: &Query,
+        next_citation: usize,
+        max_chars: usize,
+    ) -> Result<ToolOutput> {
+        let mut out = query
+            .execute(&self.ctx, next_citation, max_chars, self.lang)
+            .await?;
+        out.content = truncate(&out.content, max_chars);
+        Ok(out)
     }
 }
 
-/// 证据引用——前端渲染证据卡的数据。`index` 是本轮对话内的全局编号,
-/// 模型在答案里写 [index] 引用它。Deserialize 供聊天历史从库里回读。
+/// A piece of evidence. The front end shows it as an evidence card.
+///
+/// `index` is unique within this round of the chat, and the model cites it as `[index]` in the
+/// answer. `Deserialize` is for reading chat history back from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Citation {
@@ -84,44 +81,47 @@ pub struct Citation {
     pub title: String,
     pub started_ts: String,
     pub ended_ts: String,
-    /// 证据帧(命中行首现帧/会话首帧);可能已被 retention 删除,前端兜底
+    /// The screenshot for this evidence: the first frame of the match or of the session. It may
+    /// have been deleted after the retention period, and the front end handles that.
     pub frame_path: Option<String>,
 }
 
-/// 工具执行结果:给模型看的紧凑文本 + 给前端的结构化引用。
+/// The result of a tool: short text for the model, and citations for the front end.
 pub struct ToolOutput {
     pub content: String,
     pub citations: Vec<Citation>,
 }
 
-/// 只读工具上下文——第④道墙。两个库都是 READ_ONLY 连接。
+/// Read-only connections to the two databases.
 struct ToolCtx {
     main: Connection,
     mem: Connection,
+    /// What the AI may see. It is read from the main database on first use.
+    policy: OnceCell<AiDataPolicy>,
 }
 
 impl ToolCtx {
-    /// 打开主库与记忆库的只读连接。
+    /// Opens read-only connections to the main database and the memory database.
     async fn open_readonly() -> Result<Self> {
         use rusqlite::OpenFlags;
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let main = Connection::open_with_flags(crate::storage::db_path()?, flags).await?;
         let mem = Connection::open_with_flags(crate::memory::memory_db_path()?, flags).await?;
-        Ok(Self { main, mem })
+        Ok(Self {
+            main,
+            mem,
+            policy: OnceCell::new(),
+        })
     }
-}
 
-/// 第③道墙:固定查询执行。`next_citation` 是引用编号的起点(engine 维护全局序)。
-async fn execute(
-    ctx: &ToolCtx,
-    call: &Query,
-    next_citation: usize,
-    lang: ChatLang,
-) -> Result<ToolOutput> {
-    match call {
-        Query::SearchText(q) => search::run(ctx, q, next_citation, lang).await,
-        Query::QueryStats(q) => stats::run(ctx, q, lang).await,
-        Query::GetTimeline(q) => timeline::run(ctx, q, next_citation, lang).await,
+    /// Returns what the AI may see.
+    ///
+    /// After the first successful read, it is not read again for this question. If the read
+    /// fails, the tool that needs it fails too, and never returns unfiltered data.
+    async fn policy(&self) -> Result<&AiDataPolicy> {
+        self.policy
+            .get_or_try_init(|| AiDataPolicy::load(&self.main))
+            .await
     }
 }
 
@@ -139,53 +139,12 @@ const ACTIVITY_WHERE: &str = "WHERE a.local_date BETWEEN ?1 AND ?2
        AND g.category_id IS NOT 'hidden'
        AND a.excluded = 0";
 
-/// 覆盖披露:范围内活动日数(主库)、其中有屏幕文字索引的日数与待识别帧数(记忆库)。
-/// 拼在 timeline/search 结果最前——"没搜到"究竟是"屏幕上没出现过"还是"索引不全",
-/// 模型只有靠这行才能区分,措辞约束在 system_prompt 第 8 条。
-/// 活动日数不做隐藏组过滤:这行回答的是"电脑用没用/索引全不全",不是内容本身。
-async fn coverage_line(ctx: &ToolCtx, from: &str, to: &str, lang: ChatLang) -> Result<String> {
-    let (f, t) = (from.to_string(), to.to_string());
-    let activity_days: i64 = ctx
-        .main
-        .call(move |conn| {
-            conn.query_row(
-                "SELECT COUNT(DISTINCT local_date) FROM activities
-                 WHERE local_date BETWEEN ?1 AND ?2",
-                params![f, t],
-                |r| r.get(0),
-            )
-            .db()
-        })
-        .await?;
-    let (f, t) = (from.to_string(), to.to_string());
-    let (covered_days, pending): (i64, i64) = ctx
-        .mem
-        .call(move |conn| {
-            let covered = conn
-                .query_row(
-                    "SELECT COUNT(DISTINCT local_date) FROM text_sessions
-                     WHERE local_date BETWEEN ?1 AND ?2",
-                    params![f, t],
-                    |r| r.get(0),
-                )
-                .db()?;
-            let pending = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM frames
-                     WHERE ocr_state = 0 AND local_date BETWEEN ?1 AND ?2",
-                    params![f, t],
-                    |r| r.get(0),
-                )
-                .db()?;
-            Ok((covered, pending))
-        })
-        .await?;
-    Ok(lang.coverage_line(activity_days, covered_days, pending))
-}
-
-/// FTS MATCH 注入防护:每个词包成带引号的字符串字面量(内部引号剥除),
-/// 多词以空格连接 = 隐式 AND。模型/用户输入永远进不了 FTS 语法位。
-/// pub(crate):搜索页命令([`crate::commands::screen_memory::memory_search`])同款复用。
+/// Guards FTS MATCH against injection.
+///
+/// Each word becomes a quoted string, and any double quote inside it becomes a space. Words are
+/// joined by spaces, which FTS reads as AND. So input from the model or the user never reaches
+/// the FTS syntax. It is `pub(crate)` because the search page command
+/// ([`crate::commands::screen_memory::memory_search`]) uses it too.
 pub(crate) fn fts_literal(keywords: &[String]) -> String {
     keywords
         .iter()
@@ -194,7 +153,9 @@ pub(crate) fn fts_literal(keywords: &[String]) -> String {
         .join(" ")
 }
 
-/// LIKE 通配符转义(ESCAPE '\')。pub(crate) 理由同 [`fts_literal`]。
+/// Escapes the LIKE wildcards, for use with `ESCAPE '\'`.
+///
+/// It is `pub(crate)` for the same reason as [`fts_literal`].
 pub(crate) fn like_pattern(s: &str) -> String {
     let escaped = s
         .replace('\\', "\\\\")
@@ -214,10 +175,41 @@ fn truncate(s: &str, max_chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::kinds::search::SearchQuery;
-    use super::kinds::timeline::TimelineQuery;
+    use super::kinds::read::timeline::TimelineQuery;
     use super::test_util::{ctx_with, day};
     use super::*;
+
+    /// 用中文执行一次检查过的调用，引用从 1 编号，文字最多 4000 字。
+    async fn run(ctx: &ToolCtx, q: Query) -> ToolOutput {
+        q.execute(ctx, 1, 4000, ChatLang::ZhHans).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn execute_cuts_the_text_at_max_chars() {
+        let ctx = ctx_with(
+            "",
+            "INSERT INTO activities(started_at, ended_at, duration_secs,
+                 local_date, local_hour, process_name, window_title) VALUES
+             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
+        )
+        .await;
+        let tools = Tools {
+            ctx,
+            today: day().1,
+            lang: ChatLang::ZhHans,
+        };
+        let q = Query::GetTimeline(TimelineQuery { range: day() });
+
+        let full = tools.execute(&q, 1, 4000).await.unwrap();
+        assert!(full.content.chars().count() > 20, "{}", full.content);
+        assert!(!full.content.ends_with('…'), "{}", full.content);
+
+        // 超了就截到 20 字，再加一个省略号；证据不截
+        let cut = tools.execute(&q, 1, 20).await.unwrap();
+        assert_eq!(cut.content.chars().count(), 21, "{}", cut.content);
+        assert!(cut.content.ends_with('…'), "{}", cut.content);
+        assert_eq!(cut.citations.len(), full.citations.len());
+    }
 
     #[test]
     fn fts_injection_neutralized() {
@@ -229,144 +221,8 @@ mod tests {
         assert_eq!(like_pattern("100%_a"), "%100\\%\\_a%");
     }
 
-    // ── 覆盖披露边界(设计矩阵 A/B/C/G)──────────────────
-
-    /// A:完全没开截图/OCR 的用户——时间线照常给活动记录,覆盖行讲明索引缺席。
-    #[tokio::test]
-    async fn timeline_works_with_empty_memory_index() {
-        let ctx = ctx_with(
-            "",
-            "INSERT INTO activities(started_at, ended_at, duration_secs,
-                 local_date, local_hour, process_name, window_title) VALUES
-             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
-        )
-        .await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline(TimelineQuery { range: day() }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
-        assert!(out.content.contains("共 1 条活动记录"), "{}", out.content);
-        assert!(out.content.contains("均无屏幕文字索引"), "{}", out.content);
-    }
-
-    /// A(搜索面):索引为空时关键词靠窗口标题层兜底命中。
-    #[tokio::test]
-    async fn search_falls_back_to_title_hits_without_index() {
-        let ctx = ctx_with(
-            "",
-            "INSERT INTO activities(started_at, ended_at, duration_secs,
-                 local_date, local_hour, process_name, window_title, screenshot_path) VALUES
-             ('2026-07-08T09:00:00+09:00','2026-07-08T09:10:00+09:00',600,'2026-07-08',9,
-              'chrome','keychron K3 发货通知','shots/a.jpg');",
-        )
-        .await;
-        let out = execute(
-            &ctx,
-            &Query::SearchText(SearchQuery {
-                keywords: vec!["keychron".into()],
-                range: None,
-            }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
-        assert!(out.content.contains("窗口标题命中 1 条"), "{}", out.content);
-        assert!(out.content.contains("均无屏幕文字索引"), "{}", out.content);
-        assert!(!out.content.contains("没有命中"), "{}", out.content);
-        assert_eq!(out.citations.len(), 1);
-        assert_eq!(out.citations[0].frame_path.as_deref(), Some("shots/a.jpg"));
-    }
-
-    /// B:截图开了但识别没跑完——覆盖行报待识别帧数,不误判成"未开启"。
-    #[tokio::test]
-    async fn coverage_discloses_pending_frames() {
-        let ctx = ctx_with(
-            "INSERT INTO frames(path, ts, local_date, ocr_state) VALUES
-             ('f1','2026-07-08T09:00:00+09:00','2026-07-08',0),
-             ('f2','2026-07-08T09:01:00+09:00','2026-07-08',0),
-             ('f3','2026-07-08T09:02:00+09:00','2026-07-08',0);",
-            "INSERT INTO activities(started_at, ended_at, duration_secs,
-                 local_date, local_hour, process_name, window_title) VALUES
-             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
-        )
-        .await;
-        let out = execute(
-            &ctx,
-            &Query::GetTimeline(TimelineQuery { range: day() }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
-        assert!(out.content.contains("3 帧截图待识别"), "{}", out.content);
-        assert!(!out.content.contains("未开启"), "{}", out.content);
-    }
-
-    /// C:时有时无的用户——分母是"活动日",分子是"有索引的日"。
-    #[tokio::test]
-    async fn coverage_reports_partial_days() {
-        let ctx = ctx_with(
-            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
-             VALUES ('2026-07-08','2026-07-08T09:00:00+09:00',
-                     '2026-07-08T09:05:00+09:00','A','t','some text');",
-            "INSERT INTO activities(started_at, ended_at, duration_secs,
-                 local_date, local_hour, process_name, window_title) VALUES
-             ('2026-07-07T09:00:00+09:00','2026-07-07T09:30:00+09:00',1800,'2026-07-07',9,'A','t'),
-             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','t');",
-        )
-        .await;
-        let range = (
-            NaiveDate::from_ymd_opt(2026, 7, 7).unwrap(),
-            NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
-        );
-        let q = Query::GetTimeline(TimelineQuery { range });
-        let out = execute(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
-        assert!(
-            out.content.contains("2 个活动日中 1 日有屏幕文字索引"),
-            "{}",
-            out.content
-        );
-    }
-
-    /// G:覆盖完整且两层都零命中——才允许模型说"屏幕上没出现过"。
-    #[tokio::test]
-    async fn search_full_coverage_zero_hit_states_no_hit() {
-        let ctx = ctx_with(
-            "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title, text)
-             VALUES ('2026-07-08','2026-07-08T09:00:00+09:00',
-                     '2026-07-08T09:05:00+09:00','A','notes','完全无关的内容');",
-            "INSERT INTO activities(started_at, ended_at, duration_secs,
-                 local_date, local_hour, process_name, window_title) VALUES
-             ('2026-07-08T09:00:00+09:00','2026-07-08T09:30:00+09:00',1800,'2026-07-08',9,'A','notes');",
-        )
-        .await;
-        let out = execute(
-            &ctx,
-            &Query::SearchText(SearchQuery {
-                keywords: vec!["keychron".into()],
-                range: Some(day()),
-            }),
-            1,
-            ChatLang::ZhHans,
-        )
-        .await
-        .unwrap();
-        assert!(out.content.contains("没有命中"), "{}", out.content);
-        assert!(
-            out.content.contains("1 个活动日中 1 日有屏幕文字索引"),
-            "{}",
-            out.content
-        );
-        assert!(out.citations.is_empty());
-    }
-
-    /// 手动验收(不经过 LLM):直连真实库跑 get_timeline + search_text,
-    /// 打印模型将看到的工具原文——覆盖行、两层命中、总数披露、证据帧数。
+    /// 手动验收(不经过 LLM):直连真实库跑 get_timeline、search_titles 和
+    /// search_screen_text,打印模型将看到的工具原文和证据帧数。
     /// 只读连接,不写任何数据。跑法(在 src-tauri 目录下):
     ///
     ///   CHAT_DATE=2026-07-19 CHAT_KW=B站 \
@@ -376,7 +232,7 @@ mod tests {
     /// - CHAT_DATE_TO=2026-07-19 跨日范围(默认单日);
     /// - CHAT_KW 不设则只跑时间线;
     /// - CHAT_MEM_EMPTY=1 把记忆库换成空库(主库仍真实)——模拟
-    ///   "从没开过截图/OCR"的用户(边界 A),看覆盖行与标题层兜底。
+    ///   "从没开过截图/OCR"的用户,看没有屏幕文字索引时的回答。
     #[tokio::test]
     #[ignore]
     async fn manual_real_db() {
@@ -396,19 +252,17 @@ mod tests {
             ToolCtx {
                 main,
                 mem: empty.mem,
+                policy: OnceCell::new(),
             }
         } else {
             ToolCtx::open_readonly().await.unwrap()
         };
 
-        let out = execute(
+        let out = run(
             &ctx,
-            &Query::GetTimeline(TimelineQuery { range: (from, to) }),
-            1,
-            ChatLang::ZhHans,
+            Query::GetTimeline(TimelineQuery { range: (from, to) }),
         )
-        .await
-        .unwrap();
+        .await;
         let with_frame = out
             .citations
             .iter()
@@ -423,20 +277,20 @@ mod tests {
         );
 
         if let Ok(kw) = std::env::var("CHAT_KW") {
-            let out = execute(
-                &ctx,
-                &Query::SearchText(SearchQuery {
-                    keywords: vec![kw.clone()],
-                    range: Some((from, to)),
-                }),
-                1,
-                ChatLang::ZhHans,
-            )
-            .await
-            .unwrap();
-            println!("\n── search_text(\"{kw}\", {from} ~ {to}) ──────");
-            println!("{}", out.content);
-            println!("(引用 {} 条)", out.citations.len());
+            for name in ["search_titles", "search_screen_text"] {
+                let call = ToolCall {
+                    id: "manual".into(),
+                    name: name.into(),
+                    arguments: serde_json::json!({
+                        "keywords": [kw], "date_from": from.to_string(), "date_to": to.to_string()
+                    }),
+                };
+                let q = kinds::parse(&call, to, ChatLang::ZhHans).unwrap();
+                let out = run(&ctx, q).await;
+                println!("\n── {name}(\"{kw}\", {from} ~ {to}) ──────");
+                println!("{}", out.content);
+                println!("(引用 {} 条)", out.citations.len());
+            }
         }
     }
 }

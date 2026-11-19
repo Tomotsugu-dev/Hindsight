@@ -53,7 +53,8 @@
 ┌─────────────────────────────────────────────────┐
 │ Chat 大脑(tool-calling agent loop,已落地)        │
 │  ├─ query_stats:主库统计(时长/占比类问题)         │
-│  ├─ search_text:FTS 逐字搜索                     │
+│  ├─ search_titles:按关键词搜窗口标题             │
+│  ├─ search_screen_text:FTS 逐字搜屏幕文字        │
 │  └─ get_timeline:时段会话时间线                  │
 └─────────────────────────────────────────────────┘
         │
@@ -301,7 +302,8 @@ guarded agent loop(护栏:步数上限/重复调用去重/降级阶梯/引用绑
 | 工具 | 数据源 | 回答什么 |
 |---|---|---|
 | `query_stats` | 主库 SQL | 时长/占比/排行,支持应用与标题关键词过滤("Cursor 用了多久"/"《××》看了多久") |
-| `search_text` | text_sessions_fts | 逐字内容("什么时候买的 XX") |
+| `search_titles` | 主库 activities | 标题里有 X 的窗口、看了多久("报销单看了多久") |
+| `search_screen_text` | text_sessions_fts | 逐字内容在哪些窗口出现过("订单号在哪看到的");见 [工具设计](ai/zh/tools/search/ocr.md) |
 | `get_timeline` | text_sessions 按时间 | 某时段在干什么 |
 
 回答携带**证据卡**:命中会话的时间段、应用、标题(行级留痕可给证据帧路径)。

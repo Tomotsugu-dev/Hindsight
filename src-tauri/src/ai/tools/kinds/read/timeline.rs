@@ -1,11 +1,18 @@
 //! get_timeline：按小时抽样列出一段时间里的活动。
 
+use std::sync::LazyLock;
+
 use chrono::NaiveDate;
 use rusqlite::params;
+use serde::Deserialize;
+use serde_json::{json, Value};
 
+use crate::ai::model::ToolSpec;
+use crate::ai::tools::kinds::params::{date_schema, invalid, parse_range, read_args, spec};
+use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{
-    coverage_line, truncate, ChatLang, Citation, ToolCtx, ToolOutput, ACTIVITY_WHERE,
-    RESULT_CHAR_BUDGET,
+    truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
 };
 use crate::error::Result;
 use crate::repo::sql::FROM_ACTIVITY_GROUP;
@@ -16,12 +23,116 @@ pub struct TimelineQuery {
     pub range: (NaiveDate, NaiveDate),
 }
 
+/// 模型传来的参数，检查之前。
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Args {
+    date_from: Option<String>,
+    date_to: Option<String>,
+}
+
+/// `lang/timeline.json` 里的句子，只有时间线工具用。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineText {
+    empty: Text,
+    header_sampled: Text,
+    header_all: Text,
+}
+
+const TEXT_JSON: &str = include_str!("lang/timeline.json");
+
+static TEXT: LazyLock<TimelineText> = LazyLock::new(|| load(TEXT_JSON));
+
+impl ChatLang {
+    /// 返回时段里没有活动时给模型的那句话。
+    fn timeline_empty(self) -> &'static str {
+        TEXT.empty.get(self)
+    }
+
+    /// 返回抽样列出时的开头。开头写出总条数、覆盖范围和每小时最多取几条。
+    fn timeline_header_sampled(
+        self,
+        total: i64,
+        first: &str,
+        last: &str,
+        shown: usize,
+        per_hour: i64,
+    ) -> String {
+        TEXT.header_sampled.fill(
+            self,
+            &[
+                ("total", &total),
+                ("first", &first),
+                ("last", &last),
+                ("shown", &shown),
+                ("per_hour", &per_hour),
+            ],
+        )
+    }
+
+    /// 返回全部列出时的开头。开头写出总条数。
+    fn timeline_header_all(self, total: i64) -> String {
+        TEXT.header_all.fill(self, &[("total", &total)])
+    }
+}
+
+impl Tool for TimelineQuery {
+    const NAME: &'static str = "get_timeline";
+
+    fn spec(_lang: ChatLang) -> ToolSpec {
+        spec(
+            Self::NAME,
+            "按小时抽样列出某时段的屏幕活动会话(时间、应用、标题),回答'某天/某下午在干什么'。返回头部标注总条数与覆盖范围,正文是抽样代表,不是全量。",
+            json!({"type": "object", "properties": {
+                "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
+                "date_to": date_schema("结束日期,可选,不给就到今天,格式 YYYY-MM-DD")
+            }}),
+        )
+    }
+
+    fn parse(
+        args: &Value,
+        today: NaiveDate,
+        lang: ChatLang,
+    ) -> std::result::Result<Self, ToolError> {
+        let args: Args = read_args(args, lang)?;
+        check(&args, today, lang).map_err(|msg| invalid(&msg, lang))
+    }
+
+    async fn execute(
+        &self,
+        ctx: &ToolCtx,
+        next_citation: usize,
+        _max_chars: usize,
+        lang: ChatLang,
+    ) -> Result<ToolOutput> {
+        run(ctx, self, next_citation, lang).await
+    }
+}
+
+/// 检查参数的值。不合法时返回原因。
+fn check(
+    args: &Args,
+    today: NaiveDate,
+    lang: ChatLang,
+) -> std::result::Result<TimelineQuery, String> {
+    let range = parse_range(
+        args.date_from.as_deref(),
+        args.date_to.as_deref(),
+        today,
+        lang,
+    )?
+    .ok_or_else(|| lang.err_need_range(TimelineQuery::NAME))?;
+    Ok(TimelineQuery { range })
+}
+
 /// 时间线会话数上限
 const TIMELINE_LIMIT: usize = 50;
 /// 每个小时桶最多取几条代表活动(按时长选)。
 const TIMELINE_PER_HOUR: i64 = 3;
 
-pub(in crate::ai::tools) async fn run(
+async fn run(
     ctx: &ToolCtx,
     q: &TimelineQuery,
     next_citation: usize,
@@ -31,8 +142,7 @@ pub(in crate::ai::tools) async fn run(
     let single_day = from == to;
     let (from, to) = (from.to_string(), to.to_string());
     // 主源是主库活动记录:不开截图/OCR 的用户也有完整时间线,电池暂停或
-    // 待识别积压造成的索引空窗也不再啃掉时段尾巴;屏幕文字层的有无由覆盖行披露。
-    let coverage = coverage_line(ctx, &from, &to, lang).await?;
+    // 待识别积压造成的索引空窗也不再啃掉时段尾巴。
     let (total, span, rows) = ctx
         .main
         .call(move |conn| {
@@ -110,7 +220,7 @@ pub(in crate::ai::tools) async fn run(
         });
     }
     let content = if lines.is_empty() {
-        format!("{coverage}\n{}", lang.timeline_empty())
+        lang.timeline_empty().to_string()
     } else {
         // 头部先声明总量与覆盖范围:样本 ≠ 全量,让模型据此下结论
         let header = match &span {
@@ -123,10 +233,7 @@ pub(in crate::ai::tools) async fn run(
             ),
             _ => lang.timeline_header_all(total),
         };
-        truncate(
-            &format!("{coverage}\n{header}\n{}", lines.join("\n")),
-            RESULT_CHAR_BUDGET,
-        )
+        format!("{header}\n{}", lines.join("\n"))
     };
     Ok(ToolOutput { content, citations })
 }
@@ -134,7 +241,76 @@ pub(in crate::ai::tools) async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::tools::lang::text::assert_same_placeholders;
     use crate::ai::tools::test_util::{ctx_with, day};
+
+    const LANGS: [ChatLang; 6] = [
+        ChatLang::ZhHans,
+        ChatLang::ZhHant,
+        ChatLang::En,
+        ChatLang::Ja,
+        ChatLang::Pt,
+        ChatLang::Es,
+    ];
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
+    }
+
+    #[test]
+    fn text_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TEXT);
+        assert_same_placeholders(TEXT_JSON);
+    }
+
+    #[test]
+    fn every_language_fills_in_the_numbers() {
+        for lang in LANGS {
+            assert!(!lang.timeline_empty().is_empty(), "{lang:?}");
+            let h = lang.timeline_header_sampled(120, "2026-07-01", "2026-07-07", 40, 7);
+            assert!(h.contains("120") && h.contains("40"), "{lang:?}: {h}");
+            assert!(lang.timeline_header_all(9).contains('9'), "{lang:?}");
+        }
+    }
+
+    #[test]
+    fn parse_reads_the_range() {
+        let args = json!({"date_from": "2026-07-01", "date_to": "2026-07-05"});
+        let q = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(q.range.0, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
+        assert_eq!(q.range.1, today());
+    }
+
+    #[test]
+    fn parse_needs_at_least_one_date() {
+        let e = TimelineQuery::parse(&json!({}), today(), ChatLang::ZhHans).unwrap_err();
+        assert!(e.0.contains("get_timeline"), "{}", e.0);
+        // 只给开始：到今天为止
+        let args = json!({"date_from": "2026-07-01"});
+        let q = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(
+            q.range,
+            (NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(), today())
+        );
+    }
+
+    #[test]
+    fn parse_takes_a_range_of_any_length() {
+        let args = json!({"date_from": "2020-01-01", "date_to": "2026-07-01"});
+        assert!(TimelineQuery::parse(&args, today(), ChatLang::ZhHans).is_ok());
+        // 只给结束：从最早算起，不会因为跨度被拒
+        let args = json!({"date_to": "2026-07-01"});
+        let q = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(q.range.1, NaiveDate::from_ymd_opt(2026, 7, 1).unwrap());
+    }
+
+    #[test]
+    fn spec_requires_no_date() {
+        let spec = TimelineQuery::spec(ChatLang::ZhHans);
+        assert_eq!(spec.name, "get_timeline");
+        assert!(spec.parameters.get("required").is_none());
+        assert_eq!(spec.parameters["properties"]["date_from"]["maxLength"], 10);
+    }
 
     /// 造一天 10 个小时 × 每小时 20 条活动的 INSERT 串(主库)。
     fn dense_day_sql() -> &'static str {
@@ -197,10 +373,18 @@ mod tests {
             out.content
         );
         assert!(out.content.contains("sample"), "{}", out.content);
-        // 骨架(覆盖行 + 头部行)不应残留中文;正文标题是用户数据,语言不限
-        for skel in out.content.lines().take(2) {
-            assert!(!skel.contains("活动") && !skel.contains("覆盖"), "{skel}");
-        }
+        // 头部行不应残留中文;正文标题是用户数据,语言不限
+        let head = out.content.lines().next().unwrap();
+        assert!(!head.contains("活动"), "{head}");
+    }
+
+    #[tokio::test]
+    async fn an_empty_range_says_so_without_anything_else() {
+        let ctx = ctx_with("", "").await;
+        let q = TimelineQuery { range: day() };
+        let out = run(&ctx, &q, 1, ChatLang::ZhHans).await.unwrap();
+        assert_eq!(out.content, ChatLang::ZhHans.timeline_empty());
+        assert!(out.citations.is_empty());
     }
 
     #[tokio::test]

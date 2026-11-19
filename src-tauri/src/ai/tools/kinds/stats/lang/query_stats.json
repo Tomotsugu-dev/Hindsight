@@ -1,0 +1,130 @@
+{
+  "total": {
+    "zh-Hans": "{from} ~ {to} 合计: {dur}",
+    "zh-Hant": "{from} ~ {to} 合計: {dur}",
+    "en": "{from} ~ {to} total: {dur}",
+    "ja": "{from} ~ {to} 合計: {dur}",
+    "pt": "{from} ~ {to} total: {dur}",
+    "es": "{from} ~ {to} total: {dur}"
+  },
+  "no_match": {
+    "zh-Hans": "{from} ~ {to} 无匹配记录",
+    "zh-Hant": "{from} ~ {to} 無匹配記錄",
+    "en": "{from} ~ {to}: no matching records",
+    "ja": "{from} ~ {to} 該当する記録はありません",
+    "pt": "{from} ~ {to}: nenhum registro correspondente",
+    "es": "{from} ~ {to}: ningún registro coincide"
+  },
+  "duration_header_top": {
+    "zh-Hans": "{from} ~ {to} 共 {universe} 组,按时长取前 {shown} 组:",
+    "zh-Hant": "{from} ~ {to} 共 {universe} 組,按時長取前 {shown} 組:",
+    "en": "{from} ~ {to}: {universe} groups total; top {shown} by duration:",
+    "ja": "{from} ~ {to}: 全 {universe} グループ中、合計時間の上位 {shown} 件:",
+    "pt": "{from} ~ {to}: {universe} grupos no total; top {shown} por duração:",
+    "es": "{from} ~ {to}: {universe} grupos en total; top {shown} por duración:"
+  },
+  "duration_header_all": {
+    "zh-Hans": "{from} ~ {to} 按时长排序:",
+    "zh-Hant": "{from} ~ {to} 按時長排序:",
+    "en": "{from} ~ {to}, sorted by duration:",
+    "ja": "{from} ~ {to} 合計時間順:",
+    "pt": "{from} ~ {to}, ordenado por duração:",
+    "es": "{from} ~ {to}, ordenado por duración:"
+  },
+  "sessions_total": {
+    "zh-Hans": "{from} ~ {to} 使用会话次数: {n} 次(以间隔≥{gap} 分钟算一次)",
+    "zh-Hant": "{from} ~ {to} 使用會話次數: {n} 次(以間隔≥{gap} 分鐘算一次)",
+    "en": "{from} ~ {to}: {n} usage sessions (a gap of ≥{gap} minutes starts a new session)",
+    "ja": "{from} ~ {to} の使用セッション数: {n} 回({gap} 分以上の間隔で 1 回と数える)",
+    "pt": "{from} ~ {to}: {n} sessões de uso (intervalo ≥{gap} minutos inicia nova sessão)",
+    "es": "{from} ~ {to}: {n} sesiones de uso (un intervalo ≥{gap} minutos abre una sesión nueva)"
+  },
+  "sessions_grouped_header": {
+    "zh-Hans": "{from} ~ {to} 使用会话次数({scope}以间隔≥{gap} 分钟算一次):",
+    "zh-Hant": "{from} ~ {to} 使用會話次數({scope}以間隔≥{gap} 分鐘算一次):",
+    "en": "{from} ~ {to}: usage sessions ({scope}a gap of ≥{gap} minutes starts a new session):",
+    "ja": "{from} ~ {to} の使用セッション数({scope}{gap} 分以上の間隔で 1 回と数える):",
+    "pt": "{from} ~ {to}: sessões de uso ({scope}intervalo ≥{gap} minutos inicia nova sessão):",
+    "es": "{from} ~ {to}: sesiones de uso ({scope}un intervalo ≥{gap} minutos abre una sesión nueva):"
+  },
+  "sessions_scope": {
+    "zh-Hans": "共 {universe} 组,按次数取前 {shown} 组;",
+    "zh-Hant": "共 {universe} 組,按次數取前 {shown} 組;",
+    "en": "{universe} groups total, top {shown} by count; ",
+    "ja": "全 {universe} グループ中、回数上位 {shown} 件;",
+    "pt": "{universe} grupos no total, top {shown} por contagem; ",
+    "es": "{universe} grupos en total, top {shown} por número; "
+  },
+  "bucket_day_header": {
+    "zh-Hans": "{from} ~ {to} 逐日统计({n} 个有记录的日子;无记录的日子未列出{gap_clause}):",
+    "zh-Hant": "{from} ~ {to} 逐日統計({n} 個有記錄的日子;無記錄的日子未列出{gap_clause}):",
+    "en": "{from} ~ {to}, per-day breakdown ({n} day(s) with records; days without records are omitted{gap_clause}):",
+    "ja": "{from} ~ {to} 日別集計(記録のある {n} 日。記録のない日は省略{gap_clause}):",
+    "pt": "{from} ~ {to}, detalhamento diário ({n} dia(s) com registros; dias sem registros omitidos{gap_clause}):",
+    "es": "{from} ~ {to}, desglose diario ({n} día(s) con registros; los días sin registros se omiten{gap_clause}):"
+  },
+  "bucket_week_header": {
+    "zh-Hans": "{from} ~ {to} 逐周统计({n} 周,每行日期为该周周一{auto_week}{gap_clause}):",
+    "zh-Hant": "{from} ~ {to} 逐週統計({n} 週,每行日期為該週週一{auto_week}{gap_clause}):",
+    "en": "{from} ~ {to}, per-week breakdown ({n} week(s); each row is labeled by its Monday{auto_week}{gap_clause}):",
+    "ja": "{from} ~ {to} 週別集計({n} 週間。各行の日付はその週の月曜日{auto_week}{gap_clause}):",
+    "pt": "{from} ~ {to}, detalhamento semanal ({n} semana(s); cada linha rotulada pela segunda-feira{auto_week}{gap_clause}):",
+    "es": "{from} ~ {to}, desglose semanal ({n} semana(s); cada fila lleva la etiqueta de su lunes{auto_week}{gap_clause}):"
+  },
+  "auto_week": {
+    "zh-Hans": ";范围超过 60 天,已从逐日自动改为按周汇总",
+    "zh-Hant": ";範圍超過 60 天,已從逐日自動改為按週彙總",
+    "en": "; the range exceeds 60 days, so per-day was switched to per-week automatically",
+    "ja": "。範囲が 60 日を超えたため日別から週別に自動変更",
+    "pt": "; o intervalo excede 60 dias, então o diário mudou automaticamente para semanal",
+    "es": "; el intervalo supera los 60 días, así que el desglose diario pasó automáticamente a semanal"
+  },
+  "bucket_hour_header": {
+    "zh-Hans": "{from} ~ {to} 按一天中的小时聚合(范围内所有天的该小时累计{gap_clause}):",
+    "zh-Hant": "{from} ~ {to} 按一天中的小時聚合(範圍內所有天的該小時累計{gap_clause}):",
+    "en": "{from} ~ {to}, aggregated by hour of day (each hour totals across all days in the range{gap_clause}):",
+    "ja": "{from} ~ {to} 時間帯別集計(範囲内の全日について同じ時間帯を合算{gap_clause}):",
+    "pt": "{from} ~ {to}, agregado por hora do dia (cada hora soma todos os dias do intervalo{gap_clause}):",
+    "es": "{from} ~ {to}, agregado por hora del día (cada hora suma todos los días del intervalo{gap_clause}):"
+  },
+  "gap_clause": {
+    "zh-Hans": ";会话以间隔≥{gap} 分钟算一次",
+    "zh-Hant": ";會話以間隔≥{gap} 分鐘算一次",
+    "en": "; a gap of ≥{gap} minutes starts a new session",
+    "ja": "。{gap} 分以上の間隔で 1 回と数える",
+    "pt": "; intervalo ≥{gap} minutos inicia nova sessão",
+    "es": "; un intervalo ≥{gap} minutos abre una sesión nueva"
+  },
+  "first_last": {
+    "zh-Hans": "{from} ~ {to} 范围内共 {n} 条匹配活动:最早一次始于 {first},最近一次止于 {last}",
+    "zh-Hant": "{from} ~ {to} 範圍內共 {n} 條匹配活動:最早一次始於 {first},最近一次止於 {last}",
+    "en": "{from} ~ {to}: {n} matching activities; the earliest starts at {first}, the latest ends at {last}",
+    "ja": "{from} ~ {to} の一致する活動は {n} 件:最初は {first} に開始、直近は {last} に終了",
+    "pt": "{from} ~ {to}: {n} atividades correspondentes; a mais antiga começa em {first}, a mais recente termina em {last}",
+    "es": "{from} ~ {to}: {n} actividades coincidentes; la más antigua empieza a las {first} y la más reciente termina a las {last}"
+  },
+  "count": {
+    "zh-Hans": "{n} 次",
+    "zh-Hant": "{n} 次",
+    "en": "{n} sessions",
+    "ja": "{n} 回",
+    "pt": "{n} sessões",
+    "es": "{n} sesiones"
+  },
+  "err_title_kw_too_long": {
+    "zh-Hans": "title_keyword 过长(≤64 字符)",
+    "zh-Hant": "title_keyword 過長(≤64 字元)",
+    "en": "title_keyword is too long (max 64 characters)",
+    "ja": "title_keyword が長すぎます(64 文字以内)",
+    "pt": "title_keyword é longo demais (máx. 64 caracteres)",
+    "es": "title_keyword es demasiado largo (máx. 64 caracteres)"
+  },
+  "err_bucket_with_group": {
+    "zh-Hans": "bucket 与 group_by 不能同时使用:看趋势用 bucket,看排行用 group_by,请去掉其一",
+    "zh-Hant": "bucket 與 group_by 不能同時使用:看趨勢用 bucket,看排行用 group_by,請去掉其一",
+    "en": "bucket and group_by cannot be combined: use bucket for trends, group_by for rankings — drop one of them",
+    "ja": "bucket と group_by は併用できません。推移は bucket、ランキングは group_by を使い、どちらか一方を外してください",
+    "pt": "bucket e group_by não podem ser combinados: use bucket para tendências, group_by para rankings — remova um deles",
+    "es": "bucket y group_by no se pueden combinar: usa bucket para tendencias y group_by para rankings — quita uno de los dos"
+  }
+}

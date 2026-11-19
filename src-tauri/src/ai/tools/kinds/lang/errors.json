@@ -1,0 +1,98 @@
+{
+  "args_format_err": {
+    "zh-Hans": "参数格式错误: {e}",
+    "zh-Hant": "參數格式錯誤: {e}",
+    "en": "Malformed arguments: {e}",
+    "ja": "引数の形式が不正です: {e}",
+    "pt": "Argumentos malformados: {e}",
+    "es": "Argumentos con formato incorrecto: {e}"
+  },
+  "args_invalid": {
+    "zh-Hans": "参数校验未通过: {msg}",
+    "zh-Hant": "參數校驗未通過: {msg}",
+    "en": "Argument validation failed: {msg}",
+    "ja": "引数の検証に失敗しました: {msg}",
+    "pt": "Falha na validação dos argumentos: {msg}",
+    "es": "Falló la validación de los argumentos: {msg}"
+  },
+  "err_unknown_tool": {
+    "zh-Hans": "未知工具 {other},只能用 {known}",
+    "zh-Hant": "未知工具 {other},只能用 {known}",
+    "en": "Unknown tool {other}; only {known} are available",
+    "ja": "不明なツール {other}。{known} のみ使用できます",
+    "pt": "Ferramenta desconhecida {other}; apenas {known} estão disponíveis",
+    "es": "Herramienta desconocida {other}; solo están disponibles {known}"
+  },
+  "err_need_range": {
+    "zh-Hans": "{tool} 至少要给 date_from、date_to 其中一个(YYYY-MM-DD)",
+    "zh-Hant": "{tool} 至少要給 date_from、date_to 其中一個(YYYY-MM-DD)",
+    "en": "{tool} needs date_from, date_to, or both (YYYY-MM-DD)",
+    "ja": "{tool} には date_from と date_to(YYYY-MM-DD)の少なくとも一方が必要です",
+    "pt": "{tool} precisa de date_from, date_to ou os dois (YYYY-MM-DD)",
+    "es": "{tool} necesita date_from, date_to o los dos (YYYY-MM-DD)"
+  },
+  "err_bad_date": {
+    "zh-Hans": "{field} 不是有效日期: {val}",
+    "zh-Hant": "{field} 不是有效日期: {val}",
+    "en": "{field} is not a valid date: {val}",
+    "ja": "{field} は有効な日付ではありません: {val}",
+    "pt": "{field} não é uma data válida: {val}",
+    "es": "{field} no es una fecha válida: {val}"
+  },
+  "err_from_after_to": {
+    "zh-Hans": "date_from 晚于 date_to",
+    "zh-Hant": "date_from 晚於 date_to",
+    "en": "date_from is later than date_to",
+    "ja": "date_from が date_to より後になっています",
+    "pt": "date_from é posterior a date_to",
+    "es": "date_from es posterior a date_to"
+  },
+  "err_range_too_long": {
+    "zh-Hans": "bucket 为 day 或 week 时,时间跨度不能超过 {max} 天。请缩小范围,或者不分桶",
+    "zh-Hant": "bucket 為 day 或 week 時,時間跨度不能超過 {max} 天。請縮小範圍,或者不分桶",
+    "en": "With bucket day or week, the range cannot exceed {max} days. Narrow it, or drop bucket",
+    "ja": "bucket が day か week のとき、期間は {max} 日までです。範囲を狭めるか、bucket を外してください",
+    "pt": "Com bucket day ou week, o intervalo não pode passar de {max} dias. Reduza-o ou remova bucket",
+    "es": "Con bucket day o week, el intervalo no puede superar {max} días. Redúcelo o quita bucket"
+  },
+  "err_from_in_future": {
+    "zh-Hans": "date_from 在未来",
+    "zh-Hant": "date_from 在未來",
+    "en": "date_from is in the future",
+    "ja": "date_from が未来の日付です",
+    "pt": "date_from está no futuro",
+    "es": "date_from está en el futuro"
+  },
+  "err_keywords_empty": {
+    "zh-Hans": "keywords 不能为空",
+    "zh-Hant": "keywords 不能為空",
+    "en": "keywords must not be empty",
+    "ja": "keywords を空にはできません",
+    "pt": "keywords não pode estar vazio",
+    "es": "keywords no puede estar vacío"
+  },
+  "err_item_too_long": {
+    "zh-Hans": "{field} 里有超过 64 字符的项",
+    "zh-Hant": "{field} 裡有超過 64 字元的項",
+    "en": "{field} contains an item longer than 64 characters",
+    "ja": "{field} に 64 文字を超える項目があります",
+    "pt": "{field} contém um item com mais de 64 caracteres",
+    "es": "{field} contiene un elemento de más de 64 caracteres"
+  },
+  "err_too_many_items": {
+    "zh-Hans": "{field} 最多 {max} 个",
+    "zh-Hant": "{field} 最多 {max} 個",
+    "en": "{field} takes at most {max} items",
+    "ja": "{field} は {max} 個までです",
+    "pt": "{field} aceita no máximo {max} itens",
+    "es": "{field} admite como máximo {max} elementos"
+  },
+  "err_limit_range": {
+    "zh-Hans": "limit 要在 1 到 {max} 之间",
+    "zh-Hant": "limit 要在 1 到 {max} 之間",
+    "en": "limit must be between 1 and {max}",
+    "ja": "limit は 1 から {max} の間にしてください",
+    "pt": "limit deve estar entre 1 e {max}",
+    "es": "limit debe estar entre 1 y {max}"
+  }
+}

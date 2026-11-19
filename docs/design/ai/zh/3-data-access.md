@@ -50,45 +50,23 @@ pub struct TimeRange { pub start: NaiveDateTime, pub end: NaiveDateTime }
 
 ## 2. Tools
 
-模型自己查库用。只有一个实现，所以是普通的结构体。
+模型自己查库用。只有一个实现，所以是普通的结构体。每个工具查什么、结果长什么样，见[工具](tools/0-overview.md)。
 
 ```rust
 pub struct Tools { /* 只读的数据库连接、AiDataPolicy、提示词语言 */ }
 
 impl Tools {
-    /// 给模型看的工具列表。
+    /// 给模型看的全部工具。
     pub fn specs(&self) -> Vec<ToolSpec>;
     /// 检查模型发来的调用。不合法时，错误原因还给模型。
     pub fn validate(&self, call: &ToolCall) -> Result<Query, ToolError>;
-    /// 执行。引用编号从 next_citation 开始。
-    pub async fn execute(&self, query: &Query, next_citation: usize) -> Result<ToolOutput>;
+    /// 执行。引用编号从 next_citation 开始，结果不超过 max_chars 个字。
+    pub async fn execute(&self, query: &Query, next_citation: usize, max_chars: usize)
+        -> Result<ToolOutput>;
 }
 
-/// 检查过的调用。一种工具一个分支。日期范围含两头。
-pub enum Query {
-    /// 用关键词搜屏幕上出现过的文字。
-    SearchText {
-        keywords: Vec<String>,                   // 1–3 个，逐字匹配
-        range: Option<(NaiveDate, NaiveDate)>,   // 不给就搜全部
-    },
-    /// 统计用了多久、用了几次。
-    QueryStats {
-        range: (NaiveDate, NaiveDate),
-        apps: Vec<String>,                       // 只看这些应用。空 = 不限
-        categories: Vec<String>,                 // 只看这些分类，比如「游戏」。空 = 不限
-        title_keyword: Option<String>,           // 只看标题里有这个词的
-        group_by: GroupBy,                       // 分组排行：不分、应用、标题、分类
-        top_n: usize,                            // 分组时取前几名
-        metric: StatMetric,                      // 算什么：时长、次数、第一次和最近一次
-        gap_minutes: u32,                        // 算次数时，离开超过这么久算新的一次
-        bucket: Bucket,                          // 看趋势：不分、按天、按周、一天里的几点
-        bucket_auto_week: bool,                  // 范围超过 60 天，按天自动改成按周。结果开头要告诉模型
-    },
-    /// 列出一段日期里用了什么应用、什么窗口。
-    GetTimeline {
-        range: (NaiveDate, NaiveDate),
-    },
-}
+/// 检查过的调用。一个工具一个分支，工具清单见 tools/0-overview.md。
+pub enum Query { /* … */ }
 
 /// 参数不合法的原因。写给模型看，按提示词语言写。
 pub struct ToolError(pub String);
@@ -121,8 +99,10 @@ pub struct Citation {
 
 AI 能看到什么。按设置生成一次，交给 `ReportContext` 和 `Tools`。
 
-- 私密分类（ADR-0019）：不记录，本来就看不到。
-- 设置里「AI 分析的分类」：不在里面的分类，AI 看不到。
+- 「隐私」分类（ADR-0019）：不记录，本来就看不到。旧数据没删干净时，工具也过滤掉。
+- 「不计入统计」分类、已忽略的窗口：照常记录，AI 默认看不到。
+- 设置里「AI 分析的分类」：默认是「隐私」「不计入统计」以外的全部分类，用户可以改。不在里面的分类，AI 看不到。「隐私」加不进去。
+- 上面几种，两个库怎么过滤，见[工具总览 4.1](tools/0-overview.md#41-可见范围)。
 - 隐私关键词：命中的窗口标题，AI 看不到，也不留占位。
 - 屏幕文字（OCR）：写报告时，工具默认查不到。用户打开设置里的 `allowScreenText` 以后才能查（见[模型选择和配置](3-settings.md#11-设置里的结构)）。聊天的工具一直能查。
 - 图片只给本机的模型。用户明确允许以后，才能给云端的模型（见[读屏](3-screen-reader.md)）。

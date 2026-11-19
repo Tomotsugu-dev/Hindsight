@@ -21,6 +21,8 @@ use crate::error::{Error, Result};
 const MAX_STEPS: u32 = 6;
 /// LLM 步骤连续失败(网络/解析)容忍次数
 const MAX_LLM_FAILURES: u32 = 2;
+/// 一条工具结果最多多少字。按本机模型 8K 的上下文定，云端模型也先用这个值。
+const TOOL_RESULT_MAX_CHARS: usize = 4000;
 
 /// 一次问答的产出。
 #[derive(Debug, Serialize)]
@@ -256,10 +258,11 @@ pub async fn answer(
     let mut seen_calls: std::collections::HashSet<String> = Default::default();
     let mut llm_failures = 0u32;
     let mut steps = 0u32;
+    let specs = tools.specs();
 
     while steps < MAX_STEPS {
         steps += 1;
-        let out = match llm.step(&system, &turns).await {
+        let out = match llm.step(&system, &turns, &specs).await {
             Ok((o, usage)) => {
                 llm_failures = 0;
                 usage_total.add(usage);
@@ -313,7 +316,7 @@ pub async fn answer(
                     continue;
                 }
 
-                // 第②道墙:解析+校验;错误文案回填给模型自纠
+                // 参数不合法时，原因回给模型，让它改了再调
                 let call = ToolCall {
                     id: call_id.clone(),
                     name,
@@ -330,8 +333,10 @@ pub async fn answer(
                     }
                 };
 
-                // 第③④道墙内执行
-                match tools.execute(&query, citations.len() + 1).await {
+                match tools
+                    .execute(&query, citations.len() + 1, TOOL_RESULT_MAX_CHARS)
+                    .await
+                {
                     Ok(output) => {
                         citations.extend(output.citations);
                         turns.push(Turn::ToolResult {
@@ -353,7 +358,7 @@ pub async fn answer(
 
     // 步数耗尽:带着已有证据强制作答(最后一次 LLM 机会)
     turns.push(Turn::User(lang.steps_exhausted().to_string()));
-    match llm.step(&system, &turns).await {
+    match llm.step(&system, &turns, &specs).await {
         Ok((StepOut::Final(text), usage)) => {
             let (text, cited) = bind_citations(&text, &citations);
             usage_total.add(usage);
@@ -985,8 +990,8 @@ mod loop_tests {
     async fn invalid_tool_args_are_fed_back_for_self_correction() {
         let ctx = fixture_ctx(true, "").await;
         let (port, log) = spawn_scripted_openai(vec![
-            resp_tool_call("c1", "search_text", &json!({"keywords": 42})),
-            resp_tool_call("c2", "query_stats", &json!({"date_from": "2026-07-01"})),
+            resp_tool_call("c1", "search_titles", &json!({"keywords": 42})),
+            resp_tool_call("c2", "query_stats", &json!({})),
             resp_final("没查到相关记录。"),
         ])
         .await;

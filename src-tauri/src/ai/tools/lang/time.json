@@ -1,0 +1,74 @@
+{
+  "duration_hours": {
+    "zh-Hans": "{h} 小时 {m} 分钟",
+    "zh-Hant": "{h} 小時 {m} 分鐘",
+    "en": "{h} hr {m} min",
+    "ja": "{h}時間{m}分",
+    "pt": "{h} h {m} min",
+    "es": "{h} h {m} min"
+  },
+  "duration_minutes": {
+    "zh-Hans": "{m} 分钟",
+    "zh-Hant": "{m} 分鐘",
+    "en": "{m} min",
+    "ja": "{m}分",
+    "pt": "{m} min",
+    "es": "{m} min"
+  },
+  "monday": {
+    "zh-Hans": "周一",
+    "zh-Hant": "週一",
+    "en": "Monday",
+    "ja": "月曜日",
+    "pt": "segunda-feira",
+    "es": "lunes"
+  },
+  "tuesday": {
+    "zh-Hans": "周二",
+    "zh-Hant": "週二",
+    "en": "Tuesday",
+    "ja": "火曜日",
+    "pt": "terça-feira",
+    "es": "martes"
+  },
+  "wednesday": {
+    "zh-Hans": "周三",
+    "zh-Hant": "週三",
+    "en": "Wednesday",
+    "ja": "水曜日",
+    "pt": "quarta-feira",
+    "es": "miércoles"
+  },
+  "thursday": {
+    "zh-Hans": "周四",
+    "zh-Hant": "週四",
+    "en": "Thursday",
+    "ja": "木曜日",
+    "pt": "quinta-feira",
+    "es": "jueves"
+  },
+  "friday": {
+    "zh-Hans": "周五",
+    "zh-Hant": "週五",
+    "en": "Friday",
+    "ja": "金曜日",
+    "pt": "sexta-feira",
+    "es": "viernes"
+  },
+  "saturday": {
+    "zh-Hans": "周六",
+    "zh-Hant": "週六",
+    "en": "Saturday",
+    "ja": "土曜日",
+    "pt": "sábado",
+    "es": "sábado"
+  },
+  "sunday": {
+    "zh-Hans": "周日",
+    "zh-Hant": "週日",
+    "en": "Sunday",
+    "ja": "日曜日",
+    "pt": "domingo",
+    "es": "domingo"
+  }
+}
