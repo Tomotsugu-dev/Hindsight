@@ -110,8 +110,8 @@ impl Tool for StatsQuery {
             json!({"type": "object", "properties": {
                 "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
                 "date_to": date_schema("结束日期,格式 YYYY-MM-DD"),
-                "apps": short_strings_schema("应用名过滤,可选", 5),
-                "categories": short_strings_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", 5),
+                "apps": short_strings_schema("应用名过滤,可选", None),
+                "categories": short_strings_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", None),
                 "title_keyword": {"type": "string", "maxLength": 64, "description": "窗口标题关键词过滤,可选"},
                 "group_by": {"type": "string", "enum": ["none", "app", "title", "category"], "description": "分组维度,默认 none;category=按用户设置的应用分类(工作/娱乐/游戏等)分组"},
                 "top_n": {"type": "integer", "minimum": 1, "maximum": 10, "description": "分组时取前 N,默认 5"},
@@ -160,8 +160,8 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<S
         lang,
     )?
     .ok_or_else(|| lang.err_need_range(StatsQuery::NAME))?;
-    let apps = clean_short_strings(&args.apps, 5, "apps", lang)?;
-    let categories = clean_short_strings(&args.categories, 5, "categories", lang)?;
+    let apps = clean_short_strings(&args.apps, "apps", lang)?;
+    let categories = clean_short_strings(&args.categories, "categories", lang)?;
     let title_keyword = match args.title_keyword.as_deref().map(str::trim) {
         Some("") | None => None,
         Some(t) if t.chars().count() <= 64 => Some(t.to_string()),
@@ -799,15 +799,15 @@ mod tests {
     }
 
     #[test]
-    fn parse_cleans_apps_and_categories_and_caps_them_at_five() {
-        // 先取前 5 个再丢空的：[" A ","","B","C","D"] 清洗后剩 4 个，E、F 被截掉
+    fn parse_cleans_apps_and_categories_without_a_cap() {
+        // 去掉空白和空的，不限个数
         let q = parse_args(json!({
             "date_from": "2026-07-01", "date_to": "2026-07-05",
             "apps": [" A ", "", "B", "C", "D", "E", "F"],
             "categories": ["  游戏 ", "", "工作"]
         }))
         .unwrap();
-        assert_eq!(q.apps, ["A", "B", "C", "D"]);
+        assert_eq!(q.apps, ["A", "B", "C", "D", "E", "F"]);
         assert_eq!(q.categories, ["游戏", "工作"]);
     }
 
@@ -866,8 +866,8 @@ mod tests {
         assert_eq!(spec.name, "query_stats");
         assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
         let props = &spec.parameters["properties"];
-        assert_eq!(props["apps"]["maxItems"], 5);
-        assert_eq!(props["categories"]["maxItems"], 5);
+        assert!(props["apps"].get("maxItems").is_none());
+        assert!(props["categories"].get("maxItems").is_none());
         assert_eq!(props["title_keyword"]["maxLength"], 64);
         assert_eq!(props["top_n"]["maximum"], TOP_N_MAX);
         assert_eq!(props["gap_minutes"]["minimum"], GAP_MIN);

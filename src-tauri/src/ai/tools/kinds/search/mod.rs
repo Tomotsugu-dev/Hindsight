@@ -17,8 +17,6 @@ use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
 /// 关键词最多几个。
 const KEYWORDS_MAX: usize = 3;
-/// 应用、分类最多各几个。
-const NAMES_MAX: usize = 5;
 /// 不给 limit 时列几个。
 const LIMIT_DEFAULT: usize = 8;
 /// limit 最大是几。
@@ -60,9 +58,9 @@ impl SearchParams {
 
     /// 给模型看的参数格式，说明按 `lang` 写。`keywords_desc` 写关键词在哪里比对。
     fn schema(keywords_desc: &str, lang: ChatLang) -> Value {
-        let names = |text: &Text| short_strings_schema(text.get(lang), NAMES_MAX as u32);
+        let names = |text: &Text| short_strings_schema(text.get(lang), None);
         json!({"type": "object", "properties": {
-            "keywords": short_strings_schema(keywords_desc, KEYWORDS_MAX as u32),
+            "keywords": short_strings_schema(keywords_desc, Some(KEYWORDS_MAX as u32)),
             "date_from": date_schema(COMMON.param_date_from.get(lang)),
             "date_to": date_schema(COMMON.param_date_to.get(lang)),
             "apps": names(&COMMON.param_apps),
@@ -75,9 +73,13 @@ impl SearchParams {
 
 /// 检查参数的值，补上默认值。不合法时返回原因。
 fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, String> {
-    let keywords = check_short_strings(&args.keywords, KEYWORDS_MAX, "keywords", lang)?;
+    let keywords = clean_short_strings(&args.keywords, "keywords", lang)?;
     if keywords.is_empty() {
         return Err(lang.err_keywords_empty().into());
+    }
+    // 多给的不悄悄丢掉：模型以为都用上了，答案会错
+    if keywords.len() > KEYWORDS_MAX {
+        return Err(lang.err_too_many_items("keywords", KEYWORDS_MAX));
     }
     // 日期只给一头时当作没给；跨度不设上限
     let range = parse_range(
@@ -95,26 +97,10 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, 
     Ok(SearchParams {
         keywords,
         range,
-        apps: check_short_strings(&args.apps, NAMES_MAX, "apps", lang)?,
-        categories: check_short_strings(&args.categories, NAMES_MAX, "categories", lang)?,
+        apps: clean_short_strings(&args.apps, "apps", lang)?,
+        categories: clean_short_strings(&args.categories, "categories", lang)?,
         limit,
     })
-}
-
-/// 检查一列短字符串：去掉首尾空白，丢掉空的。剩下的超过 `max` 个就不合法。
-///
-/// 多给的不悄悄丢掉：模型以为都用上了，答案会错。
-fn check_short_strings(
-    raw: &[String],
-    max: usize,
-    field: &str,
-    lang: ChatLang,
-) -> Result<Vec<String>, String> {
-    let out = clean_short_strings(raw, usize::MAX, field, lang)?;
-    if out.len() > max {
-        return Err(lang.err_too_many_items(field, max));
-    }
-    Ok(out)
 }
 
 /// 列表里的一个窗口：一行字和它的证据。
@@ -249,12 +235,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_rejects_more_than_five_apps_or_categories() {
-        let six: Vec<String> = (0..6).map(|i| format!("app{i}")).collect();
-        let e = parse(json!({"keywords": ["a"], "apps": six})).unwrap_err();
-        assert!(e.contains("apps") && e.contains('5'), "{e}");
-        let e = parse(json!({"keywords": ["a"], "categories": six})).unwrap_err();
-        assert!(e.contains("categories"), "{e}");
+    fn parse_takes_any_number_of_apps_and_categories() {
+        let many: Vec<String> = (0..30).map(|i| format!("app{i}")).collect();
+        let p = parse(json!({"keywords": ["a"], "apps": many, "categories": many})).unwrap();
+        assert_eq!(p.apps, many);
+        assert_eq!(p.categories, many);
     }
 
     #[test]
@@ -395,8 +380,9 @@ mod tests {
         assert_eq!(props["keywords"]["maxItems"], KEYWORDS_MAX);
         assert_eq!(props["keywords"]["items"]["maxLength"], 64);
         assert_eq!(props["keywords"]["description"], "关键词");
-        assert_eq!(props["apps"]["maxItems"], NAMES_MAX);
-        assert_eq!(props["categories"]["maxItems"], NAMES_MAX);
+        // 应用、分类不限个数
+        assert!(props["apps"].get("maxItems").is_none());
+        assert!(props["categories"].get("maxItems").is_none());
         assert_eq!(props["limit"]["minimum"], 1);
         assert_eq!(props["limit"]["maximum"], LIMIT_MAX);
         assert_eq!(props["date_from"]["maxLength"], 10);

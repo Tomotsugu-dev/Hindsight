@@ -46,17 +46,16 @@ pub(super) fn parse_range(
     Ok(Some((from, to)))
 }
 
-/// 检查一列短字符串：最多取前 `max_items` 个，去掉首尾空白，空的丢掉。
+/// 检查一列短字符串：去掉首尾空白，空的丢掉。
 ///
-/// 先取前几个、再丢空的，所以空的也占名额。某个超过 64 字就不合法，原因里写出 `field`。
+/// 某个超过 64 字就不合法，原因里写出 `field`。
 pub(super) fn clean_short_strings(
     raw: &[String],
-    max_items: usize,
     field: &str,
     lang: ChatLang,
 ) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
-    for s in raw.iter().take(max_items) {
+    for s in raw {
         let t = s.trim();
         if t.is_empty() {
             continue;
@@ -83,9 +82,14 @@ pub(super) fn date_schema(desc: &str) -> Value {
     json!({"type": "string", "maxLength": 10, "description": desc})
 }
 
-/// 参数格式：一列短字符串，每个最多 64 字。
-pub(super) fn short_strings_schema(desc: &str, max_items: u32) -> Value {
-    json!({"type": "array", "items": {"type": "string", "maxLength": 64}, "maxItems": max_items, "description": desc})
+/// 参数格式：一列短字符串，每个最多 64 字。`max_items` 是 `None` 时不限个数。
+pub(super) fn short_strings_schema(desc: &str, max_items: Option<u32>) -> Value {
+    let mut schema =
+        json!({"type": "array", "items": {"type": "string", "maxLength": 64}, "description": desc});
+    if let Some(n) = max_items {
+        schema["maxItems"] = json!(n);
+    }
+    schema
 }
 
 #[cfg(test)]
@@ -129,11 +133,11 @@ mod tests {
     fn short_string_over_64_chars_rejected_with_field_named() {
         // 按字符数算：65 个不合法，64 个可以；原因里要写出字段名，模型才知道改哪个参数
         let long = vec!["x".repeat(65)];
-        let e = clean_short_strings(&long, 5, "apps", ChatLang::ZhHans).unwrap_err();
+        let e = clean_short_strings(&long, "apps", ChatLang::ZhHans).unwrap_err();
         assert!(e.contains("apps") && e.contains("64"), "{e}");
         let ok = vec!["x".repeat(64)];
         assert_eq!(
-            clean_short_strings(&ok, 5, "apps", ChatLang::ZhHans)
+            clean_short_strings(&ok, "apps", ChatLang::ZhHans)
                 .unwrap()
                 .len(),
             1
@@ -141,14 +145,14 @@ mod tests {
     }
 
     #[test]
-    fn short_strings_capped_and_cleaned() {
+    fn short_strings_cleaned_but_not_capped() {
         let raw: Vec<String> = [" A ", "", "B", "C", "D", "E", "F"]
             .map(String::from)
             .into();
-        // 取前 5 个 [" A ","","B","C","D"]，清洗后剩 4 个；E、F 被截掉
+        // 去掉空白和空的，不限个数
         assert_eq!(
-            clean_short_strings(&raw, 5, "apps", ChatLang::ZhHans).unwrap(),
-            ["A", "B", "C", "D"]
+            clean_short_strings(&raw, "apps", ChatLang::ZhHans).unwrap(),
+            ["A", "B", "C", "D", "E", "F"]
         );
     }
 }
