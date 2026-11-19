@@ -109,7 +109,7 @@ impl Tool for StatsQuery {
             "统计应用/内容的使用时长或使用次数。可按应用名过滤(apps)、按分类名过滤(categories)、按窗口标题关键词过滤(title_keyword,如视频名),可分组排行(group_by,含按用户分类的工作/娱乐口径),可分桶看趋势(bucket)。问'用了多久/花了多少时间'用默认(metric=duration);问'启动/打开/玩了几次'用 metric=session_count;问'第一次/最近一次用X是什么时候'用 metric=first_last(此口径 date_from 可给很早的日期,如 2020-01-01)。问某类活动(如游戏)的趋势用 categories+bucket,不要自己列举应用名——用户归类过的应用你未必认识。",
             json!({"type": "object", "properties": {
                 "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
-                "date_to": date_schema("结束日期,格式 YYYY-MM-DD"),
+                "date_to": date_schema("结束日期,可选,不给就到今天,格式 YYYY-MM-DD"),
                 "apps": short_strings_schema("应用名过滤,可选", None),
                 "categories": short_strings_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", None),
                 "title_keyword": {"type": "string", "maxLength": 64, "description": "窗口标题关键词过滤,可选"},
@@ -118,7 +118,7 @@ impl Tool for StatsQuery {
                 "metric": {"type": "string", "enum": ["duration", "session_count", "first_last"], "description": "统计口径:duration=累计时长(默认);session_count=使用会话次数;first_last=最早与最近一次记录的时间(忽略分组/分桶)"},
                 "gap_minutes": {"type": "integer", "minimum": 5, "maximum": 240, "description": "会话计数用:相邻活动间隔超过这么多分钟算一段新会话,默认 30。仅用户明确说'离开X分钟以上算一次'时才填"},
                 "bucket": {"type": "string", "enum": ["none", "day", "week", "hour_of_day"], "description": "趋势分桶,与 group_by 互斥:day=逐日(最多 60 天,更长自动按周);week=逐周(行首日期为周一);hour_of_day=按一天 0-23 时聚合看作息分布"}
-            }, "required": ["date_from", "date_to"]}),
+            }}),
         )
     }
 
@@ -689,14 +689,20 @@ mod tests {
     }
 
     #[test]
-    fn parse_needs_a_range() {
-        let e = parse_args(json!({"date_from": "2026-07-01"})).unwrap_err();
+    fn parse_needs_at_least_one_date() {
+        let e = parse_args(json!({})).unwrap_err();
         assert!(e.contains("query_stats"), "{e}");
+        // 只给开始：到今天为止
+        let q = parse_args(json!({"date_from": "2026-07-01"})).unwrap();
+        assert_eq!(
+            q.range,
+            (NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(), today())
+        );
     }
 
     #[test]
     fn parse_rejects_bad_ranges() {
-        let e = parse_args(json!({"date_from": "2026-07-10", "date_to": "2026-07-01"}));
+        let e = parse_args(json!({"date_from": "2026-07-03", "date_to": "2026-07-01"}));
         assert!(e.unwrap_err().contains("晚于"));
         let e = parse_args(json!({"date_from": "2026-08-01", "date_to": "2026-08-02"}));
         assert!(e.unwrap_err().contains("未来"));
@@ -864,7 +870,7 @@ mod tests {
     fn spec_carries_the_limits() {
         let spec = StatsQuery::spec(ChatLang::ZhHans);
         assert_eq!(spec.name, "query_stats");
-        assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
+        assert!(spec.parameters.get("required").is_none());
         let props = &spec.parameters["properties"];
         assert!(props["apps"].get("maxItems").is_none());
         assert!(props["categories"].get("maxItems").is_none());

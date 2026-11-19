@@ -81,7 +81,7 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, 
     if keywords.len() > KEYWORDS_MAX {
         return Err(lang.err_too_many_items("keywords", KEYWORDS_MAX));
     }
-    // 日期只给一头时当作没给；跨度不设上限
+    // 跨度不设上限
     let range = parse_range(
         args.date_from.as_deref(),
         args.date_to.as_deref(),

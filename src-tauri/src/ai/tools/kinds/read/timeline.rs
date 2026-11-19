@@ -40,8 +40,8 @@ impl Tool for TimelineQuery {
             "按小时抽样列出某时段的屏幕活动会话(时间、应用、标题),回答'某天/某下午在干什么'。返回头部标注总条数与覆盖范围,正文是抽样代表,不是全量。",
             json!({"type": "object", "properties": {
                 "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
-                "date_to": date_schema("结束日期,格式 YYYY-MM-DD")
-            }, "required": ["date_from", "date_to"]}),
+                "date_to": date_schema("结束日期,可选,不给就到今天,格式 YYYY-MM-DD")
+            }}),
         )
     }
 
@@ -211,11 +211,16 @@ mod tests {
     }
 
     #[test]
-    fn parse_needs_a_range() {
-        // 只给一头等于没给；时间线必须有范围
-        let args = json!({"date_from": "2026-07-01"});
-        let e = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap_err();
+    fn parse_needs_at_least_one_date() {
+        let e = TimelineQuery::parse(&json!({}), today(), ChatLang::ZhHans).unwrap_err();
         assert!(e.0.contains("get_timeline"), "{}", e.0);
+        // 只给开始：到今天为止
+        let args = json!({"date_from": "2026-07-01"});
+        let q = TimelineQuery::parse(&args, today(), ChatLang::ZhHans).unwrap();
+        assert_eq!(
+            q.range,
+            (NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(), today())
+        );
     }
 
     #[test]
@@ -226,10 +231,10 @@ mod tests {
     }
 
     #[test]
-    fn spec_requires_both_dates() {
+    fn spec_requires_no_date() {
         let spec = TimelineQuery::spec(ChatLang::ZhHans);
         assert_eq!(spec.name, "get_timeline");
-        assert_eq!(spec.parameters["required"], json!(["date_from", "date_to"]));
+        assert!(spec.parameters.get("required").is_none());
         assert_eq!(spec.parameters["properties"]["date_from"]["maxLength"], 10);
     }
 

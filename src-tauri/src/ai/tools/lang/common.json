@@ -160,12 +160,12 @@
     "es": "Herramienta desconocida {other}; solo están disponibles {known}"
   },
   "err_need_range": {
-    "zh-Hans": "{tool} 需要 date_from 和 date_to(YYYY-MM-DD)",
-    "zh-Hant": "{tool} 需要 date_from 和 date_to(YYYY-MM-DD)",
-    "en": "{tool} requires date_from and date_to (YYYY-MM-DD)",
-    "ja": "{tool} には date_from と date_to(YYYY-MM-DD)が必要です",
-    "pt": "{tool} requer date_from e date_to (YYYY-MM-DD)",
-    "es": "{tool} requiere date_from y date_to (YYYY-MM-DD)"
+    "zh-Hans": "{tool} 至少要给 date_from、date_to 其中一个(YYYY-MM-DD)",
+    "zh-Hant": "{tool} 至少要給 date_from、date_to 其中一個(YYYY-MM-DD)",
+    "en": "{tool} needs date_from, date_to, or both (YYYY-MM-DD)",
+    "ja": "{tool} には date_from と date_to(YYYY-MM-DD)の少なくとも一方が必要です",
+    "pt": "{tool} precisa de date_from, date_to ou os dois (YYYY-MM-DD)",
+    "es": "{tool} necesita date_from, date_to o los dos (YYYY-MM-DD)"
   },
   "err_bad_date": {
     "zh-Hans": "{field} 不是有效日期: {val}",
