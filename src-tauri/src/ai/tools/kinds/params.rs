@@ -105,7 +105,7 @@ pub(super) fn short_strings_schema(desc: &str, max_items: Option<u32>) -> Value 
     schema
 }
 
-/// `lang/errors.json` 里的句子：参数报错。
+/// The sentences in `lang/errors.json`: errors in tool parameters.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ErrorText {
@@ -128,17 +128,17 @@ const ERRORS_JSON: &str = include_str!("lang/errors.json");
 static ERRORS: LazyLock<ErrorText> = LazyLock::new(|| load(ERRORS_JSON));
 
 impl ChatLang {
-    /// 参数读不懂，`e` 是读的时候报的错。
+    /// The arguments cannot be read. `e` is the error from reading them.
     pub(super) fn args_format_err(self, e: &impl Display) -> String {
         ERRORS.args_format_err.fill(self, &[("e", e)])
     }
 
-    /// 参数读懂了，但值不合法。
+    /// An argument value is not valid. An unknown tool name uses this too.
     pub(super) fn args_invalid(self, msg: &str) -> String {
         ERRORS.args_invalid.fill(self, &[("msg", &msg)])
     }
 
-    /// `known` 是能用的工具名，由登记处给。
+    /// `known` lists the tool names that exist. The registry gives it.
     pub(super) fn err_unknown_tool(self, other: &str, known: &str) -> String {
         ERRORS
             .err_unknown_tool

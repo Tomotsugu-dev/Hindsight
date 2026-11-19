@@ -1,6 +1,7 @@
-//! 找：按关键词找 X 出现在哪。
+//! Search: find where keywords appear.
 //!
-//! 两个搜索工具的参数一样，都是 [`SearchParams`]；结果都是一个窗口一行，由 [`write_list`] 写。
+//! The two search tools take the same parameters, [`SearchParams`]. Both list one window per
+//! line, written by [`write_list`].
 
 pub(in crate::ai::tools) mod activity;
 pub(in crate::ai::tools) mod ocr;
@@ -17,25 +18,25 @@ use super::params::{
 use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
-/// `lang/search.json` 里的句子：两个搜索工具都用的。
+/// The sentences in `lang/search.json`, used by both search tools.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SearchText {
-    /// 一个关键词加上引号。
+    /// One keyword in quotes.
     quote: Text,
-    /// 几个加了引号的关键词之间。
+    /// What goes between quoted keywords.
     quote_sep: Text,
-    /// 参数说明：起始日期。
+    /// Parameter description: the start date.
     param_date_from: Text,
-    /// 参数说明：结束日期。
+    /// Parameter description: the end date.
     param_date_to: Text,
-    /// 参数说明：只搜哪些应用。
+    /// Parameter description: which apps to search.
     param_apps: Text,
-    /// 参数说明：只搜哪些分类。
+    /// Parameter description: which categories to search.
     param_categories: Text,
-    /// 参数说明：最多列几个。
+    /// Parameter description: how many to list at most.
     param_limit: Text,
-    /// 没列全时的最后一行：还有几个，怎么看更多。
+    /// The last line when not everything is listed: how many are left, and how to see more.
     more: Text,
 }
 
@@ -43,29 +44,29 @@ const TEXT_JSON: &str = include_str!("lang/search.json");
 
 static TEXT: LazyLock<SearchText> = LazyLock::new(|| load(TEXT_JSON));
 
-/// 关键词最多几个。
+/// The most keywords a search takes.
 const KEYWORDS_MAX: usize = 3;
-/// 不给 limit 时列几个。
+/// How many to list when no limit is given.
 const LIMIT_DEFAULT: usize = 8;
-/// limit 最大是几。
+/// The largest limit allowed.
 const LIMIT_MAX: usize = 20;
 
-/// 搜索工具检查过的参数。
+/// Search parameters after they are checked.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchParams {
-    /// 1 到 3 个。每个都出现才算命中。
+    /// 1 to 3 keywords. A match needs all of them.
     keywords: Vec<String>,
-    /// 不给就搜全部日期。
+    /// `None` searches all dates.
     range: Option<(NaiveDate, NaiveDate)>,
-    /// 只搜这些应用。空的就不按应用过滤。
+    /// Search only these apps. Empty means no app filter.
     apps: Vec<String>,
-    /// 只搜这些分类里的应用。空的就不按分类过滤。
+    /// Search only apps in these categories. Empty means no category filter.
     categories: Vec<String>,
-    /// 最多列几个。
+    /// How many to list at most.
     limit: usize,
 }
 
-/// 模型传来的参数，检查之前。
+/// The arguments from the model, before they are checked.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct Args {
@@ -78,13 +79,17 @@ struct Args {
 }
 
 impl SearchParams {
-    /// 解析、检查模型传来的参数。不合法时，原因写给模型看。
+    /// Reads and checks the arguments from the model.
+    ///
+    /// When they are not valid, the reason is written for the model.
     fn parse(args: &Value, today: NaiveDate, lang: ChatLang) -> Result<Self, ToolError> {
         let args: Args = read_args(args, lang)?;
         check(&args, today, lang).map_err(|msg| invalid(&msg, lang))
     }
 
-    /// 给模型看的参数格式，说明按 `lang` 写。`keywords_desc` 写关键词在哪里比对。
+    /// Builds the parameter schema for the model, with descriptions in `lang`.
+    ///
+    /// `keywords_desc` says where the keywords are matched.
     fn schema(keywords_desc: &str, lang: ChatLang) -> Value {
         let names = |text: &Text| short_strings_schema(text.get(lang), None);
         json!({"type": "object", "properties": {
@@ -99,13 +104,16 @@ impl SearchParams {
     }
 }
 
-/// 检查参数的值，补上默认值。不合法时返回原因。
+/// Checks the argument values and fills in the defaults.
+///
+/// Returns the reason when a value is not valid.
 fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, String> {
     let keywords = clean_short_strings(&args.keywords, "keywords", lang)?;
     if keywords.is_empty() {
         return Err(lang.err_keywords_empty().into());
     }
-    // 多给的不悄悄丢掉：模型以为都用上了，答案会错
+    // Do not drop extra keywords quietly. The model would think it used them all, and the
+    // answer would be wrong.
     if keywords.len() > KEYWORDS_MAX {
         return Err(lang.err_too_many_items("keywords", KEYWORDS_MAX));
     }
@@ -129,19 +137,21 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, 
     })
 }
 
-/// 列表里的一个窗口：一行字和它的证据。
+/// One window in the list: its line of text and its evidence.
 struct Row {
-    /// 编号后面的部分。
+    /// The part after the number.
     line: String,
-    /// 编号由 [`write_list`] 填。
+    /// [`write_list`] fills in the number.
     citation: Citation,
 }
 
-/// 写成给模型看的文字：开头，一个窗口一行，没列全时再写一行。
+/// Writes the text for the model: the head, one line per window, and a last line when not
+/// everything is listed.
 ///
-/// `head(n)` 写开头的几行，`n` 是列了几个，一个都没列时是 0。
-/// `count` 是全部命中的窗口数，`rows` 是要列的。编号从 `next_citation` 开始。
-/// 文字超过 `max_chars` 时少列几个，不截断某一行。
+/// `head(n)` writes the head lines. `n` is how many are listed, and 0 when none are. `count` is
+/// the number of matching windows, and `rows` are the ones to list. Numbers start at
+/// `next_citation`. When the text would go over `max_chars`, fewer rows are listed. A row is
+/// never cut.
 fn write_list(
     head: impl Fn(usize) -> Vec<String>,
     rows: Vec<Row>,
@@ -150,7 +160,8 @@ fn write_list(
     max_chars: usize,
     lang: ChatLang,
 ) -> ToolOutput {
-    // 给开头和最后一行留位置。按最大的数算，实际写出来只会更短
+    // Leave room for the head and the last line. Count them at their largest, so the real text
+    // can only be shorter.
     let mut used: usize = head(rows.len())
         .iter()
         .chain([&more(count, lang)])
@@ -181,7 +192,7 @@ fn write_list(
     }
 }
 
-/// 把关键词写进句子：「报销」「7月」。
+/// Quotes the keywords for use in a sentence, such as 「报销」「7月」.
 fn quote_keywords(keywords: &[String], lang: ChatLang) -> String {
     let quoted: Vec<String> = keywords
         .iter()
@@ -190,12 +201,12 @@ fn quote_keywords(keywords: &[String], lang: ChatLang) -> String {
     quoted.join(TEXT.quote_sep.get(lang))
 }
 
-/// 没列全时的最后一行：还有 `rest` 个没列，怎么看更多。
+/// Writes the last line when not everything is listed: `rest` are left, and how to see more.
 fn more(rest: usize, lang: ChatLang) -> String {
     TEXT.more.fill(lang, &[("rest", &rest)])
 }
 
-/// 不给日期就搜全部：换成一个包住所有日期的范围，SQL 只要一种写法。
+/// Turns "no dates" into a range that covers every date, so the SQL needs only one form.
 fn date_bounds(range: Option<(NaiveDate, NaiveDate)>) -> (String, String) {
     match range {
         Some((from, to)) => (from.to_string(), to.to_string()),

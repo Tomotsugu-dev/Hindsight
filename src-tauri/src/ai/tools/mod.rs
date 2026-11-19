@@ -14,21 +14,23 @@ use crate::ai::policy::AiDataPolicy;
 use crate::error::Result;
 use crate::storage::Connection;
 
-/// 给模型查库用的工具：给模型看的说明、检查模型发来的调用、执行。
+/// The tools the model uses to query the database: it gives the tool descriptions, checks each
+/// call from the model, and runs it.
 ///
-/// 一次提问开一个：检查日期要用 `today`，结果和报错的文字按 `lang` 写。
+/// Open one per question. The date, the language, and what the AI may see hold only for that
+/// question.
 pub struct Tools {
     ctx: ToolCtx,
     today: NaiveDate,
     lang: ChatLang,
 }
 
-/// 调用不合法的原因，写给模型看。
+/// Why a tool call was rejected.
 #[derive(Debug)]
 pub struct ToolError(pub String);
 
 impl Tools {
-    /// 打开主库和记忆库的只读连接。
+    /// Opens read-only connections to the main database and the memory database.
     pub async fn open_readonly(today: NaiveDate, lang: ChatLang) -> Result<Self> {
         Ok(Self {
             ctx: ToolCtx::open_readonly().await?,
@@ -37,19 +39,22 @@ impl Tools {
         })
     }
 
-    /// 给模型看的工具列表，说明按提示词语言写。
+    /// Lists the tools for the model, with descriptions in the prompt language.
     pub fn specs(&self) -> Vec<ToolSpec> {
         kinds::specs(self.lang)
     }
 
-    /// 检查模型发来的调用：参数读不读得懂，值合不合法。
+    /// Checks a call from the model: whether its arguments can be read, and whether their values
+    /// are valid.
     pub fn validate(&self, call: &ToolCall) -> std::result::Result<Query, ToolError> {
         kinds::parse(call, self.today, self.lang)
     }
 
-    /// 执行检查过的调用。引用编号从 `next_citation` 开始，文字最多 `max_chars` 字。
+    /// Runs a checked call.
     ///
-    /// 工具按 `max_chars` 少列几条；这里再截一次，工具算错了也超不过。
+    /// Citations are numbered from `next_citation`. Text over `max_chars` characters is cut, and
+    /// "…" is added at the end. The search tools list fewer rows to stay within `max_chars`. The
+    /// timeline and stats tools do not, so only this cut limits them.
     pub async fn execute(
         &self,
         query: &Query,
@@ -64,8 +69,10 @@ impl Tools {
     }
 }
 
-/// 证据引用——前端渲染证据卡的数据。`index` 是本轮对话内的全局编号,
-/// 模型在答案里写 [index] 引用它。Deserialize 供聊天历史从库里回读。
+/// A piece of evidence. The front end shows it as an evidence card.
+///
+/// `index` is unique within this round of the chat, and the model cites it as `[index]` in the
+/// answer. `Deserialize` is for reading chat history back from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Citation {
@@ -74,26 +81,27 @@ pub struct Citation {
     pub title: String,
     pub started_ts: String,
     pub ended_ts: String,
-    /// 证据帧(命中行首现帧/会话首帧);可能已被 retention 删除,前端兜底
+    /// The screenshot for this evidence: the first frame of the match or of the session. It may
+    /// have been deleted after the retention period, and the front end handles that.
     pub frame_path: Option<String>,
 }
 
-/// 工具执行结果:给模型看的紧凑文本 + 给前端的结构化引用。
+/// The result of a tool: short text for the model, and citations for the front end.
 pub struct ToolOutput {
     pub content: String,
     pub citations: Vec<Citation>,
 }
 
-/// 两个库的只读连接。
+/// Read-only connections to the two databases.
 struct ToolCtx {
     main: Connection,
     mem: Connection,
-    /// AI 能看到什么。第一次用时从主库读。
+    /// What the AI may see. It is read from the main database on first use.
     policy: OnceCell<AiDataPolicy>,
 }
 
 impl ToolCtx {
-    /// 打开主库与记忆库的只读连接。
+    /// Opens read-only connections to the main database and the memory database.
     async fn open_readonly() -> Result<Self> {
         use rusqlite::OpenFlags;
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
@@ -106,9 +114,10 @@ impl ToolCtx {
         })
     }
 
-    /// AI 能看到什么。一个问题里只从主库读一次。
+    /// Returns what the AI may see.
     ///
-    /// 读失败时，用到它的工具执行失败，不会给出没筛过的数据。
+    /// After the first successful read, it is not read again for this question. If the read
+    /// fails, the tool that needs it fails too, and never returns unfiltered data.
     async fn policy(&self) -> Result<&AiDataPolicy> {
         self.policy
             .get_or_try_init(|| AiDataPolicy::load(&self.main))
@@ -130,9 +139,12 @@ const ACTIVITY_WHERE: &str = "WHERE a.local_date BETWEEN ?1 AND ?2
        AND g.category_id IS NOT 'hidden'
        AND a.excluded = 0";
 
-/// FTS MATCH 注入防护:每个词包成带引号的字符串字面量(内部引号剥除),
-/// 多词以空格连接 = 隐式 AND。模型/用户输入永远进不了 FTS 语法位。
-/// pub(crate):搜索页命令([`crate::commands::screen_memory::memory_search`])同款复用。
+/// Guards FTS MATCH against injection.
+///
+/// Each word becomes a quoted string, and any double quote inside it becomes a space. Words are
+/// joined by spaces, which FTS reads as AND. So input from the model or the user never reaches
+/// the FTS syntax. It is `pub(crate)` because the search page command
+/// ([`crate::commands::screen_memory::memory_search`]) uses it too.
 pub(crate) fn fts_literal(keywords: &[String]) -> String {
     keywords
         .iter()
@@ -141,7 +153,9 @@ pub(crate) fn fts_literal(keywords: &[String]) -> String {
         .join(" ")
 }
 
-/// LIKE 通配符转义(ESCAPE '\')。pub(crate) 理由同 [`fts_literal`]。
+/// Escapes the LIKE wildcards, for use with `ESCAPE '\'`.
+///
+/// It is `pub(crate)` for the same reason as [`fts_literal`].
 pub(crate) fn like_pattern(s: &str) -> String {
     let escaped = s
         .replace('\\', "\\\\")
