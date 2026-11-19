@@ -9,7 +9,9 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::params::{clean_names, date_schema, invalid, names_schema, parse_range, read_args};
+use super::params::{
+    clean_short_strings, date_schema, invalid, parse_range, read_args, short_strings_schema,
+};
 use crate::ai::tools::text::{Text, COMMON};
 use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
@@ -58,9 +60,9 @@ impl SearchParams {
 
     /// 给模型看的参数格式，说明按 `lang` 写。`keywords_desc` 写关键词在哪里比对。
     fn schema(keywords_desc: &str, lang: ChatLang) -> Value {
-        let names = |text: &Text| names_schema(text.get(lang), NAMES_MAX as u32);
+        let names = |text: &Text| short_strings_schema(text.get(lang), NAMES_MAX as u32);
         json!({"type": "object", "properties": {
-            "keywords": names_schema(keywords_desc, KEYWORDS_MAX as u32),
+            "keywords": short_strings_schema(keywords_desc, KEYWORDS_MAX as u32),
             "date_from": date_schema(COMMON.param_date_from.get(lang)),
             "date_to": date_schema(COMMON.param_date_to.get(lang)),
             "apps": names(&COMMON.param_apps),
@@ -73,7 +75,7 @@ impl SearchParams {
 
 /// 检查参数的值，补上默认值。不合法时返回原因。
 fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, String> {
-    let keywords = names(&args.keywords, KEYWORDS_MAX, "keywords", lang)?;
+    let keywords = check_short_strings(&args.keywords, KEYWORDS_MAX, "keywords", lang)?;
     if keywords.is_empty() {
         return Err(lang.err_keywords_empty().into());
     }
@@ -93,17 +95,22 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> Result<SearchParams, 
     Ok(SearchParams {
         keywords,
         range,
-        apps: names(&args.apps, NAMES_MAX, "apps", lang)?,
-        categories: names(&args.categories, NAMES_MAX, "categories", lang)?,
+        apps: check_short_strings(&args.apps, NAMES_MAX, "apps", lang)?,
+        categories: check_short_strings(&args.categories, NAMES_MAX, "categories", lang)?,
         limit,
     })
 }
 
-/// 检查一列名字：去掉首尾空白，丢掉空的。剩下的超过 `max` 个就不合法。
+/// 检查一列短字符串：去掉首尾空白，丢掉空的。剩下的超过 `max` 个就不合法。
 ///
 /// 多给的不悄悄丢掉：模型以为都用上了，答案会错。
-fn names(raw: &[String], max: usize, field: &str, lang: ChatLang) -> Result<Vec<String>, String> {
-    let out = clean_names(raw, usize::MAX, field, lang)?;
+fn check_short_strings(
+    raw: &[String],
+    max: usize,
+    field: &str,
+    lang: ChatLang,
+) -> Result<Vec<String>, String> {
+    let out = clean_short_strings(raw, usize::MAX, field, lang)?;
     if out.len() > max {
         return Err(lang.err_too_many_items(field, max));
     }

@@ -46,10 +46,10 @@ pub(super) fn parse_range(
     Ok(Some((from, to)))
 }
 
-/// 检查一列名字：最多取前 `max_items` 个，去掉首尾空白，空的丢掉。
+/// 检查一列短字符串：最多取前 `max_items` 个，去掉首尾空白，空的丢掉。
 ///
 /// 先取前几个、再丢空的，所以空的也占名额。某个超过 64 字就不合法，原因里写出 `field`。
-pub(super) fn clean_names(
+pub(super) fn clean_short_strings(
     raw: &[String],
     max_items: usize,
     field: &str,
@@ -83,8 +83,8 @@ pub(super) fn date_schema(desc: &str) -> Value {
     json!({"type": "string", "maxLength": 10, "description": desc})
 }
 
-/// 参数格式：一列名字，每个最多 64 字。
-pub(super) fn names_schema(desc: &str, max_items: u32) -> Value {
+/// 参数格式：一列短字符串，每个最多 64 字。
+pub(super) fn short_strings_schema(desc: &str, max_items: u32) -> Value {
     json!({"type": "array", "items": {"type": "string", "maxLength": 64}, "maxItems": max_items, "description": desc})
 }
 
@@ -126,26 +126,28 @@ mod tests {
     }
 
     #[test]
-    fn name_over_64_chars_rejected_with_field_named() {
+    fn short_string_over_64_chars_rejected_with_field_named() {
         // 按字符数算：65 个不合法，64 个可以；原因里要写出字段名，模型才知道改哪个参数
         let long = vec!["x".repeat(65)];
-        let e = clean_names(&long, 5, "apps", ChatLang::ZhHans).unwrap_err();
+        let e = clean_short_strings(&long, 5, "apps", ChatLang::ZhHans).unwrap_err();
         assert!(e.contains("apps") && e.contains("64"), "{e}");
         let ok = vec!["x".repeat(64)];
         assert_eq!(
-            clean_names(&ok, 5, "apps", ChatLang::ZhHans).unwrap().len(),
+            clean_short_strings(&ok, 5, "apps", ChatLang::ZhHans)
+                .unwrap()
+                .len(),
             1
         );
     }
 
     #[test]
-    fn names_capped_and_cleaned() {
+    fn short_strings_capped_and_cleaned() {
         let raw: Vec<String> = [" A ", "", "B", "C", "D", "E", "F"]
             .map(String::from)
             .into();
         // 取前 5 个 [" A ","","B","C","D"]，清洗后剩 4 个；E、F 被截掉
         assert_eq!(
-            clean_names(&raw, 5, "apps", ChatLang::ZhHans).unwrap(),
+            clean_short_strings(&raw, 5, "apps", ChatLang::ZhHans).unwrap(),
             ["A", "B", "C", "D"]
         );
     }

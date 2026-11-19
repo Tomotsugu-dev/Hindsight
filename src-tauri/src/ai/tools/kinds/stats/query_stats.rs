@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::{
-    clean_names, date_schema, invalid, names_schema, parse_range, read_args, spec,
+    clean_short_strings, date_schema, invalid, parse_range, read_args, short_strings_schema, spec,
 };
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolError, ToolOutput};
@@ -110,8 +110,8 @@ impl Tool for StatsQuery {
             json!({"type": "object", "properties": {
                 "date_from": date_schema("起始日期,格式 YYYY-MM-DD"),
                 "date_to": date_schema("结束日期,格式 YYYY-MM-DD"),
-                "apps": names_schema("应用名过滤,可选", 5),
-                "categories": names_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", 5),
+                "apps": short_strings_schema("应用名过滤,可选", 5),
+                "categories": short_strings_schema("分类名过滤(如'游戏'),按用户的应用分类圈定范围,可选;分类名可先用 group_by=category 查到", 5),
                 "title_keyword": {"type": "string", "maxLength": 64, "description": "窗口标题关键词过滤,可选"},
                 "group_by": {"type": "string", "enum": ["none", "app", "title", "category"], "description": "分组维度,默认 none;category=按用户设置的应用分类(工作/娱乐/游戏等)分组"},
                 "top_n": {"type": "integer", "minimum": 1, "maximum": 10, "description": "分组时取前 N,默认 5"},
@@ -160,8 +160,8 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<S
         lang,
     )?
     .ok_or_else(|| lang.err_need_range(StatsQuery::NAME))?;
-    let apps = clean_names(&args.apps, 5, "apps", lang)?;
-    let categories = clean_names(&args.categories, 5, "categories", lang)?;
+    let apps = clean_short_strings(&args.apps, 5, "apps", lang)?;
+    let categories = clean_short_strings(&args.categories, 5, "categories", lang)?;
     let title_keyword = match args.title_keyword.as_deref().map(str::trim) {
         Some("") | None => None,
         Some(t) if t.chars().count() <= 64 => Some(t.to_string()),
