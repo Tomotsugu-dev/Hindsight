@@ -25,14 +25,17 @@ pub struct ActivityQuery(pub SearchParams);
 /// 每行的标题最多几个字。
 const TITLE_MAX_CHARS: usize = 60;
 
-/// `lang/activity.json` 里的句子。
+/// `lang/activity.json` 里的句子，都写给模型看。
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ActivityText {
-    /// 给模型看的工具说明。
+    // 进工具说明
+    /// 整个工具的说明。
     description: Text,
-    /// 给模型看的关键词参数说明。
+    /// 关键词参数的说明。
     keywords: Text,
+
+    // 进工具结果
     /// 开头第一句：命中了几个窗口，一共多久。
     head: Text,
     /// 开头第二句：最早、最近一次开始的时刻和窗口。

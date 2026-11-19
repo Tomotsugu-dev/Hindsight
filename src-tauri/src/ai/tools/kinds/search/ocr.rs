@@ -33,14 +33,17 @@ const SNIPPET_MAX_CHARS: usize = 120;
 /// 片段在关键词前面留几个字。
 const SNIPPET_BEFORE_CHARS: usize = 20;
 
-/// `lang/ocr.json` 里的句子。
+/// `lang/ocr.json` 里的句子，都写给模型看。
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OcrText {
-    /// 给模型看的工具说明。
+    // 进工具说明
+    /// 整个工具的说明。
     description: Text,
-    /// 给模型看的关键词参数说明。
+    /// 关键词参数的说明。
     keywords: Text,
+
+    // 进工具结果
     /// 开头：几个窗口的屏幕上出现过关键词。说明只是出现过，不算时间。一个都没列时用。
     head: Text,
     /// 同 `head`，后面接着写按最近一次列了几个。
