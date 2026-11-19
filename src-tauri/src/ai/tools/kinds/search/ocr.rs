@@ -13,7 +13,7 @@ use super::{quote_keywords, write_list, Row, SearchParams};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
-use crate::ai::tools::text::{load, Text};
+use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{
     like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
 };
@@ -276,8 +276,8 @@ mod tests {
 
     use super::super::more;
     use super::*;
+    use crate::ai::tools::lang::text::assert_same_placeholders;
     use crate::ai::tools::test_util::real_ctx;
-    use crate::ai::tools::text::assert_same_placeholders;
     use crate::repo::test_util::fresh_test_pool;
     use crate::storage::DbPool;
 

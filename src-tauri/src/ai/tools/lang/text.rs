@@ -15,7 +15,7 @@ use super::ChatLang;
 /// 一句话的 6 种语言。少一种、多一种，都读取失败。
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Text {
+pub(in crate::ai::tools) struct Text {
     #[serde(rename = "zh-Hans")]
     zh_hans: String,
     #[serde(rename = "zh-Hant")]
@@ -28,7 +28,7 @@ pub(super) struct Text {
 
 impl Text {
     /// 这种语言的句子。
-    pub(super) fn get(&self, lang: ChatLang) -> &str {
+    pub(in crate::ai::tools) fn get(&self, lang: ChatLang) -> &str {
         match lang {
             ChatLang::ZhHans => &self.zh_hans,
             ChatLang::ZhHant => &self.zh_hant,
@@ -42,7 +42,11 @@ impl Text {
     /// 这种语言的句子，`{名字}` 换成 `args` 里同名的值。
     ///
     /// 只扫一遍：值里的 `{名字}` 不会再被换掉。`args` 里没有的名字原样留着。
-    pub(super) fn fill(&self, lang: ChatLang, args: &[(&str, &dyn Display)]) -> String {
+    pub(in crate::ai::tools) fn fill(
+        &self,
+        lang: ChatLang,
+        args: &[(&str, &dyn Display)],
+    ) -> String {
         let mut out = String::new();
         let mut rest = self.get(lang);
         while let Some(open) = rest.find('{') {
@@ -72,30 +76,30 @@ impl Text {
 /// 读一个 JSON 里的句子。
 ///
 /// JSON 编进了程序，每个 JSON 都有测试读一遍，所以这里不会失败。
-pub(super) fn load<T: DeserializeOwned>(json: &str) -> T {
+pub(in crate::ai::tools) fn load<T: DeserializeOwned>(json: &str) -> T {
     serde_json::from_str(json).expect("工具文字的 JSON 读不懂，测试应该先发现")
 }
 
 /// `lang/common.json` 里的句子：几个工具共用的。
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Common {
+pub(in crate::ai::tools) struct Common {
     /// 一个关键词加上引号。
-    pub(super) quote: Text,
+    pub(in crate::ai::tools) quote: Text,
     /// 几个加了引号的关键词之间。
-    pub(super) quote_sep: Text,
+    pub(in crate::ai::tools) quote_sep: Text,
     /// 搜索工具的参数说明：起始日期。
-    pub(super) param_date_from: Text,
+    pub(in crate::ai::tools) param_date_from: Text,
     /// 搜索工具的参数说明：结束日期。
-    pub(super) param_date_to: Text,
+    pub(in crate::ai::tools) param_date_to: Text,
     /// 搜索工具的参数说明：只搜哪些应用。
-    pub(super) param_apps: Text,
+    pub(in crate::ai::tools) param_apps: Text,
     /// 搜索工具的参数说明：只搜哪些分类。
-    pub(super) param_categories: Text,
+    pub(in crate::ai::tools) param_categories: Text,
     /// 搜索工具的参数说明：最多列几个。
-    pub(super) param_limit: Text,
+    pub(in crate::ai::tools) param_limit: Text,
     /// 没列全时的最后一行：还有几个，怎么看更多。
-    pub(super) more: Text,
+    pub(in crate::ai::tools) more: Text,
     /// 时长，有小时的。
     duration_hours: Text,
     /// 时长，不到一小时的。
@@ -121,14 +125,14 @@ pub(super) struct Common {
     err_limit_range: Text,
 }
 
-const COMMON_JSON: &str = include_str!("lang/common.json");
+const COMMON_JSON: &str = include_str!("common.json");
 
-pub(super) static COMMON: LazyLock<Common> = LazyLock::new(|| load(COMMON_JSON));
+pub(in crate::ai::tools) static COMMON: LazyLock<Common> = LazyLock::new(|| load(COMMON_JSON));
 
 /// 几个工具共用的句子，从 `lang/common.json` 读。
 impl ChatLang {
     /// 时长写到分钟：1 小时 4 分钟、38 分钟。
-    pub(super) fn fmt_secs(self, secs: i64) -> String {
+    pub(in crate::ai::tools) fn fmt_secs(self, secs: i64) -> String {
         let (h, m) = (secs / 3600, (secs % 3600) / 60);
         if h > 0 {
             COMMON.duration_hours.fill(self, &[("h", &h), ("m", &m)])
@@ -155,66 +159,66 @@ impl ChatLang {
     }
 
     /// 参数读不懂，`e` 是读的时候报的错。
-    pub(super) fn args_format_err(self, e: &impl Display) -> String {
+    pub(in crate::ai::tools) fn args_format_err(self, e: &impl Display) -> String {
         COMMON.args_format_err.fill(self, &[("e", e)])
     }
 
     /// 参数读懂了，但值不合法。
-    pub(super) fn args_invalid(self, msg: &str) -> String {
+    pub(in crate::ai::tools) fn args_invalid(self, msg: &str) -> String {
         COMMON.args_invalid.fill(self, &[("msg", &msg)])
     }
 
     /// `known` 是能用的工具名，由登记处给。
-    pub(super) fn err_unknown_tool(self, other: &str, known: &str) -> String {
+    pub(in crate::ai::tools) fn err_unknown_tool(self, other: &str, known: &str) -> String {
         COMMON
             .err_unknown_tool
             .fill(self, &[("other", &other), ("known", &known)])
     }
 
-    pub(super) fn err_need_range(self, tool: &str) -> String {
+    pub(in crate::ai::tools) fn err_need_range(self, tool: &str) -> String {
         COMMON.err_need_range.fill(self, &[("tool", &tool)])
     }
 
-    pub(super) fn err_bad_date(self, field: &str, val: &str) -> String {
+    pub(in crate::ai::tools) fn err_bad_date(self, field: &str, val: &str) -> String {
         COMMON
             .err_bad_date
             .fill(self, &[("field", &field), ("val", &val)])
     }
 
-    pub(super) fn err_from_after_to(self) -> &'static str {
+    pub(in crate::ai::tools) fn err_from_after_to(self) -> &'static str {
         COMMON.err_from_after_to.get(self)
     }
 
-    pub(super) fn err_range_too_long(self) -> &'static str {
+    pub(in crate::ai::tools) fn err_range_too_long(self) -> &'static str {
         COMMON.err_range_too_long.get(self)
     }
 
-    pub(super) fn err_from_in_future(self) -> &'static str {
+    pub(in crate::ai::tools) fn err_from_in_future(self) -> &'static str {
         COMMON.err_from_in_future.get(self)
     }
 
-    pub(super) fn err_keywords_empty(self) -> &'static str {
+    pub(in crate::ai::tools) fn err_keywords_empty(self) -> &'static str {
         COMMON.err_keywords_empty.get(self)
     }
 
-    pub(super) fn err_item_too_long(self, field: &str) -> String {
+    pub(in crate::ai::tools) fn err_item_too_long(self, field: &str) -> String {
         COMMON.err_item_too_long.fill(self, &[("field", &field)])
     }
 
-    pub(super) fn err_too_many_items(self, field: &str, max: usize) -> String {
+    pub(in crate::ai::tools) fn err_too_many_items(self, field: &str, max: usize) -> String {
         COMMON
             .err_too_many_items
             .fill(self, &[("field", &field), ("max", &max)])
     }
 
-    pub(super) fn err_limit_range(self, max: usize) -> String {
+    pub(in crate::ai::tools) fn err_limit_range(self, max: usize) -> String {
         COMMON.err_limit_range.fill(self, &[("max", &max)])
     }
 }
 
 /// 检查每句话的 6 种语言用的占位符一样。每个 JSON 的测试都调它。
 #[cfg(test)]
-pub(super) fn assert_same_placeholders(json: &str) {
+pub(in crate::ai::tools) fn assert_same_placeholders(json: &str) {
     use std::collections::{BTreeMap, BTreeSet};
 
     fn placeholders(s: &str) -> BTreeSet<&str> {

@@ -2,7 +2,6 @@ mod kinds;
 mod lang;
 #[cfg(test)]
 mod test_util;
-mod text;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};

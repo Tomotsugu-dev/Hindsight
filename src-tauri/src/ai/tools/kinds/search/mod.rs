@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use super::params::{
     clean_short_strings, date_schema, invalid, parse_range, read_args, short_strings_schema,
 };
-use crate::ai::tools::text::{Text, COMMON};
+use crate::ai::tools::lang::text::{Text, COMMON};
 use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
 
 /// 关键词最多几个。
