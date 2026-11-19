@@ -1,5 +1,7 @@
 //! query_stats：统计使用时长、使用次数，或最早和最近一次的时间。
 
+use std::sync::LazyLock;
+
 use chrono::NaiveDate;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -9,6 +11,7 @@ use crate::ai::tools::kinds::params::{
     clean_short_strings, date_schema, invalid, parse_range, read_args, short_strings_schema, spec,
 };
 use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolError, ToolOutput};
 use crate::error::Result;
 use crate::storage::{DbResult, SqliteResultExt};
@@ -97,6 +100,182 @@ const BUCKET_MAX_DAYS: i64 = 366;
 const GAP_DEFAULT_MIN: u32 = 30;
 const GAP_MIN: u32 = 5;
 const GAP_MAX: u32 = 240;
+
+/// `lang/query_stats.json` 里的句子，只有用量工具用。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StatsText {
+    total: Text,
+    no_match: Text,
+    duration_header_top: Text,
+    duration_header_all: Text,
+    sessions_total: Text,
+    sessions_grouped_header: Text,
+    sessions_scope: Text,
+    bucket_day_header: Text,
+    bucket_week_header: Text,
+    auto_week: Text,
+    bucket_hour_header: Text,
+    gap_clause: Text,
+    first_last: Text,
+    count: Text,
+    err_title_kw_too_long: Text,
+    err_bucket_with_group: Text,
+}
+
+const TEXT_JSON: &str = include_str!("lang/query_stats.json");
+
+static TEXT: LazyLock<StatsText> = LazyLock::new(|| load(TEXT_JSON));
+
+impl ChatLang {
+    /// 返回按时长统计、不分组时的合计那一行。
+    fn stats_total(self, from: &str, to: &str, dur: &str) -> String {
+        TEXT.total
+            .fill(self, &[("from", &from), ("to", &to), ("dur", &dur)])
+    }
+
+    /// 返回范围里没有匹配记录时的那句话。
+    fn no_match(self, from: &str, to: &str) -> String {
+        TEXT.no_match.fill(self, &[("from", &from), ("to", &to)])
+    }
+
+    /// 返回按时长排行的开头。组数比列出的多时，开头写出一共有几组。
+    fn duration_header(self, from: &str, to: &str, universe: i64, shown: usize) -> String {
+        let args: [(&str, &dyn std::fmt::Display); 4] = [
+            ("from", &from),
+            ("to", &to),
+            ("universe", &universe),
+            ("shown", &shown),
+        ];
+        if universe as usize > shown {
+            TEXT.duration_header_top.fill(self, &args)
+        } else {
+            TEXT.duration_header_all.fill(self, &args)
+        }
+    }
+
+    /// 返回按次数统计、不分组时的那一行。这一行写出间隔多久算新的一次。
+    fn sessions_total(self, from: &str, to: &str, n: usize, gap: u32) -> String {
+        TEXT.sessions_total.fill(
+            self,
+            &[("from", &from), ("to", &to), ("n", &n), ("gap", &gap)],
+        )
+    }
+
+    /// 返回按次数排行的开头。组数比列出的多时，开头写出一共有几组。
+    fn sessions_grouped_header(
+        self,
+        from: &str,
+        to: &str,
+        universe: usize,
+        shown: usize,
+        gap: u32,
+    ) -> String {
+        let scope = if universe > shown {
+            TEXT.sessions_scope
+                .fill(self, &[("universe", &universe), ("shown", &shown)])
+        } else {
+            String::new()
+        };
+        TEXT.sessions_grouped_header.fill(
+            self,
+            &[
+                ("from", &from),
+                ("to", &to),
+                ("scope", &scope),
+                ("gap", &gap),
+            ],
+        )
+    }
+
+    /// 返回逐日统计的开头。
+    ///
+    /// 开头写明没有记录的日子没列出。查询只返回有活动的日子，模型要知道缺的日子是没有使用，不是数据丢了。
+    fn bucket_day_header(self, from: &str, to: &str, n: usize, gap: Option<u32>) -> String {
+        TEXT.bucket_day_header.fill(
+            self,
+            &[
+                ("from", &from),
+                ("to", &to),
+                ("n", &n),
+                ("gap_clause", &self.gap_clause(gap)),
+            ],
+        )
+    }
+
+    /// 返回逐周统计的开头。
+    ///
+    /// `auto` 为真时，开头说明逐日已经自动改成了按周，免得模型以为工具没按参数执行。
+    fn bucket_week_header(
+        self,
+        from: &str,
+        to: &str,
+        n: usize,
+        auto: bool,
+        gap: Option<u32>,
+    ) -> String {
+        let auto_week = if auto { TEXT.auto_week.get(self) } else { "" };
+        TEXT.bucket_week_header.fill(
+            self,
+            &[
+                ("from", &from),
+                ("to", &to),
+                ("n", &n),
+                ("auto_week", &auto_week),
+                ("gap_clause", &self.gap_clause(gap)),
+            ],
+        )
+    }
+
+    /// 返回按一天中的小时统计的开头。每个小时累加范围里所有日子的数据。
+    fn bucket_hour_header(self, from: &str, to: &str, gap: Option<u32>) -> String {
+        TEXT.bucket_hour_header.fill(
+            self,
+            &[
+                ("from", &from),
+                ("to", &to),
+                ("gap_clause", &self.gap_clause(gap)),
+            ],
+        )
+    }
+
+    /// 返回开头里写会话间隔的那一段。按时长统计时 `gap` 是 `None`，返回空串。
+    fn gap_clause(self, gap: Option<u32>) -> String {
+        match gap {
+            Some(gap) => TEXT.gap_clause.fill(self, &[("gap", &gap)]),
+            None => String::new(),
+        }
+    }
+
+    /// 返回最早一次和最近一次的那一行。
+    fn first_last_line(self, from: &str, to: &str, first: &str, last: &str, n: i64) -> String {
+        TEXT.first_last.fill(
+            self,
+            &[
+                ("from", &from),
+                ("to", &to),
+                ("first", &first),
+                ("last", &last),
+                ("n", &n),
+            ],
+        )
+    }
+
+    /// 返回行尾的次数，比如「3 次」。
+    fn count_suffix(self, n: usize) -> String {
+        TEXT.count.fill(self, &[("n", &n)])
+    }
+
+    /// 返回 title_keyword 太长时的报错。
+    fn err_title_kw_too_long(self) -> &'static str {
+        TEXT.err_title_kw_too_long.get(self)
+    }
+
+    /// 返回 bucket 和 group_by 同时给出时的报错。
+    fn err_bucket_with_group(self) -> &'static str {
+        TEXT.err_bucket_with_group.get(self)
+    }
+}
 
 impl Tool for StatsQuery {
     const NAME: &'static str = "query_stats";
@@ -672,10 +851,60 @@ fn count_sessions(rows: &[(String, String)], gap_secs: i64) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::tools::lang::text::assert_same_placeholders;
     use crate::ai::tools::test_util::{ctx_with, day};
+
+    const LANGS: [ChatLang; 6] = [
+        ChatLang::ZhHans,
+        ChatLang::ZhHant,
+        ChatLang::En,
+        ChatLang::Ja,
+        ChatLang::Pt,
+        ChatLang::Es,
+    ];
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
+    }
+
+    #[test]
+    fn text_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TEXT);
+        assert_same_placeholders(TEXT_JSON);
+    }
+
+    #[test]
+    fn every_language_fills_in_the_numbers() {
+        let (from, to) = ("2026-07-01", "2026-07-07");
+        for lang in LANGS {
+            for s in [lang.err_title_kw_too_long(), lang.err_bucket_with_group()] {
+                assert!(!s.is_empty(), "{lang:?}");
+            }
+            assert!(lang.stats_total(from, to, "1h").contains("1h"));
+            assert!(lang.no_match(from, to).contains(from));
+            let dh = lang.duration_header(from, to, 12, 5);
+            assert!(dh.contains("12"), "{lang:?}: {dh}");
+            let st = lang.sessions_total(from, to, 4, 30);
+            assert!(st.contains('4') && st.contains("30"), "{lang:?}: {st}");
+            let sg = lang.sessions_grouped_header(from, to, 8, 5, 30);
+            assert!(sg.contains('8') && sg.contains("30"), "{lang:?}: {sg}");
+            // 按次数统计时，开头里才有间隔
+            let bd = lang.bucket_day_header(from, to, 6, None);
+            assert!(bd.contains('6') && !bd.contains("30"), "{lang:?}: {bd}");
+            let bdg = lang.bucket_day_header(from, to, 6, Some(30));
+            assert!(bdg.contains("30"), "{lang:?}: {bdg}");
+            // 自动改成按周时，开头多一段说明
+            let auto = lang.bucket_week_header("2026-06-01", to, 5, true, None);
+            let asked = lang.bucket_week_header("2026-06-01", to, 5, false, None);
+            assert!(auto.contains('5') && auto.len() > asked.len(), "{lang:?}");
+            assert!(lang.bucket_hour_header(from, to, Some(15)).contains("15"));
+            let fl = lang.first_last_line(from, to, "2026-07-02 09:00", "2026-07-06 21:00", 42);
+            assert!(
+                fl.contains("42") && fl.contains("2026-07-02 09:00"),
+                "{lang:?}: {fl}"
+            );
+            assert!(lang.count_suffix(3).contains('3'));
+        }
     }
 
     /// 解析 query_stats 的参数；不合法时返回给模型看的原因。

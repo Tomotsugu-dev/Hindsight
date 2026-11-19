@@ -1,5 +1,7 @@
 //! get_timeline：按小时抽样列出一段时间里的活动。
 
+use std::sync::LazyLock;
+
 use chrono::NaiveDate;
 use rusqlite::params;
 use serde::Deserialize;
@@ -8,6 +10,7 @@ use serde_json::{json, Value};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::{date_schema, invalid, parse_range, read_args, spec};
 use crate::ai::tools::kinds::Tool;
+use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{
     truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
 };
@@ -26,6 +29,52 @@ pub struct TimelineQuery {
 struct Args {
     date_from: Option<String>,
     date_to: Option<String>,
+}
+
+/// `lang/timeline.json` 里的句子，只有时间线工具用。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineText {
+    empty: Text,
+    header_sampled: Text,
+    header_all: Text,
+}
+
+const TEXT_JSON: &str = include_str!("lang/timeline.json");
+
+static TEXT: LazyLock<TimelineText> = LazyLock::new(|| load(TEXT_JSON));
+
+impl ChatLang {
+    /// 返回时段里没有活动时给模型的那句话。
+    fn timeline_empty(self) -> &'static str {
+        TEXT.empty.get(self)
+    }
+
+    /// 返回抽样列出时的开头。开头写出总条数、覆盖范围和每小时最多取几条。
+    fn timeline_header_sampled(
+        self,
+        total: i64,
+        first: &str,
+        last: &str,
+        shown: usize,
+        per_hour: i64,
+    ) -> String {
+        TEXT.header_sampled.fill(
+            self,
+            &[
+                ("total", &total),
+                ("first", &first),
+                ("last", &last),
+                ("shown", &shown),
+                ("per_hour", &per_hour),
+            ],
+        )
+    }
+
+    /// 返回全部列出时的开头。开头写出总条数。
+    fn timeline_header_all(self, total: i64) -> String {
+        TEXT.header_all.fill(self, &[("total", &total)])
+    }
 }
 
 impl Tool for TimelineQuery {
@@ -192,10 +241,36 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::tools::lang::text::assert_same_placeholders;
     use crate::ai::tools::test_util::{ctx_with, day};
+
+    const LANGS: [ChatLang; 6] = [
+        ChatLang::ZhHans,
+        ChatLang::ZhHant,
+        ChatLang::En,
+        ChatLang::Ja,
+        ChatLang::Pt,
+        ChatLang::Es,
+    ];
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
+    }
+
+    #[test]
+    fn text_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TEXT);
+        assert_same_placeholders(TEXT_JSON);
+    }
+
+    #[test]
+    fn every_language_fills_in_the_numbers() {
+        for lang in LANGS {
+            assert!(!lang.timeline_empty().is_empty(), "{lang:?}");
+            let h = lang.timeline_header_sampled(120, "2026-07-01", "2026-07-07", 40, 7);
+            assert!(h.contains("120") && h.contains("40"), "{lang:?}: {h}");
+            assert!(lang.timeline_header_all(9).contains('9'), "{lang:?}");
+        }
     }
 
     #[test]
