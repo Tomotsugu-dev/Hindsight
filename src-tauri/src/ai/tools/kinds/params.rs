@@ -1,5 +1,3 @@
-//! 几个工具共用的参数：读模型传来的参数、检查日期和名字列表，以及参数格式里的日期和名字列表。
-
 use chrono::NaiveDate;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
@@ -7,21 +5,19 @@ use serde_json::{json, Value};
 use crate::ai::model::ToolSpec;
 use crate::ai::tools::{ChatLang, ToolError};
 
-/// 把模型传来的参数读成 `T`。读不懂时，原因写给模型看。
 pub(super) fn read_args<T: DeserializeOwned>(args: &Value, lang: ChatLang) -> Result<T, ToolError> {
     serde_json::from_value(args.clone()).map_err(|e| ToolError(lang.args_format_err(&e)))
 }
 
-/// 参数读懂了，但值不合法。原因写给模型看。
 pub(super) fn invalid(msg: &str, lang: ChatLang) -> ToolError {
     ToolError(lang.args_invalid(msg))
 }
 
-/// 检查日期范围，返回开始和结束日期，两头都算在内。
+/// Checks a date range and returns its first and last day, both included.
 ///
-/// 只给开始，算到今天；只给结束，从最早算起；都没给，返回 `None`。
-/// 格式不对、开始晚于今天、开始晚于结束、跨度超过 `max_days`，都不合法，
-/// 返回写给模型看的原因。
+/// With only a start, the range ends today. With only an end, it starts at the earliest date.
+/// With neither, it returns `None`. A bad format, a start after today, a start after the end,
+/// or a span over `max_days` is rejected with a reason written for the model.
 pub(super) fn parse_range(
     date_from: Option<&str>,
     date_to: Option<&str>,
@@ -44,7 +40,8 @@ pub(super) fn parse_range(
         .map(|t| date("date_to", t))
         .transpose()?
         .unwrap_or(today);
-    // 先查未来：只给开始时结束是今天，开始在未来会被报成「开始晚于结束」
+    // Check for a future start first. With only a start, the end is today, so a future
+    // start would otherwise be reported as a start after the end.
     if from > today {
         return Err(lang.err_from_in_future().into());
     }
@@ -57,9 +54,9 @@ pub(super) fn parse_range(
     Ok(Some((from, to)))
 }
 
-/// 检查一列短字符串：去掉首尾空白，空的丢掉。
+/// Cleans a list of short strings: trims each one and drops the empty ones.
 ///
-/// 某个超过 64 字就不合法，原因里写出 `field`。
+/// An item over 64 characters is rejected, and the reason names `field`.
 pub(super) fn clean_short_strings(
     raw: &[String],
     field: &str,
@@ -79,7 +76,6 @@ pub(super) fn clean_short_strings(
     Ok(out)
 }
 
-/// 组一个工具说明。
 pub(super) fn spec(name: &str, description: &str, parameters: Value) -> ToolSpec {
     ToolSpec {
         name: name.to_string(),
@@ -88,12 +84,17 @@ pub(super) fn spec(name: &str, description: &str, parameters: Value) -> ToolSpec
     }
 }
 
-/// 参数格式：一个日期。`desc` 里要写明格式 YYYY-MM-DD。
+/// Builds the schema of a date parameter, which tells the model how to fill it in.
+///
+/// It only limits the length. Put the format YYYY-MM-DD in `desc`.
 pub(super) fn date_schema(desc: &str) -> Value {
     json!({"type": "string", "maxLength": 10, "description": desc})
 }
 
-/// 参数格式：一列短字符串，每个最多 64 字。`max_items` 是 `None` 时不限个数。
+/// Builds the schema of a list of short strings.
+///
+/// Each item has at most 64 characters. With `max_items` set to `None`, the list has no
+/// size limit.
 pub(super) fn short_strings_schema(desc: &str, max_items: Option<u32>) -> Value {
     let mut schema =
         json!({"type": "array", "items": {"type": "string", "maxLength": 64}, "description": desc});
@@ -159,7 +160,6 @@ mod tests {
 
     #[test]
     fn short_string_over_64_chars_rejected_with_field_named() {
-        // 按字符数算：65 个不合法，64 个可以；原因里要写出字段名，模型才知道改哪个参数
         let long = vec!["x".repeat(65)];
         let e = clean_short_strings(&long, "apps", ChatLang::ZhHans).unwrap_err();
         assert!(e.contains("apps") && e.contains("64"), "{e}");
@@ -177,7 +177,6 @@ mod tests {
         let raw: Vec<String> = [" A ", "", "B", "C", "D", "E", "F"]
             .map(String::from)
             .into();
-        // 去掉空白和空的，不限个数
         assert_eq!(
             clean_short_strings(&raw, "apps", ChatLang::ZhHans).unwrap(),
             ["A", "B", "C", "D", "E", "F"]

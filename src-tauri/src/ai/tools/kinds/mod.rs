@@ -1,8 +1,3 @@
-//! 具体的工具，按干什么分三类：找、算、读。
-//!
-//! 这里是登记处：`Tool` trait、`Query` 和工具名单。只有这里认识全部工具；
-//! 加一个工具，只改这个文件和新工具自己。
-
 pub(super) mod params;
 pub(super) mod read;
 pub(super) mod search;
@@ -19,24 +14,17 @@ use super::{ChatLang, ToolCtx, ToolError, ToolOutput};
 use crate::ai::model::{ToolCall, ToolSpec};
 use crate::error::Result;
 
-/// 一个工具。实现它的是这个工具检查过的参数。
 trait Tool: Sized {
-    /// 给模型看的工具名。
     const NAME: &'static str;
 
-    /// 给模型看的说明和参数格式，按提示词语言写。
     fn spec(lang: ChatLang) -> ToolSpec;
 
-    /// 解析、检查模型传来的参数。不合法时，原因写给模型看。
     fn parse(
         args: &Value,
         today: NaiveDate,
         lang: ChatLang,
     ) -> std::result::Result<Self, ToolError>;
 
-    /// 查库，写成文字和证据。引用编号从 `next_citation` 开始。
-    ///
-    /// 文字最多 `max_chars` 字：按它算能列几条，放不下就少列。
     async fn execute(
         &self,
         ctx: &ToolCtx,
@@ -46,8 +34,7 @@ trait Tool: Sized {
     ) -> Result<ToolOutput>;
 }
 
-/// 检查过的调用。一个工具一个分支。
-// 分支名跟工具名一一对应，所以有一个叫 QueryStats。
+// `QueryStats` is named after the tool query_stats, so it starts with the enum name.
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Query {
@@ -57,7 +44,6 @@ pub enum Query {
     GetTimeline(TimelineQuery),
 }
 
-/// 给模型看的全部工具，说明按 `lang` 写。
 pub(super) fn specs(lang: ChatLang) -> Vec<ToolSpec> {
     vec![
         ActivityQuery::spec(lang),
@@ -67,7 +53,6 @@ pub(super) fn specs(lang: ChatLang) -> Vec<ToolSpec> {
     ]
 }
 
-/// 按工具名找到工具，交给它解析参数。
 pub(super) fn parse(
     call: &ToolCall,
     today: NaiveDate,
@@ -88,7 +73,6 @@ pub(super) fn parse(
 }
 
 impl Query {
-    /// 交给对应的工具执行。
     pub(super) async fn execute(
         &self,
         ctx: &ToolCtx,
@@ -132,7 +116,6 @@ mod tests {
         );
     }
 
-    /// 名单漏写一行时，这个测试会失败：说明里的每个工具名都要能交给对应的工具解析。
     #[test]
     fn every_spec_name_reaches_its_tool() {
         let names: Vec<String> = specs(ChatLang::ZhHans)
