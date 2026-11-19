@@ -155,7 +155,7 @@ flowchart TB
 | `Tools` | `mod.rs` | `Query` | 任何一个工具 |
 | 登记处 | `kinds/mod.rs` | 全部工具 | — |
 | 每个工具 | `kinds/search/`、`kinds/stats/`、`kinds/read/` | 共用的部分、自己那一类的 `mod.rs` | 别的工具 |
-| 共用的部分 | `ctx.rs`、`kinds/params.rs`、`kinds/filter.rs`、`lang/common.json` | — | 任何一个工具 |
+| 共用的部分 | `ctx.rs`、`lang/`、`kinds/params.rs`、`kinds/filter.rs` | — | 任何一个工具 |
 
 只读连接由 `Tools` 打开，跟着 `execute` 传给工具。`Tools` 的签名见 [AI 怎么读数据](../3-data-access.md#2-tools)。
 
@@ -320,8 +320,8 @@ flowchart LR
 
 结果文字和工具说明都按提示词语言（`ChatLang`）写，一共 6 种。
 
-- 共用的文字（时长、星期、参数报错）放在 `tools/lang/common.json`，每个工具自己的放在它旁边的 `lang/工具名.json`。
-- 一句话一个键，6 种语言挨在一起：`{"more_hidden": {"zh-Hans": "还有 {rest} 个没列。", "en": "…"}}`。
+- 句子放在读它的代码旁边：时长和星期在 `tools/lang/time.json`，聊天也用；参数报错在 `kinds/lang/errors.json`；两个搜索工具共用的在 `kinds/search/lang/search.json`；每个工具自己的在它旁边的 `lang/工具名.json`。
+- 一句话一个键，6 种语言挨在一起：`{"more": {"zh-Hans": "还有 {rest} 个没列。", "en": "…"}}`。
 - 读成结构体：漏一种语言，读取失败；句子名写错，编译不过。每个 JSON 一个测试，检查 6 种语言的占位符一样。
 
 ---

@@ -130,6 +130,7 @@ kinds/search/
 ├── activity.rs  查数据：ActivityQuery、impl Tool
 ├── ocr.rs       查 OCR，见 ocr.md
 └── lang/
+    ├── search.json    两个工具共用的参数说明和最后一行，6 种语言
     ├── activity.json  查数据的文字和工具说明，6 种语言
     └── ocr.json       查 OCR 的，见 ocr.md
 ```
