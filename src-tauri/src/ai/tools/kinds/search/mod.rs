@@ -5,6 +5,8 @@
 pub(in crate::ai::tools) mod activity;
 pub(in crate::ai::tools) mod ocr;
 
+use std::sync::LazyLock;
+
 use chrono::NaiveDate;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -12,8 +14,34 @@ use serde_json::{json, Value};
 use super::params::{
     clean_short_strings, date_schema, invalid, parse_range, read_args, short_strings_schema,
 };
-use crate::ai::tools::lang::text::{Text, COMMON};
+use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{ChatLang, Citation, ToolError, ToolOutput};
+
+/// `lang/search.json` 里的句子：两个搜索工具都用的。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SearchText {
+    /// 一个关键词加上引号。
+    quote: Text,
+    /// 几个加了引号的关键词之间。
+    quote_sep: Text,
+    /// 参数说明：起始日期。
+    param_date_from: Text,
+    /// 参数说明：结束日期。
+    param_date_to: Text,
+    /// 参数说明：只搜哪些应用。
+    param_apps: Text,
+    /// 参数说明：只搜哪些分类。
+    param_categories: Text,
+    /// 参数说明：最多列几个。
+    param_limit: Text,
+    /// 没列全时的最后一行：还有几个，怎么看更多。
+    more: Text,
+}
+
+const TEXT_JSON: &str = include_str!("lang/search.json");
+
+static TEXT: LazyLock<SearchText> = LazyLock::new(|| load(TEXT_JSON));
 
 /// 关键词最多几个。
 const KEYWORDS_MAX: usize = 3;
@@ -61,12 +89,12 @@ impl SearchParams {
         let names = |text: &Text| short_strings_schema(text.get(lang), None);
         json!({"type": "object", "properties": {
             "keywords": short_strings_schema(keywords_desc, Some(KEYWORDS_MAX as u32)),
-            "date_from": date_schema(COMMON.param_date_from.get(lang)),
-            "date_to": date_schema(COMMON.param_date_to.get(lang)),
-            "apps": names(&COMMON.param_apps),
-            "categories": names(&COMMON.param_categories),
+            "date_from": date_schema(TEXT.param_date_from.get(lang)),
+            "date_to": date_schema(TEXT.param_date_to.get(lang)),
+            "apps": names(&TEXT.param_apps),
+            "categories": names(&TEXT.param_categories),
             "limit": {"type": "integer", "minimum": 1, "maximum": LIMIT_MAX,
-                      "description": COMMON.param_limit.fill(lang, &[("n", &LIMIT_DEFAULT)])}
+                      "description": TEXT.param_limit.fill(lang, &[("n", &LIMIT_DEFAULT)])}
         }, "required": ["keywords"]})
     }
 }
@@ -159,14 +187,14 @@ fn write_list(
 fn quote_keywords(keywords: &[String], lang: ChatLang) -> String {
     let quoted: Vec<String> = keywords
         .iter()
-        .map(|k| COMMON.quote.fill(lang, &[("keyword", k)]))
+        .map(|k| TEXT.quote.fill(lang, &[("keyword", k)]))
         .collect();
-    quoted.join(COMMON.quote_sep.get(lang))
+    quoted.join(TEXT.quote_sep.get(lang))
 }
 
 /// 没列全时的最后一行：还有 `rest` 个没列，怎么看更多。
 fn more(rest: usize, lang: ChatLang) -> String {
-    COMMON.more.fill(lang, &[("rest", &rest)])
+    TEXT.more.fill(lang, &[("rest", &rest)])
 }
 
 /// 不给日期就搜全部：换成一个包住所有日期的范围，SQL 只要一种写法。
@@ -180,6 +208,13 @@ fn date_bounds(range: Option<(NaiveDate, NaiveDate)>) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::tools::lang::text::assert_same_placeholders;
+
+    #[test]
+    fn search_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TEXT);
+        assert_same_placeholders(TEXT_JSON);
+    }
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()

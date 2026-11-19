@@ -1,5 +1,5 @@
-//! 聊天用的语言 `ChatLang`，以及时间线、用量两个工具的多语言文字。
-//! 别的工具文字和共用的句子在 JSON 里，读法见 [`text`]；
+//! 聊天用的语言 `ChatLang`，时长和星期怎么写（`time.json`），以及时间线、用量两个工具的多语言文字。
+//! 别的工具文字在 JSON 里，读法见 [`text`]；
 //! 聊天自己的文字在 [`crate::chat::lang`]。
 //!
 //! 为什么工具骨架也要本地化:模型"读"的资料若全是中文(头部/无命中提示/
@@ -9,6 +9,12 @@
 
 pub(super) mod text;
 
+use std::sync::LazyLock;
+
+use serde::Deserialize;
+
+use self::text::{load, Text};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatLang {
     ZhHans,
@@ -17,6 +23,56 @@ pub enum ChatLang {
     Ja,
     Pt,
     Es,
+}
+
+/// `time.json` 里的句子：时长和星期。工具和聊天都用。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimeText {
+    /// 时长，有小时的。
+    duration_hours: Text,
+    /// 时长，不到一小时的。
+    duration_minutes: Text,
+    monday: Text,
+    tuesday: Text,
+    wednesday: Text,
+    thursday: Text,
+    friday: Text,
+    saturday: Text,
+    sunday: Text,
+}
+
+const TIME_JSON: &str = include_str!("time.json");
+
+static TIME: LazyLock<TimeText> = LazyLock::new(|| load(TIME_JSON));
+
+impl ChatLang {
+    /// 时长写到分钟：1 小时 4 分钟、38 分钟。
+    pub(super) fn fmt_secs(self, secs: i64) -> String {
+        let (h, m) = (secs / 3600, (secs % 3600) / 60);
+        if h > 0 {
+            TIME.duration_hours.fill(self, &[("h", &h), ("m", &m)])
+        } else {
+            TIME.duration_minutes.fill(self, &[("m", &m)])
+        }
+    }
+
+    /// 星期几。`iso` 是 1 到 7，1 是星期一；别的值算星期日。
+    ///
+    /// 用量工具逐日的行和聊天的系统提示词都用：模型自己算星期几常出错。
+    pub(crate) fn weekday(self, iso: &str) -> &'static str {
+        let t = &*TIME;
+        let day = match iso {
+            "1" => &t.monday,
+            "2" => &t.tuesday,
+            "3" => &t.wednesday,
+            "4" => &t.thursday,
+            "5" => &t.friday,
+            "6" => &t.saturday,
+            _ => &t.sunday,
+        };
+        day.get(self)
+    }
 }
 
 impl ChatLang {
@@ -412,7 +468,40 @@ impl ChatLang {
 
 #[cfg(test)]
 mod tests {
+    use super::text::assert_same_placeholders;
     use super::*;
+
+    #[test]
+    fn time_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&TIME);
+        assert_same_placeholders(TIME_JSON);
+    }
+
+    #[test]
+    fn durations_show_hours_only_when_there_are_some() {
+        let zh = ChatLang::ZhHans;
+        assert_eq!(zh.fmt_secs(59), "0 分钟");
+        assert_eq!(zh.fmt_secs(38 * 60), "38 分钟");
+        assert_eq!(zh.fmt_secs(64 * 60), "1 小时 4 分钟");
+        assert_eq!(ChatLang::En.fmt_secs(3 * 3600 + 5 * 60), "3 hr 5 min");
+        assert_eq!(ChatLang::Ja.fmt_secs(5 * 60), "5分");
+    }
+
+    #[test]
+    fn weekday_counts_from_monday_and_falls_back_to_sunday() {
+        let names: Vec<&str> = (1..=7)
+            .map(|d| ChatLang::ZhHans.weekday(&d.to_string()))
+            .collect();
+        assert_eq!(
+            names,
+            ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+        );
+        assert_eq!(ChatLang::En.weekday("3"), "Wednesday");
+        // 认不出的值不 panic
+        for bad in ["0", "8", "x"] {
+            assert_eq!(ChatLang::ZhHans.weekday(bad), "周日", "{bad}");
+        }
+    }
 
     /// 六语 × 全部格式化方法的批量烟测:每个变体都产出非空文案,
     /// 且插值参数(日期/数字/工具名)确实出现在结果里——防"漏改某语言"和

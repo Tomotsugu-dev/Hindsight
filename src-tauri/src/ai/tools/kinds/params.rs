@@ -1,8 +1,13 @@
+use std::fmt::Display;
+use std::sync::LazyLock;
+
 use chrono::NaiveDate;
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::ai::model::ToolSpec;
+use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{ChatLang, ToolError};
 
 pub(super) fn read_args<T: DeserializeOwned>(args: &Value, lang: ChatLang) -> Result<T, ToolError> {
@@ -104,9 +109,133 @@ pub(super) fn short_strings_schema(desc: &str, max_items: Option<u32>) -> Value 
     schema
 }
 
+/// `lang/errors.json` 里的句子：参数报错。
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ErrorText {
+    args_format_err: Text,
+    args_invalid: Text,
+    err_unknown_tool: Text,
+    err_need_range: Text,
+    err_bad_date: Text,
+    err_from_after_to: Text,
+    err_range_too_long: Text,
+    err_from_in_future: Text,
+    err_keywords_empty: Text,
+    err_item_too_long: Text,
+    err_too_many_items: Text,
+    err_limit_range: Text,
+}
+
+const ERRORS_JSON: &str = include_str!("lang/errors.json");
+
+static ERRORS: LazyLock<ErrorText> = LazyLock::new(|| load(ERRORS_JSON));
+
+impl ChatLang {
+    /// 参数读不懂，`e` 是读的时候报的错。
+    pub(super) fn args_format_err(self, e: &impl Display) -> String {
+        ERRORS.args_format_err.fill(self, &[("e", e)])
+    }
+
+    /// 参数读懂了，但值不合法。
+    pub(super) fn args_invalid(self, msg: &str) -> String {
+        ERRORS.args_invalid.fill(self, &[("msg", &msg)])
+    }
+
+    /// `known` 是能用的工具名，由登记处给。
+    pub(super) fn err_unknown_tool(self, other: &str, known: &str) -> String {
+        ERRORS
+            .err_unknown_tool
+            .fill(self, &[("other", &other), ("known", &known)])
+    }
+
+    pub(super) fn err_need_range(self, tool: &str) -> String {
+        ERRORS.err_need_range.fill(self, &[("tool", &tool)])
+    }
+
+    pub(super) fn err_bad_date(self, field: &str, val: &str) -> String {
+        ERRORS
+            .err_bad_date
+            .fill(self, &[("field", &field), ("val", &val)])
+    }
+
+    pub(super) fn err_from_after_to(self) -> &'static str {
+        ERRORS.err_from_after_to.get(self)
+    }
+
+    pub(super) fn err_range_too_long(self) -> &'static str {
+        ERRORS.err_range_too_long.get(self)
+    }
+
+    pub(super) fn err_from_in_future(self) -> &'static str {
+        ERRORS.err_from_in_future.get(self)
+    }
+
+    pub(super) fn err_keywords_empty(self) -> &'static str {
+        ERRORS.err_keywords_empty.get(self)
+    }
+
+    pub(super) fn err_item_too_long(self, field: &str) -> String {
+        ERRORS.err_item_too_long.fill(self, &[("field", &field)])
+    }
+
+    pub(super) fn err_too_many_items(self, field: &str, max: usize) -> String {
+        ERRORS
+            .err_too_many_items
+            .fill(self, &[("field", &field), ("max", &max)])
+    }
+
+    pub(super) fn err_limit_range(self, max: usize) -> String {
+        ERRORS.err_limit_range.fill(self, &[("max", &max)])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::tools::lang::text::assert_same_placeholders;
+
+    #[test]
+    fn errors_json_reads_and_keeps_placeholders_in_step() {
+        LazyLock::force(&ERRORS);
+        assert_same_placeholders(ERRORS_JSON);
+    }
+
+    #[test]
+    fn errors_fill_their_arguments_in_every_language() {
+        let langs = [
+            ChatLang::ZhHans,
+            ChatLang::ZhHant,
+            ChatLang::En,
+            ChatLang::Ja,
+            ChatLang::Pt,
+            ChatLang::Es,
+        ];
+        for lang in langs {
+            for s in [
+                lang.err_from_after_to(),
+                lang.err_range_too_long(),
+                lang.err_from_in_future(),
+                lang.err_keywords_empty(),
+            ] {
+                assert!(!s.is_empty(), "{lang:?}");
+            }
+            assert!(lang.args_format_err(&"boom").contains("boom"));
+            assert!(lang.args_invalid("bad-arg").contains("bad-arg"));
+            let unknown = lang.err_unknown_tool("nope", "a / b");
+            assert!(unknown.contains("nope") && unknown.contains("a / b"));
+            assert!(lang.err_need_range("query_stats").contains("query_stats"));
+            let date = lang.err_bad_date("date_from", "26-07");
+            assert!(date.contains("date_from") && date.contains("26-07"));
+            assert!(lang.err_item_too_long("apps").contains("apps"));
+            let many = lang.err_too_many_items("keywords", 3);
+            assert!(
+                many.contains("keywords") && many.contains('3'),
+                "{lang:?}: {many}"
+            );
+            assert!(lang.err_limit_range(20).contains("20"));
+        }
+    }
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 7, 5).unwrap()
