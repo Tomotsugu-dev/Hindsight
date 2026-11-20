@@ -158,6 +158,17 @@ export function setCustomTheme(theme: CustomTheme): void {
   notify();
 }
 
+/** 返回访客选过主题没有。没选过时 getStoredTheme 给的简约只是默认值。 */
+export function hasStoredTheme(): boolean {
+  return localStorage.getItem(STORAGE_KEY) !== null;
+}
+
+/** 套用内置主题但不保存，并让图表重新取色。 */
+export function showTheme(theme: AppTheme): void {
+  applyTheme(theme);
+  notify();
+}
+
 /**
  * 选中的自定义主题用不了：保留选择，删掉副本，先显示简约。
  *

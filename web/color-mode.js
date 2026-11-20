@@ -2,6 +2,7 @@
 // 访客没选过就跟随系统。点顶栏的 .mode-toggle 切换；切到和系统一样的颜色时忘掉选择，重新跟随系统。
 // 在 <head> 里同步加载：画页面之前就要设好，否则深色系统上先闪一下白。
 (function () {
+  // web/demo-src/site-mode.ts 也读这个键，让首页里的 demo 跟着变
   var KEY = "hindsight.site.mode";
   var root = document.documentElement;
   var system = matchMedia("(prefers-color-scheme: dark)");
