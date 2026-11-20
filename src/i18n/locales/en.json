@@ -1580,8 +1580,7 @@
       },
       "status": {
         "generated": "Generated {{time}}",
-        "failed": "The last run failed",
-        "empty": "No weekly review for this week yet."
+        "failed": "The last run failed"
       },
       "days": {
         "aria": "Daily reports this week",
@@ -1690,8 +1689,7 @@
       "status": {
         "done": "{{count}} segments generated",
         "partial": "{{done}} of {{total}} segments generated",
-        "running": "Summarizing \"{{label}}\" · segment {{index}} of {{total}}",
-        "empty": "No daily report for this day yet. Click \"Start summary\" to write it segment by segment."
+        "running": "Summarizing \"{{label}}\" · segment {{index}} of {{total}}"
       },
       "actions": {
         "stop": "Stop",

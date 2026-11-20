@@ -1575,8 +1575,7 @@
       },
       "status": {
         "generated": "{{time}} に生成",
-        "failed": "前回の生成に失敗しました",
-        "empty": "この週の週報はまだありません。"
+        "failed": "前回の生成に失敗しました"
       },
       "days": {
         "aria": "この週の毎日の日報",
@@ -1685,8 +1684,7 @@
       "status": {
         "done": "{{count}} 帯を生成済み",
         "partial": "{{total}} 帯中 {{done}} 帯を生成済み",
-        "running": "「{{label}}」を要約中 · {{total}} 帯中 {{index}} 帯目",
-        "empty": "この日の日報はまだありません。「サマリー開始」で時間帯ごとに生成します。"
+        "running": "「{{label}}」を要約中 · {{total}} 帯中 {{index}} 帯目"
       },
       "actions": {
         "stop": "停止",

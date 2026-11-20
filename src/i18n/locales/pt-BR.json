@@ -1580,8 +1580,7 @@
       },
       "status": {
         "generated": "Gerado em {{time}}",
-        "failed": "A última geração falhou",
-        "empty": "Ainda não há resumo desta semana."
+        "failed": "A última geração falhou"
       },
       "days": {
         "aria": "Relatórios diários da semana",
@@ -1690,8 +1689,7 @@
       "status": {
         "done": "{{count}} segmentos gerados",
         "partial": "{{done}} de {{total}} segmentos gerados",
-        "running": "Resumindo \"{{label}}\" · segmento {{index}} de {{total}}",
-        "empty": "Ainda não há relatório para este dia. Clique em \"Iniciar resumo\" para gerá-lo segmento por segmento."
+        "running": "Resumindo \"{{label}}\" · segmento {{index}} de {{total}}"
       },
       "actions": {
         "stop": "Parar",

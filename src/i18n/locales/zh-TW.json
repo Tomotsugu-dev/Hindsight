@@ -1575,8 +1575,7 @@
       },
       "status": {
         "generated": "生成於 {{time}}",
-        "failed": "上次生成失敗",
-        "empty": "這週還沒有週報。"
+        "failed": "上次生成失敗"
       },
       "days": {
         "aria": "這週每天的日報",
@@ -1685,8 +1684,7 @@
       "status": {
         "done": "{{count}} 段已生成",
         "partial": "已生成 {{done}} / {{total}} 段",
-        "running": "正在總結「{{label}}」· 第 {{index}} 段，共 {{total}} 段",
-        "empty": "這一天還沒有日報。點「開始總結」，按時段逐段寫出來。"
+        "running": "正在總結「{{label}}」· 第 {{index}} 段，共 {{total}} 段"
       },
       "actions": {
         "stop": "停止",

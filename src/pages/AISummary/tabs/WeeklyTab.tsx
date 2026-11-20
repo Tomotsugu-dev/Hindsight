@@ -34,7 +34,7 @@ import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
 import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
-import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
+import { MainButton, NoticeBars, ReportHeader, ReportStatus } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -460,9 +460,8 @@ export default function WeeklyTab() {
     if (!row) {
       return {
         busy: false,
-        text: hasModel
-          ? t("aiSummary.weekly.status.empty")
-          : t("aiSummary.weekly.actions.noModelTooltip"),
+        // 还没生成时只写日期；没有模型时说一声
+        text: hasModel ? "" : t("aiSummary.weekly.actions.noModelTooltip"),
       };
     }
     if (row.status !== "ok") return { busy: false, text: t("aiSummary.weekly.status.failed") };
@@ -544,8 +543,6 @@ export default function WeeklyTab() {
     <>
       <ReportHeader
         subtitle={t("aiSummary.weekly.subtitle")}
-        period={weekText}
-        status={status}
         nav={
           <PeriodNav
             groupLabel={t("aiSummary.weekly.weekNav.groupAria")}
@@ -669,11 +666,15 @@ export default function WeeklyTab() {
 
       <section ref={panelRef} className={styles.panel} data-part="card">
         <header className={styles.panelHead}>
-          <h3 className={styles.panelTitle}>
-            {selectedCell
-              ? t("aiSummary.weekly.panel.day", { date: selectedCell.longDate })
-              : t("aiSummary.weekly.panel.week")}
-          </h3>
+          <div className={styles.panelHeadText}>
+            <h3 className={styles.panelTitle}>
+              {selectedCell
+                ? t("aiSummary.weekly.panel.day", { date: selectedCell.longDate })
+                : t("aiSummary.weekly.panel.week")}
+            </h3>
+            {/* 生成情况说的是整周回顾，看某一天的日报时不写 */}
+            {selectedCell ? null : <ReportStatus period={weekText} status={status} />}
+          </div>
           {selectedCell ? (
             <div className={styles.panelActions}>
               {dayRows && dayRows.length > 0 ? (

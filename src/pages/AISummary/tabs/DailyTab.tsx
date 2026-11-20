@@ -30,7 +30,7 @@ import {
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
 import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
-import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
+import { MainButton, NoticeBars, ReportHeader, ReportStatus } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -341,9 +341,8 @@ export default function DailyTab() {
     if (!hasAnyRow) {
       return {
         busy: false,
-        text: hasModel
-          ? t("aiSummary.daily.status.empty")
-          : t("aiSummary.daily.actions.noModelTooltip"),
+        // 还没生成时只写日期；没有模型时说一声
+        text: hasModel ? "" : t("aiSummary.daily.actions.noModelTooltip"),
       };
     }
     // 写出了内容或确认没活动的段算完成；失败的段不算
@@ -489,8 +488,6 @@ export default function DailyTab() {
     <>
       <ReportHeader
         subtitle={t("aiSummary.daily.subtitle")}
-        period={dateText}
-        status={status}
         nav={
           <PeriodNav
             groupLabel={t("aiSummary.daily.dateNav.groupAria")}
@@ -574,6 +571,7 @@ export default function DailyTab() {
 
       {segments.length > 0 ? (
         <SegmentTimeline className={styles.card} data-part="card">
+          <ReportStatus className={styles.cardStatus} period={dateText} status={status} />
           {segments.map((seg, idx) => {
             const row = rows.get(idx);
             const isRunning = runningIdx === idx;
