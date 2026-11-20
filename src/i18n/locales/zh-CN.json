@@ -1670,7 +1670,7 @@
         "regenerateTooltip": "重新生成会清掉本日所有段总结，重新跑一遍",
         "noModelTooltip": "请先到 AI 设置 → 模型 选一个模型",
         "delete": "删除",
-        "deleteTooltip": "清空当天 ai_summaries（source=daily，不可撤销）",
+        "deleteTooltip": "清空当天的日报（不可撤销）",
         "deleteEmptyTooltip": "当天还没有日报数据可删除",
         "deleteConfirmTitle": "删除 {{date}} 当天日报数据？",
         "deleteConfirmMessage": "当天所有段总结都会清空，不影响调试 tab，操作不可撤销。",

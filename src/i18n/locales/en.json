@@ -1675,7 +1675,7 @@
         "regenerateTooltip": "Regenerating clears all segment summaries for this day and runs them again.",
         "noModelTooltip": "Pick a model in AI Settings → Models first.",
         "delete": "Delete",
-        "deleteTooltip": "Clear ai_summaries (source=daily) for this day (cannot be undone).",
+        "deleteTooltip": "Clear the daily report for this day (cannot be undone)",
         "deleteEmptyTooltip": "No daily data yet to delete.",
         "deleteConfirmTitle": "Delete daily report data for {{date}}?",
         "deleteConfirmMessage": "All segment summaries for this day will be cleared. The Debug tab is unaffected. This cannot be undone.",

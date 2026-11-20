@@ -1670,7 +1670,7 @@
         "regenerateTooltip": "重新生成會清掉本日所有段總結，重新跑一遍",
         "noModelTooltip": "請先到 AI 設定 → 模型 選一個模型",
         "delete": "刪除",
-        "deleteTooltip": "清空當天 ai_summaries（source=daily，不可撤銷）",
+        "deleteTooltip": "清空當天的日報（不可撤銷）",
         "deleteEmptyTooltip": "當天還沒有日報資料可刪除",
         "deleteConfirmTitle": "刪除 {{date}} 當天日報資料？",
         "deleteConfirmMessage": "當天所有段總結都會清空，不影響除錯 tab，操作不可撤銷。",

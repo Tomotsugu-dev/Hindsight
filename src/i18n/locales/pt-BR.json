@@ -1675,7 +1675,7 @@
         "regenerateTooltip": "Regenerar limpa todos os resumos de segmento deste dia e os executa novamente.",
         "noModelTooltip": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
         "delete": "Excluir",
-        "deleteTooltip": "Limpar ai_summaries (source=daily) deste dia (não pode ser desfeito).",
+        "deleteTooltip": "Limpar o relatório diário deste dia (não pode ser desfeito)",
         "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
         "deleteConfirmTitle": "Excluir os dados do relatório diário de {{date}}?",
         "deleteConfirmMessage": "Todos os resumos de segmento deste dia serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
