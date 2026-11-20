@@ -38,6 +38,9 @@ import { Button } from "../../components/Button/Button";
 import { IconButton } from "../../components/Button/IconButton";
 import styles from "./ChatView.module.css";
 import ThinkingToggle from "./ThinkingToggle";
+import ChatProfileToggle from "./ChatProfileToggle";
+import { useAiProfiles } from "../../state/aiProfiles";
+import { localizeAiError } from "../../lib/aiErrors";
 import { buildThread, type Message } from "./thread";
 
 /** 瞬态气泡:发送中的乐观提问 / 错误(不落库,重载即清)。 */
@@ -138,6 +141,8 @@ export default function ChatView({
   ensurePrivacyAck,
 }: ChatViewProps) {
   const { t, i18n } = useTranslation();
+  // AI 能看到哪些数据;不存,进页面回到默认分类。换了只影响后面的提问
+  const profiles = useAiProfiles("chat");
   // 库真源(消息树全量)+ 分支选择 → 当前路径;瞬态气泡(乐观提问/错误)单放
   const [rows, setRows] = useState<ChatStoredMessage[]>([]);
   const [transient, setTransient] = useState<TransientMsg[]>([]);
@@ -250,7 +255,14 @@ export default function ChatView({
     try {
       // 界面语言随请求传给后端:回答跟随提问语言,界面语言兜底
       const parent = parentOverride ?? thread.leafGuid ?? undefined;
-      const ans = await api.chatAsk(trimmed, conversationId, i18n.language, askId, parent);
+      const ans = await api.chatAsk(
+        trimmed,
+        conversationId,
+        i18n.language,
+        askId,
+        parent,
+        profiles.selected,
+      );
       if (loadSeq.current !== seq) return; // 期间切了会话,丢弃
       if (conversationId === null) {
         if (ans.cancelled) {
@@ -270,7 +282,10 @@ export default function ChatView({
       }
     } catch (e) {
       if (loadSeq.current === seq) {
-        setTransient((prev) => [...prev, { id: uid(), kind: "error", text: String(e) }]);
+        setTransient((prev) => [
+          ...prev,
+          { id: uid(), kind: "error", text: localizeAiError(String(e)) },
+        ]);
       }
     } finally {
       if (loadSeq.current === seq) {
@@ -316,6 +331,7 @@ export default function ChatView({
         i18n.language,
         askId,
         thread.leafGuid ?? undefined,
+        profiles.selected,
       );
       if (loadSeq.current !== seq) return;
       if (ans.cancelled) return;
@@ -327,7 +343,10 @@ export default function ChatView({
       onConversationTouched();
     } catch (e) {
       if (loadSeq.current === seq) {
-        setTransient((prev) => [...prev, { id: uid(), kind: "error", text: String(e) }]);
+        setTransient((prev) => [
+          ...prev,
+          { id: uid(), kind: "error", text: localizeAiError(String(e)) },
+        ]);
       }
     } finally {
       setRegeneratingId(null);
@@ -455,6 +474,7 @@ export default function ChatView({
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
+        <ChatProfileToggle state={profiles} />
         <ThinkingToggle />
         {busy ? (
           <button

@@ -1167,6 +1167,8 @@ export const api = {
     locale?: string,
     askId?: string,
     parentGuid?: string,
+    /** 用户选的配置 id；null = 按默认分类 */
+    profile: string | null = null,
   ) =>
     invoke<ChatAskResult>("chat_ask", {
       question,
@@ -1174,15 +1176,23 @@ export const api = {
       locale,
       askId,
       parentGuid,
+      profile,
     }),
   /** 重新回答当前路径上最近的提问:追加新版本落库(不删旧回答),
    *  历史沿 leafGuid(缺省=会话最新叶)回溯并截断到该提问之前。 */
-  chatRegenerate: (conversationId: number, locale?: string, askId?: string, leafGuid?: string) =>
+  chatRegenerate: (
+    conversationId: number,
+    locale?: string,
+    askId?: string,
+    leafGuid?: string,
+    profile: string | null = null,
+  ) =>
     invoke<ChatAskResult>("chat_regenerate", {
       conversationId,
       locale,
       askId,
       leafGuid,
+      profile,
     }),
   /** 会话是否正在生成回答；是则返回该次问答的 askId（停止按钮的取消句柄）。 */
   chatInflight: (conversationId: number) =>
