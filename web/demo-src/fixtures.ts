@@ -830,6 +830,35 @@ export function selfDeviceNameForLocale(locale: string): string {
   return "My workstation";
 }
 
+/** 日报那套演示配置的 id。 */
+export const DEMO_PROFILE_ID = "p_demo1";
+
+/** 日报那套演示配置在各语言里的名字。 */
+const DEMO_PROFILE_NAMES = {
+  zhCN: "专注工作",
+  zhTW: "專注工作",
+  ja: "集中作業",
+  pt: "Trabalho focado",
+  es: "Trabajo enfocado",
+  en: "Focused work",
+};
+
+/** 日报那套演示配置的名字。按当前 i18n 切。 */
+export function demoProfileNameForLocale(locale: string): string {
+  const lng = (locale || "").toLowerCase();
+  if (/^zh[-_]?(tw|hk|mo|hant)/.test(lng)) return DEMO_PROFILE_NAMES.zhTW;
+  if (lng.startsWith("zh")) return DEMO_PROFILE_NAMES.zhCN;
+  if (lng.startsWith("ja")) return DEMO_PROFILE_NAMES.ja;
+  if (lng.startsWith("pt")) return DEMO_PROFILE_NAMES.pt;
+  if (lng.startsWith("es")) return DEMO_PROFILE_NAMES.es;
+  return DEMO_PROFILE_NAMES.en;
+}
+
+/** 名字还是某种语言的默认名，说明用户没改过。 */
+export function isDemoProfileName(name: string): boolean {
+  return Object.values(DEMO_PROFILE_NAMES).includes(name);
+}
+
 /** 默认（中文）。api-mock 初始化 state 时用；运行时通过 dailySegmentsForLocale 按 i18n 切。 */
 export const mockDailySegments: SegmentSummaryRow[] = buildSegments("zh-CN", SEG_CONTENT_ZH);
 
@@ -888,7 +917,10 @@ export const mockSettings: Settings = {
     visibility: {
       daily: {
         profiles: {
-          p_demo1: { name: "专注工作", categories: ["code", "office", "workchat"] },
+          [DEMO_PROFILE_ID]: {
+            name: DEMO_PROFILE_NAMES.zhCN,
+            categories: ["code", "office", "workchat"],
+          },
         },
         autoProfile: null,
       },

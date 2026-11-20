@@ -143,6 +143,9 @@ import {
   dailySegmentsForLocale,
   selfDeviceNameForLocale,
   userBriefForLocale,
+  DEMO_PROFILE_ID,
+  demoProfileNameForLocale,
+  isDemoProfileName,
 } from "./fixtures";
 import { persistence } from "./persistence";
 
@@ -744,6 +747,11 @@ export const api = {
     const lng = (i18n.language || "zh-CN").toLowerCase();
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);
+    // 演示配置没改过名就换成当前语言的名字
+    const demoProfile = s.ai.visibility?.daily.profiles[DEMO_PROFILE_ID];
+    if (demoProfile && isDemoProfileName(demoProfile.name)) {
+      demoProfile.name = demoProfileNameForLocale(lng);
+    }
     // 时段没改过就换成当前语言的默认名字；真实应用切语言时在 App.tsx 里做同样的事
     if (isDefaultSegments(s.ai.segments)) {
       s.ai.segments = retranslateDefaultSegments(s.ai.segments, lng);
