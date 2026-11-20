@@ -55,7 +55,6 @@
       "month": "Mensual",
       "history": "Historial",
       "aiSummary": "Resumen de IA",
-      "aiSettings": "Ajustes de IA",
       "categories": "Categorías",
       "devices": "Nube",
       "settings": "Ajustes",
@@ -107,6 +106,7 @@
       "appearance": "Apariencia",
       "data": "Datos",
       "privacy": "Privacidad",
+      "engine": "Motor de IA",
       "plugins": "Plugins",
       "about": "Acerca de"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "Reconociendo… quedan {{n}} fotogramas",
         "backfillBackground": "Registrado; la indexación continúa en segundo plano (puedes salir de esta página)",
         "backfillDone": "Completado: {{ok}} reconocidos, {{failed}} omitidos",
-        "backfillRuntimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes de IA → Motor y pulsa el botón de descarga.",
+        "backfillRuntimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes → Motor de IA y pulsa el botón de descarga.",
         "ocrConfirmTitle": "Se necesita el componente de reconocimiento de texto (OCR)",
         "ocrConfirmResident": "Activar la indexación de texto requiere descargar el componente de reconocimiento (~40 MB). Se activa automáticamente cuando termine la descarga.",
         "ocrConfirmBackfill": "El relleno requiere descargar el componente de reconocimiento (~40 MB). Comienza automáticamente cuando termine la descarga.",
@@ -1037,7 +1037,6 @@
   "aiSettings": {
     "title": "Ajustes de IA",
     "tabs": {
-      "engine": "Motor",
       "models": "Modelos",
       "general": "General",
       "prompt": "Prompt",
@@ -1759,7 +1758,7 @@
       },
       "cloudOffer": {
         "title": "¿Generar con tu API en la nube?",
-        "message": "Ya hay una API en la nube configurada ({{provider}} · {{model}}), pero los resúmenes están puestos en un modelo local y el motor local no está instalado. Al confirmar, los resúmenes pasarán a usar la API en la nube: los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se enviarán a ese proveedor. También puedes descargar el motor local en Ajustes de IA → Motor.",
+        "message": "Ya hay una API en la nube configurada ({{provider}} · {{model}}), pero los resúmenes están puestos en un modelo local y el motor local no está instalado. Al confirmar, los resúmenes pasarán a usar la API en la nube: los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se enviarán a ese proveedor. También puedes descargar el motor local en Ajustes → Motor de IA.",
         "confirm": "Usar la API en la nube"
       },
       "ocrLoading": "Cargando el modelo de OCR…",
@@ -1938,7 +1937,7 @@
       "running": "Construyendo el índice… quedan {{count}}",
       "alreadyRunning": "La indexación está en marcha en segundo plano, quedan {{count}}",
       "failed": "Falló la indexación: {{msg}}",
-      "runtimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes de IA → Motor y pulsa el botón de descarga.",
+      "runtimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes → Motor de IA y pulsa el botón de descarga.",
       "ocrConfirmTitle": "Se necesita el componente de reconocimiento de texto (OCR)",
       "ocrConfirmMessage": "Construir el índice de texto requiere descargar el componente de reconocimiento (~40 MB). La indexación empieza automáticamente cuando termine la descarga.",
       "ocrConfirmAccept": "Descargar e iniciar",

@@ -3,10 +3,9 @@ import type { LucideIcon, LucideProps } from "lucide-react";
 
 /**
  * Tabler `settings-ai`——齿轮里嵌 "AI" 字样的 outline 风格。
- * 跟 lucide outline 描边风格一致，nav "AI 设置" 用它替代默认的 BrainCircuit，
- * 跟"AI 总结"(Sparkles)做更明确的"设置 vs 内容"区分。
+ * 跟 lucide outline 描边风格一致。页面标题行进 AI 设置的按钮用它，跟进「设置」的普通齿轮区分开。
  *
- * strokeWidth 通过 LucideProps 传入，跟其它 lucide icon 同款响应 nav 的 1.85 描边粗度。
+ * strokeWidth 通过 LucideProps 传入，跟其它 lucide icon 一样。
  */
 export const AiSettingsIcon: LucideIcon = forwardRef<SVGSVGElement, LucideProps>(
   function AiSettingsIcon(

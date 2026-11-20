@@ -55,7 +55,6 @@
       "month": "月統計",
       "history": "全部歷史",
       "aiSummary": "AI 總結",
-      "aiSettings": "AI 設定",
       "categories": "分類",
       "devices": "雲同步",
       "settings": "設定",
@@ -107,6 +106,7 @@
       "appearance": "外觀",
       "data": "資料",
       "privacy": "隱私",
+      "engine": "AI 引擎",
       "plugins": "外掛",
       "about": "關於"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "辨識中…剩餘 {{n}} 張",
         "backfillBackground": "已登記，背景索引中（可離開本頁）",
         "backfillDone": "完成：辨識 {{ok}} 張，跳過 {{failed}} 張",
-        "backfillRuntimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 AI 設定 → 引擎 頁點下載按鈕。",
+        "backfillRuntimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 設定 → AI 引擎 頁點下載按鈕。",
         "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
         "ocrConfirmResident": "開啟文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開啟。",
         "ocrConfirmBackfill": "回填需要下載文字辨識元件（約 40MB），下載完成後自動開始回填。",
@@ -1032,7 +1032,6 @@
   "aiSettings": {
     "title": "AI 設定",
     "tabs": {
-      "engine": "引擎",
       "models": "模型",
       "general": "常規",
       "prompt": "提示詞",
@@ -1754,7 +1753,7 @@
       },
       "cloudOffer": {
         "title": "改用雲端 API 生成？",
-        "message": "偵測到你已設定雲端 API（{{provider}} · {{model}}），但總結目前設為本機模型，且本機引擎未安裝。確認後總結將改用雲端 API 生成——應用程式名稱、分類與活動時間軸將傳送給該服務商；也可以到「AI 設定 → 引擎」下載本機引擎。",
+        "message": "偵測到你已設定雲端 API（{{provider}} · {{model}}），但總結目前設為本機模型，且本機引擎未安裝。確認後總結將改用雲端 API 生成——應用程式名稱、分類與活動時間軸將傳送給該服務商；也可以到「設定 → AI 引擎」下載本機引擎。",
         "confirm": "使用雲端生成"
       },
       "ocrLoading": "載入 OCR 模型中…",
@@ -1933,7 +1932,7 @@
       "running": "正在建立索引…剩餘 {{count}} 張",
       "alreadyRunning": "索引任務已在背景執行，剩餘 {{count}} 張",
       "failed": "回填失敗：{{msg}}",
-      "runtimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 AI 設定 → 引擎 頁點下載按鈕。",
+      "runtimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 設定 → AI 引擎 頁點下載按鈕。",
       "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
       "ocrConfirmMessage": "建立文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開始索引。",
       "ocrConfirmAccept": "下載並開始",

@@ -179,7 +179,7 @@ export function DownloadSourcesLink() {
         {t("aiSettings.downloadSources.sourceLabel")}:{" "}
         {t(`aiSettings.downloadSources.modes.${mode}`)}
       </span>
-      <Link to={ROUTES.aiSettings}>{t("aiSettings.downloadSources.change")}</Link>
+      <Link to={`${ROUTES.settings}/engine`}>{t("aiSettings.downloadSources.change")}</Link>
     </p>
   );
 }

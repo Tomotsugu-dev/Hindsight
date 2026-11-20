@@ -55,7 +55,6 @@
       "month": "月统计",
       "history": "全部历史",
       "aiSummary": "AI 总结",
-      "aiSettings": "AI 设置",
       "categories": "分类",
       "devices": "云同步",
       "settings": "设置",
@@ -107,6 +106,7 @@
       "appearance": "外观",
       "data": "数据",
       "privacy": "隐私",
+      "engine": "AI 引擎",
       "plugins": "插件",
       "about": "关于"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "识别中…剩余 {{n}} 张",
         "backfillBackground": "已登记，后台索引中（可离开本页）",
         "backfillDone": "完成：识别 {{ok}} 张，跳过 {{failed}} 张",
-        "backfillRuntimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 AI 设置 → 引擎 页点下载按钮。",
+        "backfillRuntimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 设置 → AI 引擎 页点下载按钮。",
         "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
         "ocrConfirmResident": "开启文字索引需要下载文字识别组件（约 40MB），下载完成后自动开启。",
         "ocrConfirmBackfill": "回填需要下载文字识别组件（约 40MB），下载完成后自动开始回填。",
@@ -1032,7 +1032,6 @@
   "aiSettings": {
     "title": "AI 设置",
     "tabs": {
-      "engine": "引擎",
       "models": "模型",
       "general": "常规",
       "prompt": "提示词",
@@ -1754,7 +1753,7 @@
       },
       "cloudOffer": {
         "title": "改用云端 API 生成？",
-        "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「AI 设置 → 引擎」下载本地引擎。",
+        "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「设置 → AI 引擎」下载本地引擎。",
         "confirm": "使用云端生成"
       },
       "ocrLoading": "加载 OCR 模型中…",
@@ -1933,7 +1932,7 @@
       "running": "正在建立索引…剩余 {{count}} 张",
       "alreadyRunning": "索引任务已在后台运行，剩余 {{count}} 张",
       "failed": "回填失败：{{msg}}",
-      "runtimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 AI 设置 → 引擎 页点下载按钮。",
+      "runtimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 设置 → AI 引擎 页点下载按钮。",
       "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
       "ocrConfirmMessage": "建立文字索引需要下载文字识别组件（约 40MB），下载完成后自动开始索引。",
       "ocrConfirmAccept": "下载并开始",

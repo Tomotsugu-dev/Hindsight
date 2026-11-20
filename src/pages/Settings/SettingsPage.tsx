@@ -11,6 +11,7 @@ const TABS: TabDef[] = [
   { to: "appearance", labelKey: "settings.tabs.appearance" },
   { to: "data", labelKey: "settings.tabs.data" },
   { to: "privacy", labelKey: "settings.tabs.privacy" },
+  { to: "engine", labelKey: "settings.tabs.engine" },
   { to: "plugins", labelKey: "settings.tabs.plugins" },
   { to: "about", labelKey: "settings.tabs.about" },
 ];

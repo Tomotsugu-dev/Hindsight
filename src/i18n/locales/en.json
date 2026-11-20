@@ -55,7 +55,6 @@
       "month": "Monthly",
       "history": "All time",
       "aiSummary": "AI Summary",
-      "aiSettings": "AI Settings",
       "categories": "Categories",
       "devices": "Cloud Sync",
       "settings": "Settings",
@@ -107,6 +106,7 @@
       "appearance": "Appearance",
       "data": "Data",
       "privacy": "Privacy",
+      "engine": "AI Engine",
       "plugins": "Plugins",
       "about": "About"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "Recognizing… {{n}} frames left",
         "backfillBackground": "Registered; indexing continues in the background (you can leave this page)",
         "backfillDone": "Done: {{ok}} recognized, {{failed}} skipped",
-        "backfillRuntimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to AI Settings → Engine and click the download button.",
+        "backfillRuntimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Engine and click the download button.",
         "ocrConfirmTitle": "Text recognition (OCR) component required",
         "ocrConfirmResident": "Enabling text indexing requires downloading the text recognition component (~40MB). It turns on automatically once the download finishes.",
         "ocrConfirmBackfill": "Backfilling requires downloading the text recognition component (~40MB). Backfill starts automatically once the download finishes.",
@@ -1037,7 +1037,6 @@
   "aiSettings": {
     "title": "AI Settings",
     "tabs": {
-      "engine": "Engine",
       "models": "Models",
       "general": "General",
       "prompt": "Prompt",
@@ -1759,7 +1758,7 @@
       },
       "cloudOffer": {
         "title": "Generate with your cloud API instead?",
-        "message": "A cloud API is already configured ({{provider}} · {{model}}), but summaries are currently set to a local model and the local engine isn't installed. Confirm to switch summaries to the cloud API — app names, categories and the activity timeline will be sent to that provider. Alternatively, download the local engine under AI Settings → Engine.",
+        "message": "A cloud API is already configured ({{provider}} · {{model}}), but summaries are currently set to a local model and the local engine isn't installed. Confirm to switch summaries to the cloud API — app names, categories and the activity timeline will be sent to that provider. Alternatively, download the local engine under Settings → AI Engine.",
         "confirm": "Use cloud API"
       },
       "ocrLoading": "Loading OCR model…",
@@ -1938,7 +1937,7 @@
       "running": "Building index… {{count}} remaining",
       "alreadyRunning": "Indexing is running in the background, {{count}} remaining",
       "failed": "Backfill failed: {{msg}}",
-      "runtimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to AI Settings → Engine and click the download button.",
+      "runtimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Engine and click the download button.",
       "ocrConfirmTitle": "Text recognition (OCR) component required",
       "ocrConfirmMessage": "Building the text index requires downloading the text recognition component (~40MB). Indexing starts automatically once the download finishes.",
       "ocrConfirmAccept": "Download & start",

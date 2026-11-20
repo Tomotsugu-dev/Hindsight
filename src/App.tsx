@@ -149,7 +149,7 @@ function App() {
             <Route path="debug" element={<DebugTab />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
-            <Route index element={<EngineTab />} />
+            <Route index element={<Navigate to="models" replace />} />
             <Route path="models" element={<ModelsTab />} />
             <Route path="general" element={<AiGeneralTab />} />
             <Route path="prompt" element={<PromptTab />} />
@@ -171,6 +171,7 @@ function App() {
             <Route path="appearance" element={<AppearanceTab />} />
             <Route path="data" element={<DataTab />} />
             <Route path="privacy" element={<PrivacyTab />} />
+            <Route path="engine" element={<EngineTab />} />
             <Route path="plugins" element={<PluginsTab />} />
             <Route path="about" element={<AboutTab />} />
           </Route>
