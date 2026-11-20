@@ -39,6 +39,17 @@ export default defineConfig({
 
   resolve: {
     alias: [
+      // 替换主 i18n 模块 —— 必须排在 @app 之前，否则 @app/i18n 会先命中 @app 走静态全量包。
+      // demo 走公网，6 个语言包按需动态 import，不污染主 src/
+      {
+        find: /^.*\/i18n\/useLocale$/,
+        replacement: path.resolve(demoSrc, "useLocale-demo.ts"),
+      },
+      {
+        find: /^.*\/i18n(?:\/index)?$/,
+        replacement: path.resolve(demoSrc, "i18n-demo.ts"),
+      },
+
       // @app/ → 主仓库 src/，让 demo 干净地 import 主应用代码
       { find: "@app", replacement: mainSrc },
 

@@ -4,9 +4,9 @@
 // 2. 不挂 WindowControls（iframe 内无窗口控件需要）
 // 3. data-platform 强制 "windows"；`?platform=macos` 时按 macOS 窗口画（见 MACOS_WINDOW）
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 
 import { SettingsProvider } from "@app/state/settings";
 import { UpdaterProvider } from "@app/state/updater";
@@ -15,12 +15,15 @@ import { SuperCategoriesProvider } from "@app/state/superCategories";
 import { DeviceFilterProvider } from "@app/state/deviceFilter";
 import { Sidebar } from "@app/components/Sidebar/Sidebar";
 import { ROUTES } from "@app/config/nav";
+import TodayPage from "@app/pages/Today/TodayPage";
 
 import "@app/i18n";
 import "@app/styles/global.css";
 import "@app/styles/tokens.css";
 
 import styles from "./AppDemo.module.css";
+import { DEMO_RESET_ROUTE_EVENT } from "./preview-theme";
+import { preloadRoute, routeChunks, scheduleIdleRoutePreload } from "./routeChunks";
 import { TrafficLights } from "./TrafficLights";
 
 /** `?platform=macos`：像 macOS 应用一样给左上角的红绿灯留出位置，并由 demo 画出来。
@@ -29,92 +32,123 @@ const MACOS_WINDOW =
   typeof location !== "undefined" &&
   new URLSearchParams(location.search).get("platform") === "macos";
 
-// Stage 4: 全部 8 个 sidebar 项接入真页面
-const TodayPage = lazy(() => import("@app/pages/Today/TodayPage"));
-const WeekPage = lazy(() => import("@app/pages/Week/WeekPage"));
-const MonthPage = lazy(() => import("@app/pages/Month/MonthPage"));
-const AISummaryPage = lazy(() => import("@app/pages/AISummary/AISummaryPage"));
-const DailyTab = lazy(() => import("@app/pages/AISummary/tabs/DailyTab"));
-const WeeklyTab = lazy(() => import("@app/pages/AISummary/tabs/WeeklyTab"));
-const MonthlyTab = lazy(() => import("@app/pages/AISummary/tabs/MonthlyTab"));
-const ChatPage = lazy(() => import("@app/pages/Chat/ChatPage"));
-const HistoryPage = lazy(() => import("@app/pages/History/HistoryPage"));
-const HistoryStatsTab = lazy(() => import("@app/pages/History/StatsTab"));
-const SearchPage = lazy(() => import("@app/pages/Search/SearchPage"));
-const DebugTab = lazy(() => import("@app/pages/AISummary/tabs/DebugTab"));
-const AISettingsPage = lazy(() => import("@app/pages/AISettings/AISettingsPage"));
-const EngineTab = lazy(() => import("@app/pages/AISettings/tabs/EngineTab"));
-const ModelsTab = lazy(() => import("@app/pages/AISettings/tabs/ModelsTab"));
-const AiGeneralTab = lazy(() => import("@app/pages/AISettings/tabs/GeneralTab"));
-const PromptTab = lazy(() => import("@app/pages/AISettings/tabs/PromptTab"));
-const ExternalApiTab = lazy(() => import("@app/pages/AISettings/tabs/ExternalApiTab"));
-const DevicesPage = lazy(() => import("@app/pages/Devices/DevicesPage"));
-const CategoriesPage = lazy(() => import("@app/pages/Categories/CategoriesPage"));
-const ListTab = lazy(() => import("@app/pages/Categories/tabs/ListTab"));
-const AppsPage = lazy(() => import("@app/pages/Apps/AppsPage"));
-const SitesPage = lazy(() => import("@app/pages/Sites/SitesPage"));
-const SettingsPage = lazy(() => import("@app/pages/Settings/SettingsPage"));
-const GeneralTab = lazy(() => import("@app/pages/Settings/tabs/GeneralTab"));
-const AppearanceTab = lazy(() => import("@app/pages/Settings/tabs/AppearanceTab"));
-const DataTab = lazy(() => import("@app/pages/Settings/tabs/DataTab"));
-const PrivacyTab = lazy(() => import("@app/pages/Settings/tabs/PrivacyTab"));
-const PluginsTab = lazy(() => import("@app/pages/Settings/tabs/PluginsTab"));
-const AboutTab = lazy(() => import("@app/pages/Settings/tabs/AboutTab"));
+// Demo 非首屏路由懒加载表（TodayPage 为首屏必经页面，直接静态导入避免首屏多一轮瀑布流）；
+// 配合下方事件委托 hover/focus 预加载与空闲预热消除首次点击延迟
+const WeekPage = routeChunks.week.Component;
+const MonthPage = routeChunks.month.Component;
+const AISummaryPage = routeChunks.aiSummary.Component;
+const DailyTab = routeChunks.aiDaily.Component;
+const WeeklyTab = routeChunks.aiWeekly.Component;
+const MonthlyTab = routeChunks.aiMonthly.Component;
+const ChatPage = routeChunks.chat.Component;
+const HistoryPage = routeChunks.history.Component;
+const HistoryStatsTab = routeChunks.historyStats.Component;
+const SearchPage = routeChunks.search.Component;
+const DebugTab = routeChunks.aiDebug.Component;
+const AISettingsPage = routeChunks.aiSettings.Component;
+const EngineTab = routeChunks.aiEngine.Component;
+const ModelsTab = routeChunks.aiModels.Component;
+const AiGeneralTab = routeChunks.aiGeneral.Component;
+const PromptTab = routeChunks.aiPrompt.Component;
+const ExternalApiTab = routeChunks.aiExternal.Component;
+const DevicesPage = routeChunks.devices.Component;
+const CategoriesPage = routeChunks.categories.Component;
+const ListTab = routeChunks.categoriesList.Component;
+const AppsPage = routeChunks.apps.Component;
+const SitesPage = routeChunks.sites.Component;
+const SettingsPage = routeChunks.settings.Component;
+const GeneralTab = routeChunks.settingsGeneral.Component;
+const AppearanceTab = routeChunks.settingsAppearance.Component;
+const DataTab = routeChunks.settingsData.Component;
+const PrivacyTab = routeChunks.settingsPrivacy.Component;
+const PluginsTab = routeChunks.settingsPlugins.Component;
+const AboutTab = routeChunks.settingsAbout.Component;
+
+/** 通过容器事件委托捕获任意站内 <Link>/<NavLink> 的 hover/focus，无需改动主仓库组件即可预加载 */
+function preloadLinkTarget(e: SyntheticEvent<HTMLElement>): void {
+  const el = e.target instanceof Element ? e.target.closest("a[href]") : null;
+  const href = el?.getAttribute("href");
+  if (href && href.startsWith("/")) {
+    preloadRoute(href);
+  }
+}
 
 function DemoLayout() {
   const { i18n } = useTranslation();
+  const navigate = useNavigate();
+  const contentRef = useRef<HTMLElement | null>(null);
   // 和主应用的 App.tsx 一样：<html lang> 跟着界面语言，CSS 按它调侧栏的宽度
   useEffect(() => {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
 
+  // 首屏挂载后在浏览器空闲时段静默预热侧栏主页面 chunk，消除首次点击的公网加载延迟
+  useEffect(() => scheduleIdleRoutePreload(), []);
+
+  // 主题页复用常驻 iframe 切换新主题预览时，回到默认首页并滚回顶部，保持与新建 iframe 一致
+  useEffect(() => {
+    const onReset = () => {
+      void navigate(ROUTES.today, { replace: true });
+      if (contentRef.current) contentRef.current.scrollTop = 0;
+    };
+    window.addEventListener(DEMO_RESET_ROUTE_EVENT, onReset);
+    return () => window.removeEventListener(DEMO_RESET_ROUTE_EVENT, onReset);
+  }, [navigate]);
+
   return (
-    <div className={styles.shell}>
-      <main className={styles.content}>
-        <Routes>
-          <Route path={ROUTES.today} element={<TodayPage />} />
-          <Route path={ROUTES.week} element={<WeekPage />} />
-          <Route path={ROUTES.month} element={<MonthPage />} />
-          <Route path={ROUTES.history} element={<HistoryPage />}>
-            <Route index element={<HistoryStatsTab />} />
-            <Route path="search" element={<SearchPage />} />
-          </Route>
-          <Route path={ROUTES.chat} element={<ChatPage />} />
-          <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
-            <Route index element={<DailyTab />} />
-            <Route path="week" element={<WeeklyTab />} />
-            <Route path="month" element={<MonthlyTab />} />
-            <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
-            <Route path="debug" element={<DebugTab />} />
-          </Route>
-          <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
-            <Route index element={<Navigate to="models" replace />} />
-            <Route path="models" element={<ModelsTab />} />
-            <Route path="general" element={<AiGeneralTab />} />
-            <Route path="prompt" element={<PromptTab />} />
-            <Route path="external" element={<ExternalApiTab />} />
-          </Route>
-          <Route path={ROUTES.devices} element={<DevicesPage />} />
-          <Route path={ROUTES.categories} element={<CategoriesPage />}>
-            <Route index element={<ListTab />} />
-            <Route path="apps" element={<AppsPage />} />
-            <Route path="sites" element={<SitesPage />} />
-          </Route>
-          {/* 与主程序一致:旧的独立「应用」页并入分类页 tab 后仍可访问 */}
-          <Route
-            path={ROUTES.apps}
-            element={<Navigate to={`${ROUTES.categories}/apps`} replace />}
-          />
-          <Route path={ROUTES.settings} element={<SettingsPage />}>
-            <Route index element={<GeneralTab />} />
-            <Route path="appearance" element={<AppearanceTab />} />
-            <Route path="data" element={<DataTab />} />
-            <Route path="privacy" element={<PrivacyTab />} />
-            <Route path="engine" element={<EngineTab />} />
-            <Route path="plugins" element={<PluginsTab />} />
-            <Route path="about" element={<AboutTab />} />
-          </Route>
-        </Routes>
+    <div
+      className={styles.shell}
+      onPointerOverCapture={preloadLinkTarget}
+      onFocusCapture={preloadLinkTarget}
+    >
+      <main ref={contentRef} className={styles.content}>
+        {/* Suspense 只包内容区，不挂起左侧 Sidebar */}
+        <Suspense fallback={<></>}>
+          <Routes>
+            <Route path={ROUTES.today} element={<TodayPage />} />
+            <Route path={ROUTES.week} element={<WeekPage />} />
+            <Route path={ROUTES.month} element={<MonthPage />} />
+            <Route path={ROUTES.history} element={<HistoryPage />}>
+              <Route index element={<HistoryStatsTab />} />
+              <Route path="search" element={<SearchPage />} />
+            </Route>
+            <Route path={ROUTES.chat} element={<ChatPage />} />
+            <Route path={ROUTES.aiSummary} element={<AISummaryPage />}>
+              <Route index element={<DailyTab />} />
+              <Route path="week" element={<WeeklyTab />} />
+              <Route path="month" element={<MonthlyTab />} />
+              <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
+              <Route path="debug" element={<DebugTab />} />
+            </Route>
+            <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
+              <Route index element={<Navigate to="models" replace />} />
+              <Route path="models" element={<ModelsTab />} />
+              <Route path="general" element={<AiGeneralTab />} />
+              <Route path="prompt" element={<PromptTab />} />
+              <Route path="external" element={<ExternalApiTab />} />
+            </Route>
+            <Route path={ROUTES.devices} element={<DevicesPage />} />
+            <Route path={ROUTES.categories} element={<CategoriesPage />}>
+              <Route index element={<ListTab />} />
+              <Route path="apps" element={<AppsPage />} />
+              <Route path="sites" element={<SitesPage />} />
+            </Route>
+            {/* 与主程序一致:旧的独立「应用」页并入分类页 tab 后仍可访问 */}
+            <Route
+              path={ROUTES.apps}
+              element={<Navigate to={`${ROUTES.categories}/apps`} replace />}
+            />
+            <Route path={ROUTES.settings} element={<SettingsPage />}>
+              <Route index element={<GeneralTab />} />
+              <Route path="appearance" element={<AppearanceTab />} />
+              <Route path="data" element={<DataTab />} />
+              <Route path="privacy" element={<PrivacyTab />} />
+              <Route path="engine" element={<EngineTab />} />
+              <Route path="plugins" element={<PluginsTab />} />
+              <Route path="about" element={<AboutTab />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </main>
       <div className={styles.sidebarHost}>
         <Sidebar />
@@ -163,26 +197,24 @@ export function AppDemo() {
 
   const { scale, designHeight } = useFitScale();
 
+  const providers = (
+    <MemoryRouter initialEntries={["/"]}>
+      <SettingsProvider>
+        <UpdaterProvider>
+          <CategoriesProvider>
+            <SuperCategoriesProvider>
+              <DeviceFilterProvider>
+                <DemoLayout />
+              </DeviceFilterProvider>
+            </SuperCategoriesProvider>
+          </CategoriesProvider>
+        </UpdaterProvider>
+      </SettingsProvider>
+    </MemoryRouter>
+  );
+
   // scale === 1 时直接渲染，避免无谓的 transform 层
-  if (scale === 1) {
-    return (
-      <MemoryRouter initialEntries={["/"]}>
-        <SettingsProvider>
-          <UpdaterProvider>
-            <CategoriesProvider>
-              <SuperCategoriesProvider>
-                <DeviceFilterProvider>
-                <Suspense fallback={<></>}>
-                  <DemoLayout />
-                </Suspense>
-                </DeviceFilterProvider>
-              </SuperCategoriesProvider>
-            </CategoriesProvider>
-          </UpdaterProvider>
-        </SettingsProvider>
-      </MemoryRouter>
-    );
-  }
+  if (scale === 1) return providers;
 
   // 极窄 iframe：用 transform 缩放，保持应用按 700 设计宽度渲染再缩
   return (
@@ -195,21 +227,7 @@ export function AppDemo() {
         overflow: "hidden",
       }}
     >
-      <MemoryRouter initialEntries={["/"]}>
-        <SettingsProvider>
-          <UpdaterProvider>
-            <CategoriesProvider>
-              <SuperCategoriesProvider>
-                <DeviceFilterProvider>
-                <Suspense fallback={<></>}>
-                  <DemoLayout />
-                </Suspense>
-                </DeviceFilterProvider>
-              </SuperCategoriesProvider>
-            </CategoriesProvider>
-          </UpdaterProvider>
-        </SettingsProvider>
-      </MemoryRouter>
+      {providers}
     </div>
   );
 }

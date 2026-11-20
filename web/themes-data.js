@@ -38,7 +38,7 @@ export async function serveThemeData(request, fetchSource = fetch) {
   return new Response(request.method === "HEAD" ? null : upstream.body, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": `public, max-age=${CACHE_SECONDS}`,
+      "Cache-Control": `public, max-age=${CACHE_SECONDS}, stale-while-revalidate=3600`,
     },
   });
 }
