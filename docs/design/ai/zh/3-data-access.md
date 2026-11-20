@@ -97,12 +97,78 @@ pub struct Citation {
 
 ## 3. AiDataPolicy
 
-AI 能看到什么。按设置生成一次，交给 `ReportContext` 和 `Tools`。
+`AiDataPolicy` 决定 AI 能看到哪些数据。日报、周报、聊天各存几套配置，一套配置只记 AI 能看到哪些分类；不选配置就按主库设置。`ReportContext` 和 `Tools` 只按 `AiDataPolicy` 过滤，自己不写规则。
 
-- 「隐私」分类（ADR-0019）：不记录，本来就看不到。旧数据没删干净时，工具也过滤掉。
-- 「不计入统计」分类、已忽略的窗口：照常记录，AI 默认看不到。
-- 设置里「AI 分析的分类」：默认是「隐私」「不计入统计」以外的全部分类，用户可以改。不在里面的分类，AI 看不到。「隐私」加不进去。
-- 上面几种，两个库怎么过滤，见[工具总览 4.1](tools/0-overview.md#41-可见范围)。
-- 隐私关键词：命中的窗口标题，AI 看不到，也不留占位。
-- 屏幕文字（OCR）：写报告时，工具默认查不到。用户打开设置里的 `allowScreenText` 以后才能查（见[模型选择和配置](3-settings.md#11-设置里的结构)）。聊天的工具一直能查。
-- 图片只给本机的模型。用户明确允许以后，才能给云端的模型（见[读屏](3-screen-reader.md)）。
+```mermaid
+flowchart LR
+  main["主库设置"] --> p["AiDataPolicy"]
+  prof["选中的配置<br/>（可以不选）"] -->|分类| p
+  p --> rc["ReportContext"]
+  p --> t["Tools"]
+```
+
+### 3.1 需求
+
+各个功能（日报、周报、聊天）能设置不同的数据过滤规则。这些规则默认继承于主库设置（如隐私设置、网页隐私设置）
+
+### 3.2 数据
+
+配置存在设置 JSON 的 `ai.visibility` 里。一套配置只存选中了哪些分类，没选中的 AI 看不到。
+
+```jsonc
+"visibility": {
+  "daily": {
+    "profiles": {
+      "p_8f2a": { "name": "工作", "categories": ["work", "code"] }  // key 是生成的 id，改名不影响引用
+    },
+    "autoProfile": "p_8f2a"   // 自动生成用哪套；null 就是按主库设置
+  },
+  "weekly": { "profiles": {}, "autoProfile": null },
+  "chat": { "profiles": {} }  // 聊天没有自动生成
+}
+```
+
+手动生成和聊天时，前端把选中的配置作为参数传进来，不存。
+
+**待删除**：下面几条是设计取舍，不是架构。交付时写进 PR，再从本文删掉。
+
+- 删掉 `excludedCategories`，不迁移，因为现在还不是稳定版。
+- 设置 JSON 不参与同步。
+- 新旧版本互相读设置都不报错。旧版本不认识 `visibility`，`excludedCategories` 缺失时用默认值（排除「其他」）。新版本不认识 `excludedCategories`，按主库设置。
+- 忽略规则和隐私关键词不能覆盖，一律按主库设置。
+- 新建配置时，选中状态从主库设置复制过来；之后主库设置再改，配置不跟着变。
+- 以后新建的分类，在已有配置里都是没选中。
+- `autoProfile` 指向的配置被删了，按主库设置。
+
+### 3.3 接口
+
+```rust
+/// 用 AI 的功能。
+pub enum AiModule { Daily, Weekly, Chat }
+
+/// AI 能看到什么。
+pub struct AiDataPolicy {
+    /// AI 能看到的分类。
+    shown_categories: BTreeSet<String>,
+    /// 主库设置里的隐私关键词。进程名或标题里有，就不给看。
+    privacy_keywords: Vec<String>,
+    /// 主库设置里的忽略规则。
+    ignore_rules: Vec<IgnoreRule>,
+}
+
+impl AiDataPolicy {
+    /// 读主库设置和选中的配置，返回 AI 能看到什么。profile 是 None 就全按主库设置。
+    pub async fn load(main: &Connection, module: AiModule, profile: Option<&str>) -> Result<Self>;
+    /// 返回主库查询要加的 WHERE 条件。
+    pub fn main_filter(&self) -> String;
+    /// 返回记忆库的过滤条件：apps 里 AI 能看到的进程，还有要去掉的窗口。
+    /// apps 是记忆库里的进程名和它算进的分类，由调用方查好。
+    pub fn memory_filter(&self, apps: Vec<(String, String)>) -> SessionFilter;
+}
+```
+
+### 3.4 已决定
+
+1. 标题命中隐私关键词时，AI 看不到整条活动（时长也不算）
+2. 网站规则不能覆盖，只按分类进行覆盖
+3. 读设置失败时，报错，这次不运行。

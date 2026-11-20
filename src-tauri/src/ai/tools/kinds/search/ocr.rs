@@ -1,6 +1,6 @@
 //! search_screen_text：按关键词搜屏幕上识别出的文字。回答 X 在哪些窗口的屏幕上出现过。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::sync::LazyLock;
 
@@ -20,7 +20,7 @@ use crate::ai::tools::{
 use crate::error::Result;
 use crate::memory::search::{find_sessions, session_apps};
 use crate::memory::snippet::snippet;
-use crate::storage::{DbResult, SqliteResultExt};
+use crate::storage::{Connection, DbResult, SqliteResultExt};
 
 /// search_screen_text 检查过的参数。
 #[derive(Debug, Clone, PartialEq)]
@@ -124,9 +124,17 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
     if processes.is_empty() {
         return Ok(None);
     }
-    // 可见范围、应用和分类由 AiDataPolicy 写成条件，在 SQL 里筛
-    let policy = ctx.policy().await?;
-    let filter = policy.screen_filter(processes, &p.apps, &p.categories);
+    // 先留下模型要查的应用和分类，再由 AiDataPolicy 写成条件，在 SQL 里筛
+    let apps = Apps::load(&ctx.main).await?;
+    let asked = processes
+        .into_iter()
+        .filter(|process| apps.is_asked(process, &p.apps, &p.categories))
+        .map(|process| {
+            let category = apps.category_id(&process).to_string();
+            (process, category)
+        })
+        .collect();
+    let filter = ctx.policy().await?.memory_filter(asked);
     let (keywords, range) = (p.keywords.clone(), p.range);
     let spans = ctx
         .mem
@@ -138,7 +146,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
     let mut seen = HashSet::new();
     let mut picked = Vec::new();
     for span in spans {
-        let app = policy.display_name(&span.app_id).to_string();
+        let app = apps.display_name(&span.app_id).to_string();
         if seen.insert((app.clone(), span.title.clone())) {
             picked.push((app, span));
         }
@@ -175,6 +183,95 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
         })
         .collect();
     Ok(Some(Found { windows, count }))
+}
+
+/// 主库里的应用和分类。记忆库只有进程名，显示名和分类要在这里查。
+struct Apps {
+    /// 进程名 → 它属于哪个应用。
+    by_process: HashMap<String, App>,
+    /// 没删除的分类：id → 名字。
+    categories: HashMap<String, String>,
+}
+
+/// 一个应用。同一个应用可能有几个进程名。
+struct App {
+    display_name: String,
+    category_id: Option<String>,
+}
+
+impl Apps {
+    /// 读主库里没删除的分组和分类。
+    async fn load(main: &Connection) -> Result<Self> {
+        let apps = main
+            .call(|conn| {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT gm.process_name, g.display_name, g.category_id
+                         FROM app_group_members gm JOIN app_groups g ON g.id = gm.group_id
+                         WHERE gm.deleted_at IS NULL AND g.deleted_at IS NULL",
+                    )
+                    .db()?;
+                let by_process = stmt
+                    .query_map([], |r| {
+                        let app = App {
+                            display_name: r.get(1)?,
+                            category_id: r.get(2)?,
+                        };
+                        Ok((r.get(0)?, app))
+                    })
+                    .db()?
+                    .collect::<rusqlite::Result<_>>()
+                    .db()?;
+                let mut stmt = conn
+                    .prepare("SELECT id, name FROM categories WHERE deleted_at IS NULL")
+                    .db()?;
+                let categories = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                    .db()?
+                    .collect::<rusqlite::Result<_>>()
+                    .db()?;
+                Ok(Apps {
+                    by_process,
+                    categories,
+                })
+            })
+            .await?;
+        Ok(apps)
+    }
+
+    /// 应用的显示名。没分组就是进程名。
+    fn display_name<'a>(&'a self, process: &'a str) -> &'a str {
+        self.by_process
+            .get(process)
+            .map_or(process, |app| app.display_name.as_str())
+    }
+
+    /// 应用算进的分类。没分组、没分类、分类删了，都算「其他」。
+    fn category_id<'a>(&'a self, process: &str) -> &'a str {
+        match self
+            .by_process
+            .get(process)
+            .and_then(|app| app.category_id.as_deref())
+        {
+            Some(id) if self.categories.contains_key(id) => id,
+            _ => "other",
+        }
+    }
+
+    /// 是不是模型要查的应用：进程名或显示名里有 `apps` 之一，分类的 id 或名字里有
+    /// `categories` 之一。空的不筛，英文不分大小写。
+    fn is_asked(&self, process: &str, apps: &[String], categories: &[String]) -> bool {
+        let category = self.category_id(process);
+        let category_name = self.categories.get(category).map_or("", String::as_str);
+        let is_app = |a: &String| contains(process, a) || contains(self.display_name(process), a);
+        let in_category = |c: &String| contains(category, c) || contains(category_name, c);
+        (apps.is_empty() || apps.iter().any(is_app))
+            && (categories.is_empty() || categories.iter().any(in_category))
+    }
+}
+
+fn contains(hay: &str, needle: &str) -> bool {
+    hay.to_lowercase().contains(&needle.to_lowercase())
 }
 
 /// 一段里的片段。
@@ -509,11 +606,44 @@ mod tests {
             let f = found(&ctx, json!({"keywords": ["报销"], "apps": [app]})).await;
             assert_eq!(titles(&f), ["main.rs"], "{app}");
         }
-        let f = found(&ctx, json!({"keywords": ["报销"], "categories": ["编程"]})).await;
-        assert_eq!(titles(&f), ["main.rs"]);
+        // 分类按名字或 id 找，英文不分大小写
+        for category in ["编程", "CODE"] {
+            let f = found(
+                &ctx,
+                json!({"keywords": ["报销"], "categories": [category]}),
+            )
+            .await;
+            assert_eq!(titles(&f), ["main.rs"], "{category}");
+        }
         // 没分组的应用算「其他」
         let f = found(&ctx, json!({"keywords": ["报销"], "categories": ["其他"]})).await;
         assert_eq!(titles(&f), ["笔记"]);
+        // 应用和分类都给时，两个都要满足
+        let args = json!({"keywords": ["报销"], "apps": ["code"], "categories": ["其他"]});
+        assert_eq!(found(&ctx, args).await.count, 0);
+    }
+
+    #[tokio::test]
+    async fn apps_without_a_live_category_count_as_other() {
+        let pool = main_db().await;
+        pool.0
+            .call(|c| {
+                c.execute_batch(
+                    "INSERT INTO app_groups(id, display_name, category_id) VALUES
+                         ('g-old', 'Old', 'gone'), ('g-none', 'Plain', 'none');
+                     INSERT INTO app_group_members(process_name, group_id) VALUES
+                         ('old.exe', 'g-old'), ('plain.exe', 'g-none');",
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        let apps = Apps::load(&pool.0).await.unwrap();
+        // 没分组、分类已不存在、用户设成不分类
+        for process in ["notepad", "old.exe", "plain.exe"] {
+            assert_eq!(apps.category_id(process), "other", "{process}");
+        }
+        assert_eq!(apps.category_id("Code"), "code");
     }
 
     #[tokio::test]

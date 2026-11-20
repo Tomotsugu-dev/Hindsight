@@ -750,12 +750,19 @@ mod loop_tests {
              started_at TEXT, ended_at TEXT, duration_secs INTEGER,
              local_date TEXT, local_hour INTEGER,
              process_name TEXT, window_title TEXT, screenshot_path TEXT,
-             category_id TEXT, excluded INTEGER NOT NULL DEFAULT 0);
+             category_id TEXT, url_host TEXT, excluded INTEGER NOT NULL DEFAULT 0);
          CREATE TABLE app_group_members (
              process_name TEXT, group_id TEXT, deleted_at TEXT);
          CREATE TABLE app_groups (
              id TEXT, display_name TEXT, category_id TEXT, deleted_at TEXT);
-         CREATE TABLE categories (id TEXT, name TEXT, deleted_at TEXT);";
+         CREATE TABLE categories (id TEXT, name TEXT, deleted_at TEXT);
+         CREATE TABLE site_rules (
+             host TEXT, browser TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '',
+             category_id TEXT, deleted_at TEXT);
+         CREATE TABLE settings_store (id INTEGER PRIMARY KEY, data TEXT NOT NULL);
+         -- 真实的库里一定有这三个分类
+         INSERT INTO categories(id, name) VALUES
+             ('other', '其他'), ('hidden', '不计入统计'), ('private', '隐私');";
 
     const MEM_SCHEMA: &str = "CREATE TABLE text_sessions (
              id INTEGER PRIMARY KEY, local_date TEXT, started_ts TEXT,
@@ -918,9 +925,10 @@ mod loop_tests {
     async fn cloud_full_round_executes_tool_then_answers() {
         let ctx = fixture_ctx(
             true,
-            "INSERT INTO activities VALUES(
+            "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                 local_hour, process_name, window_title) VALUES(
                  '2026-07-08T09:00:00+09:00','2026-07-08T10:30:00+09:00',5400,
-                 '2026-07-08',9,'Cursor','engine.rs — Hindsight','','',0);",
+                 '2026-07-08',9,'Cursor','engine.rs — Hindsight');",
         )
         .await;
         let (port, log) = spawn_scripted_openai(vec![

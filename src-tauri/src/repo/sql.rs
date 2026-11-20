@@ -9,25 +9,14 @@
 //! These constants are the single definition of the chain. Callers append their
 //! own SELECT list and WHERE clause; nothing about filtering belongs here.
 
-/// `FROM` clause resolving an activity to the app group its process belongs to.
-///
-/// Aliases: `a` = activities, `gm` = app_group_members, `g` = app_groups.
-///
-/// Both joins are LEFT, so an activity whose process has no group — or whose
-/// group is soft-deleted — still comes through, with `g.*` NULL. Callers that
-/// need a group identity usually fall back with `COALESCE(g.id, a.process_name)`.
-pub const FROM_ACTIVITY_GROUP: &str = "FROM activities a
-     LEFT JOIN app_group_members gm
-       ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-     LEFT JOIN app_groups g
-       ON g.id = gm.group_id AND g.deleted_at IS NULL";
-
-// TODO: 统计已经改用 from_stats_category_sql，会套上网站规则；AI 总结、对话工具、导出还在用
+// TODO: 统计已经改用 from_stats_category_sql，会套上网站规则；AI 总结、导出还在用
 // 这个常量，网站规则对它们不生效（ADR-0013 决定 4）。以后合并成一个。
-/// [`FROM_ACTIVITY_GROUP`] plus the category that group is assigned to.
+/// `FROM` clause resolving an activity to its app group and the category of that group.
 ///
-/// Adds alias `c` = categories. This join is LEFT as well, so `c.id IS NULL`
-/// covers all three ways the chain can break: the process has no group, the
+/// Aliases: `a` = activities, `gm` = app_group_members, `g` = app_groups,
+/// `c` = categories. All joins are LEFT, so an activity whose process has no
+/// group, or whose group is soft-deleted, still comes through with `g.*` NULL.
+/// `c.id IS NULL` covers all three ways the chain can break: the process has no group, the
 /// group is deleted, or `g.category_id` still points at a category that was
 /// deleted (a cascade that missed a reference).
 ///

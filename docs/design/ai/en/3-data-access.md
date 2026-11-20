@@ -97,12 +97,78 @@ pub struct Citation {
 
 ## 3. AiDataPolicy
 
-What AI can see. It is generated once from the settings. Then it is given to `ReportContext` and `Tools`.
+`AiDataPolicy` decides what data AI can see. The daily report, the weekly report and chat each keep their own profiles. A profile records only which categories AI can see. With no profile selected, the main settings apply. `ReportContext` and `Tools` filter only by `AiDataPolicy`. They do not write rules themselves.
 
-- The "Privacy" category (ADR-0019): it is not recorded. So AI cannot see it. If old data was not fully deleted, the tools filter it out too.
-- The "Not counted in statistics" category and ignored windows: they are recorded as usual. AI cannot see them by default.
-- "Categories for AI analysis" in the settings: the default is every category except "Privacy" and "Not counted in statistics". The user can change it. AI cannot see a category that is not in the list. "Privacy" cannot be added.
-- For how the two databases filter the cases above, see [Tools overview 4.1](tools/0-overview.md#41-what-ai-can-see).
-- Privacy keywords: AI cannot see a window title that matches. No placeholder is left.
-- Screen text (OCR): when writing a report, tools cannot query it by default. Tools can query it only after the user turns on `allowScreenText` in the settings (see [Model selection and configuration](3-settings.md#11-structure-in-the-settings)). Tools in chat can always query it.
-- Images are given only to a local model. They can be given to a cloud model only after the user explicitly allows it (see [Screen reader](3-screen-reader.md)).
+```mermaid
+flowchart LR
+  main["Main settings"] --> p["AiDataPolicy"]
+  prof["Selected profile<br/>(optional)"] -->|categories| p
+  p --> rc["ReportContext"]
+  p --> t["Tools"]
+```
+
+### 3.1 Requirements
+
+Each feature (daily report, weekly report, chat) can set its own data filter rules. By default, these rules follow the main settings (such as the privacy settings and the web privacy settings).
+
+### 3.2 Data
+
+Profiles are stored in `ai.visibility` in the settings JSON. A profile stores only the selected categories. AI cannot see the categories that are not selected.
+
+```jsonc
+"visibility": {
+  "daily": {
+    "profiles": {
+      "p_8f2a": { "name": "Work", "categories": ["work", "code"] }  // the key is a generated id, so renaming does not break references
+    },
+    "autoProfile": "p_8f2a"   // the profile for automatic generation; null means the main settings
+  },
+  "weekly": { "profiles": {}, "autoProfile": null },
+  "chat": { "profiles": {} }  // chat has no automatic generation
+}
+```
+
+For manual generation and chat, the frontend passes the selected profile as a parameter. It is not stored.
+
+**To be removed**: the items below are design tradeoffs, not architecture. At delivery, they go into the PR, and then they are removed from this document.
+
+- `excludedCategories` is removed with no migration, because there is no stable release yet.
+- The settings JSON is not synced.
+- Old and new versions can read each other's settings without errors. An old version does not know `visibility`. When `excludedCategories` is missing, it uses the default (exclude "Other"). A new version does not know `excludedCategories`, and follows the main settings.
+- Ignore rules and privacy keywords cannot be overridden. They always follow the main settings.
+- When a profile is created, its selection is copied from the main settings. Later changes to the main settings do not change the profile.
+- Categories created later are not selected in existing profiles.
+- If the profile that `autoProfile` points to is deleted, the main settings apply.
+
+### 3.3 Interface
+
+```rust
+/// A feature that uses AI.
+pub enum AiModule { Daily, Weekly, Chat }
+
+/// What AI can see.
+pub struct AiDataPolicy {
+    /// Categories AI can see.
+    shown_categories: BTreeSet<String>,
+    /// Privacy keywords from the main settings. If a process name or a title contains one, AI does not see it.
+    privacy_keywords: Vec<String>,
+    /// Ignore rules from the main settings.
+    ignore_rules: Vec<IgnoreRule>,
+}
+
+impl AiDataPolicy {
+    /// Reads the main settings and the selected profile, and returns what AI can see. If profile is None, the main settings apply.
+    pub async fn load(main: &Connection, module: AiModule, profile: Option<&str>) -> Result<Self>;
+    /// Returns the WHERE condition to add to a main database query.
+    pub fn main_filter(&self) -> String;
+    /// Returns the filter for the memory database: the processes in apps that AI can see, and the windows to drop.
+    /// apps holds each process name in the memory database with the category it counts toward. The caller looks them up.
+    pub fn memory_filter(&self, apps: Vec<(String, String)>) -> SessionFilter;
+}
+```
+
+### 3.4 Decided
+
+1. When a title matches a privacy keyword, AI cannot see the whole activity (and its time does not count).
+2. Website rules cannot be overridden. Profiles override only categories.
+3. When the settings cannot be read, it is an error, and this run does not happen.

@@ -108,7 +108,7 @@ pub fn find_sessions(conn: &Connection, words: &[String], range: Option<(NaiveDa
 
 - 只读记忆库：屏幕文字的段、行和截图。
 - 不加表，不迁移，不参与同步。`Citation` 不变。
-- 可见范围和分类过滤写在 SQL 里，条件由 `ToolCtx` 给，见[总览 4.1](../0-overview.md#41-可见范围)。应用的显示名也由 `ToolCtx` 给。
+- 应用的显示名和分类，工具自己从主库读。按应用、分类筛完的进程交给 `AiDataPolicy`，由它写成条件，在 SQL 里筛，见[总览 4.1](../0-overview.md#41-可见范围)。
 - 归进分类的网站认不出来，因为记忆库没有网站域名，见[总览待决定](../0-overview.md#5-待决定) 3。
 
 ---

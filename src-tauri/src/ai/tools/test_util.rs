@@ -8,7 +8,6 @@ use chrono::NaiveDate;
 use tokio::sync::OnceCell;
 
 use super::ToolCtx;
-use crate::ai::policy::AiDataPolicy;
 use crate::storage::Connection;
 
 /// 开两个内存库，建好工具查询用到的表，再跑 `mem_sql` 和 `main_sql` 造数据。
@@ -42,24 +41,30 @@ pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> T
                  started_at TEXT, ended_at TEXT, duration_secs INTEGER,
                  local_date TEXT, local_hour INTEGER,
                  process_name TEXT, window_title TEXT, screenshot_path TEXT,
-                 category_id TEXT, excluded INTEGER NOT NULL DEFAULT 0);
+                 category_id TEXT, url_host TEXT, excluded INTEGER NOT NULL DEFAULT 0);
              CREATE TABLE app_group_members (
                  process_name TEXT, group_id TEXT, deleted_at TEXT);
              CREATE TABLE app_groups (
                  id TEXT, display_name TEXT, category_id TEXT, deleted_at TEXT);
              CREATE TABLE categories (
                  id TEXT, name TEXT, deleted_at TEXT);
+             CREATE TABLE site_rules (
+                 host TEXT, browser TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '',
+                 category_id TEXT, deleted_at TEXT);
+             CREATE TABLE settings_store (id INTEGER PRIMARY KEY, data TEXT NOT NULL);
+             -- 真实的库里一定有这三个分类
+             INSERT INTO categories(id, name) VALUES
+                 ('other', '其他'), ('hidden', '不计入统计'), ('private', '隐私');
              {main_sql}"
         ))?;
         Ok(())
     })
     .await
     .unwrap();
-    // 这里的主库没有设置表，读不出 AiDataPolicy：什么都给看
     ToolCtx {
         main,
         mem,
-        policy: OnceCell::from(AiDataPolicy::default()),
+        policy: OnceCell::new(),
     }
 }
 

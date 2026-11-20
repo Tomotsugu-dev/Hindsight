@@ -4,6 +4,8 @@
 //! - [`AiSegment`] 是一天里被划分出的一个时段，AI 按段汇总
 //! - [`sanitize`] 在 settings 写入路径上调用，把非法值钳到合法范围
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// `summary_main` 的特殊值——"用云端 API 跑 step 2"。
@@ -51,6 +53,36 @@ pub struct ExternalProfile {
     pub model: String,
 }
 
+/// The profiles of the daily report, the weekly report and chat.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Visibility {
+    pub daily: ModuleProfiles,
+    pub weekly: ModuleProfiles,
+    pub chat: ModuleProfiles,
+}
+
+/// The profiles of one feature.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ModuleProfiles {
+    /// Profile id → profile. Ids are generated, so renaming a profile does not break
+    /// references to it.
+    pub profiles: BTreeMap<String, VisibilityProfile>,
+    /// The profile that automatic generation uses. None means the main settings.
+    pub auto_profile: Option<String>,
+}
+
+/// A profile: which categories the AI can see. The AI cannot see the categories that are
+/// not selected.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VisibilityProfile {
+    pub name: String,
+    /// Ids of the selected categories.
+    pub categories: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AiConfig {
@@ -80,6 +112,9 @@ pub struct AiConfig {
     pub segments: Vec<AiSegment>,
     /// 排除分析的 category id 列表
     pub excluded_categories: Vec<String>,
+    /// The profiles of the daily report, the weekly report and chat: which categories the
+    /// AI can see.
+    pub visibility: Visibility,
     /// 模型（GGUF 文件）保存路径。
     ///
     /// 空字符串 = 走 [`crate::ai::models::default_root_dir`]（`<data_root>/ai/models/`）；
@@ -294,6 +329,7 @@ impl Default for AiConfig {
             user_brief: String::new(),
             segments: default_segments_for(lang),
             excluded_categories: vec!["other".to_string()],
+            visibility: Visibility::default(),
             models_path: String::new(),
             active_main: String::new(),
             active_mmproj: String::new(),

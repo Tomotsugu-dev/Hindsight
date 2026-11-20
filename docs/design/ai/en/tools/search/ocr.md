@@ -108,7 +108,7 @@ pub fn find_sessions(conn: &Connection, words: &[String], range: Option<(NaiveDa
 
 - Read only the memory database: segments, lines, and screenshots of screen text.
 - Do not add a table. Do not migrate. Do not take part in sync. `Citation` does not change.
-- What AI can see and the category filter are written in the SQL. `ToolCtx` gives the conditions. See [Overview 4.1](../0-overview.md#41-what-ai-can-see). `ToolCtx` also gives the display name of the app.
+- The tool reads the display name and the category of each app from the main database. It keeps the processes that match the apps and categories asked for, and gives them to `AiDataPolicy`. `AiDataPolicy` turns them into conditions for the SQL. See [Overview 4.1](../0-overview.md#41-what-ai-can-see).
 - A website that is put into a category cannot be recognized, because the memory database has no website domain. See [To be decided in the overview](../0-overview.md#5-to-be-decided) item 3.
 
 ---

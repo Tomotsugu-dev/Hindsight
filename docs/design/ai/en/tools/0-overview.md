@@ -261,37 +261,37 @@ flowchart LR
 
 ### 4.1 What AI can see
 
-What AI can see follows the settings in the main database by default. AI settings can override those settings. The two are combined into [AiDataPolicy](../3-data-access.md#3-aidatapolicy). Tools do not write the rules themselves.
+[AiDataPolicy](../3-data-access.md#3-aidatapolicy) decides what AI can see. With no profile selected, it follows the main database settings. With a profile selected, it follows the categories in the profile. Tools do not write the rules themselves.
 
 ```mermaid
 flowchart LR
   subgraph app["Settings in the<br/>main database"]
-    h["'Not counted<br/>in statistics'<br/>categories + ignored windows"]
+    h["'Not counted<br/>in statistics'<br/>categories + ignore rules"]
     p["'Privacy'<br/>not recorded<br/>in the first place"]
+    k["Privacy keywords"]
   end
-  ai["AI settings<br/>'Categories for<br/>AI analysis'"]
+  prof["Profile picked<br/>in chat<br/>categories AI can see"]
   policy["AiDataPolicy<br/>what AI can see"]
-  ctx["ToolCtx<br/>at the start of each question<br/>one condition set ready<br/>per database"]
   tool["Tool<br/>writes the conditions<br/>into its own SQL"]
   main[("Main database")]
   mem[("Memory database")]
-  app -->|"inherit by default"| policy
-  ai -->|"override"| policy
-  policy --> ctx
-  ctx -->|"conditions"| tool
-  tool -->|"with the main<br/>database conditions"| main
-  tool -->|"with the memory<br/>database conditions"| mem
+  app --> policy
+  prof -->|"optional"| policy
+  policy -->|"main_filter"| tool
+  policy -->|"memory_filter"| tool
+  tool --> main
+  tool --> mem
 ```
 
-- **Inherit by default, AI settings override**: What the main database settings hide, AI cannot see by default either. Then the durations AI reports match the statistics page. The user can change "Categories for AI analysis" in the AI settings. This can let AI see more categories, or fewer. "Privacy" cannot be overridden.
-- **One set of conditions per database**: The two databases store different things. The same rule is written differently in the two databases. `ToolCtx` prepares the conditions. A tool only puts them into the SQL. The tool does not need to know what the rule is.
+- **No profile, follow the main settings**: What the main database settings hide, AI cannot see either. Then the durations AI reports match the statistics page. With a profile, AI sees only the categories selected in it. AI cannot see "Privacy" even if it is selected. Ignore rules and privacy keywords always come from the main settings. A profile cannot change them.
+- **One set of conditions per database**: The two databases store different things. The same rule is written differently in the two databases. For the main database, the condition is a piece of SQL from `main_filter`. The memory database has no categories. So the tool first looks up the category of each process, then gives them to `memory_filter`.
 - **"Privacy" must be filtered too**: It is not recorded in the first place. But deleting old data can fail. Then the old data stays in the database (ADR-0019).
 
 Other rules:
 
 | Rule | How it is handled |
 |---|---|
-| Privacy keywords | Replace a matching title with `[Private]`, the same as the daily report |
+| Privacy keywords | If the process name or the title matches, the whole activity is dropped, and its time does not count |
 | Device | To be decided |
 
 ### 4.2 Evidence

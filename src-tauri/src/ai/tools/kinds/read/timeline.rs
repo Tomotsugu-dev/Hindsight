@@ -11,11 +11,9 @@ use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::{date_schema, invalid, parse_range, read_args, spec};
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::lang::text::{load, Text};
-use crate::ai::tools::{
-    truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput, ACTIVITY_WHERE,
-};
+use crate::ai::tools::{truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput};
 use crate::error::Result;
-use crate::repo::sql::FROM_ACTIVITY_GROUP;
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::SqliteResultExt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -141,6 +139,13 @@ async fn run(
     let (from, to) = q.range;
     let single_day = from == to;
     let (from, to) = (from.to_string(), to.to_string());
+    // 网站规则的 WITH 排在最前，它的两个 ? 编号是 1、2，跟这里的 ?1、?2 是同一对日期
+    let with = host_rule_with_sql("activities");
+    let scope = format!(
+        "{} WHERE a.local_date BETWEEN ?1 AND ?2 AND {}",
+        from_stats_category_sql("activities"),
+        ctx.policy().await?.main_filter()
+    );
     // 主源是主库活动记录:不开截图/OCR 的用户也有完整时间线,电池暂停或
     // 待识别积压造成的索引空窗也不再啃掉时段尾巴。
     let (total, span, rows) = ctx
@@ -148,7 +153,7 @@ async fn run(
         .call(move |conn| {
             let (total, first, last): (i64, Option<String>, Option<String>) = conn
                 .query_row(
-                    &format!("SELECT COUNT(*), MIN(a.started_at), MAX(a.ended_at) {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE}"),
+                    &format!("{with} SELECT COUNT(*), MIN(a.started_at), MAX(a.ended_at) {scope}"),
                     params![from, to],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
@@ -158,7 +163,7 @@ async fn run(
             // 半小时",模型会把开头当成全天(2026-07-08 的误报正是这么来的)。
             let mut stmt = conn
                 .prepare(&format!(
-                    "SELECT app, title, started_at, ended_at, shot FROM (
+                    "{with} SELECT app, title, started_at, ended_at, shot FROM (
                          SELECT COALESCE(g.display_name, a.process_name) AS app,
                                 COALESCE(a.window_title,'') AS title,
                                 a.started_at, a.ended_at,
@@ -167,7 +172,7 @@ async fn run(
                                     PARTITION BY a.local_date, a.local_hour
                                     ORDER BY a.duration_secs DESC
                                 ) AS rn
-                         {FROM_ACTIVITY_GROUP} {ACTIVITY_WHERE}
+                         {scope}
                      ) WHERE rn <= ?3 ORDER BY started_at LIMIT ?4",
                 ))
                 .db()?;
