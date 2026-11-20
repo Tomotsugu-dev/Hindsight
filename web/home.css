@@ -84,7 +84,7 @@ mark {
   padding: 12px 22px;
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   text-decoration: none;
   transition: background-color 0.15s;
 }
@@ -127,7 +127,7 @@ mark {
 }
 
 .dl-quiet {
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -187,7 +187,7 @@ mark {
 
 .frame {
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -291,7 +291,7 @@ h2 {
   height: 44px;
   border: 1px solid var(--line);
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
   transition: border-color 0.15s, opacity 0.15s;
@@ -337,7 +337,7 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   scroll-snap-align: start;
@@ -365,7 +365,7 @@ h2 {
 }
 
 .card.near {
-  border-color: #d6d6e4;
+  border-color: var(--line-strong);
   box-shadow: var(--shadow);
 }
 
@@ -429,7 +429,7 @@ h2 {
 }
 
 .cta-all .dl {
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--line);
 }

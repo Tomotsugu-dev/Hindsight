@@ -112,7 +112,7 @@ html {
   --pagefind-ui-scale: 0.85;
   --pagefind-ui-primary: var(--accent-ink);
   --pagefind-ui-text: var(--ink);
-  --pagefind-ui-background: #fff;
+  --pagefind-ui-background: var(--surface);
   --pagefind-ui-border: var(--line);
   --pagefind-ui-tag: var(--band);
   --pagefind-ui-border-width: 1px;
@@ -161,7 +161,7 @@ html {
   max-height: min(70vh, 640px);
   overflow-y: auto;
   padding: 4px 20px 16px;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: var(--shadow);
@@ -263,7 +263,7 @@ html {
 .doc-body a {
   color: var(--accent-ink);
   text-decoration: underline;
-  text-decoration-color: rgba(75, 63, 192, 0.3);
+  text-decoration-color: color-mix(in srgb, var(--accent-ink) 30%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
