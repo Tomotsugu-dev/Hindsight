@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchPreviewTheme, previewThemeId } from "./preview-theme";
+import { fetchPreviewTheme, isThemeHostMode, previewThemeId } from "./preview-theme";
 
 describe("previewThemeId", () => {
   it("reads the theme id from ?theme=", () => {
@@ -10,6 +10,14 @@ describe("previewThemeId", () => {
     for (const search of ["", "?lang=ja", "?theme=", "?theme=Harbor", "?theme=..%2Fx", "?theme=-a"]) {
       expect(previewThemeId(search), search).toBeNull();
     }
+  });
+});
+
+describe("isThemeHostMode", () => {
+  it("detects ?theme-host=1", () => {
+    expect(isThemeHostMode("?lang=zh-CN&theme-host=1")).toBe(true);
+    expect(isThemeHostMode("?lang=zh-CN&theme=harbor")).toBe(false);
+    expect(isThemeHostMode("")).toBe(false);
   });
 });
 

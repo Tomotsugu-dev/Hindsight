@@ -1,7 +1,7 @@
-// Demo entry. 比主 main.tsx 简单：
-// - 不挂 SettingsProvider / CategoriesProvider 等（Stage 1 hello world 阶段）
-// - Stage 3 以后会逐步把 providers 都挂上
+// Demo entry.
 // - 注入 Tauri internals 全局 stub，防止某些组件运行时报错
+// - 启动时并行拉取当前语言包、首屏 TodayPage chunk，以及（若有）?theme= 预览主题
+// - 支持 /themes/ 页面的 ?theme-host=1 常驻预览宿主模式，通过同源 postMessage 瞬时切主题
 
 // 注入 Tauri internals stub——某些组件可能直接访问 window.__TAURI_INTERNALS__
 declare global {
@@ -20,13 +20,14 @@ if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__) {
 
 // 必须是第一个 import：要在 i18n 启动前设好语言
 import "./lang-from-query";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { ErrorBoundary } from "@app/components/ErrorBoundary/ErrorBoundary";
 import { restoreTheme } from "@app/lib/theme";
 import { AppDemo } from "./AppDemo";
+import { ensureInitialLocale } from "./i18n-demo";
 import { PreviewError } from "./PreviewError";
-import { applyPreviewTheme } from "./preview-theme";
+import { applyPreviewTheme, installPreviewThemeHost, isThemeHostMode } from "./preview-theme";
 import { followSiteMode } from "./site-mode";
 import "./mobile-overrides.css";
 
@@ -34,17 +35,33 @@ import "./mobile-overrides.css";
 // 否则 <html> 无 data-theme,会渲染成 default 多彩主题
 restoreTheme();
 
-// 主题页的预览要显示 ?theme= 的主题，不跟官网的深浅色
-if (!new URLSearchParams(location.search).has("theme")) followSiteMode();
+const params = new URLSearchParams(location.search);
+const isThemePreview = params.has("theme") || isThemeHostMode(location.search);
 
-// 官网主题页的预览：先套好 ?theme= 的主题，再画页面
-applyPreviewTheme(location.search).then((failed) => {
+// 主题页的预览要显示指定主题，不跟官网的深浅色
+if (!isThemePreview) followSiteMode();
+
+function DemoRoot({ initialFailed, hostMode }: { initialFailed: boolean; hostMode: boolean }) {
+  const [failed, setFailed] = useState(initialFailed);
+
+  useEffect(() => {
+    if (!hostMode) return;
+    return installPreviewThemeHost(setFailed);
+  }, [hostMode]);
+
+  return (
+    <ErrorBoundary scope="demo.crash">
+      {failed && <PreviewError />}
+      <AppDemo />
+    </ErrorBoundary>
+  );
+}
+
+// 并行加载当前语言包 +（若有）预览主题，都准备好再首次渲染，避免闪出 key 或默认主题
+Promise.all([ensureInitialLocale(), applyPreviewTheme(location.search)]).then(([, failed]) => {
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
-      <ErrorBoundary scope="demo.crash">
-        {failed && <PreviewError />}
-        <AppDemo />
-      </ErrorBoundary>
+      <DemoRoot initialFailed={failed} hostMode={isThemeHostMode(location.search)} />
     </React.StrictMode>,
   );
 });

@@ -10,15 +10,17 @@ interface Props {
   theme: ThemeEntry;
   language: PageLanguage;
   onPreview: (theme: ThemeEntry) => void;
+  onPrefetch?: (theme: ThemeEntry) => void;
 }
 
 /** 一个主题的卡片：色块、名称、作者和版本、简介、下载次数，以及三个按钮。 */
-export function ThemeCard({ theme, language, onPreview }: Props) {
+export function ThemeCard({ theme, language, onPreview, onPrefetch }: Props) {
   const s = STRINGS[language];
   const description = pickDescription(theme.description, language);
   const downloads = new Intl.NumberFormat(language).format(theme.downloads);
+  const prefetch = () => onPrefetch?.(theme);
   return (
-    <article className={styles.card}>
+    <article className={styles.card} onPointerEnter={prefetch}>
       <Swatch theme={theme} />
       <div className={styles.cardBody}>
         <h2 className={styles.name}>{theme.name}</h2>
@@ -30,7 +32,12 @@ export function ThemeCard({ theme, language, onPreview }: Props) {
         </p>
       </div>
       <div className={styles.actions}>
-        <button type="button" className={`${styles.button} ${styles.primary}`} onClick={() => onPreview(theme)}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.primary}`}
+          onClick={() => onPreview(theme)}
+          onFocus={prefetch}
+        >
           <Eye size={14} strokeWidth={2} aria-hidden />
           {s.preview}
         </button>

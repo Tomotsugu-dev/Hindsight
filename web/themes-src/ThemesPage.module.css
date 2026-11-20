@@ -223,6 +223,13 @@
   background: rgba(20, 16, 24, 0.55);
 }
 
+/* 常驻 iframe 关闭时隐藏但不 display: none，保持内部布局尺寸已测量完毕 */
+.backdropHidden {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -273,6 +280,11 @@
   flex: 1;
   width: 100%;
   border: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+.frameLoading {
+  opacity: 0;
 }
 
 /* 手机上占满整屏 */

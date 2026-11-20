@@ -3,6 +3,7 @@ import { RotateCw } from "lucide-react";
 import { DOCS_PAGE, HOME_PAGE, LANGUAGE_NAMES, STRINGS, pageLanguage, type PageLanguage } from "./i18n";
 import { loadIndex, type ThemeEntry } from "./index-data";
 import { PreviewPanel } from "./PreviewPanel";
+import { prefetchTheme } from "./theme-cache";
 import { ThemeCard } from "./ThemeCard";
 import styles from "./ThemesPage.module.css";
 
@@ -26,6 +27,8 @@ export function ThemesPage() {
   const s = STRINGS[LANGUAGE];
   const [state, setState] = useState<State>({ status: "loading" });
   const [previewing, setPreviewing] = useState<ThemeEntry | null>(null);
+  // 主题列表就绪后在空闲时后台挂载常驻预览宿主 iframe，避免首屏抢带宽、点击预览时零冷启动
+  const [hostMounted, setHostMounted] = useState(false);
 
   const load = useCallback(() => {
     setState({ status: "loading" });
@@ -39,6 +42,34 @@ export function ThemesPage() {
     document.title = `${s.title} · Hindsight`;
     load();
   }, [load, s.title]);
+
+  useEffect(() => {
+    if (hostMounted) return;
+    if (previewing) {
+      setHostMounted(true);
+      return;
+    }
+    if (state.status !== "ready" || state.themes.length === 0) return;
+
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    const mount = () => setHostMounted(true);
+    if (typeof win.requestIdleCallback === "function") {
+      const id = win.requestIdleCallback(mount, { timeout: 1000 });
+      return () => win.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(mount, 250);
+    return () => window.clearTimeout(timer);
+  }, [hostMounted, previewing, state]);
+
+  const handlePrefetch = useCallback((theme: ThemeEntry) => {
+    setHostMounted(true);
+    prefetchTheme(theme.id);
+  }, []);
+
+  const handleClose = useCallback(() => setPreviewing(null), []);
 
   return (
     <>
@@ -75,7 +106,13 @@ export function ThemesPage() {
         {state.status === "ready" && state.themes.length > 0 && (
           <div className={styles.grid}>
             {state.themes.map((theme) => (
-              <ThemeCard key={theme.id} theme={theme} language={LANGUAGE} onPreview={setPreviewing} />
+              <ThemeCard
+                key={theme.id}
+                theme={theme}
+                language={LANGUAGE}
+                onPreview={setPreviewing}
+                onPrefetch={handlePrefetch}
+              />
             ))}
           </div>
         )}
@@ -83,8 +120,8 @@ export function ThemesPage() {
 
       <Footer />
 
-      {previewing && (
-        <PreviewPanel theme={previewing} language={LANGUAGE} onClose={() => setPreviewing(null)} />
+      {hostMounted && (
+        <PreviewPanel theme={previewing} language={LANGUAGE} onClose={handleClose} />
       )}
     </>
   );
