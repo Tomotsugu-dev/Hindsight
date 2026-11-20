@@ -15,7 +15,9 @@ pub struct SessionFilter {
     /// 只要这些进程的段。
     pub apps: Vec<String>,
     /// 不要这些窗口：进程名一样，标题里有这个词。英文不分大小写。
-    pub hidden_windows: Vec<(String, String)>,
+    pub ignored_windows: Vec<(String, String)>,
+    /// 不要标题里有这些词的段，不管是哪个进程。英文不分大小写。
+    pub privacy_keywords: Vec<String>,
 }
 
 /// 命中的一段屏幕文字。
@@ -65,13 +67,17 @@ pub fn find_sessions(
         let marks = vec!["?"; f.apps.len()].join(", ");
         conds.push(format!("COALESCE(s.app_id, '') IN ({marks})"));
         binds.extend(f.apps.iter().cloned());
-        for (app, word) in &f.hidden_windows {
+        for (app, word) in &f.ignored_windows {
             conds.push(
                 "NOT (lower(trim(COALESCE(s.app_id, ''))) = lower(trim(?))
                       AND COALESCE(s.title, '') LIKE ? ESCAPE '\\')"
                     .to_string(),
             );
             binds.extend([app.clone(), like_pattern(word.trim())]);
+        }
+        for word in &f.privacy_keywords {
+            conds.push("COALESCE(s.title, '') NOT LIKE ? ESCAPE '\\'".to_string());
+            binds.push(like_pattern(word.trim()));
         }
     }
     let wheres = if conds.is_empty() {
@@ -289,7 +295,7 @@ mod tests {
 
         let only = |apps: &[&str]| SessionFilter {
             apps: apps.iter().map(|a| a.to_string()).collect(),
-            hidden_windows: Vec::new(),
+            ..Default::default()
         };
         assert_eq!(
             titles(&db, &["报销"], None, Some(only(&["Code"]))).await,
@@ -323,12 +329,41 @@ mod tests {
         let filter = SessionFilter {
             apps: vec!["Terminal".into(), "iTerm".into()],
             // 进程名和标题里的词都不分大小写，前后的空白不算
-            hidden_windows: vec![(" terminal ".into(), " DOWNLOAD ".into())],
+            ignored_windows: vec![(" terminal ".into(), " DOWNLOAD ".into())],
+            ..Default::default()
         };
         // 没有标题的段不会被这条规则去掉
         assert_eq!(
             titles(&db, &["报销"], None, Some(filter)).await,
             ["", "download", "vim"]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_filter_hides_titles_with_a_word_in_any_app() {
+        let db = db_with(&[
+            seg("2026-07-01T09:00", "Excel", "工资表.xlsx", "报销"),
+            seg("2026-07-01T10:00", "Chrome", "MyBank - Login", "报销"),
+            seg("2026-07-01T11:00", "Chrome", "GitHub", "报销"),
+            Seg {
+                start: "2026-07-01T12:00",
+                app: Some("Excel"),
+                title: None,
+                text: "报销",
+            },
+        ])
+        .await;
+
+        let filter = SessionFilter {
+            apps: vec!["Excel".into(), "Chrome".into()],
+            // 不分大小写，前后的空白不算
+            privacy_keywords: vec!["工资".into(), " bank ".into()],
+            ..Default::default()
+        };
+        // 没有标题的段不会被去掉
+        assert_eq!(
+            titles(&db, &["报销"], None, Some(filter)).await,
+            ["", "GitHub"]
         );
     }
 

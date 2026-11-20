@@ -8,7 +8,6 @@ use chrono::NaiveDate;
 use tokio::sync::OnceCell;
 
 use super::ToolCtx;
-use crate::ai::policy::AiDataPolicy;
 use crate::storage::Connection;
 
 /// 开两个内存库，建好工具查询用到的表，再跑 `mem_sql` 和 `main_sql` 造数据。
@@ -55,11 +54,10 @@ pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> T
     })
     .await
     .unwrap();
-    // 这里的主库没有设置表，读不出 AiDataPolicy：什么都给看
     ToolCtx {
         main,
         mem,
-        policy: OnceCell::from(AiDataPolicy::default()),
+        policy: OnceCell::new(),
     }
 }
 
