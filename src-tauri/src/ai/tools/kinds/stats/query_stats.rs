@@ -378,7 +378,7 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<S
 }
 
 async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput> {
-    let visible = ctx.policy().await?.main_filter();
+    let visible = ctx.policy.main_filter();
     let (from, to) = (q.range.0.to_string(), q.range.1.to_string());
     let apps: Vec<String> = q.apps.iter().map(|a| like_pattern(a)).collect();
     let title_like = q.title_keyword.as_deref().map(like_pattern);

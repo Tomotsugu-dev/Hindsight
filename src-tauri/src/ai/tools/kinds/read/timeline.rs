@@ -144,7 +144,7 @@ async fn run(
     let scope = format!(
         "{} WHERE a.local_date BETWEEN ?1 AND ?2 AND {}",
         from_stats_category_sql("activities"),
-        ctx.policy().await?.main_filter()
+        ctx.policy.main_filter()
     );
     // 主源是主库活动记录:不开截图/OCR 的用户也有完整时间线,电池暂停或
     // 待识别积压造成的索引空窗也不再啃掉时段尾巴。

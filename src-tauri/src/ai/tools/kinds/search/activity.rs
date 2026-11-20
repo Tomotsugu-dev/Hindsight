@@ -200,7 +200,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Found> {
          ORDER BY w.secs DESC, l.started_at DESC",
         with = host_rule_with_sql("activities"),
         from_sql = from_stats_category_sql("activities"),
-        visible = ctx.policy().await?.main_filter(),
+        visible = ctx.policy.main_filter(),
     );
     let all = ctx
         .main

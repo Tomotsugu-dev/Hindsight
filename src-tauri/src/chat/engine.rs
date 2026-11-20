@@ -584,6 +584,7 @@ mod sanitize_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::policy::ProfileChoice;
 
     fn cite(index: usize) -> Citation {
         Citation {
@@ -674,7 +675,9 @@ mod tests {
             ChatLlm::local(port, &model, thinking).unwrap()
         };
         let today = chrono::Local::now().date_naive();
-        let ctx = Tools::open_readonly(today, ChatLang::ZhHans).await.unwrap();
+        let ctx = Tools::open_readonly(today, ChatLang::ZhHans, &ProfileChoice::Main)
+            .await
+            .unwrap();
 
         // (问题, 历史) —— 第三条是省略式追问,靠历史做指代消解
         let follow_up_history = vec![
@@ -734,6 +737,7 @@ mod loop_tests {
     //! 断言分两层:返回值(ChatAnswer 契约)与请求体(引擎回喂给模型的报文)——
     //! 后者才能钉死"纠错回路/历史消毒/步数强制作答"这些只在报文里可见的行为。
     use super::*;
+    use crate::ai::policy::ProfileChoice;
     use serde_json::{json, Value};
     use std::sync::{Arc, Mutex};
 
@@ -776,8 +780,8 @@ mod loop_tests {
              path TEXT PRIMARY KEY, ts TEXT, local_date TEXT,
              ocr_state INTEGER NOT NULL DEFAULT 0);";
 
-    /// `with_schema=false` 时留两个 0 字节文件:库能只读打开但一张表都没有,
-    /// 任何工具 SQL 必然报错——专门喂"工具执行失败"分支。
+    /// `with_schema=false` 时主库只建 AiDataPolicy 要读的两张表,记忆库留 0 字节:
+    /// 工具能打开,任何工具 SQL 必然报错——专门喂"工具执行失败"分支。
     // env 锁必须横跨 open_readonly().await(它在内部读 HINDSIGHT_DATA_DIR);
     // 该锁是 test_util 的进程级 std::sync::Mutex,同步测试也在用,不能换 tokio 锁。
     // 每个 #[tokio::test] 是独立的单线程 runtime,持锁跨 await 不会自死锁;
@@ -801,10 +805,16 @@ mod loop_tests {
             main.execute_batch(&format!("{MAIN_SCHEMA}{main_sql}"))
                 .unwrap();
             mem.execute_batch(MEM_SCHEMA).unwrap();
+        } else {
+            main.execute_batch(
+                "CREATE TABLE settings_store (id INTEGER PRIMARY KEY, data TEXT NOT NULL);
+                 CREATE TABLE categories (id TEXT, name TEXT, deleted_at TEXT);",
+            )
+            .unwrap();
         }
         drop(main);
         drop(mem);
-        let ctx = Tools::open_readonly(today(), ChatLang::ZhHans).await;
+        let ctx = Tools::open_readonly(today(), ChatLang::ZhHans, &ProfileChoice::Main).await;
         match prev {
             Some(v) => std::env::set_var("HINDSIGHT_DATA_DIR", v),
             None => std::env::remove_var("HINDSIGHT_DATA_DIR"),
@@ -1031,7 +1041,7 @@ mod loop_tests {
     }
 
     /// 工具执行期失败(库损坏/表缺失)不许升级成整轮失败:引擎回喂固定文案,
-    /// 模型换路或基于已有资料作答。0 字节 SQLite = 能只读打开但无任何表。
+    /// 模型换路或基于已有资料作答。主库没有 activities 表,查时间线必然报错。
     #[tokio::test]
     async fn tool_execution_failure_is_fed_back_not_fatal() {
         let ctx = fixture_ctx(false, "").await;
