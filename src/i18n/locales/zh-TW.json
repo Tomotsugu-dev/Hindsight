@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "載入分類…",
       "empty": "還沒有分類",
-      "excludedTitle": "已排除——點一下重新加入",
-      "includeTitle": "點一下從分析中排除"
+      "unseenTitle": "AI 看不到——點一下給它看",
+      "seenTitle": "AI 看得到——點一下不給看"
     },
     "rankedList": {
       "expand": "展開剩餘 {{count}} 項",
@@ -1250,11 +1250,6 @@
       "sectionInfo": "AI 按段彙總；段內截圖按相似度抽幀再發給模型。",
       "rowLabel": "時段"
     },
-    "filter": {
-      "sectionTitle": "過濾",
-      "rowLabel": "分析這些分類",
-      "rowHint": "點選切換：\n• 彩色 + 分類圖示 = 參與 AI 分析\n• 灰色空心 + 閉眼圖示 = 已排除"
-    },
     "external": {
       "sectionTitle": "雲端 API（可選）",
       "sectionDesc": "時段總結與「對話」問答改用雲端模型，截圖永遠不會上傳。",
@@ -1508,6 +1503,38 @@
       "confirm": "永久移除",
       "doneToast": "已從雲端移除「{{name}}」，刪除 {{count}} 個 Drive 檔案。",
       "error": "移除失敗：{{message}}"
+    }
+  },
+  "aiProfiles": {
+    "main": "預設分類",
+    "pickerTitle": "AI 看得到的資料",
+    "manage": "管理設定檔…",
+    "moduleGroup": "功能",
+    "feature": {
+      "daily": "日報",
+      "weekly": "週報",
+      "chat": "對話"
+    },
+    "intro": {
+      "daily": "每個設定檔是一組分類，產生日報時 AI 只看這些分類裡的記錄。隱私分類和命中隱私關鍵字的記錄，任何設定檔下 AI 都看不到。",
+      "weekly": "每個設定檔是一組分類，產生週報時 AI 只看這些分類裡的記錄。隱私分類和命中隱私關鍵字的記錄，任何設定檔下 AI 都看不到。",
+      "chat": "每個設定檔是一組分類，對話時 AI 只看這些分類裡的記錄。隱私分類和命中隱私關鍵字的記錄，任何設定檔下 AI 都看不到。"
+    },
+    "weeklyNote": "週報會照原文讀這週的日報，日報裡已經寫進去的內容，這裡攔不住。設定檔只管週報自己查的記錄：整週的應用排行，和沒有日報那幾天的記錄。",
+    "autoLabel": "自動產生時使用",
+    "mainNote": "除了「不計入統計」和「隱私」以外的全部分類，不能改。",
+    "empty": "還沒有設定檔。新增一個，只給 AI 看你選的分類。",
+    "add": "新增設定檔",
+    "defaultName": "設定檔 {{n}}",
+    "unnamed": "（未命名）",
+    "namePlaceholder": "設定檔名稱",
+    "delete": "刪除這個設定檔",
+    "saved": "變更已自動儲存",
+    "notSaved": "標紅的設定檔改好之前，變更不會儲存",
+    "errors": {
+      "noName": "要有名稱",
+      "sameName": "和另一個設定檔同名",
+      "noCategory": "至少給 AI 看一個分類"
     }
   },
   "aiSummary": {

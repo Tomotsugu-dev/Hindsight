@@ -201,7 +201,7 @@ async function openAiSummary(page, shot, labels) {
   await page.getByText(shot.ready, { exact: false }).first().waitFor();
 }
 
-/** 「AI 设置」页：shot.tab 为 general 时切到「常规」标签，等「分析这些分类」那一行出来。 */
+/** 「AI 设置」页：shot.tab 为 general 时切到「常规」标签，等「时段」那一行出来。 */
 async function openAiSettings(page, shot, labels) {
   await disableAnimations(page);
   await page.getByRole("link", { name: labels.nav.items.aiSettings, exact: true }).click();
@@ -210,7 +210,7 @@ async function openAiSettings(page, shot, labels) {
     .waitFor();
   if (shot.tab === "general") {
     await page.getByRole("link", { name: labels.aiSettings.tabs.general, exact: true }).click();
-    await page.getByText(labels.aiSettings.filter.rowLabel, { exact: true }).waitFor();
+    await page.getByText(labels.aiSettings.segments.rowLabel, { exact: true }).waitFor();
   }
 }
 

@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "Loading categories…",
       "empty": "No categories yet",
-      "excludedTitle": "Excluded — click to include again",
-      "includeTitle": "Click to exclude from analysis"
+      "unseenTitle": "The AI can't see this. Click to show it",
+      "seenTitle": "The AI can see this. Click to hide it"
     },
     "rankedList": {
       "expand": "Show {{count}} more",
@@ -1255,11 +1255,6 @@
       "sectionInfo": "AI summaries are produced per segment; screenshots within each segment are sampled by similarity before being sent to the model.",
       "rowLabel": "Segments"
     },
-    "filter": {
-      "sectionTitle": "Filters",
-      "rowLabel": "Analyze these categories",
-      "rowHint": "Click to toggle:\n• Colored + category icon = included in AI analysis\n• Gray outline + closed-eye icon = excluded"
-    },
     "external": {
       "sectionTitle": "Cloud API (optional)",
       "sectionDesc": "Generate segment summaries and Chat answers with a cloud model. Screenshots are never uploaded.",
@@ -1513,6 +1508,38 @@
       "confirm": "Forget device",
       "doneToast": "\"{{name}}\" removed from the cloud ({{count}} Drive files deleted).",
       "error": "Failed to remove device: {{message}}"
+    }
+  },
+  "aiProfiles": {
+    "main": "Default categories",
+    "pickerTitle": "Data the AI can see",
+    "manage": "Manage profiles…",
+    "moduleGroup": "Feature",
+    "feature": {
+      "daily": "Daily report",
+      "weekly": "Weekly report",
+      "chat": "Chat"
+    },
+    "intro": {
+      "daily": "A profile is a set of categories. When it writes the daily report, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile.",
+      "weekly": "A profile is a set of categories. When it writes the weekly report, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile.",
+      "chat": "A profile is a set of categories. In chat, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile."
+    },
+    "weeklyNote": "The weekly report reads this week's daily reports as they are. A profile can't remove what they already say. It only filters what the weekly report looks up itself: the top apps of the week, and the records of days with no daily report.",
+    "autoLabel": "Use for automatic reports",
+    "mainNote": "Every category except hidden and private ones. You can't change it.",
+    "empty": "No profiles yet. Add one to let the AI see only the categories you choose.",
+    "add": "New profile",
+    "defaultName": "Profile {{n}}",
+    "unnamed": "(no name)",
+    "namePlaceholder": "Profile name",
+    "delete": "Delete this profile",
+    "saved": "Changes are saved automatically",
+    "notSaved": "Changes aren't saved until you fix the profiles marked in red",
+    "errors": {
+      "noName": "Needs a name",
+      "sameName": "Another profile has this name",
+      "noCategory": "Let the AI see at least one category"
     }
   },
   "aiSummary": {

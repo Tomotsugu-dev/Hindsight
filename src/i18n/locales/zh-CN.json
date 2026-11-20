@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "加载分类…",
       "empty": "还没有分类",
-      "excludedTitle": "已排除——点一下重新加入",
-      "includeTitle": "点一下从分析中排除"
+      "unseenTitle": "AI 看不到——点一下给它看",
+      "seenTitle": "AI 能看到——点一下不给看"
     },
     "rankedList": {
       "expand": "展开剩余 {{count}} 项",
@@ -1250,11 +1250,6 @@
       "sectionInfo": "AI 按段汇总；段内截图按相似度抽帧再发给模型。",
       "rowLabel": "时段"
     },
-    "filter": {
-      "sectionTitle": "过滤",
-      "rowLabel": "分析这些分类",
-      "rowHint": "点击切换：\n• 彩色 + 分类图标 = 参与 AI 分析\n• 灰色空心 + 闭眼图标 = 已排除"
-    },
     "external": {
       "sectionTitle": "云端 API（可选）",
       "sectionDesc": "时段总结与「对话」问答改用云端模型，截图永远不上传。",
@@ -1508,6 +1503,38 @@
       "confirm": "永久移除",
       "doneToast": "已从云端移除「{{name}}」，删除 {{count}} 个 Drive 文件。",
       "error": "移除失败：{{message}}"
+    }
+  },
+  "aiProfiles": {
+    "main": "默认分类",
+    "pickerTitle": "AI 能看到的数据",
+    "manage": "管理配置…",
+    "moduleGroup": "功能",
+    "feature": {
+      "daily": "日报",
+      "weekly": "周报",
+      "chat": "对话"
+    },
+    "intro": {
+      "daily": "每套配置是一组分类，生成日报时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。",
+      "weekly": "每套配置是一组分类，生成周报时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。",
+      "chat": "每套配置是一组分类，对话时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。"
+    },
+    "weeklyNote": "周报会照原文读这周的日报，日报里已经写进去的内容，这里拦不住。配置只管周报自己查的记录：整周的应用排行，和没有日报那几天的记录。",
+    "autoLabel": "自动生成时用",
+    "mainNote": "除了「不计入统计」和「隐私」以外的全部分类，不能改。",
+    "empty": "还没有配置。新建一套，只给 AI 看你选的分类。",
+    "add": "新建配置",
+    "defaultName": "配置 {{n}}",
+    "unnamed": "（未命名）",
+    "namePlaceholder": "配置名",
+    "delete": "删除这套配置",
+    "saved": "改动已自动保存",
+    "notSaved": "标红的配置改好之前，改动不会保存",
+    "errors": {
+      "noName": "要有名字",
+      "sameName": "和另一套配置重名",
+      "noCategory": "至少给 AI 看一个分类"
     }
   },
   "aiSummary": {

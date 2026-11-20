@@ -80,14 +80,14 @@ const SHOTS = [
   { doc: "ai-summary-and-chat", file: "daily-report", page: "aiSummary", ready: "HourlyChart" },
   // 「对话」：问一个问题，回答和来源出来后截图。
   { doc: "ai-summary-and-chat", file: "chat", page: "chat", questions: CHAT_QUESTIONS },
-  // 「AI 设置 → 常规」：只要时段划分和过滤，定时计划不要。滚到底，裁掉侧栏。
+  // 「AI 设置 → 常规」：只要时段划分，定时计划不要。滚到底，裁掉侧栏。
   {
     doc: "ai-configuration",
     file: "summary-settings",
     page: "aiSettings",
     tab: "general",
     scrollToEnd: true,
-    sections: ["aiSettings.segments.sectionTitle", "aiSettings.filter.sectionTitle"],
+    sections: ["aiSettings.segments.sectionTitle"],
   },
   // Capture the full daily statistics window in each of the four themes.
   {
@@ -200,7 +200,7 @@ async function cardsClip(page, shot, labels) {
 
 /**
  * 不要侧栏，只截 shot.sections 里第一个到最后一个设置块之间的范围，上下各留一点边距。
- * sections 里写的是设置块标题在界面文案里的路径，如 "aiSettings.filter.sectionTitle"。
+ * sections 里写的是设置块标题在界面文案里的路径，如 "aiSettings.segments.sectionTitle"。
  */
 async function sectionsClip(page, shot, labels) {
   await page

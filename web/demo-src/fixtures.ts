@@ -884,8 +884,17 @@ export const mockSettings: Settings = {
     externalProvider: "openai",
     userBrief: "全栈开发者，主要做 React + Rust 项目。",
     segments: DEFAULT_AI_SEGMENTS.map((seg) => ({ ...seg })),
-    // 与真实默认一致：「其他」不参与分析
-    excludedCategories: ["other"],
+    // 日报带一套演示配置，好看到下拉框里有东西
+    visibility: {
+      daily: {
+        profiles: {
+          p_demo1: { name: "专注工作", categories: ["code", "office", "workchat"] },
+        },
+        autoProfile: null,
+      },
+      weekly: { profiles: {}, autoProfile: null },
+      chat: { profiles: {}, autoProfile: null },
+    },
     modelsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models",
     activeMain: "Qwen3.5-9B-Q4_K_M.gguf",
     activeMmproj: "",

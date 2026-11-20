@@ -437,7 +437,6 @@ export interface SummaryProgress {
 /** 单次 generate 调用对 settings.ai 的局部覆盖（不写 settings 全局）。
  *  调试 tab 用：跑总结时传这个 patch，跑完不留痕。 */
 export interface AiOverrides {
-  excludedCategories?: string[];
   /** 段总结的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
   systemPrompt?: string;
   /** llama-server `--batch-size` / `--ubatch-size`（取一致值）。
@@ -500,6 +499,27 @@ export interface ExternalProfile {
   model: string;
 }
 
+/** 有配置的三个功能。 */
+export type AiProfileModule = "daily" | "weekly" | "chat";
+
+/** 一套配置：AI 只看选中的这些分类。 */
+export interface VisibilityProfile {
+  name: string;
+  /** 选中的分类 id */
+  categories: string[];
+}
+
+/** 一个功能的全部配置。 */
+export interface ModuleProfiles {
+  /** 配置 id → 配置。id 是生成的，改名不影响引用 */
+  profiles: Record<string, VisibilityProfile>;
+  /** 自动生成用哪套；null = 按默认分类。聊天没有自动生成，一直是 null */
+  autoProfile: string | null;
+}
+
+/** 日报、周报、聊天各自的配置。镜像后端 `crate::ai::config::Visibility`。 */
+export type AiVisibility = Record<AiProfileModule, ModuleProfiles>;
+
 export interface AiConfig {
   /** 外部云端 API base URL（OpenAI 兼容，不含 /chat/completions）。
    *  仅在 externalEnabled = true 时生效。 */
@@ -520,8 +540,8 @@ export interface AiConfig {
   userBrief: string;
   /** 一天的时段划分（按 startHour 排序、相邻段共边） */
   segments: AiSegment[];
-  /** 不分析的 category id 列表 */
-  excludedCategories: string[];
+  /** 日报、周报、聊天各自的配置：AI 能看到哪些分类 */
+  visibility: AiVisibility;
   /** 模型（GGUF）保存路径。
    *  空字符串 = 走默认 `<data_root>/ai/models/`；后端 settings load 启动时
    *  会把空值填成实际默认路径，所以前端拿到的总是非空字符串。 */

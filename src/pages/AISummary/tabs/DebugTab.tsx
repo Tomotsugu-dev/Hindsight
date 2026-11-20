@@ -88,7 +88,6 @@ export default function DebugTab() {
 
   // 调试参数 state 来自 Context，跟 DebugSettingsTab 共享同一份。
   const {
-    debugExcluded,
     debugSummaryBatchSize,
     debugSummaryParallelSlots,
     debugSummaryCtxSize,
@@ -267,7 +266,6 @@ export default function DebugTab() {
       const lang = settings?.ai.promptLanguage ?? "zh";
       const sysPromptDefault = DEFAULT_SYSTEM_PROMPTS[lang];
       const overrides: AiOverrides = {
-        excludedCategories: debugExcluded,
         systemPrompt: debugSysPrompt.trim() === sysPromptDefault.trim() ? "" : debugSysPrompt,
         // 引擎参数——null / 1 = 不传，让后端 fallback 到 settings.ai 默认；
         // 非默认值才打包到对应的 summary* 字段，触发 stop+start with overrides

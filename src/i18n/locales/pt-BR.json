@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "Carregando categorias…",
       "empty": "Nenhuma categoria ainda",
-      "excludedTitle": "Excluída — clique para incluir novamente",
-      "includeTitle": "Clique para excluir da análise"
+      "unseenTitle": "A IA não vê esta categoria. Clique para mostrar",
+      "seenTitle": "A IA vê esta categoria. Clique para esconder"
     },
     "rankedList": {
       "expand": "Mostrar mais {{count}}",
@@ -1255,11 +1255,6 @@
       "sectionInfo": "Os resumos de IA são produzidos por segmento; as capturas de tela dentro de cada segmento são amostradas por similaridade antes de serem enviadas ao modelo.",
       "rowLabel": "Segmentos"
     },
-    "filter": {
-      "sectionTitle": "Filtros",
-      "rowLabel": "Analisar estas categorias",
-      "rowHint": "Clique para alternar:\n• Colorido + ícone de categoria = incluído na análise de IA\n• Contorno cinza + ícone de olho fechado = excluído"
-    },
     "external": {
       "sectionTitle": "API na nuvem (opcional)",
       "sectionDesc": "Gere resumos de períodos e respostas do Chat com um modelo na nuvem. Capturas de tela nunca são enviadas.",
@@ -1513,6 +1508,38 @@
       "confirm": "Esquecer dispositivo",
       "doneToast": "\"{{name}}\" removido da nuvem ({{count}} arquivos do Drive excluídos).",
       "error": "Falha ao remover o dispositivo: {{message}}"
+    }
+  },
+  "aiProfiles": {
+    "main": "Categorias padrão",
+    "pickerTitle": "Dados que a IA vê",
+    "manage": "Gerenciar perfis…",
+    "moduleGroup": "Função",
+    "feature": {
+      "daily": "Resumo diário",
+      "weekly": "Resumo semanal",
+      "chat": "Chat"
+    },
+    "intro": {
+      "daily": "Um perfil é um conjunto de categorias. Ao escrever o resumo diário, a IA só vê os registros dessas categorias. Em nenhum perfil a IA vê registros privados nem os que batem com uma palavra-chave de privacidade.",
+      "weekly": "Um perfil é um conjunto de categorias. Ao escrever o resumo semanal, a IA só vê os registros dessas categorias. Em nenhum perfil a IA vê registros privados nem os que batem com uma palavra-chave de privacidade.",
+      "chat": "Um perfil é um conjunto de categorias. No chat, a IA só vê os registros dessas categorias. Em nenhum perfil a IA vê registros privados nem os que batem com uma palavra-chave de privacidade."
+    },
+    "weeklyNote": "O resumo semanal lê os resumos diários como estão. Um perfil não remove o que eles já dizem. Ele só filtra o que o resumo semanal consulta sozinho: os apps mais usados da semana e os registros dos dias sem resumo diário.",
+    "autoLabel": "Usar nos resumos automáticos",
+    "mainNote": "Todas as categorias, menos as ocultas e as privadas. Não pode ser alterado.",
+    "empty": "Ainda não há perfis. Crie um para a IA ver só as categorias que você escolher.",
+    "add": "Novo perfil",
+    "defaultName": "Perfil {{n}}",
+    "unnamed": "(sem nome)",
+    "namePlaceholder": "Nome do perfil",
+    "delete": "Excluir este perfil",
+    "saved": "As alterações são salvas automaticamente",
+    "notSaved": "As alterações só são salvas depois que você corrigir os perfis marcados em vermelho",
+    "errors": {
+      "noName": "Precisa de um nome",
+      "sameName": "Outro perfil tem este nome",
+      "noCategory": "Deixe a IA ver pelo menos uma categoria"
     }
   },
   "aiSummary": {

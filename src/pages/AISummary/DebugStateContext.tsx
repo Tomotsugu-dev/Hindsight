@@ -12,8 +12,6 @@ import { DEFAULT_SYSTEM_PROMPTS, overrideKey } from "../../lib/aiPrompts";
 import { useSettings } from "../../state/settings";
 
 interface DebugState {
-  debugExcluded: string[];
-  setDebugExcluded: (v: string[]) => void;
   /** 段总结阶段 batch；null = fallback 到默认 */
   debugSummaryBatchSize: number | null;
   setDebugSummaryBatchSize: (v: number | null) => void;
@@ -36,7 +34,6 @@ const DebugStateContext = createContext<DebugState | null>(null);
 export function DebugStateProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
 
-  const [debugExcluded, setDebugExcluded] = useState<string[]>([]);
   const [debugSummaryBatchSize, setDebugSummaryBatchSize] = useState<number | null>(null);
   const [debugSummaryParallelSlots, setDebugSummaryParallelSlots] = useState(1);
   const [debugSummaryCtxSize, setDebugSummaryCtxSize] = useState<number | null>(null);
@@ -49,7 +46,6 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (initedRef.current || !settings) return;
     initedRef.current = true;
-    setDebugExcluded(settings.ai.excludedCategories);
     // 调试参数初值——优先用 summary 专用字段，未设则 fallback 到旧全局字段
     setDebugSummaryBatchSize(settings.ai.summaryBatchSize ?? settings.ai.batchSize ?? null);
     setDebugSummaryParallelSlots(
@@ -65,8 +61,6 @@ export function DebugStateProvider({ children }: { children: ReactNode }) {
   }, [settings]);
 
   const value: DebugState = {
-    debugExcluded,
-    setDebugExcluded,
     debugSummaryBatchSize,
     setDebugSummaryBatchSize,
     debugSummaryParallelSlots,
