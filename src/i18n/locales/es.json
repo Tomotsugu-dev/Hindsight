@@ -1675,7 +1675,7 @@
         "regenerateTooltip": "Regenerar borra todos los resúmenes por tramos de este día y los vuelve a ejecutar.",
         "noModelTooltip": "Elige primero un modelo en Ajustes de IA → Modelos.",
         "delete": "Eliminar",
-        "deleteTooltip": "Borrar ai_summaries (source=daily) de este día (no se puede deshacer).",
+        "deleteTooltip": "Borrar el informe diario de este día (no se puede deshacer)",
         "deleteEmptyTooltip": "Aún no hay datos diarios que eliminar.",
         "deleteConfirmTitle": "¿Eliminar los datos del informe diario del {{date}}?",
         "deleteConfirmMessage": "Se borrarán todos los resúmenes por tramos de este día. La pestaña Depuración no se ve afectada. Esto no se puede deshacer.",
