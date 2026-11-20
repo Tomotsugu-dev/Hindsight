@@ -1,0 +1,194 @@
+/* 从齿轮跳过来时整块描一圈边，1.6 秒后淡掉 */
+.wrap {
+  border-radius: var(--radius-lg);
+  transition: box-shadow 400ms var(--ease-out);
+}
+
+.arrived {
+  box-shadow: 0 0 0 calc(6px * var(--density)) var(--color-accent-soft);
+}
+
+/* —— 日报 / 周报 / 对话 切换，样子同 tab 条 —— */
+.switcher {
+  display: inline-flex;
+  gap: calc(4px * var(--density));
+  padding: calc(3px * var(--density));
+  border-radius: var(--radius-md);
+  background: var(--fill-default);
+}
+
+.switchItem {
+  height: calc(var(--control-height-sm) * var(--density));
+  padding: 0 calc(12px * var(--density));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 160ms var(--ease-out);
+}
+
+.switchItem:hover {
+  color: var(--text-strong);
+}
+
+.switchActive {
+  background: var(--surface-card-elevated);
+  color: var(--text-strong);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
+}
+
+/* —— 卡片里的每一行，内边距和分隔线同 Row —— */
+.line {
+  margin: 0;
+  padding: calc(14px * var(--density)) calc(20px * var(--density));
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.line:last-child {
+  border-bottom: none;
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(8px * var(--density));
+  background: var(--surface-2);
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  line-height: 1.6;
+  color: var(--text-regular);
+}
+
+.note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.autoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--density));
+}
+
+.autoLabel {
+  font-size: calc(var(--font-size-body-lg) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-strong);
+}
+
+/* 一套配置一行：名字一栏、分类一栏、删除按钮 */
+.profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(12px * var(--density)) calc(16px * var(--density));
+}
+
+.nameCol {
+  flex: 0 0 calc(170px * var(--density));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(8px * var(--density));
+}
+
+.name {
+  width: 100%;
+}
+
+.name.invalid {
+  border-color: var(--status-error);
+}
+
+.mainName {
+  width: 100%;
+  box-sizing: border-box;
+  height: calc(var(--control-height-md) * var(--density));
+  padding: 0 calc(10px * var(--density));
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+  border-radius: var(--radius-sm);
+  background: var(--fill-default);
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-regular);
+}
+
+.mainName > svg {
+  color: var(--text-muted);
+}
+
+.mainNote {
+  flex: 1 1 calc(240px * var(--density));
+  min-width: 0;
+  margin: 0;
+  align-self: center;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.chipsCol {
+  flex: 1 1 calc(240px * var(--density));
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--density));
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: calc(20px * var(--density));
+  padding: 0 calc(8px * var(--density));
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  white-space: nowrap;
+}
+
+.problem {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--status-error-strong);
+}
+
+.empty {
+  text-align: center;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--density));
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+}
+
+.statusSaved {
+  color: var(--status-ok-strong);
+}
+
+.statusBlocked {
+  color: var(--status-error-strong);
+}

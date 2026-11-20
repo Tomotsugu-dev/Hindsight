@@ -191,6 +191,8 @@ export async function startWeeklyGenerate(
   weekStart: string,
   forceRefresh: boolean,
   allowMissingDays: boolean = false,
+  /** 用户选的配置 id；null = 默认分类 */
+  profile: string | null = null,
 ): Promise<void> {
   ensureListener();
   snap = Object.freeze({
@@ -201,10 +203,10 @@ export async function startWeeklyGenerate(
   });
   notify();
   try {
-    await api.generateWeekSummary(weekStart, forceRefresh, allowMissingDays);
+    await api.generateWeekSummary(weekStart, forceRefresh, allowMissingDays, profile);
     // generateWeekSummary 在 all_done 后 resolve；事件流已经把 generating 置回 false
   } catch (e) {
-    setTopError(typeof e === "string" ? e : String(e));
+    setTopError(localizeAiError(typeof e === "string" ? e : String(e)));
     throw e;
   }
 }

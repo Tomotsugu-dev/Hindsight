@@ -5,12 +5,11 @@ mod test_util;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use tokio::sync::OnceCell;
 
 pub use self::kinds::Query;
 pub use self::lang::ChatLang;
 use crate::ai::model::{ToolCall, ToolSpec};
-use crate::ai::policy::{AiDataPolicy, AiModule};
+use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::error::Result;
 use crate::storage::Connection;
 
@@ -30,10 +29,20 @@ pub struct Tools {
 pub struct ToolError(pub String);
 
 impl Tools {
-    /// Opens read-only connections to the main database and the memory database.
-    pub async fn open_readonly(today: NaiveDate, lang: ChatLang) -> Result<Self> {
+    /// Opens read-only connections to the main database and the memory database, and reads
+    /// what the AI can see with `profile`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidInput`](crate::error::Error::InvalidInput) if the profile the user
+    /// picked is gone.
+    pub async fn open_readonly(
+        today: NaiveDate,
+        lang: ChatLang,
+        profile: &ProfileChoice,
+    ) -> Result<Self> {
         Ok(Self {
-            ctx: ToolCtx::open_readonly().await?,
+            ctx: ToolCtx::open_readonly(profile).await?,
             today,
             lang,
         })
@@ -92,36 +101,27 @@ pub struct ToolOutput {
     pub citations: Vec<Citation>,
 }
 
-/// Read-only connections to the two databases.
+/// Read-only connections to the two databases, and what the AI can see.
 struct ToolCtx {
     main: Connection,
     mem: Connection,
-    /// What the AI may see. It is read from the main database on first use.
-    policy: OnceCell<AiDataPolicy>,
+    /// What the AI can see. It is read when the tools are opened, and stays the same for
+    /// the question.
+    policy: AiDataPolicy,
 }
 
 impl ToolCtx {
-    /// Opens read-only connections to the main database and the memory database.
-    async fn open_readonly() -> Result<Self> {
+    /// Opens read-only connections to the main database and the memory database, and reads
+    /// what the AI can see with `profile`.
+    async fn open_readonly(profile: &ProfileChoice) -> Result<Self> {
         use rusqlite::OpenFlags;
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let main = Connection::open_with_flags(crate::storage::db_path()?, flags).await?;
+        // Read before the model runs. If this fails, the question fails, and the model does
+        // not answer from a failed tool
+        let policy = AiDataPolicy::load(&main, AiModule::Chat, profile).await?;
         let mem = Connection::open_with_flags(crate::memory::memory_db_path()?, flags).await?;
-        Ok(Self {
-            main,
-            mem,
-            policy: OnceCell::new(),
-        })
-    }
-
-    /// Returns what the AI may see.
-    ///
-    /// After the first successful read, it is not read again for this question. If the read
-    /// fails, the tool that needs it fails too, and never returns unfiltered data.
-    async fn policy(&self) -> Result<&AiDataPolicy> {
-        self.policy
-            .get_or_try_init(|| AiDataPolicy::load(&self.main, AiModule::Chat, None))
-            .await
+        Ok(Self { main, mem, policy })
     }
 }
 
@@ -284,13 +284,16 @@ mod tests {
             let main = Connection::open_with_flags(crate::storage::db_path().unwrap(), flags)
                 .await
                 .unwrap();
+            let policy = AiDataPolicy::load(&main, AiModule::Chat, &ProfileChoice::Main)
+                .await
+                .unwrap();
             ToolCtx {
                 main,
                 mem: empty.mem,
-                policy: OnceCell::new(),
+                policy,
             }
         } else {
-            ToolCtx::open_readonly().await.unwrap()
+            ToolCtx::open_readonly(&ProfileChoice::Main).await.unwrap()
         };
 
         let out = run(

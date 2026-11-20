@@ -14,11 +14,10 @@ use crate::ai::config::AiConfig;
 use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
-use crate::capture::screenshot;
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
-use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 把一个 future 变成"可被停止按钮中断的"：每 250ms 轮询一次 cancel 标志，
@@ -199,11 +198,9 @@ pub(crate) async fn upsert_skipped_no_activity(
 /// SQL 语义：
 /// - `local_date` + `local_hour` 在 `[start_hour, end_hour)` 范围内
 /// - 仅取 `duration_secs > 0` 的已 seal 行（unsealed 心跳行 dur=0 排除）
-/// - 复用 [`crate::repo::ai_summaries::list_segment_screenshots`] 的
-///   `excluded_categories` 与 [`DeviceFilter`] 过滤模式
-///
-/// 隐私行为：window_title 命中 `privacy_app_keywords`（子串忽略大小写）→ 替换成
-/// `[私密]`，app 名 + 时长照常贡献。URL 关键词不参与（activities 表无 URL 字段）。
+/// - `visible` 是 AI 能看到哪些活动，见
+///   [`AiDataPolicy::main_filter`](crate::ai::policy::AiDataPolicy::main_filter)；
+///   再按 [`DeviceFilter`] 过滤
 ///
 /// 返回的 `Vec` 元素形状：`(time_label, hour_summary_text)`，如：
 ///   `("09:00-10:00", "VSCode 45 分钟（DataTab.tsx、ModelsSection.tsx）· Chrome 10 分钟…")`
@@ -215,50 +212,41 @@ pub(crate) async fn build_activity_timeline(
     date_str: &str,
     start_hour: u8,
     end_hour: u8,
-    excluded_categories: &[String],
+    visible: &str,
     device: &DeviceFilter,
-    privacy_app_keywords: &[String],
 ) -> Result<Vec<(String, String)>> {
     use rusqlite::ToSql;
 
     let date = date_str.to_string();
-    let excluded: Vec<String> = excluded_categories.to_vec();
+    let visible = visible.to_string();
     let dev = device.clone();
     let rows: Vec<(u8, String, Option<String>, i64)> = pool
         .0
         .call(move |conn| {
-            let placeholders = if excluded.is_empty() {
-                String::new()
-            } else {
-                let marks = vec!["?"; excluded.len()].join(",");
-                format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
-            };
             let sql = format!(
-                "SELECT a.local_hour,
+                "{with}
+                 SELECT a.local_hour,
                         COALESCE(g.display_name, a.process_name) AS app_display,
                         a.window_title,
                         a.duration_secs
-                   {FROM_ACTIVITY_GROUP_CATEGORY}
+                   {from}
                   WHERE a.local_date = ?
                     AND a.local_hour >= ?
                     AND a.local_hour < ?
                     AND a.duration_secs > 0
-                    AND a.excluded = 0
-                    {}
-                    {}
+                    AND {visible}
+                    {device}
                   ORDER BY a.local_hour ASC, a.duration_secs DESC",
-                placeholders,
-                dev.sql_clause(),
+                with = host_rule_with_sql("activities"),
+                from = from_stats_category_sql("activities"),
+                device = dev.sql_clause(),
             );
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&date);
+            // 网站规则的 WITH 在最前，它的两个 ? 是日期范围的两头
+            let mut params: Vec<&dyn ToSql> = vec![&date, &date, &date];
             let sh = start_hour as i64;
             let eh = end_hour as i64;
             params.push(&sh);
             params.push(&eh);
-            for cat in &excluded {
-                params.push(cat);
-            }
             if let Some(extra) = dev.sql_param() {
                 params.push(extra);
             }
@@ -280,15 +268,12 @@ pub(crate) async fn build_activity_timeline(
         })
         .await?;
 
-    Ok(format_timeline_hours(rows, privacy_app_keywords))
+    Ok(format_timeline_hours(rows))
 }
 
 /// 把 SQL 行（hour, app, title, dur）按小时 / 应用聚合成 `(time_label, desc)` 列表。
 /// 抽函数让单测可以纯粹喂结构化数据，不依赖 SQLite。
-fn format_timeline_hours(
-    rows: Vec<(u8, String, Option<String>, i64)>,
-    privacy_app_keywords: &[String],
-) -> Vec<(String, String)> {
+fn format_timeline_hours(rows: Vec<(u8, String, Option<String>, i64)>) -> Vec<(String, String)> {
     use std::collections::BTreeMap;
 
     // hour → app → (total_secs, Vec<title>)
@@ -304,12 +289,7 @@ fn format_timeline_hours(
         if let Some(t) = title {
             let trimmed = t.trim();
             if !trimmed.is_empty() {
-                let display = if screenshot::policy::matches_any(trimmed, privacy_app_keywords) {
-                    "[私密]".to_string()
-                } else {
-                    trimmed.to_string()
-                };
-                app_bucket.1.push(display);
+                app_bucket.1.push(trimmed.to_string());
             }
         }
     }
@@ -382,6 +362,7 @@ fn pick_titles(titles: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
 
     /// 端到端:真实主库 → 新单步管线(活动时间线 + 云端文本模型)→ 写回 daily 日报。
@@ -416,6 +397,10 @@ mod tests {
         let supervisor = Arc::new(EngineSupervisor::new());
         let cancel = Arc::new(AtomicBool::new(false));
         let step2 = build_step2(&ai, 0, "").unwrap();
+        let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
+            .await
+            .unwrap()
+            .main_filter();
 
         for (idx, seg) in ai.segments.iter().enumerate() {
             if seg.end_hour <= seg.start_hour {
@@ -426,9 +411,8 @@ mod tests {
                 &date,
                 seg.start_hour,
                 seg.end_hour,
-                &ai.excluded_categories,
+                &visible,
                 &DeviceFilter::All,
-                &cfg.privacy_app_keywords,
             )
             .await
             .unwrap();
@@ -460,7 +444,7 @@ mod tests {
                 &date,
                 seg.start_hour,
                 seg.end_hour,
-                &ai.excluded_categories,
+                &visible,
                 DeviceFilter::All,
                 8,
             )
@@ -559,12 +543,40 @@ mod tests {
             .unwrap();
     }
 
+    /// 按主库设置，取 2026-05-15 从 `start` 点到 `end` 点、所有设备的时间线。
+    async fn timeline(pool: &DbPool, start: u8, end: u8) -> Vec<(String, String)> {
+        let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
+            .await
+            .unwrap()
+            .main_filter();
+        build_activity_timeline(pool, "2026-05-15", start, end, &visible, &DeviceFilter::All)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_daily_timeline_uses_the_policy() {
+        let pool = fresh_test_pool().await;
+        seed_solo_group(&pool, "Secret", "hidden").await;
+        seed_solo_group(&pool, "Signal", "private").await;
+        insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "Secret", "s", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "Signal", "c", 300).await;
+
+        let out = timeline(&pool, 9, 10).await;
+        let desc = &out[0].1;
+        // 按主库设置，「不计入统计」和「隐私」分类都看不到
+        assert!(desc.contains("VSCode"), "{desc}");
+        assert!(
+            !desc.contains("Secret") && !desc.contains("Signal"),
+            "{desc}"
+        );
+    }
+
     #[tokio::test]
     async fn timeline_empty_activities_returns_empty() {
         let pool = fresh_test_pool().await;
-        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
-            .await
-            .unwrap();
+        let out = timeline(&pool, 9, 10).await;
         assert!(out.is_empty(), "无 activities 应返回空: {out:?}");
     }
 
@@ -576,9 +588,7 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "Chrome", "GitHub", 180).await;
         insert_act(&pool, "2026-05-15", 9, "Slack", "#hindsight", 90).await;
 
-        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
-            .await
-            .unwrap();
+        let out = timeline(&pool, 9, 10).await;
         assert_eq!(out.len(), 1, "只一小时应只返回一项: {out:?}");
         assert_eq!(out[0].0, "09:00-10:00");
         let desc = &out[0].1;
@@ -590,35 +600,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn timeline_privacy_keyword_replaces_window_title() {
+    async fn timeline_drops_activities_with_privacy_keywords() {
         let pool = fresh_test_pool().await;
         insert_act(&pool, "2026-05-15", 9, "Chrome", "GitHub PR #142", 300).await;
+        insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
+        let mut s = crate::repo::settings::load(&pool).await.unwrap();
+        s.privacy_app_keywords = vec!["github".to_string()];
+        crate::repo::settings::save(&pool, &s).await.unwrap();
 
-        let keywords = vec!["github".to_string()];
-        let out = build_activity_timeline(
-            &pool,
-            "2026-05-15",
-            9,
-            10,
-            &[],
-            &DeviceFilter::All,
-            &keywords,
-        )
-        .await
-        .unwrap();
-        assert_eq!(out.len(), 1);
+        let out = timeline(&pool, 9, 10).await;
         let desc = &out[0].1;
-        assert!(
-            desc.contains("[私密]"),
-            "命中 keyword 应替换成 [私密]: {desc}"
-        );
-        assert!(!desc.contains("GitHub PR #142"), "原标题不应再出现: {desc}");
-        assert!(desc.contains("Chrome"), "app 名仍应贡献: {desc}");
-        assert!(desc.contains("5 分钟"), "时长仍应贡献: {desc}");
+        // 标题命中关键词，整条活动都不给：应用名和时长也不算
+        assert!(!desc.contains("Chrome"), "{desc}");
+        assert!(desc.contains("VSCode 5 分钟"), "{desc}");
     }
 
     #[tokio::test]
-    async fn timeline_excludes_categories() {
+    async fn timeline_applies_the_visible_condition() {
         let pool = fresh_test_pool().await;
         // Slack 挂到 'browse' 分类（旧版本用 'fun'，v31 软删后改成另一个 active 默认分类）
         seed_solo_group(&pool, "Slack", "browse").await;
@@ -626,15 +624,13 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "Slack", "amusing", 300).await;
         insert_act(&pool, "2026-05-15", 9, "VSCode", "lib.rs", 300).await;
 
-        let excluded = vec!["browse".to_string()];
         let out = build_activity_timeline(
             &pool,
             "2026-05-15",
             9,
             10,
-            &excluded,
+            "COALESCE(c.id, 'other') <> 'browse'",
             &DeviceFilter::All,
-            &[],
         )
         .await
         .unwrap();
@@ -651,9 +647,7 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "VSCode", "main.rs", 300).await;
         insert_act(&pool, "2026-05-15", 11, "VSCode", "lib.rs", 300).await;
 
-        let out = build_activity_timeline(&pool, "2026-05-15", 9, 12, &[], &DeviceFilter::All, &[])
-            .await
-            .unwrap();
+        let out = timeline(&pool, 9, 12).await;
         assert_eq!(out.len(), 2, "只 9 + 11 两点有活动: {out:?}");
         assert_eq!(out[0].0, "09:00-10:00");
         assert_eq!(out[1].0, "11:00-12:00");
@@ -830,7 +824,7 @@ mod tests {
             (9, "Preview".to_string(), None, 10),
             (10, "Spotlight".to_string(), None, 30),
         ];
-        let out = format_timeline_hours(rows, &[]);
+        let out = format_timeline_hours(rows);
         assert_eq!(out.len(), 2, "{out:?}");
 
         // 同 app 两行 200+100 聚合成 5 分钟；重复标题去重只出现一次
@@ -861,16 +855,16 @@ mod tests {
     fn timeline_hours_skips_blank_titles() {
         let rows: Vec<(u8, String, Option<String>, i64)> =
             vec![(9, "Term".to_string(), Some("   ".to_string()), 120)];
-        let out = format_timeline_hours(rows, &[]);
+        let out = format_timeline_hours(rows);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].1, "Term 2 分钟", "空白标题不应产生括号");
     }
 
     /// 多设备同步后别的设备的 activities 混进本机日报是真实翻车场景。
-    /// 同时带 excluded_categories + DeviceFilter::Only 覆盖 SQL 参数顺序：
-    /// excluded 参数与 device 参数一旦颠倒会静默查错列、结果全错。
+    /// 同时带可见条件 + DeviceFilter::Only 覆盖 SQL 参数顺序：
+    /// 网站规则的日期参数与 device 参数一旦颠倒会静默查错列、结果全错。
     #[tokio::test]
-    async fn timeline_device_only_filter_with_excluded_categories() {
+    async fn timeline_device_only_filter_with_the_visible_condition() {
         let pool = fresh_test_pool().await;
         seed_solo_group(&pool, "Slack", "browse").await;
         seed_solo_group(&pool, "VSCode", "code").await;
@@ -888,9 +882,9 @@ mod tests {
         )
         .await;
 
-        let excluded = vec!["browse".to_string()];
+        let no_browse = "COALESCE(c.id, 'other') <> 'browse'";
         let only = DeviceFilter::Only(TEST_SELF_ID.to_string());
-        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &excluded, &only, &[])
+        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, no_browse, &only)
             .await
             .unwrap();
         assert_eq!(out.len(), 1, "{out:?}");
@@ -903,17 +897,10 @@ mod tests {
         assert!(!desc.contains("Slack"), "browse 分类应同时被排除: {desc}");
 
         // 对照组：All 应把两台设备聚合（300 + 6000 = 105 分钟）
-        let all = build_activity_timeline(
-            &pool,
-            "2026-05-15",
-            9,
-            10,
-            &excluded,
-            &DeviceFilter::All,
-            &[],
-        )
-        .await
-        .unwrap();
+        let all =
+            build_activity_timeline(&pool, "2026-05-15", 9, 10, no_browse, &DeviceFilter::All)
+                .await
+                .unwrap();
         assert!(
             all[0].1.contains("VSCode 105 分钟"),
             "All 过滤应聚合全部设备: {}",
@@ -929,9 +916,7 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "Ghost", "beat", 0).await;
         insert_act(&pool, "2026-05-15", 9, "Real", "work.rs", 120).await;
 
-        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
-            .await
-            .unwrap();
+        let out = timeline(&pool, 9, 10).await;
         assert_eq!(out.len(), 1, "{out:?}");
         let desc = &out[0].1;
         assert!(desc.contains("Real"), "已 seal 行应保留: {desc}");
@@ -949,9 +934,7 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "Mid", "m", 300).await;
         insert_act(&pool, "2026-05-15", 10, "Late", "l", 300).await;
 
-        let out = build_activity_timeline(&pool, "2026-05-15", 9, 10, &[], &DeviceFilter::All, &[])
-            .await
-            .unwrap();
+        let out = timeline(&pool, 9, 10).await;
         assert_eq!(out.len(), 1, "仅 9 点应命中: {out:?}");
         assert_eq!(out[0].0, "09:00-10:00");
         assert!(out[0].1.contains("Mid"));

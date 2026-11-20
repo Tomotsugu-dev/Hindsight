@@ -18,7 +18,6 @@ use crate::ai::config::{AiConfig, SUMMARY_CLOUD_SENTINEL};
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiOverrides {
-    pub excluded_categories: Option<Vec<String>>,
     /// 段总结的 system prompt 覆盖文本（按当前语言写入 prompt_overrides）
     pub system_prompt: Option<String>,
     /// llama-server `--batch-size` / `--ubatch-size`（取一致值）；调试用，不进 settings。
@@ -58,9 +57,6 @@ impl AiOverrides {
 
     /// 把 override 应用到一份 `AiConfig` 上，返回合并后的新值（不就地改原值）。
     pub fn with_overrides(self, mut ai: AiConfig) -> AiConfig {
-        if let Some(v) = self.excluded_categories {
-            ai.excluded_categories = v;
-        }
         // 文本 prompt 覆盖按当前 prompt_language 写到对应字段；空串等同 "走默认"
         let lang = ai.prompt_language.clone();
         if let Some(v) = self.system_prompt {

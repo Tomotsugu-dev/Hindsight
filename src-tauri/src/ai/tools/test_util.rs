@@ -5,10 +5,16 @@
 
 use chrono::NaiveDate;
 
-use tokio::sync::OnceCell;
-
 use super::ToolCtx;
+use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::storage::Connection;
+
+/// 按主库设置读聊天的 AiDataPolicy。
+async fn main_policy(main: &Connection) -> AiDataPolicy {
+    AiDataPolicy::load(main, AiModule::Chat, &ProfileChoice::Main)
+        .await
+        .unwrap()
+}
 
 /// 开两个内存库，建好工具查询用到的表，再跑 `mem_sql` 和 `main_sql` 造数据。
 pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> ToolCtx {
@@ -61,23 +67,20 @@ pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> T
     })
     .await
     .unwrap();
-    ToolCtx {
-        main,
-        mem,
-        policy: OnceCell::new(),
-    }
+    let policy = main_policy(&main).await;
+    ToolCtx { main, mem, policy }
 }
 
 /// 用 `main` 和一个新的记忆库组一个 `ToolCtx`。两个库都跑过真实的建表。
 ///
 /// `main` 用 [`fresh_test_pool`](crate::repo::test_util::fresh_test_pool) 开。
-/// AiDataPolicy 第一次用时才读，分组、分类、忽略规则要在那之前造好。
+/// AiDataPolicy 在这里读，分类和设置要在调用之前造好。
 pub(super) async fn real_ctx(main: &crate::storage::DbPool) -> ToolCtx {
     let mem = crate::memory::MemoryDb::open_in_memory().await.unwrap();
     ToolCtx {
         main: main.0.clone(),
         mem: mem.0,
-        policy: OnceCell::new(),
+        policy: main_policy(&main.0).await,
     }
 }
 

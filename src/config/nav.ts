@@ -2,7 +2,6 @@ import { History, Sparkles, Cloud, MessageSquare, Settings, LayoutGrid } from "l
 import { CalendarTodayIcon } from "../components/icons/CalendarTodayIcon";
 import { CalendarWeekIcon } from "../components/icons/CalendarWeekIcon";
 import { CalendarMonthIcon } from "../components/icons/CalendarMonthIcon";
-import { AiSettingsIcon } from "../components/icons/AiSettingsIcon";
 import type { NavItem } from "../types/nav";
 
 export const ROUTES = {
@@ -55,8 +54,6 @@ export const NAV_ITEMS: NavItem[] = [
     group: "primary",
     color: "#14b8a6",
   },
-  // /ai 是 AI 总结的根；子页 /ai/week / /ai/debug 也应该让 AI 总结高亮，
-  // 但 /ai/settings 是兄弟项（AI 设置）——用 excludePaths 把它从前缀匹配里抠掉
   {
     path: ROUTES.chat,
     labelKey: "nav.items.chat",
@@ -70,14 +67,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Sparkles,
     group: "ai",
     color: "#d946ef",
-    excludePaths: [ROUTES.aiSettings],
-  },
-  {
-    path: ROUTES.aiSettings,
-    labelKey: "nav.items.aiSettings",
-    icon: AiSettingsIcon,
-    group: "ai",
-    color: "#a855f7",
   },
   {
     path: ROUTES.categories,

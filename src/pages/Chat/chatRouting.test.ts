@@ -24,7 +24,11 @@ function baseAi(patch: Partial<AiConfig> = {}): AiConfig {
     externalProvider: "custom",
     userBrief: "",
     segments: [],
-    excludedCategories: [],
+    visibility: {
+      daily: { profiles: {}, autoProfile: null },
+      weekly: { profiles: {}, autoProfile: null },
+      chat: { profiles: {}, autoProfile: null },
+    },
     modelsPath: "/models",
     activeMain: "",
     activeMmproj: "",

@@ -55,7 +55,6 @@
       "month": "月统计",
       "history": "全部历史",
       "aiSummary": "AI 总结",
-      "aiSettings": "AI 设置",
       "categories": "分类",
       "devices": "云同步",
       "settings": "设置",
@@ -107,6 +106,7 @@
       "appearance": "外观",
       "data": "数据",
       "privacy": "隐私",
+      "engine": "AI 引擎",
       "plugins": "插件",
       "about": "关于"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "识别中…剩余 {{n}} 张",
         "backfillBackground": "已登记，后台索引中（可离开本页）",
         "backfillDone": "完成：识别 {{ok}} 张，跳过 {{failed}} 张",
-        "backfillRuntimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 AI 设置 → 引擎 页点下载按钮。",
+        "backfillRuntimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 设置 → AI 引擎 页点下载按钮。",
         "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
         "ocrConfirmResident": "开启文字索引需要下载文字识别组件（约 40MB），下载完成后自动开启。",
         "ocrConfirmBackfill": "回填需要下载文字识别组件（约 40MB），下载完成后自动开始回填。",
@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "加载分类…",
       "empty": "还没有分类",
-      "excludedTitle": "已排除——点一下重新加入",
-      "includeTitle": "点一下从分析中排除"
+      "unseenTitle": "AI 看不到——点一下给它看",
+      "seenTitle": "AI 能看到——点一下不给看"
     },
     "rankedList": {
       "expand": "展开剩余 {{count}} 项",
@@ -1032,7 +1032,6 @@
   "aiSettings": {
     "title": "AI 设置",
     "tabs": {
-      "engine": "引擎",
       "models": "模型",
       "general": "常规",
       "prompt": "提示词",
@@ -1249,11 +1248,6 @@
       "sectionTitle": "时段划分",
       "sectionInfo": "AI 按段汇总；段内截图按相似度抽帧再发给模型。",
       "rowLabel": "时段"
-    },
-    "filter": {
-      "sectionTitle": "过滤",
-      "rowLabel": "分析这些分类",
-      "rowHint": "点击切换：\n• 彩色 + 分类图标 = 参与 AI 分析\n• 灰色空心 + 闭眼图标 = 已排除"
     },
     "external": {
       "sectionTitle": "云端 API（可选）",
@@ -1510,6 +1504,38 @@
       "error": "移除失败：{{message}}"
     }
   },
+  "aiProfiles": {
+    "main": "默认分类",
+    "pickerTitle": "AI 能看到的数据",
+    "manage": "管理配置…",
+    "moduleGroup": "功能",
+    "feature": {
+      "daily": "日报",
+      "weekly": "周报",
+      "chat": "对话"
+    },
+    "intro": {
+      "daily": "每套配置是一组分类，生成日报时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。",
+      "weekly": "每套配置是一组分类，生成周报时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。",
+      "chat": "每套配置是一组分类，对话时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。"
+    },
+    "weeklyNote": "周报会照原文读这周的日报，日报里已经写进去的内容，这里拦不住。配置只管周报自己查的记录：整周的应用排行，和没有日报那几天的记录。",
+    "autoLabel": "自动生成时用",
+    "mainNote": "除了「不计入统计」和「隐私」以外的全部分类，不能改。",
+    "empty": "还没有配置。新建一套，只给 AI 看你选的分类。",
+    "add": "新建配置",
+    "defaultName": "配置 {{n}}",
+    "unnamed": "（未命名）",
+    "namePlaceholder": "配置名",
+    "delete": "删除这套配置",
+    "saved": "改动已自动保存",
+    "notSaved": "标红的配置改好之前，改动不会保存",
+    "errors": {
+      "noName": "要有名字",
+      "sameName": "和另一套配置重名",
+      "noCategory": "至少给 AI 看一个分类"
+    }
+  },
   "aiSummary": {
     "title": "AI 总结",
     "tabs": {
@@ -1523,6 +1549,7 @@
     },
     "errors": {
       "runBusy": "已有一个 AI 生成任务在运行中。等它完成或先点「停止」再试。",
+      "profileGone": "选中的配置已经不存在了。在下拉框里换一套再试。",
       "llmEmptyReasoning": "模型把额度都用在「思考」上，没来得及写出答案。请更新应用后重试（新版默认关闭本地思考）；若仍出现，换一个非推理（instruct）类文本模型，或在 AI 设置里调大该步骤的上下文。",
       "llmEmptyEos": "模型还没开始生成就停了——通常是选的模型或它的视觉投影器（mmproj）不匹配。在 AI 设置里换一个模型。",
       "llmEmptyTruncated": "模型的回答还没输出有用内容就被截断了（多半是推理模型）。换 Gemma 或 Qwen3 这类普通文本模型，或在 AI 设置里调大上下文。",
@@ -1726,7 +1753,7 @@
       },
       "cloudOffer": {
         "title": "改用云端 API 生成？",
-        "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「AI 设置 → 引擎」下载本地引擎。",
+        "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「设置 → AI 引擎」下载本地引擎。",
         "confirm": "使用云端生成"
       },
       "ocrLoading": "加载 OCR 模型中…",
@@ -1905,7 +1932,7 @@
       "running": "正在建立索引…剩余 {{count}} 张",
       "alreadyRunning": "索引任务已在后台运行，剩余 {{count}} 张",
       "failed": "回填失败：{{msg}}",
-      "runtimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 AI 设置 → 引擎 页点下载按钮。",
+      "runtimeMissing": "文字识别（OCR）组件需要更新（约 40MB）：请到 设置 → AI 引擎 页点下载按钮。",
       "ocrConfirmTitle": "需要下载文字识别（OCR）组件",
       "ocrConfirmMessage": "建立文字索引需要下载文字识别组件（约 40MB），下载完成后自动开始索引。",
       "ocrConfirmAccept": "下载并开始",

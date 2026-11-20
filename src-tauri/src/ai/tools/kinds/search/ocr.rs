@@ -134,7 +134,7 @@ async fn find(ctx: &ToolCtx, p: &SearchParams) -> Result<Option<Found>> {
             (process, category)
         })
         .collect();
-    let filter = ctx.policy().await?.memory_filter(asked);
+    let filter = ctx.policy.memory_filter(asked);
     let (keywords, range) = (p.keywords.clone(), p.range);
     let spans = ctx
         .mem

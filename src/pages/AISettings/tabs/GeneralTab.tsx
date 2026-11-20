@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarClock, Clock, Filter, Minus, Plus, ScanText, Timer } from "lucide-react";
+import { CalendarClock, Clock, Minus, Plus, ScanText, Timer } from "lucide-react";
 import { IconButton } from "../../../components/Button/IconButton";
+import { AiProfilesCard } from "../../../components/AiProfiles/AiProfilesCard";
 import { Section } from "../../../components/FormLayout/Section";
 import { Row } from "../../../components/FormLayout/Row";
 import { Toggle } from "../../../components/FormControls/Toggle";
 import { TimeOfDayPicker } from "../../../components/FormControls/TimeOfDayPicker";
 import { SegmentList } from "../../../components/FormControls/SegmentList";
-import { CategoryChipMultiSelect } from "../../../components/FormControls/CategoryChipMultiSelect";
 import { type AiSegment } from "../../../api/hindsight";
 import { useAiSettings } from "../shared/useAiSettings";
 import { useSettings } from "../../../state/settings";
@@ -19,8 +19,8 @@ import {
 import styles from "../AISettings.module.css";
 
 /**
- * AI 设置 → 常规 tab：决定"喂给 LLM 的数据范围"——时段切分 + 分类过滤。
- * 这两件事都是 prompt 之前的数据加工，跟"怎么写总结"（PromptTab）解耦。
+ * AI 设置 → 常规 tab：AI 能看到哪些分类、什么时候自动跑、按哪些时段汇总。
+ * 跟"怎么写总结"（PromptTab）分开。
  */
 export default function GeneralTab() {
   const { t } = useTranslation();
@@ -53,6 +53,8 @@ export default function GeneralTab() {
 
   return (
     <div className={styles.content}>
+      <AiProfilesCard />
+
       <Section
         title={t("aiSettings.autoSummary.sectionTitle")}
         icon={Timer}
@@ -197,19 +199,6 @@ export default function GeneralTab() {
           <SegmentList
             segments={ai.segments}
             onChange={(next: AiSegment[]) => updateAi({ segments: next })}
-          />
-        </Row>
-      </Section>
-
-      <Section title={t("aiSettings.filter.sectionTitle")} icon={Filter}>
-        <Row
-          label={t("aiSettings.filter.rowLabel")}
-          labelHint={t("aiSettings.filter.rowHint")}
-          block
-        >
-          <CategoryChipMultiSelect
-            selectedIds={ai.excludedCategories}
-            onChange={(next) => updateAi({ excludedCategories: next })}
           />
         </Row>
       </Section>

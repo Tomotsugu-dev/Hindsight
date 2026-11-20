@@ -55,7 +55,6 @@
       "month": "Mensual",
       "history": "Historial",
       "aiSummary": "Resumen de IA",
-      "aiSettings": "Ajustes de IA",
       "categories": "Categorías",
       "devices": "Nube",
       "settings": "Ajustes",
@@ -107,6 +106,7 @@
       "appearance": "Apariencia",
       "data": "Datos",
       "privacy": "Privacidad",
+      "engine": "Motor de IA",
       "plugins": "Plugins",
       "about": "Acerca de"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "Reconociendo… quedan {{n}} fotogramas",
         "backfillBackground": "Registrado; la indexación continúa en segundo plano (puedes salir de esta página)",
         "backfillDone": "Completado: {{ok}} reconocidos, {{failed}} omitidos",
-        "backfillRuntimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes de IA → Motor y pulsa el botón de descarga.",
+        "backfillRuntimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes → Motor de IA y pulsa el botón de descarga.",
         "ocrConfirmTitle": "Se necesita el componente de reconocimiento de texto (OCR)",
         "ocrConfirmResident": "Activar la indexación de texto requiere descargar el componente de reconocimiento (~40 MB). Se activa automáticamente cuando termine la descarga.",
         "ocrConfirmBackfill": "El relleno requiere descargar el componente de reconocimiento (~40 MB). Comienza automáticamente cuando termine la descarga.",
@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "Cargando las categorías…",
       "empty": "Aún no hay categorías",
-      "excludedTitle": "Excluida: pulsa para volver a incluirla",
-      "includeTitle": "Pulsa para excluirla del análisis"
+      "unseenTitle": "La IA no la ve. Pulsa para mostrársela",
+      "seenTitle": "La IA puede verla. Pulsa para ocultarla"
     },
     "rankedList": {
       "expand": "Mostrar {{count}} más",
@@ -1037,7 +1037,6 @@
   "aiSettings": {
     "title": "Ajustes de IA",
     "tabs": {
-      "engine": "Motor",
       "models": "Modelos",
       "general": "General",
       "prompt": "Prompt",
@@ -1254,11 +1253,6 @@
       "sectionTitle": "Tramos horarios",
       "sectionInfo": "Los resúmenes de IA se generan por tramos; las capturas de pantalla de cada tramo se muestrean por similitud antes de enviarse al modelo.",
       "rowLabel": "Tramos"
-    },
-    "filter": {
-      "sectionTitle": "Filtros",
-      "rowLabel": "Analizar estas categorías",
-      "rowHint": "Pulsa para alternar:\n• A color + icono de categoría = incluida en el análisis de IA\n• Contorno gris + icono de ojo cerrado = excluida"
     },
     "external": {
       "sectionTitle": "API en la nube (opcional)",
@@ -1515,6 +1509,38 @@
       "error": "No se pudo quitar el dispositivo: {{message}}"
     }
   },
+  "aiProfiles": {
+    "main": "Categorías predeterminadas",
+    "pickerTitle": "Datos que ve la IA",
+    "manage": "Gestionar perfiles…",
+    "moduleGroup": "Función",
+    "feature": {
+      "daily": "Resumen diario",
+      "weekly": "Resumen semanal",
+      "chat": "Chat"
+    },
+    "intro": {
+      "daily": "Un perfil es un conjunto de categorías. Al escribir el resumen diario, la IA solo ve los registros de esas categorías. En ningún perfil ve la IA los registros privados ni los que coinciden con una palabra clave de privacidad.",
+      "weekly": "Un perfil es un conjunto de categorías. Al escribir el resumen semanal, la IA solo ve los registros de esas categorías. En ningún perfil ve la IA los registros privados ni los que coinciden con una palabra clave de privacidad.",
+      "chat": "Un perfil es un conjunto de categorías. En el chat, la IA solo ve los registros de esas categorías. En ningún perfil ve la IA los registros privados ni los que coinciden con una palabra clave de privacidad."
+    },
+    "weeklyNote": "El resumen semanal lee los resúmenes diarios tal como están. Un perfil no puede quitar lo que ya dicen. Solo filtra lo que el resumen semanal consulta por sí mismo: las apps más usadas de la semana y los registros de los días sin resumen diario.",
+    "autoLabel": "Usar en los resúmenes automáticos",
+    "mainNote": "Todas las categorías salvo las ocultas y las privadas. No se puede cambiar.",
+    "empty": "Aún no hay perfiles. Crea uno para que la IA solo vea las categorías que elijas.",
+    "add": "Nuevo perfil",
+    "defaultName": "Perfil {{n}}",
+    "unnamed": "(sin nombre)",
+    "namePlaceholder": "Nombre del perfil",
+    "delete": "Eliminar este perfil",
+    "saved": "Los cambios se guardan automáticamente",
+    "notSaved": "Los cambios no se guardan hasta que corrijas los perfiles marcados en rojo",
+    "errors": {
+      "noName": "Necesita un nombre",
+      "sameName": "Otro perfil tiene este nombre",
+      "noCategory": "Deja que la IA vea al menos una categoría"
+    }
+  },
   "aiSummary": {
     "title": "Resumen de IA",
     "tabs": {
@@ -1528,6 +1554,7 @@
     },
     "errors": {
       "runBusy": "Ya hay otra tarea de generación de IA en marcha. Espera a que termine o pulsa Detener primero.",
+      "profileGone": "El perfil elegido ya no existe. Elige otro en el menú y vuelve a intentarlo.",
       "llmEmptyReasoning": "El modelo gastó todo el presupuesto pensando y no llegó a escribir la respuesta. Actualiza la aplicación e inténtalo de nuevo (las versiones nuevas desactivan el razonamiento local de forma predeterminada); si persiste, cambia a un modelo sin razonamiento (instruct) o amplía el contexto de este paso.",
       "llmEmptyEos": "El modelo se detuvo sin generar nada: normalmente el modelo elegido o el proyector de visión (mmproj) no encajan. Elige otro modelo en los Ajustes de IA.",
       "llmEmptyTruncated": "La respuesta del modelo se cortó antes de producir texto útil (probablemente un modelo de razonamiento). Usa un modelo de texto normal, como Gemma o Qwen3, o amplía el contexto en los Ajustes de IA.",
@@ -1731,7 +1758,7 @@
       },
       "cloudOffer": {
         "title": "¿Generar con tu API en la nube?",
-        "message": "Ya hay una API en la nube configurada ({{provider}} · {{model}}), pero los resúmenes están puestos en un modelo local y el motor local no está instalado. Al confirmar, los resúmenes pasarán a usar la API en la nube: los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se enviarán a ese proveedor. También puedes descargar el motor local en Ajustes de IA → Motor.",
+        "message": "Ya hay una API en la nube configurada ({{provider}} · {{model}}), pero los resúmenes están puestos en un modelo local y el motor local no está instalado. Al confirmar, los resúmenes pasarán a usar la API en la nube: los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se enviarán a ese proveedor. También puedes descargar el motor local en Ajustes → Motor de IA.",
         "confirm": "Usar la API en la nube"
       },
       "ocrLoading": "Cargando el modelo de OCR…",
@@ -1910,7 +1937,7 @@
       "running": "Construyendo el índice… quedan {{count}}",
       "alreadyRunning": "La indexación está en marcha en segundo plano, quedan {{count}}",
       "failed": "Falló la indexación: {{msg}}",
-      "runtimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes de IA → Motor y pulsa el botón de descarga.",
+      "runtimeMissing": "El componente de reconocimiento de texto (OCR) necesita actualizarse (~40 MB): ve a Ajustes → Motor de IA y pulsa el botón de descarga.",
       "ocrConfirmTitle": "Se necesita el componente de reconocimiento de texto (OCR)",
       "ocrConfirmMessage": "Construir el índice de texto requiere descargar el componente de reconocimiento (~40 MB). La indexación empieza automáticamente cuando termine la descarga.",
       "ocrConfirmAccept": "Descargar e iniciar",

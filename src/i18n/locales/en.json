@@ -55,7 +55,6 @@
       "month": "Monthly",
       "history": "All time",
       "aiSummary": "AI Summary",
-      "aiSettings": "AI Settings",
       "categories": "Categories",
       "devices": "Cloud Sync",
       "settings": "Settings",
@@ -107,6 +106,7 @@
       "appearance": "Appearance",
       "data": "Data",
       "privacy": "Privacy",
+      "engine": "AI Engine",
       "plugins": "Plugins",
       "about": "About"
     },
@@ -189,7 +189,7 @@
         "backfillProgress": "Recognizing… {{n}} frames left",
         "backfillBackground": "Registered; indexing continues in the background (you can leave this page)",
         "backfillDone": "Done: {{ok}} recognized, {{failed}} skipped",
-        "backfillRuntimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to AI Settings → Engine and click the download button.",
+        "backfillRuntimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Engine and click the download button.",
         "ocrConfirmTitle": "Text recognition (OCR) component required",
         "ocrConfirmResident": "Enabling text indexing requires downloading the text recognition component (~40MB). It turns on automatically once the download finishes.",
         "ocrConfirmBackfill": "Backfilling requires downloading the text recognition component (~40MB). Backfill starts automatically once the download finishes.",
@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "Loading categories…",
       "empty": "No categories yet",
-      "excludedTitle": "Excluded — click to include again",
-      "includeTitle": "Click to exclude from analysis"
+      "unseenTitle": "The AI can't see this. Click to show it",
+      "seenTitle": "The AI can see this. Click to hide it"
     },
     "rankedList": {
       "expand": "Show {{count}} more",
@@ -1037,7 +1037,6 @@
   "aiSettings": {
     "title": "AI Settings",
     "tabs": {
-      "engine": "Engine",
       "models": "Models",
       "general": "General",
       "prompt": "Prompt",
@@ -1254,11 +1253,6 @@
       "sectionTitle": "Time segments",
       "sectionInfo": "AI summaries are produced per segment; screenshots within each segment are sampled by similarity before being sent to the model.",
       "rowLabel": "Segments"
-    },
-    "filter": {
-      "sectionTitle": "Filters",
-      "rowLabel": "Analyze these categories",
-      "rowHint": "Click to toggle:\n• Colored + category icon = included in AI analysis\n• Gray outline + closed-eye icon = excluded"
     },
     "external": {
       "sectionTitle": "Cloud API (optional)",
@@ -1515,6 +1509,38 @@
       "error": "Failed to remove device: {{message}}"
     }
   },
+  "aiProfiles": {
+    "main": "Default categories",
+    "pickerTitle": "Data the AI can see",
+    "manage": "Manage profiles…",
+    "moduleGroup": "Feature",
+    "feature": {
+      "daily": "Daily report",
+      "weekly": "Weekly report",
+      "chat": "Chat"
+    },
+    "intro": {
+      "daily": "A profile is a set of categories. When it writes the daily report, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile.",
+      "weekly": "A profile is a set of categories. When it writes the weekly report, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile.",
+      "chat": "A profile is a set of categories. In chat, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile."
+    },
+    "weeklyNote": "The weekly report reads this week's daily reports as they are. A profile can't remove what they already say. It only filters what the weekly report looks up itself: the top apps of the week, and the records of days with no daily report.",
+    "autoLabel": "Use for automatic reports",
+    "mainNote": "Every category except hidden and private ones. You can't change it.",
+    "empty": "No profiles yet. Add one to let the AI see only the categories you choose.",
+    "add": "New profile",
+    "defaultName": "Profile {{n}}",
+    "unnamed": "(no name)",
+    "namePlaceholder": "Profile name",
+    "delete": "Delete this profile",
+    "saved": "Changes are saved automatically",
+    "notSaved": "Changes aren't saved until you fix the profiles marked in red",
+    "errors": {
+      "noName": "Needs a name",
+      "sameName": "Another profile has this name",
+      "noCategory": "Let the AI see at least one category"
+    }
+  },
   "aiSummary": {
     "title": "AI Summary",
     "tabs": {
@@ -1528,6 +1554,7 @@
     },
     "errors": {
       "runBusy": "Another AI generation task is already running. Wait for it to finish, or press Stop first.",
+      "profileGone": "The selected profile no longer exists. Pick another one in the menu and try again.",
       "llmEmptyReasoning": "The model spent its entire budget thinking and never wrote the answer. Update the app and retry (new builds disable local thinking by default); if it persists, switch to a non-reasoning (instruct) model or raise this step's context size.",
       "llmEmptyEos": "The model stopped without generating anything — usually the chosen model or its vision projector (mmproj) don't match. Pick a different model in AI Settings.",
       "llmEmptyTruncated": "The model's answer was cut off before any usable text came out (likely a reasoning model). Use a regular text model like Gemma or Qwen3, or raise the context size in AI Settings.",
@@ -1731,7 +1758,7 @@
       },
       "cloudOffer": {
         "title": "Generate with your cloud API instead?",
-        "message": "A cloud API is already configured ({{provider}} · {{model}}), but summaries are currently set to a local model and the local engine isn't installed. Confirm to switch summaries to the cloud API — app names, categories and the activity timeline will be sent to that provider. Alternatively, download the local engine under AI Settings → Engine.",
+        "message": "A cloud API is already configured ({{provider}} · {{model}}), but summaries are currently set to a local model and the local engine isn't installed. Confirm to switch summaries to the cloud API — app names, categories and the activity timeline will be sent to that provider. Alternatively, download the local engine under Settings → AI Engine.",
         "confirm": "Use cloud API"
       },
       "ocrLoading": "Loading OCR model…",
@@ -1910,7 +1937,7 @@
       "running": "Building index… {{count}} remaining",
       "alreadyRunning": "Indexing is running in the background, {{count}} remaining",
       "failed": "Backfill failed: {{msg}}",
-      "runtimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to AI Settings → Engine and click the download button.",
+      "runtimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Engine and click the download button.",
       "ocrConfirmTitle": "Text recognition (OCR) component required",
       "ocrConfirmMessage": "Building the text index requires downloading the text recognition component (~40MB). Indexing starts automatically once the download finishes.",
       "ocrConfirmAccept": "Download & start",

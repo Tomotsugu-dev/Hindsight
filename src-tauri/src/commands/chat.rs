@@ -15,6 +15,7 @@ use serde::Serialize;
 use tauri::{Emitter, State};
 
 use super::screen_memory::MemoryState;
+use crate::ai::policy::ProfileChoice;
 use crate::ai::server::EngineSupervisor;
 use crate::ai::tools::Tools;
 use crate::chat::engine::{self, ChatAnswer};
@@ -138,6 +139,8 @@ pub async fn chat_ask(
     locale: Option<String>,
     ask_id: Option<String>,
     parent_guid: Option<String>,
+    // 用户选的配置 id；None = 按主库设置
+    profile: Option<String>,
 ) -> Result<ChatAskResult, String> {
     let question = question.trim().to_string();
     if question.is_empty() {
@@ -179,6 +182,7 @@ pub async fn chat_ask(
         },
         lang,
         ask_id,
+        &ProfileChoice::from(profile),
     )
     .await
 }
@@ -198,6 +202,7 @@ pub async fn chat_regenerate(
     locale: Option<String>,
     ask_id: Option<String>,
     leaf_guid: Option<String>,
+    profile: Option<String>,
 ) -> Result<ChatAskResult, String> {
     let db = require(&mem)?;
     let lang = crate::ai::tools::ChatLang::from_tag(locale.as_deref());
@@ -214,6 +219,7 @@ pub async fn chat_regenerate(
         AskInput::Regenerate { leaf: leaf_guid },
         lang,
         ask_id,
+        &ProfileChoice::from(profile),
     )
     .await
 }
@@ -245,6 +251,7 @@ async fn run_ask(
     input: AskInput,
     lang: crate::ai::tools::ChatLang,
     ask_id: String,
+    profile: &ProfileChoice,
 ) -> Result<ChatAskResult, String> {
     // 注册 in-flight:同会话已有生成中的问答 → 明确报忙(本地引擎单槽,
     // 放进去也只是静默排队装死)。注册成功后由 guard 负责摘除 + 广播。
@@ -293,6 +300,12 @@ async fn run_ask(
                 .ok_or_else(|| lang.err_nothing_to_regenerate().to_string())?
         }
     };
+
+    // 在启动引擎之前开：配置被删了就不白等模型加载
+    let today = chrono::Local::now().date_naive();
+    let tools = Tools::open_readonly(today, lang, profile)
+        .await
+        .map_err(String::from)?;
 
     let cfg = settings::load(pool).await.map_err(String::from)?;
     let ai = &cfg.ai;
@@ -369,10 +382,6 @@ async fn run_ask(
         )
     };
 
-    let today = chrono::Local::now().date_naive();
-    let tools = Tools::open_readonly(today, lang)
-        .await
-        .map_err(String::from)?;
     // 生成可被"停止"打断:cancel 分支丢弃生成 future——reqwest 连接随之断开,
     // llama-server 对断连会中止解码;云端同理。提问已落库,什么都不补写,
     // 会话呈"有问无答"可重问;guard 广播 ok=false 让各处视图清掉打字指示。

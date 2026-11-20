@@ -1,7 +1,10 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { type TabDef } from "../../components/TabNav/TabNav";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
+import { IconButton } from "../../components/Button/IconButton";
+import { AiSettingsIcon } from "../../components/icons/AiSettingsIcon";
+import { ROUTES } from "../../config/nav";
 import { DebugStateProvider } from "./DebugStateContext";
 import styles from "./AISummaryPage.module.css";
 
@@ -20,16 +23,32 @@ const TAB_GROUPS: TabDef[][] = [
 ];
 
 /**
- * AI 总结页外壳：标题 + 4 个 tab + Outlet。
+ * AI 总结页外壳：标题 + 4 个 tab + 进 AI 设置的按钮 + Outlet。
  * DebugStateProvider 仍保留——DebugTab 自己用 debug 参数 state（之前由 settings tab 写入）。
  */
 export default function AISummaryPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // 周报页进周报的设置，其余进日报的
+  const module = pathname.startsWith(`${ROUTES.aiSummary}/week`) ? "weekly" : "daily";
 
   return (
     <div className={styles.page}>
       {/* tab 条在标题行右边；滚出视口顶端时在视口顶部浮动居中显示（FloatingTabNav） */}
-      <PageHeader title={t("aiSummary.title")} groups={TAB_GROUPS} />
+      <PageHeader
+        title={t("aiSummary.title")}
+        groups={TAB_GROUPS}
+        actions={
+          <IconButton
+            icon={AiSettingsIcon}
+            label={t("aiSettings.title")}
+            size="lg"
+            variant="soft"
+            onClick={() => navigate(`${ROUTES.aiSettings}/general?module=${module}`)}
+          />
+        }
+      />
 
       <section className={styles.tabContent}>
         <DebugStateProvider>

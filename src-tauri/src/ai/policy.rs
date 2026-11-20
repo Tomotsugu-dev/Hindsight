@@ -13,18 +13,39 @@ use rusqlite::OptionalExtension;
 use crate::ai::config::{ModuleProfiles, Visibility};
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::capture::screenshot::policy::matches_any;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::memory::search::SessionFilter;
 use crate::repo::settings::Settings;
 use crate::storage::{Connection, SqliteResultExt};
 
+/// The error when the profile the user picked is gone. The front end shows a message for
+/// its code.
+const PROFILE_GONE: &str = "[AI_PROFILE_GONE] the selected AI profile no longer exists";
+
 /// A feature that uses AI. Each feature keeps its own profiles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(dead_code)]
 pub enum AiModule {
     Daily,
     Weekly,
     Chat,
+}
+
+/// Which profile a run uses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileChoice {
+    /// The main settings.
+    Main,
+    /// The profile that automatic reports use.
+    Auto,
+    /// The profile the user picked on the page. The value is its id.
+    Picked(String),
+}
+
+impl From<Option<String>> for ProfileChoice {
+    /// A command gets `None` when the user picked the main settings.
+    fn from(id: Option<String>) -> Self {
+        id.map_or(Self::Main, Self::Picked)
+    }
 }
 
 /// What the AI can see. Built from the main database settings once per question.
@@ -42,10 +63,32 @@ pub struct AiDataPolicy {
 impl AiDataPolicy {
     /// Returns what the AI can see in `module`: the categories it can see, and the privacy
     /// keywords and ignore rules from the main settings.
-    pub async fn load(main: &Connection, module: AiModule, profile: Option<&str>) -> Result<Self> {
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidInput`] if the profile the user picked is not in `module`.
+    pub async fn load(
+        main: &Connection,
+        module: AiModule,
+        profile: &ProfileChoice,
+    ) -> Result<Self> {
         let (settings, category_ids) = read_main(main).await?;
-        let profiles = &module_profiles(&settings.ai.visibility, module).profiles;
-        let shown_categories = match profile.and_then(|id| profiles.get(id)) {
+        let profiles = module_profiles(&settings.ai.visibility, module);
+        let picked = match profile {
+            ProfileChoice::Main => None,
+            ProfileChoice::Auto => profiles
+                .auto_profile
+                .as_deref()
+                .and_then(|id| profiles.profiles.get(id)),
+            // Not the main settings when the picked profile is gone: the AI could see more
+            ProfileChoice::Picked(id) => Some(
+                profiles
+                    .profiles
+                    .get(id)
+                    .ok_or(Error::InvalidInput(PROFILE_GONE))?,
+            ),
+        };
+        let shown_categories = match picked {
             Some(p) => p
                 .categories
                 .iter()
@@ -287,8 +330,10 @@ mod tests {
             .unwrap();
     }
 
+    /// `profile` 是 None 就按主库设置，否则是用户选的那套。
     async fn load(pool: &DbPool, module: AiModule, profile: Option<&str>) -> AiDataPolicy {
-        AiDataPolicy::load(&pool.0, module, profile).await.unwrap()
+        let choice = ProfileChoice::from(profile.map(str::to_string));
+        AiDataPolicy::load(&pool.0, module, &choice).await.unwrap()
     }
 
     /// 用 `main_filter` 查主库，按加进去的顺序返回能看到的活动标题。
@@ -363,13 +408,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_missing_profile_follows_the_main_settings() {
+    async fn a_picked_profile_that_is_gone_is_an_error() {
         let pool = seeded().await;
         // p_work 是日报的配置，聊天里没有
         for (module, profile) in [(AiModule::Chat, "p_work"), (AiModule::Daily, "p_gone")] {
-            let v = load(&pool, module, Some(profile)).await;
-            assert_eq!(visible(&pool, &v).await, MAIN, "{module:?} {profile}");
+            let choice = ProfileChoice::Picked(profile.to_string());
+            let err = AiDataPolicy::load(&pool.0, module, &choice)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("[AI_PROFILE_GONE]"), "{err}");
         }
+    }
+
+    #[tokio::test]
+    async fn automatic_runs_use_the_auto_profile() {
+        let pool = seeded().await;
+        set(&pool, "$.ai.visibility.daily.autoProfile", r#""p_work""#).await;
+        let v = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
+            .await
+            .unwrap();
+        assert_eq!(visible(&pool, &v).await, ["main.rs", "GitHub"]);
+    }
+
+    #[tokio::test]
+    async fn a_deleted_auto_profile_follows_the_main_settings() {
+        let pool = seeded().await;
+        set(&pool, "$.ai.visibility.daily.autoProfile", r#""p_gone""#).await;
+        let v = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
+            .await
+            .unwrap();
+        assert_eq!(visible(&pool, &v).await, MAIN);
     }
 
     #[tokio::test]
@@ -464,8 +532,10 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(AiDataPolicy::load(&pool.0, AiModule::Daily, None)
-            .await
-            .is_err());
+        assert!(
+            AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
+                .await
+                .is_err()
+        );
     }
 }

@@ -178,7 +178,6 @@ export function Sidebar() {
                       Icon={item.icon}
                       color={item.color}
                       end={item.end}
-                      excludePaths={item.excludePaths}
                       badge={
                         item.path === ROUTES.settings && !pluginsSeen
                           ? t("plugins.newBadge")

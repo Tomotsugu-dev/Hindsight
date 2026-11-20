@@ -174,6 +174,31 @@
   max-width: 220px;
 }
 
+/* ── 「AI 能看到的数据」下拉:钮面 = 筛选图标 + 配置名,菜单跟思考档位同款 ── */
+
+/* 配置名太长时截断,不把输入框挤窄 */
+.profileLabel {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menuDivider {
+  flex-shrink: 0;
+  height: 1px;
+  margin: calc(4px * var(--density)) calc(4px * var(--density));
+  background: var(--border-default);
+}
+
+/* 「管理配置…」不是一个可选值,比选项淡一档 */
+.menuAction {
+  color: var(--text-muted);
+}
+
+.menuAction:hover {
+  color: var(--text-strong);
+}
+
 /* ── 左右两栏 ── */
 
 .columns {

@@ -11,6 +11,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use tauri::{AppHandle, Emitter, State};
 
 use super::screen_memory::MemoryState;
+use crate::ai::policy::ProfileChoice;
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary::{
     precheck_week, AiOverrides, DaySummaryRunner, SummaryProgress, WeekPrecheckResp,
@@ -70,6 +71,8 @@ pub async fn generate_day_summary(
     overrides: Option<AiOverrides>,
     // "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据
     source: Option<String>,
+    // 用户选的配置 id；None = 按主库设置
+    profile: Option<String>,
 ) -> Result<(), String> {
     let Ok(_run) = run_lock.0.try_lock() else {
         return Err(AI_RUN_BUSY.to_string());
@@ -78,6 +81,7 @@ pub async fn generate_day_summary(
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = DeviceFilter::from_option(device_id);
     let source = source.unwrap_or_else(|| "daily".to_string());
+    let profile = ProfileChoice::from(profile);
 
     cancel.0.store(false, Ordering::Relaxed);
     // 一条龙第一棒:未识别的截图先全部 OCR(尽力而为,零积压零开销;
@@ -91,7 +95,14 @@ pub async fn generate_day_summary(
     );
 
     if let Err(e) = runner
-        .run(&source, parsed_date, device, force_refresh, overrides)
+        .run(
+            &source,
+            parsed_date,
+            device,
+            force_refresh,
+            overrides,
+            &profile,
+        )
         .await
     {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
@@ -117,6 +128,7 @@ pub async fn retry_summary_segment(
     device_id: Option<String>,
     overrides: Option<AiOverrides>,
     source: Option<String>,
+    profile: Option<String>,
 ) -> Result<(), String> {
     let Ok(_run) = run_lock.0.try_lock() else {
         return Err(AI_RUN_BUSY.to_string());
@@ -125,6 +137,7 @@ pub async fn retry_summary_segment(
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = DeviceFilter::from_option(device_id);
     let source = source.unwrap_or_else(|| "daily".to_string());
+    let profile = ProfileChoice::from(profile);
 
     cancel.0.store(false, Ordering::Relaxed);
     let runner = DaySummaryRunner::new(
@@ -134,7 +147,14 @@ pub async fn retry_summary_segment(
         Arc::clone(&cancel.0),
     );
     runner
-        .run_one_segment_only(&source, parsed_date, segment_idx, device, overrides)
+        .run_one_segment_only(
+            &source,
+            parsed_date,
+            segment_idx,
+            device,
+            overrides,
+            &profile,
+        )
         .await
         .map_err(String::from)
 }
@@ -244,6 +264,7 @@ pub async fn generate_week_summary(
     week_start: String,
     force_refresh: bool,
     allow_missing_days: bool,
+    profile: Option<String>,
 ) -> Result<(), String> {
     let Ok(_run) = run_lock.0.try_lock() else {
         return Err(AI_RUN_BUSY.to_string());
@@ -271,7 +292,11 @@ pub async fn generate_week_summary(
         Arc::clone(&cancel.0),
     );
 
-    if let Err(e) = runner.run(monday, force_refresh, allow_missing_days).await {
+    let profile = ProfileChoice::from(profile);
+    if let Err(e) = runner
+        .run(monday, force_refresh, allow_missing_days, &profile)
+        .await
+    {
         // 顶层失败也 emit 一条 error 让前端 toast——和 daily 同款 UX
         let mut p =
             SummaryProgress::base(WEEKLY_SOURCE.to_string(), monday_str.clone(), "error", 1);
@@ -294,11 +319,14 @@ pub async fn generate_week_summary(
 pub async fn precheck_week_summary(
     pool: State<'_, DbPool>,
     week_start: String,
+    profile: Option<String>,
 ) -> Result<WeekPrecheckResp, String> {
     let parsed_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let monday = align_to_monday(parsed_date);
-    precheck_week(&pool, monday).await.map_err(String::from)
+    precheck_week(&pool, monday, &ProfileChoice::from(profile))
+        .await
+        .map_err(String::from)
 }
 
 /// 拉某周已落库的周报行（最多一行）。前端进周报 tab 时调一次。

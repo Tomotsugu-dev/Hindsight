@@ -768,10 +768,7 @@ mod tests {
             s.ai.external_provider,
             AiConfig::default().external_provider
         );
-        assert_eq!(
-            s.ai.excluded_categories,
-            AiConfig::default().excluded_categories
-        );
+        assert_eq!(s.ai.visibility, AiConfig::default().visibility);
         assert!(!s.ai.models_path.trim().is_empty());
 
         // 回填触发的回写不能弄丢用户已有的显式设置
