@@ -125,20 +125,6 @@ impl ToolCtx {
     }
 }
 
-/// Report-scope WHERE clause for activities (?1 = from, ?2 = to; extra params
-/// number from ?3). Pair it with
-/// [`FROM_ACTIVITY_GROUP`](crate::repo::sql::FROM_ACTIVITY_GROUP), whose `g`
-/// alias it depends on.
-///
-/// Same shape as repo/reports.rs: the group is the cross-OS source of truth,
-/// groups explicitly assigned to `hidden` are dropped, and rows flagged by an
-/// ignore rule (`excluded = 1`) are dropped too. Ungrouped activities
-/// (`g.category_id` NULL) still pass — `IS NOT` is a NULL-safe comparison, so
-/// only an explicit 'hidden' is excluded.
-const ACTIVITY_WHERE: &str = "WHERE a.local_date BETWEEN ?1 AND ?2
-       AND g.category_id IS NOT 'hidden'
-       AND a.excluded = 0";
-
 /// Guards FTS MATCH against injection.
 ///
 /// Each word becomes a quoted string, and any double quote inside it becomes a space. Words are
@@ -209,6 +195,55 @@ mod tests {
         assert_eq!(cut.content.chars().count(), 21, "{}", cut.content);
         assert!(cut.content.ends_with('…'), "{}", cut.content);
         assert_eq!(cut.citations.len(), full.citations.len());
+    }
+
+    #[tokio::test]
+    async fn stats_and_timeline_drop_the_private_category() {
+        use super::kinds::stats::query_stats::{Bucket, GroupBy, StatMetric, StatsQuery};
+        use crate::storage::SqliteResultExt;
+
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        pool.0
+            .call(|c| {
+                c.execute_batch(
+                    "INSERT INTO app_groups(id, display_name, category_id)
+                         VALUES ('g-signal', 'Signal', 'private');
+                     INSERT INTO app_group_members(process_name, group_id)
+                         VALUES ('Signal', 'g-signal');
+                     INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                         local_hour, process_name, window_title, category_id) VALUES
+                     ('2026-07-08T09:00:00+09:00', '2026-07-08T09:30:00+09:00', 1800,
+                      '2026-07-08', 9, 'Signal', 'chat', 'other'),
+                     ('2026-07-08T10:00:00+09:00', '2026-07-08T10:30:00+09:00', 1800,
+                      '2026-07-08', 10, 'Code', 'main.rs', 'other');",
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        let ctx = super::test_util::real_ctx(&pool).await;
+
+        let timeline = run(&ctx, Query::GetTimeline(TimelineQuery { range: day() })).await;
+        let stats = run(
+            &ctx,
+            Query::QueryStats(StatsQuery {
+                range: day(),
+                apps: vec![],
+                title_keyword: None,
+                categories: vec![],
+                group_by: GroupBy::App,
+                top_n: 5,
+                metric: StatMetric::Duration,
+                gap_minutes: 30,
+                bucket: Bucket::None,
+                bucket_auto_week: false,
+            }),
+        )
+        .await;
+        for out in [timeline, stats] {
+            assert!(out.content.contains("Code"), "{}", out.content);
+            assert!(!out.content.contains("Signal"), "{}", out.content);
+        }
     }
 
     #[test]

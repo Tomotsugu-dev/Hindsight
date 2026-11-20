@@ -14,6 +14,7 @@ use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::lang::text::{load, Text};
 use crate::ai::tools::{like_pattern, truncate, ChatLang, ToolCtx, ToolError, ToolOutput};
 use crate::error::Result;
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::{DbResult, SqliteResultExt};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -376,29 +377,8 @@ fn check(args: &Args, today: NaiveDate, lang: ChatLang) -> std::result::Result<S
     })
 }
 
-/// 统计查询的基础 FROM 段(别名 a,与既有口径一致:裸活动表、不排 hidden 组)。
-const STATS_FROM: &str = "FROM activities a";
-/// FROM clause for grouping by category: activity → group → category, two joins.
-///
-/// Deliberately **not** [`crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY`]: that
-/// one joins on `c.id = g.category_id`, leaving `c.*` NULL for an ungrouped
-/// activity, and its callers bucket those with `COALESCE(c.id, 'other')`. Here
-/// the fallback is inside the join, so ungrouped activities reach the real
-/// `other` row and `c.name` is the user's localised label rather than NULL —
-/// which is what the model needs to restate in the answer.
-/// The category lives on the group (`g.category_id`); an activity whose app has
-/// no group falls back to `'other'`. `a.category_id` is a dead column (always
-/// `'other'`, see `repo::activities`) and is deliberately not read here.
-/// Hidden groups are filtered out in WHERE, matching the reports behaviour.
-const STATS_FROM_CATEGORY: &str = "FROM activities a
-     LEFT JOIN app_group_members gm
-       ON gm.process_name = a.process_name AND gm.deleted_at IS NULL
-     LEFT JOIN app_groups g
-       ON g.id = gm.group_id AND g.deleted_at IS NULL
-     LEFT JOIN categories c
-       ON c.id = COALESCE(NULLIF(g.category_id, 'none'), 'other') AND c.deleted_at IS NULL";
-
 async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput> {
+    let visible = ctx.policy().await?.main_filter();
     let (from, to) = (q.range.0.to_string(), q.range.1.to_string());
     let apps: Vec<String> = q.apps.iter().map(|a| like_pattern(a)).collect();
     let title_like = q.title_keyword.as_deref().map(like_pattern);
@@ -417,16 +397,9 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
         .call(move |conn| {
             // 动态拼的只有 WHERE 的占位段与 GROUP BY/分桶维度,全部来自白名单枚举,
             // 参数一律绑定——不存在字符串拼接注入面。
-            let needs_category = group_by == GroupBy::Category || !cats.is_empty();
-            let from_sql = if needs_category {
-                STATS_FROM_CATEGORY
-            } else {
-                STATS_FROM
-            };
-            let mut where_sql = String::from("a.local_date BETWEEN ?1 AND ?2 AND a.excluded = 0");
-            if needs_category {
-                where_sql.push_str(" AND g.category_id IS NOT 'hidden'");
-            }
+            // 网站规则的 WITH 排在最前，它的两个 ? 编号是 1、2，跟这里的 ?1、?2 是同一对日期
+            let with = host_rule_with_sql("activities");
+            let mut where_sql = format!("a.local_date BETWEEN ?1 AND ?2 AND {visible}");
             let mut bind: Vec<Box<dyn rusqlite::ToSql>> =
                 vec![Box::new(from.clone()), Box::new(to.clone())];
             if !apps.is_empty() {
@@ -437,15 +410,13 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
                 }
             }
             if !cats.is_empty() {
-                // 显示名与分类 id 双匹配:模型可能填用户语言的名字("游戏"),
-                // 也可能填英文 builtin id("game")
-                let ors = vec![
-                    "(c.name LIKE ? ESCAPE '\\' \
-                      OR COALESCE(NULLIF(g.category_id, 'none'), 'other') LIKE ? ESCAPE '\\')";
-                    cats.len()
-                ]
-                .join(" OR ");
-                where_sql.push_str(&format!(" AND ({ors})"));
+                // 分类可以写名字（"游戏"），也可以写 id（"game"）。没分类的活动算「其他」，跟统计页一样
+                let one = "name LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\'";
+                where_sql.push_str(&format!(
+                    " AND COALESCE(c.id, 'other') IN (
+                         SELECT id FROM categories WHERE deleted_at IS NULL AND ({}))",
+                    vec![one; cats.len()].join(" OR ")
+                ));
                 for c in &cats {
                     bind.push(Box::new(c.clone()));
                     bind.push(Box::new(c.clone()));
@@ -455,17 +426,21 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
                 where_sql.push_str(" AND a.window_title LIKE ? ESCAPE '\\'");
                 bind.push(Box::new(t.clone()));
             }
+            let scope = format!(
+                "{} WHERE {where_sql}",
+                from_stats_category_sql("activities")
+            );
             let params_ref: Vec<&dyn rusqlite::ToSql> = bind.iter().map(|b| b.as_ref()).collect();
 
             // first_last 忽略分组/分桶;bucket 只与 none 分组组合(validate 拦)
             if metric == StatMetric::FirstLast {
-                return query_first_last(conn, from_sql, &where_sql, &params_ref, &from, &to, lang);
+                return query_first_last(conn, &with, &scope, &params_ref, &from, &to, lang);
             }
             if bucket != Bucket::None {
                 return query_bucket(
                     conn,
-                    from_sql,
-                    &where_sql,
+                    &with,
+                    &scope,
                     &params_ref,
                     bucket,
                     bucket_auto_week,
@@ -479,8 +454,8 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
             match metric {
                 StatMetric::Duration => query_duration(
                     conn,
-                    from_sql,
-                    &where_sql,
+                    &with,
+                    &scope,
                     &params_ref,
                     group_by,
                     top_n,
@@ -490,8 +465,8 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
                 ),
                 StatMetric::SessionCount => query_session_count(
                     conn,
-                    from_sql,
-                    &where_sql,
+                    &with,
+                    &scope,
                     &params_ref,
                     group_by,
                     top_n,
@@ -511,11 +486,13 @@ async fn run(ctx: &ToolCtx, q: &StatsQuery, lang: ChatLang) -> Result<ToolOutput
 }
 
 /// 时长口径:SUM(duration_secs),可分组 top-N。
+///
+/// `with` 是网站规则的 WITH，放在语句最前；`scope` 是 FROM 加 WHERE，后面的几个函数也一样。
 #[allow(clippy::too_many_arguments)]
 fn query_duration(
     conn: &rusqlite::Connection,
-    from_sql: &str,
-    where_sql: &str,
+    with: &str,
+    scope: &str,
     params: &[&dyn rusqlite::ToSql],
     group_by: GroupBy,
     top_n: usize,
@@ -527,9 +504,7 @@ fn query_duration(
         GroupBy::None => {
             let secs: i64 = conn
                 .query_row(
-                    &format!(
-                        "SELECT COALESCE(SUM(a.duration_secs),0) {from_sql} WHERE {where_sql}"
-                    ),
+                    &format!("{with} SELECT COALESCE(SUM(a.duration_secs),0) {scope}"),
                     params,
                     |r| r.get(0),
                 )
@@ -544,7 +519,7 @@ fn query_duration(
             let universe: i64 = conn
                 .query_row(
                     &format!(
-                        "SELECT COUNT(*) FROM (SELECT 1 {from_sql} WHERE {where_sql}
+                        "{with} SELECT COUNT(*) FROM (SELECT 1 {scope}
                          GROUP BY {dim} HAVING SUM(a.duration_secs) >= 60)"
                     ),
                     params,
@@ -553,8 +528,8 @@ fn query_duration(
                 .db()?;
             let mut stmt = conn
                 .prepare(&format!(
-                    "SELECT {dim}, SUM(a.duration_secs) d {from_sql}
-                     WHERE {where_sql} GROUP BY {dim} HAVING d >= 60
+                    "{with} SELECT {dim}, SUM(a.duration_secs) d {scope}
+                     GROUP BY {dim} HAVING d >= 60
                      ORDER BY d DESC LIMIT {top_n}"
                 ))
                 .db()?;
@@ -586,8 +561,8 @@ fn query_duration(
 #[allow(clippy::too_many_arguments)]
 fn query_session_count(
     conn: &rusqlite::Connection,
-    from_sql: &str,
-    where_sql: &str,
+    with: &str,
+    scope: &str,
     params: &[&dyn rusqlite::ToSql],
     group_by: GroupBy,
     top_n: usize,
@@ -601,8 +576,7 @@ fn query_session_count(
         GroupBy::None => {
             let mut stmt = conn
                 .prepare(&format!(
-                    "SELECT a.started_at, a.ended_at {from_sql}
-                     WHERE {where_sql} ORDER BY a.started_at"
+                    "{with} SELECT a.started_at, a.ended_at {scope} ORDER BY a.started_at"
                 ))
                 .db()?;
             let rows = stmt
@@ -620,7 +594,7 @@ fn query_session_count(
         }
         GroupBy::App | GroupBy::Title | GroupBy::Category => {
             let dim = group_dim(group_by);
-            let rows = fetch_grouped_spans(conn, from_sql, where_sql, params, dim)?;
+            let rows = fetch_grouped_spans(conn, with, scope, params, dim)?;
             if rows.is_empty() {
                 return Ok(lang.no_match(from, to));
             }
@@ -644,15 +618,15 @@ fn query_session_count(
 /// 分组与分桶的会话计数共用(桶也是一种"组",维度表达式不同而已)。
 fn fetch_grouped_spans(
     conn: &rusqlite::Connection,
-    from_sql: &str,
-    where_sql: &str,
+    with: &str,
+    scope: &str,
     params: &[&dyn rusqlite::ToSql],
     dim: &str,
 ) -> DbResult<Vec<(String, String, String)>> {
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT {dim} AS g, a.started_at, a.ended_at {from_sql}
-             WHERE {where_sql} ORDER BY g, a.started_at"
+            "{with} SELECT {dim} AS grp, a.started_at, a.ended_at {scope}
+             ORDER BY grp, a.started_at"
         ))
         .db()?;
     let rows = stmt
@@ -696,12 +670,12 @@ fn count_sessions_by_group(
 fn group_dim(group_by: GroupBy) -> &'static str {
     match group_by {
         GroupBy::App => "a.process_name",
+        // TODO: '(无标题)' 写死了中文，聊天用别的语言时模型看到的也是中文。按聊天语言取，放进 lang/*.json
         GroupBy::Title => "COALESCE(a.window_title,'(无标题)')",
-        // Display name: the user-visible name from `categories`; falls back to the
-        // raw id when the category row is deleted or missing, then to 'other' when
-        // the app has no group at all. (The model restates it in the answer's
-        // language, and 'other' reads the same as any English builtin id.)
-        GroupBy::Category => "COALESCE(c.name, NULLIF(g.category_id, 'none'), 'other')",
+        // 用分类的名字，模型照着写进回答。没分类的活动 c 是 NULL，用「其他」的名字
+        GroupBy::Category => {
+            "COALESCE(c.name, (SELECT name FROM categories WHERE id = 'other'), 'other')"
+        }
         GroupBy::None => unreachable!("group_dim 只在分组分支被调用"),
     }
 }
@@ -726,8 +700,8 @@ fn bucket_dim(bucket: Bucket) -> &'static str {
 #[allow(clippy::too_many_arguments)]
 fn query_bucket(
     conn: &rusqlite::Connection,
-    from_sql: &str,
-    where_sql: &str,
+    with: &str,
+    scope: &str,
     params: &[&dyn rusqlite::ToSql],
     bucket: Bucket,
     auto_week: bool,
@@ -754,8 +728,8 @@ fn query_bucket(
             // "某天: 0 分钟"是噪音,滤掉后与"无记录的日子未列出"语义一致
             let mut stmt = conn
                 .prepare(&format!(
-                    "SELECT {dim} AS b, SUM(a.duration_secs) s {from_sql}
-                     WHERE {where_sql} GROUP BY b HAVING s >= 60 ORDER BY b"
+                    "{with} SELECT {dim} AS b, SUM(a.duration_secs) s {scope}
+                     GROUP BY b HAVING s >= 60 ORDER BY b"
                 ))
                 .db()?;
             let rows = stmt
@@ -770,7 +744,7 @@ fn query_bucket(
                 .collect()
         }
         StatMetric::SessionCount => {
-            let rows = fetch_grouped_spans(conn, from_sql, where_sql, params, dim)?;
+            let rows = fetch_grouped_spans(conn, with, scope, params, dim)?;
             // 不排序不截断:count_sessions_by_group 保持输入的桶序(=时间升序)
             count_sessions_by_group(rows, gap_minutes as i64 * 60)
                 .iter()
@@ -796,8 +770,8 @@ fn query_bucket(
 /// 首末口径:范围内最早开始与最晚结束的活动时间 + 总条数,忽略分组/分桶。
 fn query_first_last(
     conn: &rusqlite::Connection,
-    from_sql: &str,
-    where_sql: &str,
+    with: &str,
+    scope: &str,
     params: &[&dyn rusqlite::ToSql],
     from: &str,
     to: &str,
@@ -805,9 +779,7 @@ fn query_first_last(
 ) -> DbResult<String> {
     let (first, last, n): (Option<String>, Option<String>, i64) = conn
         .query_row(
-            &format!(
-                "SELECT MIN(a.started_at), MAX(a.ended_at), COUNT(*) {from_sql} WHERE {where_sql}"
-            ),
+            &format!("{with} SELECT MIN(a.started_at), MAX(a.ended_at), COUNT(*) {scope}"),
             params,
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
@@ -1218,7 +1190,7 @@ mod tests {
             "{}",
             out.content
         );
-        assert!(out.content.contains("other: 30 分钟"), "{}", out.content);
+        assert!(out.content.contains("其他: 30 分钟"), "{}", out.content);
         assert!(!out.content.contains("零星"), "{}", out.content);
     }
 
@@ -1240,7 +1212,7 @@ mod tests {
         q.group_by = GroupBy::Category;
         let out = run(&ctx, &q, ChatLang::ZhHans).await.unwrap();
         assert!(
-            out.content.contains("other: 1 小时 0 分钟"),
+            out.content.contains("其他: 1 小时 0 分钟"),
             "{}",
             out.content
         );
