@@ -21,6 +21,12 @@
   margin: 0;
 }
 
+.end {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+}
+
 /* TabNav 自带的下边距是给「tab 条独占一行」用的，放进标题行就不要了 */
 .tabs nav {
   margin-bottom: 0;
