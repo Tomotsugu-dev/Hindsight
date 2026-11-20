@@ -27,11 +27,15 @@ import { restoreTheme } from "@app/lib/theme";
 import { AppDemo } from "./AppDemo";
 import { PreviewError } from "./PreviewError";
 import { applyPreviewTheme } from "./preview-theme";
+import { followSiteMode } from "./site-mode";
 import "./mobile-overrides.css";
 
 // 跟主 main.tsx 一致:启动即应用主题(默认 minimal 简约),
 // 否则 <html> 无 data-theme,会渲染成 default 多彩主题
 restoreTheme();
+
+// 主题页的预览要显示 ?theme= 的主题，不跟官网的深浅色
+if (!new URLSearchParams(location.search).has("theme")) followSiteMode();
 
 // 官网主题页的预览：先套好 ?theme= 的主题，再画页面
 applyPreviewTheme(location.search).then((failed) => {

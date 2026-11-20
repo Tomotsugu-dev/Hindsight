@@ -9,7 +9,8 @@
 web/
 ├── index.html         简体中文主页（默认语言）
 ├── en/ ja/ pt/ tw/    其它语言主页
-├── site.css           各页共用的配色变量、顶栏和页脚（首页、文档站、主题页、404 都先加载它）
+├── site.css           各页共用的配色变量（浅色、深色两套）、顶栏和页脚（首页、文档站、主题页、404 都先加载它）
+├── color-mode.js      各页共用的深浅色切换，在 <head> 里同步加载
 ├── home.css           首页样式
 ├── linux.svg          Linux 下载按钮的图标，取自 Simple Icons 13.21.0（CC0），home.css 用 mask 引用
 ├── 404.html           找不到页面时返回
@@ -71,7 +72,8 @@ npx wrangler deploy --config web/wrangler.jsonc
 
 ## 修改清单
 
-- 全局配色 token、顶栏、页脚：`site.css`，改一处全站生效
+- 全局配色 token、顶栏、页脚：`site.css`，改一处全站生效；加颜色时浅色、深色两块都要写
+- 新页面：`<head>` 里先加载 `/color-mode.js`，顶栏放 `.mode-toggle` 按钮
 - 首页其余样式：`home.css`；文档站样式：`scripts/docs/docs.css`
 - 各 section 文案：各语言 `index.html` 里有注释 `<!-- ============ XXX ============ -->` 分隔
 - 视频：替换 `docs/intro/<lang>/shot_video/` 下的 mp4，并重新生成封面

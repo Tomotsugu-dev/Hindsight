@@ -124,7 +124,7 @@
 .primary {
   border-color: var(--ink);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .primary:hover {

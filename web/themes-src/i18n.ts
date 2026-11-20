@@ -67,6 +67,7 @@ export interface Strings {
   navFeatures: string;
   navDownload: string;
   language: string;
+  darkMode: string;
   allReleases: string;
   changelog: string;
   docs: string;
@@ -96,6 +97,7 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     navFeatures: "功能",
     navDownload: "下载",
     language: "语言",
+    darkMode: "深色模式",
     allReleases: "所有版本",
     changelog: "更新日志",
     docs: "功能说明",
@@ -122,6 +124,7 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     navFeatures: "功能",
     navDownload: "下載",
     language: "語言",
+    darkMode: "深色模式",
     allReleases: "所有版本",
     changelog: "更新紀錄",
     docs: "功能說明",
@@ -148,6 +151,7 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     navFeatures: "Features",
     navDownload: "Download",
     language: "Language",
+    darkMode: "Dark mode",
     allReleases: "All releases",
     changelog: "Changelog",
     docs: "Features",
@@ -175,6 +179,7 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     navFeatures: "機能",
     navDownload: "ダウンロード",
     language: "言語",
+    darkMode: "ダークモード",
     allReleases: "すべてのバージョン",
     changelog: "更新履歴",
     docs: "機能説明",
@@ -202,6 +207,7 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     navFeatures: "Recursos",
     navDownload: "Download",
     language: "Idioma",
+    darkMode: "Modo escuro",
     allReleases: "Todas as versões",
     changelog: "Novidades",
     docs: "Recursos",
@@ -229,6 +235,7 @@ export const STRINGS: Record<PageLanguage, Strings> = {
     navFeatures: "Funciones",
     navDownload: "Descargar",
     language: "Idioma",
+    darkMode: "Modo oscuro",
     allReleases: "Todas las versiones",
     changelog: "Novedades",
     docs: "Funciones",
