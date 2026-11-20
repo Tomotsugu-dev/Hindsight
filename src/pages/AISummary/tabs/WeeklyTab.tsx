@@ -9,6 +9,8 @@ import { ROUTES } from "../../../config/nav";
 import { useDurationFormatter } from "../../../utils/duration";
 import { resolveSegmentDotColor } from "../../../utils/segmentColor";
 import { useSettings } from "../../../state/settings";
+import { useAiProfiles } from "../../../state/aiProfiles";
+import { AiProfilePicker } from "../../../components/AiProfiles/AiProfilePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import {
   cancelWeeklyGenerate,
@@ -111,6 +113,8 @@ interface DayCell {
 export default function WeeklyTab() {
   const { t, i18n } = useTranslation();
   const { settings } = useSettings();
+  // 这次生成 AI 能看到哪些数据；不存，进页面回到「自动生成时用」的那套
+  const profiles = useAiProfiles("weekly");
   const navigate = useNavigate();
   const fmtDuration = useDurationFormatter();
   const [weekOffset, setWeekOffset] = useState(0);
@@ -289,14 +293,15 @@ export default function WeeklyTab() {
 
     // precheck 先看缺日报情况——失败不阻塞，按"没问题"走兜底（后端严格模式仍会写
     // error 行，前端能看到提示）
+    const profile = profiles.selected;
     let precheck: WeekPrecheckResp;
     try {
-      precheck = await api.precheckWeekSummary(monday);
+      precheck = await api.precheckWeekSummary(monday, profile);
     } catch (e) {
       logError("weekly.precheck", e);
       // 直接走严格生成；后端日报为空就 error 行兜底
       try {
-        await startWeeklyGenerate(monday, forceRefresh);
+        await startWeeklyGenerate(monday, forceRefresh, false, profile);
       } catch {
         /* store 已设过 topError */
       }
@@ -308,7 +313,7 @@ export default function WeeklyTab() {
     // 全有 → 直接生成
     if (missingDays.length === 0) {
       try {
-        await startWeeklyGenerate(monday, forceRefresh);
+        await startWeeklyGenerate(monday, forceRefresh, false, profile);
       } catch {
         /* store 已设过 topError */
       }
@@ -330,7 +335,7 @@ export default function WeeklyTab() {
     const force = pendingConfirm.forceRefresh;
     setPendingConfirm(null);
     try {
-      await startWeeklyGenerate(monday, force, true);
+      await startWeeklyGenerate(monday, force, true, profiles.selected);
     } catch {
       /* store 已设过 topError */
     }
@@ -558,6 +563,7 @@ export default function WeeklyTab() {
         }
         actions={
           <>
+            <AiProfilePicker state={profiles} disabled={generating} />
             {generating ? (
               <MainButton action="stop" label={mainBtnLabel} onClick={() => void onCancel()} />
             ) : (

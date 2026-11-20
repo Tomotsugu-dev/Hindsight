@@ -1073,7 +1073,8 @@ export const api = {
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；
-   *  overrides 是调试 tab 用的局部参数覆盖，传 null = 走 settings.ai 全局值。 */
+   *  overrides 是调试 tab 用的局部参数覆盖，传 null = 走 settings.ai 全局值。
+   *  profile 是用户选的配置 id，null = 按默认分类；配置不存在时报 `[AI_PROFILE_GONE]`。 */
   generateDaySummary: (
     date: string,
     forceRefresh: boolean,
@@ -1081,6 +1082,7 @@ export const api = {
     overrides: AiOverrides | null = null,
     /** "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据 */
     source: string = "daily",
+    profile: string | null = null,
   ) =>
     invoke<void>("generate_day_summary", {
       date,
@@ -1088,6 +1090,7 @@ export const api = {
       deviceId,
       overrides,
       source,
+      profile,
     }),
   /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
   retrySummarySegment: (
@@ -1096,6 +1099,7 @@ export const api = {
     deviceId: string | null,
     overrides: AiOverrides | null = null,
     source: string = "daily",
+    profile: string | null = null,
   ) =>
     invoke<void>("retry_summary_segment", {
       date,
@@ -1103,6 +1107,7 @@ export const api = {
       deviceId,
       overrides,
       source,
+      profile,
     }),
   /** 设取消标记——下一段循环开头会感知到然后早 return。
    *  已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。 */
@@ -1127,16 +1132,19 @@ export const api = {
     weekStart: string,
     forceRefresh: boolean,
     allowMissingDays: boolean = false,
+    profile: string | null = null,
   ) =>
     invoke<void>("generate_week_summary", {
       weekStart,
       forceRefresh,
       allowMissingDays,
+      profile,
     }),
   /** 周报生成前预览：返回该周 7 天每天的"是否有日报 / 是否有活动"。
-   *  前端点击生成时调一次，根据结果决定要不要弹"日报缺失"确认弹框。 */
-  precheckWeekSummary: (weekStart: string) =>
-    invoke<WeekPrecheckResp>("precheck_week_summary", { weekStart }),
+   *  前端点击生成时调一次，根据结果决定要不要弹"日报缺失"确认弹框。
+   *  「有活动」按 profile 算：只数 AI 能看到的记录。 */
+  precheckWeekSummary: (weekStart: string, profile: string | null = null) =>
+    invoke<WeekPrecheckResp>("precheck_week_summary", { weekStart, profile }),
   /** 拉某周已落库的周报；该周无生成时返回 null。weekStart 不是周一时自动对齐。 */
   getWeekSummary: (weekStart: string) =>
     invoke<SegmentSummaryRow | null>("get_week_summary", { weekStart }),

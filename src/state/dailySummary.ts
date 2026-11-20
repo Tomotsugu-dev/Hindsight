@@ -196,7 +196,12 @@ export function setTopError(msg: string): void {
  * invoke 前先乐观置 generating=true（让按钮立刻变"停止"，不等首个事件来）；
  * invoke 抛错时回滚并设 topError。成功就交给事件流接管 generating 复位。
  */
-export async function startDailyGenerate(date: string, forceRefresh: boolean): Promise<void> {
+export async function startDailyGenerate(
+  date: string,
+  forceRefresh: boolean,
+  /** 用户选的配置 id；null = 默认分类 */
+  profile: string | null = null,
+): Promise<void> {
   ensureListener();
   snap = Object.freeze({
     ...EMPTY_SNAP,
@@ -205,10 +210,10 @@ export async function startDailyGenerate(date: string, forceRefresh: boolean): P
   });
   notify();
   try {
-    await api.generateDaySummary(date, forceRefresh, null);
+    await api.generateDaySummary(date, forceRefresh, null, null, "daily", profile);
     // generateDaySummary 在 all_done 后 resolve；事件流已经把 generating 置回 false
   } catch (e) {
-    setTopError(typeof e === "string" ? e : String(e));
+    setTopError(localizeAiError(typeof e === "string" ? e : String(e)));
     throw e;
   }
 }
@@ -233,7 +238,11 @@ export async function cancelDailyGenerate(): Promise<void> {
  * 重试单段。后端 `run_one_segment_only` 不发 all_done 事件，只发 segment_started
  * / segment_done——这里需要在 await 完手动复位 generating（事件流不会替它复位）。
  */
-export async function retryDailySegment(date: string, segmentIdx: number): Promise<void> {
+export async function retryDailySegment(
+  date: string,
+  segmentIdx: number,
+  profile: string | null = null,
+): Promise<void> {
   ensureListener();
   snap = Object.freeze({
     ...EMPTY_SNAP,
@@ -242,12 +251,12 @@ export async function retryDailySegment(date: string, segmentIdx: number): Promi
   });
   notify();
   try {
-    await api.retrySummarySegment(date, segmentIdx, null);
+    await api.retrySummarySegment(date, segmentIdx, null, null, "daily", profile);
     // retry 后端不发 all_done；这里命令 resolve 时显式复位
     snap = Object.freeze({ ...EMPTY_SNAP, topError: snap.topError });
     notify();
   } catch (e) {
-    setTopError(typeof e === "string" ? e : String(e));
+    setTopError(localizeAiError(typeof e === "string" ? e : String(e)));
     throw e;
   }
 }

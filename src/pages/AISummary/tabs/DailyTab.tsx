@@ -12,6 +12,8 @@ import {
   type SegmentSummaryRow,
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
+import { useAiProfiles } from "../../../state/aiProfiles";
+import { AiProfilePicker } from "../../../components/AiProfiles/AiProfilePicker";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { resolveSegmentDotColor } from "../../../utils/segmentColor";
@@ -66,6 +68,8 @@ function offsetToDateStr(dayOffset: number): string {
 export default function DailyTab() {
   const { t, i18n } = useTranslation();
   const { settings, reload: reloadSettings } = useSettings();
+  // 这次生成 AI 能看到哪些数据；不存，进页面回到「自动生成时用」的那套
+  const profiles = useAiProfiles("daily");
   // 从周报点某一天跳过来时带 ?date=YYYY-MM-DD，打开那一天
   const [searchParams] = useSearchParams();
   const [dayOffset, setDayOffset] = useState(() => dayOffsetOf(searchParams.get("date")));
@@ -244,7 +248,7 @@ export default function DailyTab() {
     clearTopError();
     await requireEngineThen(async () => {
       try {
-        await startDailyGenerate(date, forceRefresh);
+        await startDailyGenerate(date, forceRefresh, profiles.selected);
       } catch {
         // store 已经设过 topError；这里不再重复处理
       }
@@ -264,7 +268,7 @@ export default function DailyTab() {
     clearTopError();
     await requireEngineThen(async () => {
       try {
-        await retryDailySegment(date, segmentIdx);
+        await retryDailySegment(date, segmentIdx, profiles.selected);
       } catch {
         // store 已经设过 topError
       }
@@ -504,6 +508,7 @@ export default function DailyTab() {
         }
         actions={
           <>
+            <AiProfilePicker state={profiles} disabled={generating} />
             {generating ? (
               <MainButton
                 action="stop"

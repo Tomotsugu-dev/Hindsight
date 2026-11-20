@@ -16,6 +16,7 @@ const CODE_KEYS: Record<string, string> = {
   LLM_EMPTY_TRUNCATED: "aiSummary.errors.llmEmptyTruncated",
   LLM_EMPTY: "aiSummary.errors.llmEmpty",
   AI_RUN_BUSY: "aiSummary.errors.runBusy",
+  AI_PROFILE_GONE: "aiSummary.errors.profileGone",
 };
 
 /** 把后端原始错误串映射成本地化文案：命中已知 `[CODE]` 码走 i18n，否则原样返回。

@@ -19,6 +19,8 @@ interface SimplePickerProps<T extends string> {
   icon?: LucideIcon;
   /** Next to buttons, use the buttons' size so the heights match */
   size?: ControlSize;
+  /** 按钮的悬停提示，也是读屏软件读的名字 */
+  title?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ export function SimplePicker<T extends string>({
   disabled,
   icon: Icon,
   size = "sm",
+  title,
 }: SimplePickerProps<T>) {
   const { open, wrapRef, toggle, close } = usePicker();
   const current = options.find((o) => o.value === value);
@@ -69,6 +72,8 @@ export function SimplePicker<T extends string>({
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={title}
+        aria-label={title ? `${title}: ${current?.label ?? ""}` : undefined}
         data-part="select"
         data-size={size}
       >

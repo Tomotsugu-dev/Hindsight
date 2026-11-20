@@ -1555,6 +1555,7 @@
     },
     "errors": {
       "runBusy": "Ya hay otra tarea de generación de IA en marcha. Espera a que termine o pulsa Detener primero.",
+      "profileGone": "El perfil elegido ya no existe. Elige otro en el menú y vuelve a intentarlo.",
       "llmEmptyReasoning": "El modelo gastó todo el presupuesto pensando y no llegó a escribir la respuesta. Actualiza la aplicación e inténtalo de nuevo (las versiones nuevas desactivan el razonamiento local de forma predeterminada); si persiste, cambia a un modelo sin razonamiento (instruct) o amplía el contexto de este paso.",
       "llmEmptyEos": "El modelo se detuvo sin generar nada: normalmente el modelo elegido o el proyector de visión (mmproj) no encajan. Elige otro modelo en los Ajustes de IA.",
       "llmEmptyTruncated": "La respuesta del modelo se cortó antes de producir texto útil (probablemente un modelo de razonamiento). Usa un modelo de texto normal, como Gemma o Qwen3, o amplía el contexto en los Ajustes de IA.",
