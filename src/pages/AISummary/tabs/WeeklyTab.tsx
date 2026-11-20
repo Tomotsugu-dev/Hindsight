@@ -575,8 +575,11 @@ export default function WeeklyTab() {
                 }
               />
             )}
+            {/* 带框，和左边的下拉框、主按钮看着一样高；平时灰，悬停才上色 */}
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               icon={Pencil}
               label={t("aiSummary.edit.action")}
               onClick={() => {
@@ -588,6 +591,8 @@ export default function WeeklyTab() {
             />
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               icon={Download}
               label={t("aiSummary.weekly.actions.exportMarkdown")}
               onClick={() => void onExportMarkdown()}
@@ -602,6 +607,8 @@ export default function WeeklyTab() {
             />
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               tone="danger"
               icon={Trash2}
               label={t("aiSummary.weekly.actions.delete")}

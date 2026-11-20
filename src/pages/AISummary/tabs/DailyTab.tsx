@@ -522,8 +522,11 @@ export default function DailyTab() {
                 }
               />
             )}
+            {/* 带框，和左边的下拉框、主按钮看着一样高；平时灰，悬停才上色 */}
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               icon={Download}
               label={t("aiSummary.daily.actions.exportMarkdown")}
               onClick={() => void onExportMarkdown()}
@@ -538,6 +541,8 @@ export default function DailyTab() {
             />
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               tone="danger"
               icon={Trash2}
               label={t("aiSummary.daily.actions.delete")}
