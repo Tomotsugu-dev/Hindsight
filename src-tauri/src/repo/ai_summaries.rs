@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::repo::reports::DeviceFilter;
-use crate::repo::sql::FROM_ACTIVITY_GROUP_CATEGORY;
+use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 单段总结的一行（DB <-> 前端共用）。
@@ -418,56 +418,48 @@ pub async fn clear_day_summaries_only(pool: &DbPool, source: &str, local_date: &
 /// 拉某天某段使用最多的应用（display_name, minutes, category_id），按 minutes 降序。
 ///
 /// 用来给 LLM 一个 "用户在干什么" 的弱信号，防止它对着十几张截图猜半天。
-/// limit 默认调用方传 8 即可。
+/// limit 默认调用方传 8 即可。`visible` 是 AI 能看到哪些活动，见
+/// [`AiDataPolicy::main_filter`](crate::ai::policy::AiDataPolicy::main_filter)。
 pub async fn list_segment_top_apps(
     pool: &DbPool,
     local_date: &str,
     start_hour: u8,
     end_hour: u8,
-    excluded_categories: &[String],
+    visible: &str,
     device: DeviceFilter,
     limit: u32,
 ) -> Result<Vec<(String, u32, String)>> {
     let date = local_date.to_string();
-    let excluded: Vec<String> = excluded_categories.to_vec();
+    let visible = visible.to_string();
     let dev = device.clone();
     let rows = pool
         .0
         .call(move |conn| {
-            let placeholders = if excluded.is_empty() {
-                String::new()
-            } else {
-                let marks = vec!["?"; excluded.len()].join(",");
-                format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
-            };
-            // 硬编码排除 hidden 分类（不在 excluded_categories 配置范畴内）
+            // 别名不能叫 name：FROM 里联了 categories，它有 name 列，GROUP BY 会分不清
             let sql = format!(
-                "SELECT COALESCE(g.display_name, a.process_name) AS name,
+                "{with}
+                 SELECT COALESCE(g.display_name, a.process_name) AS app,
                         SUM(a.duration_secs) AS secs,
                         COALESCE(c.id, 'other') AS cat
-                   {FROM_ACTIVITY_GROUP_CATEGORY}
+                   {from}
                   WHERE a.local_date = ?
                     AND a.local_hour >= ?
                     AND a.local_hour < ?
-                    AND g.category_id IS NOT 'hidden'
-                    AND a.excluded = 0
-                    {}
-                    {}
-                  GROUP BY name, cat
+                    AND {visible}
+                    {device}
+                  GROUP BY app, cat
                   ORDER BY secs DESC
                   LIMIT ?",
-                placeholders,
-                dev.sql_clause(),
+                with = host_rule_with_sql("activities"),
+                from = from_stats_category_sql("activities"),
+                device = dev.sql_clause(),
             );
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&date);
+            // 网站规则的 WITH 在最前，它的两个 ? 是日期范围的两头
+            let mut params: Vec<&dyn ToSql> = vec![&date, &date, &date];
             let sh = start_hour as i64;
             let eh = end_hour as i64;
             params.push(&sh);
             params.push(&eh);
-            for cat in &excluded {
-                params.push(cat);
-            }
             if let Some(extra) = dev.sql_param() {
                 params.push(extra);
             }
@@ -502,47 +494,37 @@ pub async fn list_range_top_apps(
     pool: &DbPool,
     start_date: &str,
     end_date: &str,
-    excluded_categories: &[String],
+    visible: &str,
     device: DeviceFilter,
     limit: u32,
 ) -> Result<Vec<(String, u32, String)>> {
     let from = start_date.to_string();
     let to = end_date.to_string();
-    let excluded: Vec<String> = excluded_categories.to_vec();
+    let visible = visible.to_string();
     let dev = device.clone();
     let rows = pool
         .0
         .call(move |conn| {
-            let placeholders = if excluded.is_empty() {
-                String::new()
-            } else {
-                let marks = vec!["?"; excluded.len()].join(",");
-                format!(" AND COALESCE(c.id, 'other') NOT IN ({})", marks)
-            };
-            // 硬编码排除 hidden 分类（不在 excluded_categories 配置范畴内）
+            // 别名不叫 name 的原因见 list_segment_top_apps
             let sql = format!(
-                "SELECT COALESCE(g.display_name, a.process_name) AS name,
+                "{with}
+                 SELECT COALESCE(g.display_name, a.process_name) AS app,
                         SUM(a.duration_secs) AS secs,
                         COALESCE(c.id, 'other') AS cat
-                   {FROM_ACTIVITY_GROUP_CATEGORY}
+                   {from_sql}
                   WHERE a.local_date >= ?
                     AND a.local_date <= ?
-                    AND g.category_id IS NOT 'hidden'
-                    AND a.excluded = 0
-                    {}
-                    {}
-                  GROUP BY name, cat
+                    AND {visible}
+                    {device}
+                  GROUP BY app, cat
                   ORDER BY secs DESC
                   LIMIT ?",
-                placeholders,
-                dev.sql_clause(),
+                with = host_rule_with_sql("activities"),
+                from_sql = from_stats_category_sql("activities"),
+                device = dev.sql_clause(),
             );
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            params.push(&from);
-            params.push(&to);
-            for cat in &excluded {
-                params.push(cat);
-            }
+            // 网站规则的 WITH 在最前，它的两个 ? 是日期范围的两头
+            let mut params: Vec<&dyn ToSql> = vec![&from, &to, &from, &to];
             if let Some(extra) = dev.sql_param() {
                 params.push(extra);
             }
@@ -1134,8 +1116,17 @@ mod tests {
         );
     }
 
+    /// 按主库设置，AI 能看到哪些活动。
+    async fn main_visible(pool: &DbPool) -> String {
+        use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+        AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
+            .await
+            .unwrap()
+            .main_filter()
+    }
+
     /// list_segment_top_apps 的小时窗口是 [start, end) 半开区间，秒数换算分钟
-    /// 向下取整，hidden 分类硬排除、未分组进程按 'other' 放行。真实翻车场景：
+    /// 向下取整，按主库设置 hidden 分类看不到、未分组进程按 'other' 放行。真实翻车场景：
     /// end_hour 写成 <= 会把下一段开头的应用算进本段，LLM 拿到串场材料。
     #[tokio::test]
     async fn list_segment_top_apps_window_order_and_filters() {
@@ -1158,13 +1149,14 @@ mod tests {
         insert_activity(&pool, TEST_SELF_ID, date, 9, "Secret", 6000).await;
         // 别的设备的 Chrome：Only(self) 时不能算
         insert_activity(&pool, "device-win", date, 9, "Chrome", 6000).await;
+        let visible = main_visible(&pool).await;
 
         let rows = list_segment_top_apps(
             &pool,
             date,
             9,
             12,
-            &[],
+            &visible,
             DeviceFilter::Only(TEST_SELF_ID.to_string()),
             8,
         )
@@ -1181,32 +1173,34 @@ mod tests {
         );
 
         // All 视角：两台设备的 Chrome 合并 (480+6000)/60 = 108 分钟，跃居第一
-        let all = list_segment_top_apps(&pool, date, 9, 12, &[], DeviceFilter::All, 8)
+        let all = list_segment_top_apps(&pool, date, 9, 12, &visible, DeviceFilter::All, 8)
             .await
             .unwrap();
         assert_eq!(all[0], ("Chrome".to_string(), 108, "browse".to_string()));
 
-        // excluded_categories 把 browse 整类踢掉
+        // 条件里不要 browse，就把 browse 整类踢掉
         let no_browse = list_segment_top_apps(
             &pool,
             date,
             9,
             12,
-            &["browse".to_string()],
+            "COALESCE(c.id, 'other') <> 'browse'",
             DeviceFilter::Only(TEST_SELF_ID.to_string()),
             8,
         )
         .await
         .unwrap();
-        // 精确比对整个结果：只踢 browse 一类，Code / Mystery(other) 必须原样保留——
-        // 只断言"没有 browse"会漏掉「误把 other 一起排掉」这类过度过滤 bug
+        // 精确比对整个结果：只踢 browse 一类，其余必须原样保留——
+        // 只断言"没有 browse"会漏掉「误把 other 一起排掉」这类过度过滤 bug。
+        // hidden 也留着：藏什么全看传进来的条件，函数自己不另外藏
         assert_eq!(
             no_browse,
             vec![
+                ("Secret".to_string(), 100, "hidden".to_string()),
                 ("Code".to_string(), 10, "code".to_string()),
                 ("Mystery".to_string(), 2, "other".to_string()),
             ],
-            "excluded_categories 应只踢掉 browse 整类，其余行原样保留"
+            "条件应只踢掉 browse 整类，其余行原样保留"
         );
 
         // limit 截断：只留时长第一名
@@ -1215,7 +1209,7 @@ mod tests {
             date,
             9,
             12,
-            &[],
+            &visible,
             DeviceFilter::Only(TEST_SELF_ID.to_string()),
             1,
         )
@@ -1242,10 +1236,17 @@ mod tests {
         insert_activity(&pool, TEST_SELF_ID, "2026-07-19", 9, "Chrome", 60000).await;
         insert_activity(&pool, TEST_SELF_ID, "2026-07-23", 9, "Chrome", 60000).await;
 
-        let rows =
-            list_range_top_apps(&pool, "2026-07-20", "2026-07-22", &[], DeviceFilter::All, 8)
-                .await
-                .unwrap();
+        let visible = main_visible(&pool).await;
+        let rows = list_range_top_apps(
+            &pool,
+            "2026-07-20",
+            "2026-07-22",
+            &visible,
+            DeviceFilter::All,
+            8,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             rows,
             vec![

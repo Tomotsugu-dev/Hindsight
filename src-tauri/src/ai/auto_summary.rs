@@ -18,6 +18,7 @@ use std::sync::Arc;
 use chrono::{Duration as ChronoDuration, Local, NaiveDate};
 use tauri::{AppHandle, Manager};
 
+use crate::ai::policy::ProfileChoice;
 use crate::ai::summary::{precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE};
 use crate::commands::ai_summary::{RunLock, SummaryCancel};
 use crate::error::Result;
@@ -164,7 +165,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     let last_monday = align_to_monday(today) - ChronoDuration::days(7);
     let w_key = format!("w:{last_monday}");
     if !attempted.contains(&w_key) && weekly_absent(&pool, last_monday).await? {
-        let pre = precheck_week(&pool, last_monday).await?;
+        let pre = precheck_week(&pool, last_monday, &ProfileChoice::Auto).await?;
         // 整周零日报不硬跑:没有叙事材料的周报只是活动统计空壳;
         // 等日报(手动或上面的自动)补上后,同一运行期内下轮再试。
         if pre.days_with_daily > 0 {
@@ -215,7 +216,14 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
         Arc::clone(&cancel.0),
     );
     if let Err(e) = runner
-        .run("daily", date, DeviceFilter::All, force_refresh, None)
+        .run(
+            "daily",
+            date,
+            DeviceFilter::All,
+            force_refresh,
+            None,
+            &ProfileChoice::Auto,
+        )
         .await
     {
         log::warn!("自动总结:{date} 日报失败(本次运行期不再自动重试): {e}");
@@ -250,7 +258,10 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
         app.clone(),
         Arc::clone(&cancel.0),
     );
-    if let Err(e) = runner.run(monday, false, allow_missing).await {
+    if let Err(e) = runner
+        .run(monday, false, allow_missing, &ProfileChoice::Auto)
+        .await
+    {
         log::warn!("自动总结:{monday} 周报失败(本次运行期不再自动重试): {e}");
     }
     RunOutcome::Ran

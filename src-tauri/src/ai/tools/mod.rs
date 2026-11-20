@@ -10,7 +10,7 @@ use tokio::sync::OnceCell;
 pub use self::kinds::Query;
 pub use self::lang::ChatLang;
 use crate::ai::model::{ToolCall, ToolSpec};
-use crate::ai::policy::{AiDataPolicy, AiModule};
+use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::error::Result;
 use crate::storage::Connection;
 
@@ -120,7 +120,9 @@ impl ToolCtx {
     /// fails, the tool that needs it fails too, and never returns unfiltered data.
     async fn policy(&self) -> Result<&AiDataPolicy> {
         self.policy
-            .get_or_try_init(|| AiDataPolicy::load(&self.main, AiModule::Chat, None))
+            .get_or_try_init(|| {
+                AiDataPolicy::load(&self.main, AiModule::Chat, &ProfileChoice::Main)
+            })
             .await
     }
 }

@@ -110,8 +110,6 @@ pub struct AiConfig {
     pub user_brief: String,
     /// 一天的时段划分；UI 上是连续条
     pub segments: Vec<AiSegment>,
-    /// 排除分析的 category id 列表
-    pub excluded_categories: Vec<String>,
     /// The profiles of the daily report, the weekly report and chat: which categories the
     /// AI can see.
     pub visibility: Visibility,
@@ -328,7 +326,6 @@ impl Default for AiConfig {
             external_profiles: Vec::new(),
             user_brief: String::new(),
             segments: default_segments_for(lang),
-            excluded_categories: vec!["other".to_string()],
             visibility: Visibility::default(),
             models_path: String::new(),
             active_main: String::new(),
@@ -432,13 +429,6 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     } else {
         valid_segments
     };
-
-    next.excluded_categories = next
-        .excluded_categories
-        .into_iter()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
 
     // 引擎启动级参数 clamp（跟 AiOverrides 一致）：
     // batch ≥ 32 是 llama-server 不接受过小值的安全下限
@@ -838,23 +828,6 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_excluded_categories_trim_and_drop_empty() {
-        // 空串 category id 匹配不到任何分类，留着只会污染 UI 列表
-        let mut next = base();
-        next.excluded_categories = vec![
-            "  work  ".to_string(),
-            "".to_string(),
-            "   ".to_string(),
-            "games".to_string(),
-        ];
-        let out = sanitize(next, &base());
-        assert_eq!(
-            out.excluded_categories,
-            vec!["work".to_string(), "games".to_string()]
-        );
-    }
-
-    #[test]
     fn sanitize_engine_params_clamped_to_documented_ranges() {
         // 期望范围独立取自文档约定：batch 32~32768、slots 1~32、ctx 512~262144。
         // 越界值钳到边界而不是拒绝——保证引擎启动参数永远可用。
@@ -1022,8 +995,6 @@ mod tests {
         assert!(!d.external_enabled);
         assert!(d.endpoint.is_empty() && d.model.is_empty() && d.api_key.is_empty());
         assert_eq!(d.external_provider, "openai");
-        // "other" 分类默认排除——杂项噪声不进 AI 分析
-        assert_eq!(d.excluded_categories, vec!["other".to_string()]);
         assert_eq!(d.segments.len(), 5);
         assert!(VALID_LANGS.contains(&d.prompt_language.as_str()));
         assert!(!d.auto_summary);
@@ -1046,12 +1017,22 @@ mod tests {
         let parsed: AiConfig = serde_json::from_str("{}").expect("{} 应能反序列化");
         let d = AiConfig::default();
         assert_eq!(parsed.external_provider, d.external_provider);
-        assert_eq!(parsed.excluded_categories, d.excluded_categories);
+        assert_eq!(parsed.visibility, d.visibility);
         assert_eq!(parsed.segments.len(), d.segments.len());
         assert_eq!(parsed.external_enabled, d.external_enabled);
         assert_eq!(parsed.batch_size, None);
         assert_eq!(parsed.summary_ctx_size, None);
         assert!(parsed.summary_main.is_empty() && parsed.chat_main.is_empty());
+    }
+
+    #[test]
+    fn old_excluded_categories_is_ignored() {
+        // 旧版本写过 excludedCategories：照样读得出来，配置按默认，写回时这个字段就没了
+        let parsed: AiConfig =
+            serde_json::from_str(r#"{"excludedCategories":["other","games"]}"#).unwrap();
+        assert_eq!(parsed.visibility, Visibility::default());
+        let json = serde_json::to_string(&parsed).unwrap();
+        assert!(!json.contains("excludedCategories"), "{json}");
     }
 
     #[test]
@@ -1061,7 +1042,7 @@ mod tests {
         for key in [
             "\"externalProvider\"",
             "\"promptLanguage\"",
-            "\"excludedCategories\"",
+            "\"autoProfile\"",
             "\"activeMain\"",
             "\"promptOverrides\"",
             "\"systemZh\"",

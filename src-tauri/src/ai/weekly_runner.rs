@@ -27,6 +27,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::models;
+use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
 };
@@ -81,11 +82,15 @@ impl WeekSummaryRunner {
     ///   - 整周无日报但有 activity：仅基于整周 + 每日 top apps 做简化分析
     ///
     /// 不再因"日报缺失"早 return error。
+    ///
+    /// `profile` 决定 AI 能看到哪些活动。七天的日报照原文读，日报里已经写进去的，
+    /// 这里拦不住。
     pub async fn run(
         &self,
         week_start: NaiveDate,
         force_refresh: bool,
         allow_missing_days: bool,
+        profile: &ProfileChoice,
     ) -> Result<()> {
         let week_end = week_start + Duration::days(6);
         let week_key = week_start.format("%Y-%m-%d").to_string();
@@ -106,6 +111,9 @@ impl WeekSummaryRunner {
                 "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
         }
+        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
+            .await?
+            .main_filter();
 
         if force_refresh {
             ai_summaries::clear_day_summaries_only(&self.pool, WEEKLY_SOURCE, &week_key).await?;
@@ -163,7 +171,7 @@ impl WeekSummaryRunner {
                         &self.pool,
                         &day_str,
                         &day_str,
-                        &ai.excluded_categories,
+                        &visible,
                         DeviceFilter::All,
                         8,
                     )
@@ -183,7 +191,7 @@ impl WeekSummaryRunner {
             days.sort_by(|a, b| a.0.cmp(&b.0));
         }
 
-        // 整周 top apps：跟 daily 段总结同语义（excluded_categories 过滤、按组合并），
+        // 整周 top apps：跟 daily 段总结同语义（按 AI 能看到的过滤、按组合并），
         // 但跨 7 天聚合。device 用 All——周报当前没暴露设备维度，跟现有"多设备聚合"一致。
         // 查询失败不让整轮报错——top_apps 只是辅助信号，丢了就让 LLM 只看日报全文。
         // 提到引擎启动前查：宽松模式下没 activity 也要早 fail，省得白等模型加载。
@@ -191,7 +199,7 @@ impl WeekSummaryRunner {
             &self.pool,
             &week_key,
             &end_key,
-            &ai.excluded_categories,
+            &visible,
             DeviceFilter::All,
             8,
         )
@@ -539,7 +547,7 @@ pub struct WeekPrecheckDay {
     pub weekday: String,
     /// 该日是否有 daily ok 段总结（status='ok' 且 content 非空）
     pub has_daily: bool,
-    /// 该日是否有 activity 记录（活动表非空 + 过滤掉 excluded_categories 后仍有内容）
+    /// 该日是否有 AI 能看到的 activity 记录
     pub has_activity: bool,
 }
 
@@ -558,15 +566,21 @@ pub struct WeekPrecheckResp {
 /// 给前端"点击生成前预览"用的查询：拿这周 7 天的日报 / 活动覆盖情况。
 ///
 /// 不依赖 [`WeekSummaryRunner`]，纯函数形式——前端可以单独 invoke 而无需触发任何
-/// 引擎 / 模型加载，是"生成前确认"流程的支点。
-pub async fn precheck_week(pool: &DbPool, week_start: NaiveDate) -> Result<WeekPrecheckResp> {
+/// 引擎 / 模型加载，是"生成前确认"流程的支点。`profile` 跟生成时传的一样。
+pub async fn precheck_week(
+    pool: &DbPool,
+    week_start: NaiveDate,
+    profile: &ProfileChoice,
+) -> Result<WeekPrecheckResp> {
     let week_end = week_start + Duration::days(6);
     let week_key = week_start.format("%Y-%m-%d").to_string();
     let end_key = week_end.format("%Y-%m-%d").to_string();
 
     let cfg = settings_repo::load(pool).await?;
-    let ai = cfg.ai.clone();
-    let lang = ai.prompt_language.as_str().to_string();
+    let lang = cfg.ai.prompt_language.as_str().to_string();
+    let visible = AiDataPolicy::load(&pool.0, AiModule::Weekly, profile)
+        .await?
+        .main_filter();
 
     let daily_rows = ai_summaries::get_range(pool, "daily", &week_key, &end_key).await?;
     let present_daily: HashSet<String> = daily_rows
@@ -594,7 +608,7 @@ pub async fn precheck_week(pool: &DbPool, week_start: NaiveDate) -> Result<WeekP
                 pool,
                 &day_str,
                 &day_str,
-                &ai.excluded_categories,
+                &visible,
                 DeviceFilter::All,
                 1,
             )

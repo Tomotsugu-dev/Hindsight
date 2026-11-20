@@ -20,6 +20,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::AiConfig;
 use crate::ai::models;
+use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
     build_activity_timeline, build_step2, summarize_segment, upsert_skipped_no_activity,
@@ -83,6 +84,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     ///
     /// `force_refresh = true` 会先清空当天 ai_summaries 行，否则已有 ok 段直接复用。
     /// `source` = "daily" / "debug" — DailyTab 跟 DebugTab 写各自命名空间互不污染。
+    /// `profile` 决定 AI 能看到哪些活动。
     pub async fn run(
         &self,
         source: &str,
@@ -90,6 +92,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         device: DeviceFilter,
         force_refresh: bool,
         overrides: Option<AiOverrides>,
+        profile: &ProfileChoice,
     ) -> Result<()> {
         // needs_restart：debug 路径（AiOverrides 显式带了 engine 覆盖）下才触发
         // 「跑前 stop+start with overrides，跑后再 stop」；daily 路径靠 settings.ai
@@ -106,6 +109,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 device,
                 force_refresh,
                 overrides,
+                profile,
                 needs_restart,
             )
             .await;
@@ -146,6 +150,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run_inner(
         &self,
         source: &str,
@@ -153,6 +158,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         device: DeviceFilter,
         force_refresh: bool,
         overrides: Option<AiOverrides>,
+        profile: &ProfileChoice,
         needs_restart: bool,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
@@ -167,6 +173,10 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
         }
+        // 在启动引擎之前读：配置被删了就不白等模型加载
+        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
+            .await?
+            .main_filter();
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
         // 这里**不**前置 clear_day。删在重建之前意味着:模型文件缺失、密钥过期、
@@ -232,6 +242,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 seg.start_hour,
                 seg.end_hour,
                 device.clone(),
+                &visible,
             )
             .await?;
         }
@@ -362,6 +373,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         start_hour: u8,
         end_hour: u8,
         device: DeviceFilter,
+        visible: &str,
     ) -> Result<()> {
         let step2_model = step2.model_label().to_string();
 
@@ -375,18 +387,9 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         p_started.images_total = Some(0);
         self.emit(p_started);
 
-        // 隐私关键词在 Settings 顶层，不在 AiConfig 里——每段一次 ad-hoc load，量级可忽略
-        let cfg = settings_repo::load(&self.pool).await?;
-        let timeline = build_activity_timeline(
-            &self.pool,
-            date_str,
-            start_hour,
-            end_hour,
-            &ai.excluded_categories,
-            &device,
-            &cfg.privacy_app_keywords,
-        )
-        .await?;
+        let timeline =
+            build_activity_timeline(&self.pool, date_str, start_hour, end_hour, visible, &device)
+                .await?;
 
         if timeline.is_empty() {
             // 真的什么都没有 —— skipped_no_activity 兜底
@@ -420,7 +423,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             date_str,
             start_hour,
             end_hour,
-            &ai.excluded_categories,
+            visible,
             device.clone(),
             8,
         )
@@ -478,6 +481,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         segment_idx: u32,
         device: DeviceFilter,
         overrides: Option<AiOverrides>,
+        profile: &ProfileChoice,
     ) -> Result<()> {
         let needs_restart = overrides
             .as_ref()
@@ -491,6 +495,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 segment_idx,
                 device,
                 overrides,
+                profile,
                 needs_restart,
             )
             .await;
@@ -500,6 +505,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run_one_segment_only_inner(
         &self,
         source: &str,
@@ -507,6 +513,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         segment_idx: u32,
         device: DeviceFilter,
         overrides: Option<AiOverrides>,
+        profile: &ProfileChoice,
         needs_restart: bool,
     ) -> Result<()> {
         let cfg = settings_repo::load(&self.pool).await?;
@@ -529,6 +536,9 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         if seg.end_hour <= seg.start_hour {
             return Err(Error::InvalidInput("段时间范围非法"));
         }
+        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
+            .await?
+            .main_filter();
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
 
@@ -562,6 +572,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             seg.start_hour,
             seg.end_hour,
             device,
+            &visible,
         )
         .await
     }
@@ -712,12 +723,7 @@ mod tests {
 
     /// 把「云端段总结 + 指定段划分 + 排除分类」写进 settings_store。
     /// runner 的 run_inner 每次都从 DB 现读 settings——这是唯一的注入口。
-    async fn seed_cloud_settings(
-        pool: &DbPool,
-        port: u16,
-        segments: Vec<AiSegment>,
-        excluded: Vec<String>,
-    ) {
+    async fn seed_cloud_settings(pool: &DbPool, port: u16, segments: Vec<AiSegment>) {
         // 两个路径设非空：避免 load() 的「空路径补默认值」dirty 回写干扰测试
         let mut s = settings_repo::Settings {
             screenshot_path: "/tmp/hindsight-test-shots".to_string(),
@@ -729,7 +735,6 @@ mod tests {
         s.ai.endpoint = format!("http://127.0.0.1:{port}/v1");
         s.ai.model = "canned-model".to_string();
         s.ai.segments = segments;
-        s.ai.excluded_categories = excluded;
         settings_repo::save(pool, &s).await.unwrap();
     }
 
@@ -879,7 +884,6 @@ mod tests {
                 seg("下午", 13, 18),
                 seg("晚上", 19, 23),
             ],
-            vec![],
         )
         .await;
 
@@ -887,7 +891,14 @@ mod tests {
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .expect("全天编排应成功");
 
@@ -967,7 +978,6 @@ mod tests {
             &pool,
             port,
             vec![seg("早", 9, 12), seg("午", 13, 18), seg("晚", 19, 23)],
-            vec![],
         )
         .await;
 
@@ -975,7 +985,14 @@ mod tests {
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .expect("单段失败不应让整天返回 Err");
 
@@ -1034,13 +1051,20 @@ mod tests {
         insert_act(&pool, "2026-05-15", 9, "VSCode", "a.rs", 300).await;
         // endpoint 指向必然拒连的端口：若 runner 违约发出请求，
         // 会以 error 行 / error 事件形式在下面的断言里暴露
-        seed_cloud_settings(&pool, free_local_port(), vec![seg("早", 9, 12)], vec![]).await;
+        seed_cloud_settings(&pool, free_local_port(), vec![seg("早", 9, 12)]).await;
 
         let sink = RecordingSink::default();
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(true)));
         runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .expect("取消是正常收尾，不是错误");
 
@@ -1066,13 +1090,7 @@ mod tests {
         insert_act(&pool, "2026-05-15", 13, "Chrome", "b", 300).await;
         // 脚本只有一发成功：若段 1 违约发请求会拿到 500 落 error 行，被下面断言抓住
         let (port, bodies) = spawn_scripted_openai_server(vec![Canned::Ok("第一段完成。")]).await;
-        seed_cloud_settings(
-            &pool,
-            port,
-            vec![seg("早", 9, 12), seg("午", 13, 18)],
-            vec![],
-        )
-        .await;
+        seed_cloud_settings(&pool, port, vec![seg("早", 9, 12), seg("午", 13, 18)]).await;
 
         let cancel = Arc::new(AtomicBool::new(false));
         let sink = RecordingSink {
@@ -1082,7 +1100,14 @@ mod tests {
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, cancel);
         runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .unwrap();
 
@@ -1116,7 +1141,7 @@ mod tests {
         // 挂起的假服务：backlog 完成 TCP 握手但应用层永不 accept/回包
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        seed_cloud_settings(&pool, port, vec![seg("早", 9, 12)], vec![]).await;
+        seed_cloud_settings(&pool, port, vec![seg("早", 9, 12)]).await;
 
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_bg = cancel.clone();
@@ -1130,7 +1155,14 @@ mod tests {
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, cancel);
         runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .expect("在途取消应优雅收尾返回 Ok");
 
@@ -1167,14 +1199,21 @@ mod tests {
 
         // 第一轮：正常生成
         let (port1, bodies1) = spawn_scripted_openai_server(vec![Canned::Ok("第一版总结。")]).await;
-        seed_cloud_settings(&pool, port1, vec![seg("早", 9, 12)], vec![]).await;
+        seed_cloud_settings(&pool, port1, vec![seg("早", 9, 12)]).await;
         let runner = make_runner(
             &pool,
             RecordingSink::default(),
             Arc::new(AtomicBool::new(false)),
         );
         runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .unwrap();
         assert_eq!(bodies1.lock().unwrap().len(), 1);
@@ -1185,7 +1224,14 @@ mod tests {
         let events2 = sink2.events.clone();
         let runner2 = make_runner(&pool, sink2, Arc::new(AtomicBool::new(false)));
         runner2
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -1202,14 +1248,21 @@ mod tests {
 
         // 第三轮 force_refresh=true：换新假服务，应清空重新生成出第二版
         let (port3, bodies3) = spawn_scripted_openai_server(vec![Canned::Ok("第二版总结。")]).await;
-        seed_cloud_settings(&pool, port3, vec![seg("早", 9, 12)], vec![]).await;
+        seed_cloud_settings(&pool, port3, vec![seg("早", 9, 12)]).await;
         let runner3 = make_runner(
             &pool,
             RecordingSink::default(),
             Arc::new(AtomicBool::new(false)),
         );
         runner3
-            .run("daily", date_2026_05_15(), DeviceFilter::All, true, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                true,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .unwrap();
         let rows = ai_summaries::get_day(&pool, "daily", "2026-05-15")
@@ -1238,7 +1291,14 @@ mod tests {
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         let r = runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await;
         assert!(
             matches!(r, Err(Error::InvalidInput(_))),
@@ -1253,11 +1313,11 @@ mod tests {
 
     // ────────────────────── 材料过滤在 runner 层的传递 ──────────────────────
 
-    /// excluded_categories 与 DeviceFilter 必须从 settings / 参数一路传到
-    /// 材料合成：被排除分类的活动与他机活动都不许进 prompt；某段若只剩
-    /// 被排除的活动，该段应落 skipped_no_activity（而不是拿空材料去骗模型）。
+    /// 选中的配置与 DeviceFilter 必须从参数一路传到材料合成：配置里没选的
+    /// 分类与他机活动都不许进 prompt；某段若只剩没选的分类的活动，该段应落
+    /// skipped_no_activity（而不是拿空材料去骗模型）。
     #[tokio::test]
-    async fn run_passes_excluded_categories_and_device_filter_to_materials() {
+    async fn run_passes_the_profile_and_device_filter_to_materials() {
         let pool = fresh_test_pool().await;
         seed_solo_group(&pool, "VSCode", "code").await;
         seed_solo_group(&pool, "Slack", "browse").await;
@@ -1279,13 +1339,17 @@ mod tests {
 
         let (port, bodies) =
             spawn_scripted_openai_server(vec![Canned::Ok("只统计了本机代码活动。")]).await;
-        seed_cloud_settings(
-            &pool,
-            port,
-            vec![seg("早", 9, 10), seg("午", 13, 14)],
-            vec!["browse".to_string()],
-        )
-        .await;
+        seed_cloud_settings(&pool, port, vec![seg("早", 9, 10), seg("午", 13, 14)]).await;
+        // 日报的「工作」配置只选了「编程」
+        let mut s = settings_repo::load(&pool).await.unwrap();
+        s.ai.visibility.daily.profiles.insert(
+            "p_work".to_string(),
+            crate::ai::config::VisibilityProfile {
+                name: "工作".to_string(),
+                categories: vec!["code".to_string()],
+            },
+        );
+        settings_repo::save(&pool, &s).await.unwrap();
 
         let runner = make_runner(
             &pool,
@@ -1299,6 +1363,7 @@ mod tests {
                 DeviceFilter::Only(TEST_SELF_ID.to_string()),
                 false,
                 None,
+                &ProfileChoice::Picked("p_work".to_string()),
             )
             .await
             .unwrap();
@@ -1339,19 +1404,20 @@ mod tests {
         insert_act(&pool, "2026-05-15", 13, "Chrome", "b", 300).await;
         let (port, bodies) =
             spawn_scripted_openai_server(vec![Canned::Ok("只重试了下午段。")]).await;
-        seed_cloud_settings(
-            &pool,
-            port,
-            vec![seg("早", 9, 12), seg("午", 13, 18)],
-            vec![],
-        )
-        .await;
+        seed_cloud_settings(&pool, port, vec![seg("早", 9, 12), seg("午", 13, 18)]).await;
 
         let sink = RecordingSink::default();
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         runner
-            .run_one_segment_only("daily", date_2026_05_15(), 1, DeviceFilter::All, None)
+            .run_one_segment_only(
+                "daily",
+                date_2026_05_15(),
+                1,
+                DeviceFilter::All,
+                None,
+                &ProfileChoice::Main,
+            )
             .await
             .unwrap();
 
@@ -1383,20 +1449,21 @@ mod tests {
     async fn run_one_segment_only_rejects_bad_index_and_degenerate_segment() {
         let pool = fresh_test_pool().await;
         let (port, bodies) = spawn_scripted_openai_server(vec![]).await;
-        seed_cloud_settings(
-            &pool,
-            port,
-            vec![seg("早", 9, 12), seg("坏", 12, 12)],
-            vec![],
-        )
-        .await;
+        seed_cloud_settings(&pool, port, vec![seg("早", 9, 12), seg("坏", 12, 12)]).await;
 
         let sink = RecordingSink::default();
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
 
         let r = runner
-            .run_one_segment_only("daily", date_2026_05_15(), 5, DeviceFilter::All, None)
+            .run_one_segment_only(
+                "daily",
+                date_2026_05_15(),
+                5,
+                DeviceFilter::All,
+                None,
+                &ProfileChoice::Main,
+            )
             .await;
         assert!(
             matches!(r, Err(Error::InvalidInputDyn(_))),
@@ -1404,7 +1471,14 @@ mod tests {
         );
 
         let r = runner
-            .run_one_segment_only("daily", date_2026_05_15(), 1, DeviceFilter::All, None)
+            .run_one_segment_only(
+                "daily",
+                date_2026_05_15(),
+                1,
+                DeviceFilter::All,
+                None,
+                &ProfileChoice::Main,
+            )
             .await;
         assert!(
             matches!(r, Err(Error::InvalidInput(_))),
@@ -1444,7 +1518,14 @@ mod tests {
         let events = sink.events.clone();
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         let r = runner
-            .run("daily", date_2026_05_15(), DeviceFilter::All, false, None)
+            .run(
+                "daily",
+                date_2026_05_15(),
+                DeviceFilter::All,
+                false,
+                None,
+                &ProfileChoice::Main,
+            )
             .await;
         assert!(
             matches!(r, Err(Error::ModelFileMissing(_))),
