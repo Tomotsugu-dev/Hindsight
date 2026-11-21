@@ -167,12 +167,3 @@ pub async fn set_step_model(
     let _ = supervisor.stop().await;
     Ok(())
 }
-
-/// 拿 llama-server 子进程最近 N 行 stderr/stdout（ring buffer 最大 500 行）。
-/// 调试 tab 用：看 GPU 加载日志（`offloaded XX/YY layers to GPU` / `cuBLAS init` 等）。
-#[tauri::command]
-pub async fn get_engine_logs(
-    supervisor: State<'_, Arc<EngineSupervisor>>,
-) -> Result<Vec<String>, String> {
-    Ok(supervisor.recent_logs().await)
-}

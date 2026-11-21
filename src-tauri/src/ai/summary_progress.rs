@@ -21,8 +21,6 @@ pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
 /// - `dedup_running`：MobileNet embedding 余弦去重中（首次跑全段 5-10s/千张）；
 ///   `images_total` 是去重前段内总图数，给前端展示"段 X：N 张相似度去重中…"
 /// - `segment_started`：段进入 step 1（逐图描述）；imagesTotal 给去重 + 抽帧后实际送 LLM 的图数
-/// - `image_described`：单张图描述完成；image_index / image_path / image_description 一起带过来，
-///   前端调试 tab 实时往面板里塞条目，不必等整段完成
 /// - `step1_done`：daily Phase 1 单段图描述全部跑完，但**还没**做段总结；前端**不**应据此
 ///   把段 row 切到"已生成"——只有 `segment_done` + status=ok 才算真完成。其它 status 等同段失败。
 /// - `summarizing`：step 1 跑完，正在跑 step 2 段总结（单次 chat 无进度条）；前端段卡片
@@ -32,8 +30,8 @@ pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryProgress {
-    /// "daily" / "debug"——前端两个 tab 各自只 listen 自己 source 的事件，
-    /// 避免一个 tab 跑时另一个 tab 跟着刷数据。
+    /// "daily" / "weekly"——日报、周报各自只 listen 自己 source 的事件，
+    /// 避免一个页面跑时另一个页面跟着刷数据。
     pub source: String,
     pub date: String,
     pub phase: &'static str,
@@ -41,18 +39,8 @@ pub struct SummaryProgress {
     pub total_segments: u32,
     /// 段开跑时给前端 "12 张图待分析" 的提示
     pub images_total: Option<u32>,
-    /// image_described 时该图在段内的下标（0-based）
+    /// ocr_running 时已识别的帧数
     pub image_index: Option<u32>,
-    /// image_described 时附该图绝对路径（前端可以用来显示缩略图）
-    pub image_path: Option<String>,
-    /// image_described 时附该图的描述文本
-    pub image_description: Option<String>,
-    /// image_described 时附该图调用 LLM 的耗时（毫秒）
-    pub latency_ms: Option<u64>,
-    /// image_described 时附 prompt token 数（llama-server 不返时为 None）
-    pub prompt_tokens: Option<u32>,
-    /// image_described 时附 completion token 数
-    pub completion_tokens: Option<u32>,
     /// segment_done 时附该段总结，前端立刻渲染该段不等其它
     pub content: Option<String>,
     /// segment_done 时也会带上落库行的 status（ok / skipped_no_screenshots / error）
@@ -78,11 +66,6 @@ impl SummaryProgress {
             total_segments,
             images_total: None,
             image_index: None,
-            image_path: None,
-            image_description: None,
-            latency_ms: None,
-            prompt_tokens: None,
-            completion_tokens: None,
             content: None,
             status: None,
             message: None,

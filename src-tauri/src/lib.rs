@@ -247,7 +247,7 @@ pub fn run() {
                 handle.manage(pool.clone());
                 handle.manage(svc);
                 handle.manage(sync_engine);
-                // 启动 idle watcher：跑完日报/调试 N 秒无新请求 → 自动 stop 释放显存。
+                // 启动 idle watcher：跑完日报 N 秒无新请求 → 自动 stop 释放显存。
                 // watcher 持 Weak<EngineSupervisor>，supervisor drop 后自然退出，无需手动取消。
                 let _watcher = engine_supervisor.spawn_idle_watcher();
                 handle.manage(engine_supervisor);
@@ -376,7 +376,6 @@ pub fn run() {
             commands::ai_engine::stop_engine,
             commands::ai_engine::set_active_model,
             commands::ai_engine::set_step_model,
-            commands::ai_engine::get_engine_logs,
             // --- ai: binary ---
             commands::ai_binary::download_binary,
             commands::ai_binary::delete_binary,
@@ -415,7 +414,6 @@ pub fn run() {
             commands::ai_summary::get_day_summary,
             commands::ai_summary::edit_summary_segment,
             commands::ai_summary::clear_day_summary,
-            commands::ai_summary::clear_day_segment_summaries,
             // --- ai: 周报 ---
             commands::ai_summary::generate_week_summary,
             commands::ai_summary::get_week_summary,

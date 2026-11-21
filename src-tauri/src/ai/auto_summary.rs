@@ -216,14 +216,7 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
         Arc::clone(&cancel.0),
     );
     if let Err(e) = runner
-        .run(
-            "daily",
-            date,
-            DeviceFilter::All,
-            force_refresh,
-            None,
-            &ProfileChoice::Auto,
-        )
+        .run(date, DeviceFilter::All, force_refresh, &ProfileChoice::Auto)
         .await
     {
         log::warn!("自动总结:{date} 日报失败(本次运行期不再自动重试): {e}");

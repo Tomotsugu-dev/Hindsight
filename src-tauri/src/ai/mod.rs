@@ -11,7 +11,7 @@
 //! - [`prompt`] system / user prompt 拼装（多语言）
 //! - [`job_guard`] 子进程组保护（Windows Job Object / Linux+macOS setpgid）
 //! - [`summary`] 总结编排 façade（实际实现在 `summary_runner` / `summary_operations` /
-//!   `summary_overrides` / `summary_progress`）
+//!   `summary_progress`）
 
 pub mod auto_summary;
 pub mod binary;
@@ -39,7 +39,6 @@ pub mod recommended;
 pub mod server;
 pub mod summary;
 pub mod summary_operations;
-pub mod summary_overrides;
 pub mod summary_progress;
 pub mod summary_runner;
 pub mod tools;
