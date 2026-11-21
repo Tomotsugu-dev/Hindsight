@@ -61,7 +61,7 @@ async fn next_gap_secs(app: &AppHandle) -> u64 {
     if !cfg.ai.auto_summary {
         return CHECK_GAP_SECS;
     }
-    match secs_until_next_point(Local::now(), &cfg.ai.effective_auto_summary_times()) {
+    match secs_until_next_point(Local::now(), &cfg.ai.auto_summary_times) {
         Some(d) => (d + POINT_WAKE_BUFFER_SECS).clamp(60, CHECK_GAP_SECS),
         None => CHECK_GAP_SECS,
     }
@@ -89,8 +89,8 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     if !cfg.ai.auto_summary {
         return Ok(());
     }
-    // AI 未配置(既无云端也没选本地模型)时静默跳过——开关先于配置打开是合法状态
-    if !cfg.ai.summary_use_cloud() && cfg.ai.effective_summary_main().trim().is_empty() {
+    // Skip silently when no daily model is configured yet.
+    if !cfg.ai.is_ready_for(crate::ai::config::Task::Daily) {
         log::debug!("自动总结:AI 未配置,跳过");
         return Ok(());
     }
@@ -98,11 +98,11 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     let now = Local::now();
     let today = now.date_naive();
     let yesterday = today - ChronoDuration::days(1);
-    let times = cfg.ai.effective_auto_summary_times();
+    let times = &cfg.ai.auto_summary_times;
 
     // 定时模式:任一时间点到点即放行本轮;全部未到则整体跳过。
     // 未配置任何点 = 尽快模式(旧行为:只补前一天,不动进行中的今天)。
-    if !times.is_empty() && !any_point_due(now.time(), &times) {
+    if !times.is_empty() && !any_point_due(now.time(), times) {
         log::debug!("自动总结:未到任何设定时间({}),本轮跳过", times.join("/"));
         return Ok(());
     }
@@ -139,7 +139,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
         } else {
             ai_summaries::latest_generated_at(&pool, "daily", &today.to_string()).await?
         };
-        for t in due_unsatisfied_points(now, &times, last_gen.as_deref()) {
+        for t in due_unsatisfied_points(now, times, last_gen.as_deref()) {
             let key = format!("d:{today}@{t}");
             if attempted.contains(&key) {
                 continue;

@@ -5,6 +5,7 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::ai::config::{ModelRef, Pick};
 use crate::ai::models::{self, ModelEntry, PartialEntry};
 use crate::ai::recommended::{recommended, Recommended};
 use crate::repo::settings;
@@ -21,8 +22,8 @@ pub async fn list_local_models(pool: State<'_, DbPool>) -> Result<Vec<ModelEntry
 /// 删除一个本地 GGUF 文件。`filename` 必须是文件名（不含路径），后端
 /// 会再次校验防 `..` / 分隔符注入。
 ///
-/// 顺手清理：被删文件如果是当前 active_main / active_mmproj，把 settings
-/// 里那项清掉——下次 `start_engine` 才不会拿一个不存在的文件名报错。
+/// 顺手清理：若被删文件被 `picks` 引用，则清空对应任务选择（`weekly` 回退到 `Inherit`）；
+/// 同时移除 `advanced` 中绑定该模型的高级参数覆盖，避免后续引用到不存在的文件。
 #[tauri::command]
 pub async fn delete_model(pool: State<'_, DbPool>, filename: String) -> Result<(), String> {
     let mut cfg = settings::load(&pool).await.map_err(String::from)?;
@@ -31,17 +32,25 @@ pub async fn delete_model(pool: State<'_, DbPool>, filename: String) -> Result<(
         .map_err(String::from)?;
 
     let mut dirty = false;
-    for slot in [
-        &mut cfg.ai.active_main,
-        &mut cfg.ai.active_mmproj,
-        &mut cfg.ai.summary_main,
-        &mut cfg.ai.summary_mmproj,
-        &mut cfg.ai.chat_main,
-    ] {
-        if *slot == filename {
-            slot.clear();
-            dirty = true;
-        }
+    if matches!(&cfg.ai.picks.daily, Some(ModelRef::Local { file }) if file == &filename) {
+        cfg.ai.picks.daily = None;
+        dirty = true;
+    }
+    if matches!(&cfg.ai.picks.weekly, Pick::Local { file } if file == &filename) {
+        cfg.ai.picks.weekly = Pick::Inherit;
+        dirty = true;
+    }
+    if matches!(&cfg.ai.picks.chat, Some(ModelRef::Local { file }) if file == &filename) {
+        cfg.ai.picks.chat = None;
+        dirty = true;
+    }
+    // 同步清理绑定到该本地模型的高级参数覆盖项（advanced），避免残留孤立配置。
+    let before = cfg.ai.advanced.len();
+    cfg.ai
+        .advanced
+        .retain(|a| !matches!(&a.model, ModelRef::Local { file } if file == &filename));
+    if cfg.ai.advanced.len() != before {
+        dirty = true;
     }
     if dirty {
         settings::save(&pool, &cfg).await.map_err(String::from)?;

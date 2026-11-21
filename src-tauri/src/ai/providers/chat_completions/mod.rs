@@ -34,7 +34,7 @@ impl ChatCompletionsModel {
     ///
     /// `endpoint` is the part of the URL before `/chat/completions`.
     /// When `api_key` is empty, no auth header is sent.
-    /// `provider` is the provider preset in the settings (`ai.external_provider`).
+    /// `provider` is the dialect key from [`CloudConnection::dialect`](crate::ai::config::CloudConnection::dialect).
     ///
     /// # Errors
     ///

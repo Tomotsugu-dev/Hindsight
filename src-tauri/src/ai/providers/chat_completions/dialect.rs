@@ -21,7 +21,7 @@ pub(super) enum Dialect {
 }
 
 impl Dialect {
-    /// Picks the dialect from the provider preset in the settings (`ai.external_provider`).
+    /// Picks the dialect from [`CloudConnection::dialect`](crate::ai::config::CloudConnection::dialect).
     pub(super) fn for_provider(provider: &str) -> Self {
         match provider {
             "openai" => Self::OpenAi,

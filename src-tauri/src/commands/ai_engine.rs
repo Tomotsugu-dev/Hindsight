@@ -3,16 +3,19 @@
 //! 引擎的 binary 安装由 [`crate::commands::ai_binary`] 管，这里仅管运行时进程；
 //! [`get_engine_status`] 把两者合并一次返回方便前端拉取。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::State;
 
 use crate::ai::binary::{self, EngineBinaryStatus};
+use crate::ai::config::{sanitize as sanitize_ai, AiConfig, ModelRef, Pick, Task};
 use crate::ai::embedding_runtime::{self, RuntimeStatus};
 use crate::ai::job_guard::{self, JobInitState};
 use crate::ai::platform::{self, VramInfo};
-use crate::ai::server::{EngineRuntimeStatus, EngineSupervisor};
+use crate::ai::server::{EngineRuntimeStatus, EngineStartOverrides, EngineSupervisor};
+use crate::commands::ai_endpoint::{test_ai_chat, test_ai_endpoint};
 use crate::repo::settings;
 use crate::storage::DbPool;
 
@@ -64,105 +67,206 @@ pub async fn get_engine_status(
     })
 }
 
-/// 启动 llama-server 子进程。
-///
-/// 加载段总结的文本模型——`effective_summary_main()` 优先读 `summary_main`，
-/// 空则 fallback 到老的 `active_main`。手动启动按钮一般是给跑总结/对话前
-/// 预热引擎用。
-///
-/// 没选任何模型时直接拒绝启动——比让 server 起空跑然后 `/v1/models` 返空
-/// 列表友好（用户能立刻知道要先去选）。
-#[tauri::command]
-pub async fn start_engine(
-    pool: State<'_, DbPool>,
-    supervisor: State<'_, Arc<EngineSupervisor>>,
-) -> Result<u16, String> {
-    let cfg = settings::load(&pool).await.map_err(String::from)?;
-    let main_name = cfg.ai.effective_summary_main();
-    if main_name.trim().is_empty() {
-        return Err("请先在「模型」里选一个模型，再启动引擎".to_string());
-    }
-    let models_dir = crate::ai::models::root_dir(&cfg.ai);
-    let main_path = models_dir.join(main_name);
-    if !main_path.exists() {
-        return Err(format!(
-            "选中的主权重不存在：{main_name}（可能被删除或路径变了）"
-        ));
-    }
-    let mmproj_name = cfg.ai.effective_summary_mmproj();
-    let mmproj_path = if mmproj_name.trim().is_empty() {
-        None
-    } else {
-        let p = models_dir.join(mmproj_name);
-        if !p.exists() {
-            return Err(format!("选中的 vision 投影文件不存在：{mmproj_name}"));
-        }
-        Some(p)
-    };
-    supervisor
-        .start(Some(main_path), mmproj_path)
-        .await
-        .map_err(String::from)
+/// 单个任务的 AI 连接探测结果。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskConnectionTest {
+    pub task: Task,
+    /// 连接类型：`"local"`、`"cloud"` 或 `"unconfigured"`。
+    pub kind: &'static str,
+    pub model: String,
+    pub ok: bool,
+    pub message: String,
 }
 
-/// 停掉子进程（如果在跑）。
+fn overrides_for_task(ai: &AiConfig, task: Task) -> EngineStartOverrides {
+    match task {
+        Task::Chat => EngineStartOverrides {
+            batch_size: None,
+            parallel_slots: None,
+            ctx_size: ai.chat_ctx_size(),
+        },
+        Task::Daily | Task::Weekly => EngineStartOverrides {
+            batch_size: ai.batch_size_for(task),
+            parallel_slots: ai.parallel_slots_for(task),
+            ctx_size: ai.ctx_size_for(task),
+        },
+    }
+}
+
+/// 探测日报、周报、对话三个任务当前配置的 AI 连接。
+///
+/// 本地模型会按各自任务的高级参数启动，测试完成后停止以释放显存；
+/// 若相邻任务共用相同的本地模型与启动参数，则复用同一次启动。
+#[tauri::command]
+pub async fn test_ai_connections(
+    pool: State<'_, DbPool>,
+    supervisor: State<'_, Arc<EngineSupervisor>>,
+) -> Result<Vec<TaskConnectionTest>, String> {
+    let cfg = settings::load(&pool).await.map_err(String::from)?;
+    let ai = &cfg.ai;
+    let models_dir = crate::ai::models::root_dir(ai);
+
+    let mut results = Vec::with_capacity(3);
+    let mut started_local = false;
+    let mut last_local: Option<(PathBuf, EngineStartOverrides, u16)> = None;
+
+    for task in [Task::Daily, Task::Weekly, Task::Chat] {
+        match ai.model_for(task) {
+            None => {
+                results.push(TaskConnectionTest {
+                    task,
+                    kind: "unconfigured",
+                    model: String::new(),
+                    ok: false,
+                    message: "[AI_NO_MODEL] No language model is configured.".to_string(),
+                });
+            }
+            Some(ModelRef::Cloud { connection }) => {
+                let Some(conn) = ai.cloud_connection(&connection).filter(|c| c.is_ready()) else {
+                    results.push(TaskConnectionTest {
+                        task,
+                        kind: "cloud",
+                        model: connection,
+                        ok: false,
+                        message: "[AI_CLOUD_UNAVAILABLE] Selected cloud connection is incomplete or unavailable."
+                            .to_string(),
+                    });
+                    continue;
+                };
+                let key = (!conn.api_key.is_empty()).then(|| conn.api_key.clone());
+                let endpoint_resp = test_ai_endpoint(conn.endpoint.clone(), key.clone()).await?;
+                if !endpoint_resp.ok {
+                    results.push(TaskConnectionTest {
+                        task,
+                        kind: "cloud",
+                        model: conn.model.clone(),
+                        ok: false,
+                        message: endpoint_resp.message,
+                    });
+                    continue;
+                }
+                let chat_resp =
+                    test_ai_chat(conn.endpoint.clone(), key, conn.model.clone(), false).await?;
+                results.push(TaskConnectionTest {
+                    task,
+                    kind: "cloud",
+                    model: conn.model.clone(),
+                    ok: chat_resp.ok,
+                    message: chat_resp.message,
+                });
+            }
+            Some(ModelRef::Local { file }) => {
+                let main_path = models_dir.join(&file);
+                if !main_path.exists() {
+                    results.push(TaskConnectionTest {
+                        task,
+                        kind: "local",
+                        model: file.clone(),
+                        ok: false,
+                        message: format!(
+                            "[AI_MODEL_MISSING] Selected local model file not found: {file}"
+                        ),
+                    });
+                    continue;
+                }
+                let overrides = overrides_for_task(ai, task);
+                let port = match &last_local {
+                    Some((prev_path, prev_ov, prev_port))
+                        if *prev_path == main_path && *prev_ov == overrides =>
+                    {
+                        Ok(*prev_port)
+                    }
+                    _ => {
+                        started_local = true;
+                        match supervisor
+                            .restart_with_overrides(
+                                Some(main_path.clone()),
+                                None,
+                                overrides.clone(),
+                            )
+                            .await
+                        {
+                            Ok(p) => {
+                                last_local = Some((main_path, overrides, p));
+                                Ok(p)
+                            }
+                            Err(e) => {
+                                last_local = None;
+                                Err(e.to_string())
+                            }
+                        }
+                    }
+                };
+                match port {
+                    Ok(p) => {
+                        let resp =
+                            test_ai_endpoint(format!("http://127.0.0.1:{p}/v1"), None).await?;
+                        results.push(TaskConnectionTest {
+                            task,
+                            kind: "local",
+                            model: file,
+                            ok: resp.ok,
+                            message: resp.message,
+                        });
+                    }
+                    Err(msg) => {
+                        results.push(TaskConnectionTest {
+                            task,
+                            kind: "local",
+                            model: file,
+                            ok: false,
+                            message: msg,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if started_local {
+        let _ = supervisor.stop().await;
+    }
+
+    Ok(results)
+}
+
+/// 停止当前正在运行的 llama-server 子进程（如有）。
 #[tauri::command]
 pub async fn stop_engine(supervisor: State<'_, Arc<EngineSupervisor>>) -> Result<(), String> {
     supervisor.stop().await.map_err(String::from)
 }
 
-/// 切换 / 设置当前在用的模型（旧版单一字段；新代码请用 [`set_step_model`]）。
-///
-/// 写 settings 后顺手 stop 在跑的 server——下次用户点"启动引擎"会带新模型重起。
-/// 不在这里自动 start，因为 start 可能 90s 才返回，命令调用方等不动；让用户主动触发更可控。
+/// 设置或清空指定 AI 任务的模型选择，并停止当前运行中的本地服务。
 #[tauri::command]
-pub async fn set_active_model(
+pub async fn set_task_model(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
-    main_file: String,
-    mmproj_file: Option<String>,
+    task: Task,
+    model: Option<Pick>,
 ) -> Result<(), String> {
     let mut cfg = settings::load(&pool).await.map_err(String::from)?;
-    cfg.ai.active_main = main_file.trim().to_string();
-    cfg.ai.active_mmproj = mmproj_file.unwrap_or_default().trim().to_string();
-    settings::save(&pool, &cfg).await.map_err(String::from)?;
-
-    // 切了模型，旧 server 跑的就是旧模型，停掉等用户手动重启
-    let _ = supervisor.stop().await;
-    Ok(())
-}
-
-/// 单独设置段总结（summary）/ 对话（chat）的模型；另一个槽位不动。
-///
-/// `step` 取 `"summary"` / `"chat"`；`main_file` 空字符串 = 清掉该槽位的覆盖
-/// （summary fallback 到 `active_main`；chat 回到"自动"路由）。
-/// 同时 stop 在跑的 server，下次使用时按新模型 lazy spawn。
-/// chat 是纯文本任务不带 mmproj，`mmproj_file` 对它忽略。
-#[tauri::command]
-pub async fn set_step_model(
-    pool: State<'_, DbPool>,
-    supervisor: State<'_, Arc<EngineSupervisor>>,
-    step: String,
-    main_file: String,
-    mmproj_file: Option<String>,
-) -> Result<(), String> {
-    let mut cfg = settings::load(&pool).await.map_err(String::from)?;
-    let main = main_file.trim().to_string();
-    let mmproj = mmproj_file.unwrap_or_default().trim().to_string();
-    match step.as_str() {
-        "summary" => {
-            cfg.ai.summary_main = main;
-            cfg.ai.summary_mmproj = mmproj;
+    let old_ai = cfg.ai.clone();
+    match task {
+        Task::Daily => {
+            cfg.ai.picks.daily = match model {
+                Some(Pick::Local { file }) => Some(ModelRef::Local { file }),
+                Some(Pick::Cloud { connection }) => Some(ModelRef::Cloud { connection }),
+                Some(Pick::Inherit) | None => None,
+            };
         }
-        "chat" => {
-            cfg.ai.chat_main = main;
+        Task::Weekly => {
+            cfg.ai.picks.weekly = model.unwrap_or(Pick::Inherit);
         }
-        other => {
-            return Err(format!(
-                "set_step_model: 未知 step {other}（仅支持 summary / chat）"
-            ));
+        Task::Chat => {
+            cfg.ai.picks.chat = match model {
+                Some(Pick::Local { file }) => Some(ModelRef::Local { file }),
+                Some(Pick::Cloud { connection }) => Some(ModelRef::Cloud { connection }),
+                Some(Pick::Inherit) | None => None,
+            };
         }
     }
+    cfg.ai = sanitize_ai(cfg.ai, &old_ai);
     settings::save(&pool, &cfg).await.map_err(String::from)?;
     let _ = supervisor.stop().await;
     Ok(())

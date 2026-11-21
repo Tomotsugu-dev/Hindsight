@@ -318,23 +318,9 @@ impl EngineSupervisor {
         s
     }
 
-    /// 启动 llama-server。
+    /// Starts llama-server with explicit engine parameter overrides.
     ///
-    /// `model_path` / `mmproj_path` 可为 None——α.4 还没模型选择，留待 β。传 None
-    /// 时 llama-server 会因为缺 `-m` 参数自己退出，supervisor 拿 stderr 包错误。
-    ///
-    /// 已经在 Running 状态时返回当前端口，不重复 spawn；已经在 Starting 状态时
-    /// 返回错误（避免并发抢同一进程）。
-    pub async fn start(
-        &self,
-        model_path: Option<PathBuf>,
-        mmproj_path: Option<PathBuf>,
-    ) -> Result<u16> {
-        self.start_with_overrides(model_path, mmproj_path, EngineStartOverrides::default())
-            .await
-    }
-
-    /// 跟 [`start`] 一样，但带上 batch_size / parallel_slots / ctx_size。
+    /// Returns the running port without respawning if already `Running`, or errors if `Starting`.
     pub async fn start_with_overrides(
         &self,
         model_path: Option<PathBuf>,

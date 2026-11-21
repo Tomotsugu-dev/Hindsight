@@ -1,58 +1,15 @@
-//! 每个任务实际用哪个模型、什么思考档位。
-//!
-//! 模型字段之间有回退链，调用方走这里的方法取值，不直接读字段。
+//! Model selection and per-(task, model) parameter resolution.
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::AiConfig;
+use super::{AiConfig, CloudConnection};
 use crate::ai::model::Reasoning;
 
-/// `summary_main` 的特殊值——"用云端 API 跑 step 2"。
-///
-/// 历史：早期 `external_enabled` 单一开关同时表示「云端配好可用」+「step 2 就用云端」。
-/// 用户反馈：希望两件事分开 ——「云端 API tab 的启用」只表示配好可用，
-/// 是否真的把云端选为 step 2 backend 应该是 Models tab 里独立的一次点击。
-/// 实现上避免引入第二个布尔字段（容易跟 `external_enabled` 状态打架），
-/// 复用 `summary_main` 一个槽位：本来它存 GGUF 文件名（或空 fallback 到 active_main），
-/// 多塞这一个 sentinel 表示「目标不是文件，是云端」。
-///
-/// 路由判定走 [`AiConfig::summary_use_cloud`]——它把"标记为 cloud" + "external 配好"
-/// 两条件合在一起，避免漏判其一造成静默退化。
-pub const SUMMARY_CLOUD_SENTINEL: &str = "__cloud__";
+/// Minimum per-slot context size for chat when a user sets an explicit override.
+const CHAT_MIN_CTX_SIZE: u32 = 8192;
 
-/// 每个任务用哪个模型。现在只有周报。
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Picks {
-    #[serde(deserialize_with = "or_default")]
-    pub weekly: Pick,
-}
-
-/// 一个任务选的模型。
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Pick {
-    /// 和日报用同一个模型。
-    #[default]
-    Inherit,
-    /// 本机模型。`file` 是模型目录里的文件名。
-    Local { file: String },
-    /// 云端 API。
-    Cloud,
-}
-
-/// 一个模型。
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum ModelRef {
-    /// 本机模型。`file` 是模型目录里的文件名。
-    Local { file: String },
-    /// 云端 API。
-    Cloud,
-}
-
-/// 用 AI 的任务。
+/// AI tasks that pick a language model.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Task {
@@ -61,18 +18,42 @@ pub enum Task {
     Chat,
 }
 
-/// 用户给「一个任务 + 一个模型」设的参数。
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Advanced {
-    pub task: Task,
-    pub model: ModelRef,
-    /// 思考档位。`None` 是自动。
-    #[serde(default)]
-    pub reasoning: Option<ReasoningLevel>,
+/// A concrete language model target.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ModelRef {
+    /// A local GGUF model file inside `models_path`.
+    Local { file: String },
+    /// A cloud connection referenced by [`CloudConnection::id`].
+    Cloud { connection: String },
 }
 
-/// 用户能选的思考档位。
+/// Model choice for the weekly report task.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Pick {
+    /// Use the same model as the daily report.
+    #[default]
+    Inherit,
+    /// A local GGUF model file inside `models_path`.
+    Local { file: String },
+    /// A cloud connection referenced by [`CloudConnection::id`].
+    Cloud { connection: String },
+}
+
+/// Model selection per AI task.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Picks {
+    #[serde(deserialize_with = "or_default")]
+    pub daily: Option<ModelRef>,
+    #[serde(deserialize_with = "or_default")]
+    pub weekly: Pick,
+    #[serde(deserialize_with = "or_default")]
+    pub chat: Option<ModelRef>,
+}
+
+/// User-configured reasoning level.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ReasoningLevel {
@@ -95,7 +76,39 @@ impl From<ReasoningLevel> for Reasoning {
     }
 }
 
-/// 读不懂的值当默认值，免得新版本写的值让旧版本读不出整份设置。
+/// Per-(task, model) parameter overrides.
+///
+/// Missing entries or `None` fields use automatic defaults.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Advanced {
+    pub task: Task,
+    pub model: ModelRef,
+    /// Reasoning level override (`None` means automatic).
+    #[serde(default)]
+    pub reasoning: Option<ReasoningLevel>,
+    /// Local engine per-slot context size override (`None` means engine default).
+    #[serde(default)]
+    pub ctx_size: Option<u32>,
+    /// Local engine parallel slot count `-np` override (`None` means 1).
+    #[serde(default)]
+    pub parallel_slots: Option<u32>,
+    /// Local engine `--batch-size` / `--ubatch-size` override (`None` means llama.cpp default).
+    #[serde(default)]
+    pub batch_size: Option<u32>,
+}
+
+impl Advanced {
+    /// Returns `true` if every override field is `None`.
+    pub(super) fn is_empty(&self) -> bool {
+        self.reasoning.is_none()
+            && self.ctx_size.is_none()
+            && self.parallel_slots.is_none()
+            && self.batch_size.is_none()
+    }
+}
+
+/// Falls back to `Default` for unknown JSON values so newer settings stay readable by older versions.
 fn or_default<'de, D, T>(d: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -105,7 +118,7 @@ where
     Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
-/// 读不懂的项跳过，原因同 [`or_default`]。
+/// Skips unrecognized items in a JSON array for forward compatibility.
 pub(super) fn known_items<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
@@ -122,100 +135,103 @@ where
         .collect())
 }
 
+fn normalize_model_ref(model: &ModelRef) -> Option<ModelRef> {
+    match model {
+        ModelRef::Local { file } => {
+            let f = file.trim();
+            (!f.is_empty()).then(|| ModelRef::Local {
+                file: f.to_string(),
+            })
+        }
+        ModelRef::Cloud { connection } => {
+            let id = connection.trim();
+            (!id.is_empty()).then(|| ModelRef::Cloud {
+                connection: id.to_string(),
+            })
+        }
+    }
+}
+
 impl AiConfig {
-    /// 段总结主权重文件名；空 → fallback 到 `active_main`。
-    /// `summary_main == SUMMARY_CLOUD_SENTINEL` 也走 fallback —— 那是"用云端"标记，
-    /// 不是真实文件名；走本地路径的代码（VRAM 估算 / fallback chain）应当看到 active_main。
-    pub fn effective_summary_main(&self) -> &str {
-        let s = self.summary_main.trim();
-        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
-            self.active_main.as_str()
-        } else {
-            self.summary_main.as_str()
-        }
-    }
-    /// 段总结 mmproj 文件名。**mmproj 跟 main 配套 fallback**：`summary_main`
-    /// 显式设了，mmproj 就只看 `summary_mmproj`（空 = 纯文本模型）；
-    /// `summary_main` 为空或 sentinel 时才 fallback 到 `active_mmproj`——
-    /// 否则会把 vision mmproj 强加到文本模型上，token embedding 错位首 token 即 EOS。
-    pub fn effective_summary_mmproj(&self) -> &str {
-        let s = self.summary_main.trim();
-        if s.is_empty() || s == SUMMARY_CLOUD_SENTINEL {
-            self.active_mmproj.as_str()
-        } else {
-            self.summary_mmproj.as_str()
-        }
+    /// Looks up a saved cloud connection by its `id`.
+    pub fn cloud_connection(&self, id: &str) -> Option<&CloudConnection> {
+        let id = id.trim();
+        self.cloud.iter().find(|c| c.id == id)
     }
 
-    /// 段总结是否实际路由到云端：要 `summary_main` 是"用云端"标记 **且** `external_enabled=true`。
-    /// `external_enabled=false` 时 sentinel 退化为 fallback（按 `active_main` 跑本地），
-    /// 不会因为 sentinel 残留就硬卡住没法跑总结。
-    pub fn summary_use_cloud(&self) -> bool {
-        self.external_enabled && self.summary_main.trim() == SUMMARY_CLOUD_SENTINEL
-    }
-
-    /// 云端三元组是否配齐(Chat 路由用:enabled + endpoint + model 缺一不可)。
-    pub fn chat_cloud_ready(&self) -> bool {
-        self.external_enabled && !self.endpoint.trim().is_empty() && !self.model.trim().is_empty()
-    }
-
-    /// Chat 是否路由到云端:`chat_main` 显式 sentinel 或未设置(自动)时,
-    /// 云端三元组配齐即走云端;显式本地文件名则永远本地。
-    /// sentinel 但云端没配齐 → 退化为本地 fallback,不硬卡(同 step 1/2 语义)。
-    pub fn chat_use_cloud(&self) -> bool {
-        let c = self.chat_main.trim();
-        if !c.is_empty() && c != SUMMARY_CLOUD_SENTINEL {
-            return false;
-        }
-        self.chat_cloud_ready()
-    }
-
-    /// Chat 本地路径实际加载的主权重:显式文件名优先,否则同 step 2 的 fallback 链。
-    pub fn effective_chat_main(&self) -> &str {
-        let c = self.chat_main.trim();
-        if c.is_empty() || c == SUMMARY_CLOUD_SENTINEL {
-            self.effective_summary_main()
-        } else {
-            self.chat_main.as_str()
-        }
-    }
-
-    /// 返回这个任务实际用的模型。
-    pub fn task_model(&self, task: Task) -> ModelRef {
-        let summary = if self.summary_use_cloud() {
-            ModelRef::Cloud
-        } else {
-            ModelRef::Local {
-                file: self.effective_summary_main().to_string(),
-            }
-        };
+    /// Resolves the concrete model configured for `task`, if any.
+    ///
+    /// [`Pick::Inherit`] on [`Task::Weekly`] resolves to the daily report model.
+    pub fn model_for(&self, task: Task) -> Option<ModelRef> {
         match task {
-            Task::Daily => summary,
+            Task::Daily => self.picks.daily.as_ref().and_then(normalize_model_ref),
             Task::Weekly => match &self.picks.weekly {
-                Pick::Inherit => summary,
-                Pick::Local { file } => ModelRef::Local { file: file.clone() },
-                Pick::Cloud if self.external_enabled => ModelRef::Cloud,
-                // 和日报一样：云端没开就用 active_main
-                Pick::Cloud => ModelRef::Local {
-                    file: self.active_main.clone(),
-                },
+                Pick::Inherit => self.model_for(Task::Daily),
+                Pick::Local { file } => {
+                    normalize_model_ref(&ModelRef::Local { file: file.clone() })
+                }
+                Pick::Cloud { connection } => normalize_model_ref(&ModelRef::Cloud {
+                    connection: connection.clone(),
+                }),
             },
-            Task::Chat if self.chat_use_cloud() => ModelRef::Cloud,
-            Task::Chat => ModelRef::Local {
-                file: self.effective_chat_main().to_string(),
-            },
+            Task::Chat => self.picks.chat.as_ref().and_then(normalize_model_ref),
         }
     }
 
-    /// 返回日报或周报的思考档位：`advanced` 里这个任务、这个模型的那一项。没有就是
-    /// [`Reasoning::Default`]。
-    pub fn report_reasoning(&self, task: Task) -> Reasoning {
-        let model = self.task_model(task);
+    /// Returns whether `task` has a usable model configured (a local filename or a ready cloud
+    /// connection).
+    pub fn is_ready_for(&self, task: Task) -> bool {
+        match self.model_for(task) {
+            Some(ModelRef::Local { .. }) => true,
+            Some(ModelRef::Cloud { connection }) => self
+                .cloud_connection(&connection)
+                .is_some_and(CloudConnection::is_ready),
+            None => false,
+        }
+    }
+
+    /// Returns the [`Advanced`] override entry matching `task` and its resolved model.
+    pub fn advanced_for(&self, task: Task) -> Option<&Advanced> {
+        let model = self.model_for(task)?;
         self.advanced
             .iter()
             .find(|a| a.task == task && a.model == model)
+    }
+
+    /// Returns the effective reasoning level for `task` (`Reasoning::Default` when unset).
+    pub fn reasoning_for(&self, task: Task) -> Reasoning {
+        self.advanced_for(task)
             .and_then(|a| a.reasoning)
             .map_or(Reasoning::Default, Reasoning::from)
+    }
+
+    /// Returns the explicit batch size override for `task`, if any.
+    pub fn batch_size_for(&self, task: Task) -> Option<u32> {
+        self.advanced_for(task).and_then(|a| a.batch_size)
+    }
+
+    /// Returns the explicit parallel slot override for `task`, if any.
+    pub fn parallel_slots_for(&self, task: Task) -> Option<u32> {
+        self.advanced_for(task).and_then(|a| a.parallel_slots)
+    }
+
+    /// Returns the explicit per-slot context size override for `task`, if any.
+    pub fn ctx_size_for(&self, task: Task) -> Option<u32> {
+        self.advanced_for(task).and_then(|a| a.ctx_size)
+    }
+
+    /// Returns the per-slot context size override for chat, floored to 8192 tokens so tool
+    /// results fit. `None` keeps the engine default ([`crate::ai::server::DEFAULT_CTX_SIZE`]).
+    pub fn chat_ctx_size(&self) -> Option<u32> {
+        self.ctx_size_for(Task::Chat)
+            .map(|c| c.max(CHAT_MIN_CTX_SIZE))
+    }
+
+    /// Returns `max_tokens` for one summary response: half of the effective context size
+    /// (default 8192), with a floor of 2048 tokens for reasoning models.
+    pub fn summary_max_tokens(&self, task: Task) -> u32 {
+        let ctx = self.ctx_size_for(task).unwrap_or(8192);
+        (ctx / 2).max(2048)
     }
 }
 
@@ -224,248 +240,157 @@ mod tests {
     use super::*;
     use crate::ai::config::tests::base;
 
-    // ---------- effective_* / 云端路由 ----------
+    fn cloud_conn(id: &str, endpoint: &str, model: &str) -> CloudConnection {
+        CloudConnection {
+            id: id.into(),
+            name: id.into(),
+            dialect: "openai".into(),
+            endpoint: endpoint.into(),
+            model: model.into(),
+            api_key: String::new(),
+            context_length: None,
+        }
+    }
 
-    #[test]
-    fn effective_summary_main_fallback_chain() {
-        // 空 / sentinel → active_main；显式文件名 → 用它。
-        // sentinel 走 fallback 是刻意的：本地路径代码（VRAM 估算等）不能把 "__cloud__" 当文件名
-        let mut c = base();
-        c.active_main = "active.gguf".to_string();
-        c.summary_main = String::new();
-        assert_eq!(c.effective_summary_main(), "active.gguf", "空 → fallback");
-        c.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
-        assert_eq!(
-            c.effective_summary_main(),
-            "active.gguf",
-            "sentinel → fallback"
-        );
-        c.summary_main = "  __cloud__  ".to_string();
-        assert_eq!(
-            c.effective_summary_main(),
-            "active.gguf",
-            "带空白 sentinel 也识别"
-        );
-        c.summary_main = "small.gguf".to_string();
-        assert_eq!(c.effective_summary_main(), "small.gguf", "显式文件名优先");
+    fn adv(task: Task, model: ModelRef, reasoning: Option<ReasoningLevel>) -> Advanced {
+        Advanced {
+            task,
+            model,
+            reasoning,
+            ctx_size: None,
+            parallel_slots: None,
+            batch_size: None,
+        }
     }
 
     #[test]
-    fn effective_summary_mmproj_pairs_with_main() {
-        // mmproj 跟 main 配套：summary_main 显式设置时绝不 fallback 到 active_mmproj——
-        // 把 vision mmproj 强加给文本模型会导致 embedding 错位（首 token 即 EOS）
-        let mut c = base();
-        c.active_mmproj = "vision-mm.gguf".to_string();
-        c.summary_main = String::new();
-        assert_eq!(
-            c.effective_summary_mmproj(),
-            "vision-mm.gguf",
-            "main 空 → 跟随 active 配套"
-        );
-        c.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
-        assert_eq!(
-            c.effective_summary_mmproj(),
-            "vision-mm.gguf",
-            "sentinel 同 fallback 组"
-        );
-        c.summary_main = "text-model.gguf".to_string();
-        c.summary_mmproj = String::new();
-        assert_eq!(
-            c.effective_summary_mmproj(),
-            "",
-            "main 显式且 mmproj 空 = 纯文本，不得借用 active"
-        );
-        c.summary_mmproj = "sum-mm.gguf".to_string();
-        assert_eq!(
-            c.effective_summary_mmproj(),
-            "sum-mm.gguf",
-            "main 显式 → 只看 summary_mmproj"
-        );
-    }
-
-    #[test]
-    fn summary_use_cloud_requires_sentinel_and_enabled() {
-        // 双条件缺一不可：只 sentinel 不 enabled → 本地 fallback（不硬卡）；
-        // 只 enabled 不 sentinel → 用户没选云端，别偷偷上云
-        let mut c = base();
-        c.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
-        c.external_enabled = false;
-        assert!(
-            !c.summary_use_cloud(),
-            "external 未启用时 sentinel 退化为本地"
-        );
-        c.external_enabled = true;
-        assert!(c.summary_use_cloud(), "双条件齐 → 云端");
-        c.summary_main = "local.gguf".to_string();
-        assert!(!c.summary_use_cloud(), "非 sentinel 永不走云");
-        c.summary_main = " __cloud__ ".to_string();
-        assert!(
-            c.summary_use_cloud(),
-            "sentinel 带空白也应识别（未 sanitize 的读取路径）"
-        );
-    }
-
-    #[test]
-    fn chat_cloud_ready_needs_all_three() {
-        // enabled + endpoint + model 三元组缺一不可；api_key 不在必要集里
-        //（部分自建兼容端点无鉴权）
-        let ready = |enabled: bool, ep: &str, model: &str| {
-            let mut c = base();
-            c.external_enabled = enabled;
-            c.endpoint = ep.to_string();
-            c.model = model.to_string();
-            c.chat_cloud_ready()
+    fn model_for_and_weekly_inheritance() {
+        let local = |f: &str| ModelRef::Local { file: f.into() };
+        let cloud = |id: &str| ModelRef::Cloud {
+            connection: id.into(),
         };
-        assert!(ready(true, "https://api.x.com", "m1"));
-        assert!(!ready(false, "https://api.x.com", "m1"), "未启用");
-        assert!(!ready(true, "", "m1"), "缺 endpoint");
-        assert!(!ready(true, "https://api.x.com", ""), "缺 model");
-        assert!(!ready(true, "   ", "m1"), "纯空白 endpoint 等同缺失");
-    }
-
-    #[test]
-    fn chat_use_cloud_three_states() {
-        let mut ready = base();
-        ready.external_enabled = true;
-        ready.endpoint = "https://api.x.com".to_string();
-        ready.model = "m1".to_string();
-
-        // 态 1：显式本地文件名 → 无论云端是否 ready，永远本地
-        let mut c = ready.clone();
-        c.chat_main = "local.gguf".to_string();
-        assert!(!c.chat_use_cloud(), "显式本地永不上云");
-        // 态 2：显式 sentinel → ready 才上云，不 ready 退化本地不硬卡
-        let mut c = ready.clone();
-        c.chat_main = SUMMARY_CLOUD_SENTINEL.to_string();
-        assert!(c.chat_use_cloud(), "sentinel + ready → 云端");
-        c.model = String::new();
-        assert!(!c.chat_use_cloud(), "sentinel 但三元组不齐 → 本地 fallback");
-        // 态 3：空 = 自动 → 跟随 ready 状态
-        let mut c = ready.clone();
-        c.chat_main = String::new();
-        assert!(c.chat_use_cloud(), "自动 + ready → 云端");
-        c.external_enabled = false;
-        assert!(!c.chat_use_cloud(), "自动 + 未配好 → 本地");
-    }
-
-    #[test]
-    fn effective_chat_main_passthrough_chain() {
-        // 显式文件名 → 用它；空/sentinel → 穿透到 step 2 的链（summary_main → active_main）
         let mut c = base();
-        c.active_main = "active.gguf".to_string();
-        c.summary_main = "sum.gguf".to_string();
-        c.chat_main = "chat.gguf".to_string();
-        assert_eq!(c.effective_chat_main(), "chat.gguf", "显式优先");
-        c.chat_main = String::new();
-        assert_eq!(
-            c.effective_chat_main(),
-            "sum.gguf",
-            "空 → 穿透到 summary_main"
-        );
-        c.chat_main = SUMMARY_CLOUD_SENTINEL.to_string();
-        assert_eq!(c.effective_chat_main(), "sum.gguf", "sentinel → 同空处理");
-        c.summary_main = String::new();
-        assert_eq!(
-            c.effective_chat_main(),
-            "active.gguf",
-            "两级皆空 → 落到 active_main"
-        );
+        assert_eq!(c.model_for(Task::Daily), None);
+        assert_eq!(c.model_for(Task::Weekly), None);
+        assert_eq!(c.model_for(Task::Chat), None);
+
+        c.picks.daily = Some(local("daily.gguf"));
+        assert_eq!(c.model_for(Task::Daily), Some(local("daily.gguf")));
+        assert_eq!(c.model_for(Task::Weekly), Some(local("daily.gguf")));
+
+        c.picks.weekly = Pick::Local {
+            file: "week.gguf".into(),
+        };
+        assert_eq!(c.model_for(Task::Weekly), Some(local("week.gguf")));
+        assert_eq!(c.model_for(Task::Daily), Some(local("daily.gguf")));
+
+        c.picks.weekly = Pick::Cloud {
+            connection: "c1".into(),
+        };
+        assert_eq!(c.model_for(Task::Weekly), Some(cloud("c1")));
+
+        c.picks.chat = Some(cloud("c2"));
+        assert_eq!(c.model_for(Task::Chat), Some(cloud("c2")));
     }
 
-    /// 旧设置里没有 picks、advanced：周报跟日报用同一个模型，思考是自动。
     #[test]
-    fn report_settings_default_when_missing() {
-        let c: AiConfig = serde_json::from_str(r#"{"summaryMain":"sum.gguf"}"#).unwrap();
-        assert_eq!(c.picks.weekly, Pick::Inherit);
-        assert!(c.advanced.is_empty());
-        assert_eq!(c.task_model(Task::Weekly), c.task_model(Task::Daily));
-        assert_eq!(c.report_reasoning(Task::Weekly), Reasoning::Default);
+    fn is_ready_for_checks_cloud_connection_readiness() {
+        let mut c = base();
+        c.cloud.push(cloud_conn("c1", "https://api.x/v1", "m1"));
+        c.cloud.push(cloud_conn("c2", "https://api.x/v1", ""));
+        c.picks.daily = Some(ModelRef::Cloud {
+            connection: "c1".into(),
+        });
+        c.picks.chat = Some(ModelRef::Cloud {
+            connection: "c2".into(),
+        });
+        c.picks.weekly = Pick::Cloud {
+            connection: "missing".into(),
+        };
+        assert!(c.is_ready_for(Task::Daily));
+        assert!(!c.is_ready_for(Task::Chat), "missing model means not ready");
+        assert!(!c.is_ready_for(Task::Weekly), "unknown id means not ready");
     }
 
-    /// 读不懂的 kind、档位按默认读，同一份设置里别的字段照常读出来。
     #[test]
-    fn unknown_report_settings_read_as_default() {
+    fn unknown_pick_and_advanced_variants_fall_back_safely() {
         let c: AiConfig = serde_json::from_str(
             r#"{
-                "userBrief": "写代码",
-                "picks": {"weekly": {"kind": "apple_fm"}},
+                "userBrief": "coding",
+                "picks": {
+                    "daily": {"kind": "apple_fm"},
+                    "weekly": {"kind": "apple_fm"},
+                    "chat": {"kind": "local", "file": "c.gguf"}
+                },
                 "advanced": [
                     {"task": "daily", "model": {"kind": "local", "file": "a.gguf"}, "reasoning": "ultra"},
-                    {"task": "screen", "model": {"kind": "cloud"}, "reasoning": "high"},
-                    {"task": "weekly", "model": {"kind": "cloud"}, "reasoning": "low"}
+                    {"task": "screen", "model": {"kind": "cloud", "connection": "c1"}, "reasoning": "high"},
+                    {"task": "weekly", "model": {"kind": "cloud", "connection": "c1"}, "reasoning": "low"}
                 ]
             }"#,
         )
         .unwrap();
-        assert_eq!(c.user_brief, "写代码");
+        assert_eq!(c.user_brief, "coding");
+        assert_eq!(c.picks.daily, None);
         assert_eq!(c.picks.weekly, Pick::Inherit);
         assert_eq!(
+            c.picks.chat,
+            Some(ModelRef::Local {
+                file: "c.gguf".into()
+            })
+        );
+        assert_eq!(
             c.advanced,
-            vec![Advanced {
-                task: Task::Weekly,
-                model: ModelRef::Cloud,
-                reasoning: Some(ReasoningLevel::Low),
-            }]
+            vec![adv(
+                Task::Weekly,
+                ModelRef::Cloud {
+                    connection: "c1".into()
+                },
+                Some(ReasoningLevel::Low),
+            )]
         );
     }
 
-    /// 周报的模型按 picks.weekly 选；选云端但云端没开时，和日报一样用 active_main。
     #[test]
-    fn weekly_model_follows_the_pick() {
-        let local = |f: &str| ModelRef::Local { file: f.into() };
-        let mut c = AiConfig {
-            summary_main: "sum.gguf".into(),
-            active_main: "active.gguf".into(),
-            ..AiConfig::default()
+    fn reasoning_for_looks_up_by_task_and_resolved_model() {
+        let m = ModelRef::Local {
+            file: "sum.gguf".into(),
         };
-        assert_eq!(c.task_model(Task::Weekly), local("sum.gguf"), "inherit");
-
-        c.summary_main = SUMMARY_CLOUD_SENTINEL.into();
-        c.external_enabled = true;
-        assert_eq!(c.task_model(Task::Weekly), ModelRef::Cloud, "inherit 云端");
+        let mut c = base();
+        c.picks.daily = Some(m.clone());
+        c.advanced = vec![
+            adv(Task::Weekly, m.clone(), Some(ReasoningLevel::High)),
+            adv(Task::Daily, m.clone(), Some(ReasoningLevel::Off)),
+        ];
+        assert_eq!(c.reasoning_for(Task::Daily), Reasoning::Off);
+        assert_eq!(c.reasoning_for(Task::Weekly), Reasoning::High);
 
         c.picks.weekly = Pick::Local {
-            file: "week.gguf".into(),
+            file: "other.gguf".into(),
         };
-        assert_eq!(c.task_model(Task::Weekly), local("week.gguf"));
-        assert_eq!(c.task_model(Task::Daily), ModelRef::Cloud, "日报不受影响");
-
-        c.picks.weekly = Pick::Cloud;
-        assert_eq!(c.task_model(Task::Weekly), ModelRef::Cloud);
-        c.external_enabled = false;
-        assert_eq!(c.task_model(Task::Weekly), local("active.gguf"));
+        assert_eq!(c.reasoning_for(Task::Weekly), Reasoning::Default);
     }
 
-    /// 思考档位按「任务 + 实际用的模型」找；周报 inherit 时用日报的模型找。
     #[test]
-    fn report_reasoning_is_found_by_task_and_model() {
-        let mut c = AiConfig {
-            summary_main: "sum.gguf".into(),
-            advanced: vec![
-                Advanced {
-                    task: Task::Weekly,
-                    model: ModelRef::Local {
-                        file: "sum.gguf".into(),
-                    },
-                    reasoning: Some(ReasoningLevel::High),
-                },
-                Advanced {
-                    task: Task::Daily,
-                    model: ModelRef::Local {
-                        file: "sum.gguf".into(),
-                    },
-                    reasoning: Some(ReasoningLevel::Off),
-                },
-            ],
-            ..AiConfig::default()
+    fn chat_ctx_size_applies_8k_floor() {
+        let m = ModelRef::Local {
+            file: "chat.gguf".into(),
         };
-        assert_eq!(c.report_reasoning(Task::Weekly), Reasoning::High);
-        assert_eq!(c.report_reasoning(Task::Daily), Reasoning::Off);
+        let mut c = base();
+        c.picks.chat = Some(m.clone());
+        assert_eq!(c.chat_ctx_size(), None);
 
-        // 换了模型，这个模型没设过：自动
-        c.picks.weekly = Pick::Local {
-            file: "week.gguf".into(),
-        };
-        assert_eq!(c.report_reasoning(Task::Weekly), Reasoning::Default);
+        c.advanced.push(Advanced {
+            task: Task::Chat,
+            model: m.clone(),
+            reasoning: None,
+            ctx_size: Some(2048),
+            parallel_slots: None,
+            batch_size: None,
+        });
+        assert_eq!(c.chat_ctx_size(), Some(8192));
+
+        c.advanced[0].ctx_size = Some(16_384);
+        assert_eq!(c.chat_ctx_size(), Some(16_384));
     }
 }

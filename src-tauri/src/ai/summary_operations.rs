@@ -137,22 +137,32 @@ pub(crate) async fn summarize_segment(
     Ok((row, status_str))
 }
 
-/// 打开日报或周报用的模型，带上这份报告的思考档位。
+/// Opens the model configured for a daily or weekly report with its reasoning level.
 ///
-/// 用本机模型时，`local_port` 是已经加载好这个模型的引擎的端口。
+/// When using a local model, `local_port` is the port of the running llama-server instance.
 pub(crate) fn build_step2(ai: &AiConfig, task: Task, local_port: u16) -> Result<Step2Chat> {
-    let max_tokens = ai.summary_max_tokens();
-    let reasoning = ai.report_reasoning(task);
-    match ai.task_model(task) {
-        ModelRef::Cloud => Step2Chat::cloud(
-            &ai.endpoint,
-            &ai.model,
-            &ai.api_key,
-            &ai.external_provider,
-            max_tokens,
-            reasoning,
-        ),
-        ModelRef::Local { file } => Step2Chat::local(local_port, &file, max_tokens, reasoning),
+    let max_tokens = ai.summary_max_tokens(task);
+    let reasoning = ai.reasoning_for(task);
+    match ai.model_for(task) {
+        Some(ModelRef::Cloud { connection }) => {
+            let conn = ai
+                .cloud_connection(&connection)
+                .ok_or(Error::InvalidInput("选中的云端连接不存在，请重新选择模型"))?;
+            Step2Chat::cloud(
+                &conn.endpoint,
+                &conn.model,
+                &conn.api_key,
+                &conn.dialect,
+                max_tokens,
+                reasoning,
+            )
+        }
+        Some(ModelRef::Local { file }) => {
+            Step2Chat::local(local_port, &file, max_tokens, reasoning)
+        }
+        None => Err(Error::InvalidInput(
+            "请先在「模型」给报告选一个模型，或选定云端连接",
+        )),
     }
 }
 
@@ -382,11 +392,18 @@ mod tests {
         let cfg = crate::repo::settings::load(&pool).await.unwrap();
         // 强制云端文本路由(用传入凭据),其余(段划分/排除分类/语言/简介)沿用用户设置
         let mut ai = cfg.ai.clone();
-        ai.external_enabled = true;
-        ai.summary_main = crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string();
-        ai.endpoint = endpoint;
-        ai.model = model;
-        ai.api_key = api_key;
+        ai.cloud = vec![crate::ai::config::CloudConnection {
+            id: "e2e".to_string(),
+            name: "e2e".to_string(),
+            dialect: "openai".to_string(),
+            endpoint,
+            model,
+            api_key,
+            context_length: None,
+        }];
+        ai.picks.daily = Some(ModelRef::Cloud {
+            connection: "e2e".to_string(),
+        });
 
         ai_summaries::clear_day(&pool, "daily", &date)
             .await
@@ -943,36 +960,22 @@ mod tests {
         );
     }
 
-    /// 历史上 external_enabled 单开关跟 sentinel 打过架：云端没启用时 sentinel
-    /// 必须退化为本地路由（否则日报直接报"配置不全"）；反向 external 配好但
-    /// summary_main 没标 sentinel 也必须走本地。
     #[test]
-    fn step2_sentinel_without_external_falls_back_local() {
-        let ai = AiConfig {
-            summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
-            external_enabled: false,
-            active_main: "qwen.gguf".to_string(),
-            ..AiConfig::default()
-        };
-        let s = build_step2(&ai, Task::Daily, 8080).unwrap();
-        assert!(s.is_local(), "external 未启用时 sentinel 应退化为本地");
-        assert_eq!(s.model_label(), "qwen.gguf");
+    fn step2_local_and_missing_routes() {
+        let mut ai = AiConfig::default();
+        assert!(matches!(
+            build_step2(&ai, Task::Daily, 8080),
+            Err(Error::InvalidInput(_))
+        ));
 
-        let ai2 = AiConfig {
-            external_enabled: true,
-            endpoint: "https://api.example.com/v1".to_string(),
-            model: "gpt-x".to_string(),
-            summary_main: "local.gguf".to_string(),
-            ..AiConfig::default()
-        };
-        let s2 = build_step2(&ai2, Task::Daily, 8080).unwrap();
-        assert!(
-            s2.is_local(),
-            "没标 sentinel 时即使 external 配好也应走本地"
-        );
+        ai.picks.daily = Some(ModelRef::Local {
+            file: "qwen.gguf".to_string(),
+        });
+        let s = build_step2(&ai, Task::Daily, 8080).unwrap();
+        assert!(s.is_local());
+        assert_eq!(s.model_label(), "qwen.gguf");
     }
 
-    /// 报告按设置里的思考档位发请求：日报的本机模型选了「高」，请求里就打开思考。
     #[tokio::test]
     async fn reports_send_their_reasoning() {
         use crate::ai::config::{Advanced, ReasoningLevel};
@@ -982,17 +985,20 @@ mod tests {
             serde_json::json!({"choices": [{"message": {"role": "assistant", "content": "好"}}]}),
         )])
         .await;
-        let ai = AiConfig {
-            summary_main: "m.gguf".into(),
-            advanced: vec![Advanced {
-                task: Task::Daily,
-                model: ModelRef::Local {
-                    file: "m.gguf".into(),
-                },
-                reasoning: Some(ReasoningLevel::High),
-            }],
-            ..AiConfig::default()
-        };
+        let mut ai = AiConfig::default();
+        ai.picks.daily = Some(ModelRef::Local {
+            file: "m.gguf".into(),
+        });
+        ai.advanced = vec![Advanced {
+            task: Task::Daily,
+            model: ModelRef::Local {
+                file: "m.gguf".into(),
+            },
+            reasoning: Some(ReasoningLevel::High),
+            ctx_size: None,
+            parallel_slots: None,
+            batch_size: None,
+        }];
         build_step2(&ai, Task::Daily, server.port)
             .unwrap()
             .chat("sys", "user")
@@ -1002,54 +1008,68 @@ mod tests {
         assert_eq!(body["chat_template_kwargs"]["enable_thinking"], true);
     }
 
-    /// 云端路由时落库 model 必须是用户填的云端模型 ID——取成本地 GGUF 文件名
-    /// 会让 DailyTab / 导出 Markdown 显示错误的生成来源。
     #[test]
     fn step2_cloud_route_uses_cloud_model_label() {
-        let ai = AiConfig {
-            external_enabled: true,
-            summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
-            endpoint: "https://api.example.com/v1/".to_string(),
-            model: "deepseek-chat".to_string(),
-            ..AiConfig::default()
-        };
+        let mut ai = AiConfig::default();
+        ai.cloud = vec![crate::ai::config::CloudConnection {
+            id: "c1".into(),
+            name: "DeepSeek".into(),
+            dialect: "deepseek".into(),
+            endpoint: "https://api.example.com/v1/".into(),
+            model: "deepseek-chat".into(),
+            api_key: String::new(),
+            context_length: None,
+        }];
+        ai.picks.daily = Some(ModelRef::Cloud {
+            connection: "c1".into(),
+        });
         let s = build_step2(&ai, Task::Daily, 8080).unwrap();
         assert!(!s.is_local());
         assert_eq!(s.model_label(), "deepseek-chat");
     }
 
-    /// 用户选了云端但 endpoint / model 没填全：必须构造期抛错让顶层错误条提示
-    /// 去补配置，而不是悄悄构造一个打空地址的 client 到运行期才失败。
     #[test]
     fn step2_cloud_missing_config_errors() {
-        let ai = AiConfig {
-            external_enabled: true,
-            summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
-            endpoint: "   ".to_string(),
-            model: "deepseek-chat".to_string(),
-            ..AiConfig::default()
-        };
-        // 必须是 InvalidInput：顶层错误条按这个类型渲染"去补配置"的引导文案，
-        // 换成别的错误类型用户只会看到一条不可操作的通用报错。
+        let mut ai = AiConfig::default();
+        ai.cloud = vec![crate::ai::config::CloudConnection {
+            id: "c1".into(),
+            name: "bad".into(),
+            dialect: "openai".into(),
+            endpoint: "   ".into(),
+            model: "deepseek-chat".into(),
+            api_key: String::new(),
+            context_length: None,
+        }];
+        ai.picks.daily = Some(ModelRef::Cloud {
+            connection: "c1".into(),
+        });
         assert!(
             matches!(
                 build_step2(&ai, Task::Daily, 0),
                 Err(Error::InvalidInput(_))
             ),
-            "endpoint 全空白应报 InvalidInput"
+            "blank endpoint should return InvalidInput"
         );
 
-        let ai2 = AiConfig {
-            endpoint: "https://api.example.com/v1".to_string(),
-            model: "  ".to_string(),
-            ..ai
-        };
+        ai.cloud[0].endpoint = "https://api.example.com/v1".into();
+        ai.cloud[0].model = "  ".into();
         assert!(
             matches!(
-                build_step2(&ai2, Task::Daily, 0),
+                build_step2(&ai, Task::Daily, 0),
                 Err(Error::InvalidInput(_))
             ),
-            "model 全空白应报 InvalidInput"
+            "blank model should return InvalidInput"
+        );
+
+        ai.picks.daily = Some(ModelRef::Cloud {
+            connection: "missing".into(),
+        });
+        assert!(
+            matches!(
+                build_step2(&ai, Task::Daily, 0),
+                Err(Error::InvalidInput(_))
+            ),
+            "dangling connection id should return InvalidInput"
         );
     }
 
