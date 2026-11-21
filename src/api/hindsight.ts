@@ -520,6 +520,23 @@ export interface ModuleProfiles {
 /** 日报、周报、聊天各自的配置。镜像后端 `crate::ai::config::Visibility`。 */
 export type AiVisibility = Record<AiProfileModule, ModuleProfiles>;
 
+/** 一个模型。镜像后端 `crate::ai::config::ModelRef`。 */
+export type ModelRef = { kind: "local"; file: string } | { kind: "cloud" };
+
+/** 一个任务选的模型：inherit = 和日报用同一个。镜像后端 `crate::ai::config::Pick`。 */
+export type ModelPick = { kind: "inherit" } | ModelRef;
+
+/** 用户能选的思考档位。没设就是自动。 */
+export type ReasoningLevel = "off" | "low" | "medium" | "high" | "max";
+
+/** 用户给「一个任务 + 一个模型」设的参数。镜像后端 `crate::ai::config::Advanced`。 */
+export interface AdvancedEntry {
+  task: "daily" | "weekly" | "chat";
+  model: ModelRef;
+  /** null = 自动 */
+  reasoning: ReasoningLevel | null;
+}
+
 export interface AiConfig {
   /** 外部云端 API base URL（OpenAI 兼容，不含 /chat/completions）。
    *  仅在 externalEnabled = true 时生效。 */
@@ -557,6 +574,10 @@ export interface AiConfig {
   summaryMain: string;
   /** 段总结专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
   summaryMmproj: string;
+  /** 每个任务用哪个模型。现在只有周报。还没有这个字段的后端不返回它。 */
+  picks?: { weekly?: ModelPick };
+  /** 用户给「任务 + 模型」设的参数。还没有这个字段的后端不返回它。 */
+  advanced?: AdvancedEntry[];
   /** 对话（Chat）模型槽位：空 = 自动（云端配好走云端，否则同 step 2）；
    *  [`SUMMARY_CLOUD_SENTINEL`] = 明确云端；文件名 = 明确该本地 GGUF。 */
   chatMain: string;

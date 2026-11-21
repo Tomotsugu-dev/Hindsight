@@ -1135,6 +1135,11 @@
     "models": {
       "sectionTitle": "モデル",
       "sectionDesc": "ローカル推論に使う LLM。GGUF ファイルは HuggingFace からダウンロードします。",
+      "reports": {
+        "title": "日次・週次レポートのモデル",
+        "description": "自動生成でもここで選んだものを使います。選べる思考の強さはサービスによって違い、強いほど遅くなります。",
+        "inUse": "使用中：{{model}}"
+      },
       "toolbar": {
         "statusAll": "すべて",
         "statusInstalled": "ダウンロード済み",
@@ -1543,6 +1548,12 @@
       "week": "週次",
       "month": "月次",
       "debug": "デバッグ"
+    },
+    "model": {
+      "title": "モデルと思考モード",
+      "modelGroup": "モデル",
+      "followDaily": "日次と同じ",
+      "cloudConfirmMessage": "クラウドにすると、レポートを作るたびにアプリ名・分類・アクティビティのタイムラインが {{provider}} に送信されます。スクリーンショットは送信されません。"
     },
     "placeholder": {
       "hint": "開発中の機能です。"

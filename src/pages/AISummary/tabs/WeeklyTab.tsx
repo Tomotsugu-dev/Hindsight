@@ -24,12 +24,13 @@ import {
 } from "../../../state/weeklySummary";
 import {
   api,
-  SUMMARY_CLOUD_SENTINEL,
   type AiSegment,
   type SegmentSummaryRow,
   type WeekPrecheckDay,
   type WeekPrecheckResp,
 } from "../../../api/hindsight";
+import { reportRoute } from "../../../state/reportModel";
+import { ReportModelPickers } from "../../../components/ReportModel/ReportModelPickers";
 import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
@@ -144,14 +145,9 @@ export default function WeeklyTab() {
   const mondayRef = useRef(monday);
   mondayRef.current = monday;
 
-  // hasModel：周报走纯文本段总结——本地 summary 模型或选定云端 二选一即可。
-  const activeMain = settings?.ai.activeMain ?? "";
-  const rawSummaryMain = settings?.ai.summaryMain ?? "";
-  const externalEnabled = settings?.ai.externalEnabled ?? false;
-  const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
-  const localSummaryAvailable =
-    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) || activeMain !== "";
-  const hasModel = cloudRoute || localSummaryAvailable;
+  // 周报用自己的模型（没单独选就跟日报），走云端或有本地文件就能生成
+  const route = settings ? reportRoute(settings.ai, "weekly") : null;
+  const hasModel = !!route && (route.cloud || route.local !== "");
 
   // 全局 store 订阅——切走再回来还在跑的 weekly run 仍能保持"停止"按钮
   const runSnap = useSyncExternalStore(
@@ -543,6 +539,7 @@ export default function WeeklyTab() {
     <>
       <ReportHeader
         subtitle={t("aiSummary.weekly.subtitle")}
+        pickers={<ReportModelPickers module="weekly" disabled={generating} />}
         nav={
           <PeriodNav
             groupLabel={t("aiSummary.weekly.weekNav.groupAria")}

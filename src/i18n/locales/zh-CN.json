@@ -1135,6 +1135,11 @@
     "models": {
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 文件下载自 HuggingFace。",
+      "reports": {
+        "title": "日报和周报用的模型",
+        "description": "自动生成也用这里的选择。思考模式能选哪几档看用的是哪家服务，越强越慢。",
+        "inUse": "现在用：{{model}}"
+      },
       "toolbar": {
         "statusAll": "所有",
         "statusInstalled": "已下载",
@@ -1543,6 +1548,12 @@
       "week": "周报",
       "month": "月报",
       "debug": "调试"
+    },
+    "model": {
+      "title": "模型和思考模式",
+      "modelGroup": "模型",
+      "followDaily": "跟日报一样",
+      "cloudConfirmMessage": "选了云端后，每次生成报告都会把应用名、分类和活动时间线发送到 {{provider}}。不会上传截图。"
     },
     "placeholder": {
       "hint": "功能开发中。"

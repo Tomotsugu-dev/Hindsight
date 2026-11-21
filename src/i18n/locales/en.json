@@ -1140,6 +1140,11 @@
     "models": {
       "sectionTitle": "Models",
       "sectionDesc": "LLM used for local inference; GGUF files are downloaded from HuggingFace.",
+      "reports": {
+        "title": "Models for daily and weekly reports",
+        "description": "Automatic reports use these choices too. The thinking levels depend on the service. Higher levels are slower.",
+        "inUse": "In use: {{model}}"
+      },
       "toolbar": {
         "statusAll": "All",
         "statusInstalled": "Downloaded",
@@ -1548,6 +1553,12 @@
       "week": "Weekly",
       "month": "Monthly",
       "debug": "Debug"
+    },
+    "model": {
+      "title": "Model and thinking",
+      "modelGroup": "Model",
+      "followDaily": "Same as daily",
+      "cloudConfirmMessage": "With the cloud, each report sends app names, categories and your activity timeline to {{provider}}. Screenshots are not sent."
     },
     "placeholder": {
       "hint": "Feature in development."

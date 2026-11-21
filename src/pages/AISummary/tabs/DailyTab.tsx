@@ -13,7 +13,10 @@ import {
 } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { useAiProfiles } from "../../../state/aiProfiles";
+import { reportRoute } from "../../../state/reportModel";
+import { chatCloudReady } from "../../Chat/chatRouting";
 import { AiProfilePicker } from "../../../components/AiProfiles/AiProfilePicker";
+import { ReportModelPickers } from "../../../components/ReportModel/ReportModelPickers";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { resolveSegmentDotColor } from "../../../utils/segmentColor";
@@ -100,23 +103,13 @@ export default function DailyTab() {
   );
   const segments = settings?.ai.segments ?? [];
   const activeMain = settings?.ai.activeMain ?? "";
-  // hasModel 跟后端 summary_runner 的 check 对齐：段总结满足以下任一：
-  //   - 用户在云端卡选 Text（rawSummaryMain == sentinel）且云端 API 启用
-  //   - 用户在本地某个模型卡选 Text（rawSummaryMain 是真实文件名）
-  //   - 都没选但 activeMain 存在（旧版 fallback 兼容）
-  const rawSummaryMain = settings?.ai.summaryMain ?? "";
-  const externalEnabled = settings?.ai.externalEnabled ?? false;
-  const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
+  // 走云端或有本地文件就能生成，和后端 summary_runner 的检查一致
+  const route = settings ? reportRoute(settings.ai, "daily") : null;
+  const hasModel = !!route && (route.cloud || route.local !== "");
   // 云端总结真正可跑 = 路由选中云端 + 三元组配齐(endpoint/model 任一缺失时
   // 后端 External 分支会直接报错,不该拿"下载本地引擎"去引导)
-  const cloudConfigured =
-    externalEnabled &&
-    (settings?.ai.endpoint ?? "").trim() !== "" &&
-    (settings?.ai.model ?? "").trim() !== "";
-  const cloudSummaryReady = cloudRoute && cloudConfigured;
-  const localSummaryAvailable =
-    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) || activeMain !== "";
-  const hasModel = cloudRoute || localSummaryAvailable;
+  const cloudConfigured = !!settings && chatCloudReady(settings.ai);
+  const cloudSummaryReady = !!route?.cloud && cloudConfigured;
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
   // 依赖 t，所以在组件里定义，跟随 i18n.language 自动重渲。
@@ -488,6 +481,7 @@ export default function DailyTab() {
     <>
       <ReportHeader
         subtitle={t("aiSummary.daily.subtitle")}
+        pickers={<ReportModelPickers module="daily" disabled={generating} />}
         nav={
           <PeriodNav
             groupLabel={t("aiSummary.daily.dateNav.groupAria")}

@@ -1,4 +1,4 @@
-// 日报、周报共用的控件：页面顶部（副标题、时段切换、操作按钮）、内容框里的状态行和提示条。
+// 日报、周报共用的控件：页面顶部（副标题、时段切换、操作按钮、模型）、内容框里的状态行和提示条。
 // 样式在 ReportControls.module.css；占位条、错误框这类正文里的样式也在那里，各 tab 直接引用。
 import type { ReactNode } from "react";
 import { AlertTriangle, Check, Loader2, Play, RefreshCcw, Square, X } from "lucide-react";
@@ -12,10 +12,12 @@ interface ReportHeaderProps {
   nav: ReactNode;
   /** 右边：主按钮、导出、删除 */
   actions: ReactNode;
+  /** 工具栏下面一行：用哪个模型、什么思考模式 */
+  pickers?: ReactNode;
 }
 
-/** 页面顶部：副标题、工具栏。 */
-export function ReportHeader({ subtitle, nav, actions }: ReportHeaderProps) {
+/** 页面顶部：副标题、工具栏、模型那一行。 */
+export function ReportHeader({ subtitle, nav, actions, pickers }: ReportHeaderProps) {
   return (
     <div className={styles.top}>
       <p className={styles.subtitle}>{subtitle}</p>
@@ -23,6 +25,7 @@ export function ReportHeader({ subtitle, nav, actions }: ReportHeaderProps) {
         {nav}
         <div className={styles.actions}>{actions}</div>
       </header>
+      {pickers ? <div className={styles.pickers}>{pickers}</div> : null}
     </div>
   );
 }

@@ -1140,6 +1140,11 @@
     "models": {
       "sectionTitle": "Modelos",
       "sectionDesc": "El LLM que se usa para la inferencia local; los archivos GGUF se descargan de HuggingFace.",
+      "reports": {
+        "title": "Modelos de los informes diario y semanal",
+        "description": "Los informes automáticos también usan esta elección. Los niveles de razonamiento dependen del servicio. Cuanto más alto, más lento.",
+        "inUse": "En uso: {{model}}"
+      },
       "toolbar": {
         "statusAll": "Todos",
         "statusInstalled": "Descargados",
@@ -1548,6 +1553,12 @@
       "week": "Semanal",
       "month": "Mensual",
       "debug": "Depuración"
+    },
+    "model": {
+      "title": "Modelo y razonamiento",
+      "modelGroup": "Modelo",
+      "followDaily": "Igual que el diario",
+      "cloudConfirmMessage": "Con la nube, cada informe envía los nombres de las aplicaciones, las categorías y la línea de tiempo de actividad a {{provider}}. No se envían capturas de pantalla."
     },
     "placeholder": {
       "hint": "Función en desarrollo."

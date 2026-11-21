@@ -1135,6 +1135,11 @@
     "models": {
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 檔案下載自 HuggingFace。",
+      "reports": {
+        "title": "日報和週報用的模型",
+        "description": "自動產生也用這裡的選擇。思考模式能選哪幾檔要看使用哪家服務，越強越慢。",
+        "inUse": "目前使用：{{model}}"
+      },
       "toolbar": {
         "statusAll": "所有",
         "statusInstalled": "已下載",
@@ -1543,6 +1548,12 @@
       "week": "週報",
       "month": "月報",
       "debug": "除錯"
+    },
+    "model": {
+      "title": "模型和思考模式",
+      "modelGroup": "模型",
+      "followDaily": "跟日報一樣",
+      "cloudConfirmMessage": "選了雲端後，每次產生報告都會把應用程式名、分類和活動時間線傳送到 {{provider}}。不會上傳截圖。"
     },
     "placeholder": {
       "hint": "功能開發中。"
