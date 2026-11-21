@@ -674,6 +674,7 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.prompt_overrides.system_ja = next.prompt_overrides.system_ja.trim().to_string();
     next.prompt_overrides.system_pt = next.prompt_overrides.system_pt.trim().to_string();
     next.prompt_overrides.system_tw = next.prompt_overrides.system_tw.trim().to_string();
+    next.prompt_overrides.system_es = next.prompt_overrides.system_es.trim().to_string();
 
     next
 }
@@ -956,12 +957,14 @@ mod tests {
         next.prompt_overrides.system_ja = "   \n\t  ".to_string(); // 纯空白 → 空
         next.prompt_overrides.system_pt = "single".to_string();
         next.prompt_overrides.system_tw = "\t保留\t中间\ttab\t".to_string();
+        next.prompt_overrides.system_es = format!("\n{text}\n");
         let out = sanitize(next, &base());
         assert_eq!(out.prompt_overrides.system_zh, "第一行\n    缩进第二行");
         assert_eq!(out.prompt_overrides.system_en, "第一行\n    缩进第二行");
         assert_eq!(out.prompt_overrides.system_ja, "");
         assert_eq!(out.prompt_overrides.system_pt, "single");
         assert_eq!(out.prompt_overrides.system_tw, "保留\t中间\ttab");
+        assert_eq!(out.prompt_overrides.system_es, "第一行\n    缩进第二行");
     }
 
     #[test]
