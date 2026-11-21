@@ -62,6 +62,29 @@ describe("home-media helpers", () => {
     expect(v.preload).toBe("auto");
     expect(v.load).toHaveBeenCalledTimes(1);
   });
+
+  it("hydrates the dark version on a dark page and keeps data-* for a later switch", () => {
+    const v = makeVideo({ src: "/assets/home/c.mp4", poster: "/assets/home/c.webp" });
+    v.dataset.darkSrc = "/assets/home/c_dark.mp4";
+    v.dataset.darkPoster = "/assets/home/c_dark.webp";
+    v.ownerDocument = { documentElement: { dataset: { mode: "dark" } } };
+
+    expect(hydrateVideo(v, "auto")).toBe(true);
+    expect(v.getAttribute("poster")).toBe("/assets/home/c_dark.webp");
+    expect(v.getAttribute("src")).toBe("/assets/home/c_dark.mp4");
+    // color-mode.js 换回浅色时要用
+    expect(v.dataset.src).toBe("/assets/home/c.mp4");
+    expect(v.dataset.poster).toBe("/assets/home/c.webp");
+  });
+
+  it("hydrates the only version of a video without a dark one on a dark page", () => {
+    const v = makeVideo({ src: "/assets/home/garden.mp4", poster: "/assets/home/garden.webp" });
+    v.ownerDocument = { documentElement: { dataset: { mode: "dark" } } };
+
+    expect(hydrateVideo(v)).toBe(true);
+    expect(v.getAttribute("poster")).toBe("/assets/home/garden.webp");
+    expect(v.getAttribute("src")).toBe("/assets/home/garden.mp4");
+  });
 });
 
 describe("initHomeMedia progressive cascade", () => {

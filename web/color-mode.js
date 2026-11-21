@@ -27,10 +27,37 @@
     document.querySelectorAll(".mode-toggle").forEach(function (button) {
       button.setAttribute("aria-pressed", String(mode === "dark"));
     });
+    document.querySelectorAll("video[data-dark-src]").forEach(function (video) {
+      showVideo(video, mode === "dark");
+    });
+  }
+
+  // 首页有深浅两版的视频：浅色版在 data-src / data-poster，深色版在 data-dark-src / data-dark-poster。
+  // 什么时候挂上 src、poster 由 home-media.js 决定，它按当前颜色取；这里只把已经挂上的换成另一版。
+  // 两版时间轴相同，换版时从原来的位置接着播，原来在播就接着播。
+  // 跳到原来的位置要服务器支持 Range，见 worker.js
+  function showVideo(video, dark) {
+    if (video.hasAttribute("poster")) {
+      video.setAttribute("poster", dark ? video.dataset.darkPoster : video.dataset.poster);
+    }
+    var src = dark ? video.dataset.darkSrc : video.dataset.src;
+    if (!video.hasAttribute("src") || video.getAttribute("src") === src) return;
+    var at = video.currentTime;
+    var playing = !video.paused;
+    video.setAttribute("src", src);
+    if (at > 0) {
+      video.addEventListener("loadedmetadata", function () {
+        video.currentTime = at;
+      }, { once: true });
+    }
+    if (playing) {
+      var started = video.play();
+      if (started) started.catch(function () {});
+    }
   }
 
   apply();
-  // 第一次 apply 时按钮还没解析到
+  // 第一次 apply 时按钮和视频还没解析到
   document.addEventListener("DOMContentLoaded", apply);
   system.addEventListener("change", apply);
   // 别的标签页切换了

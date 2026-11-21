@@ -11,12 +11,22 @@ export function isDataSaver(nav = typeof navigator !== "undefined" ? navigator :
   return Boolean(conn.saveData || conn.effectiveType === "2g" || conn.effectiveType === "slow-2g");
 }
 
+/**
+ * 按页面当前深浅色取地址或封面：有深色版（data-dark-src / data-dark-poster）且页面是深色时取深色版。
+ * 深浅色由 color-mode.js 写在 <html data-mode> 上；换色时，已挂载的视频也由它换成另一版，所以 data-* 要留着。
+ */
+function pick(video, key) {
+  const dark = video.ownerDocument?.documentElement?.dataset?.mode === "dark";
+  const darkKey = key === "src" ? "darkSrc" : "darkPoster";
+  return (dark && video.dataset?.[darkKey]) || video.dataset?.[key];
+}
+
 /** 挂载封面图（幂等）。 */
 export function hydratePoster(video) {
-  const poster = video.dataset?.poster;
+  if (video.getAttribute("poster") !== null) return false;
+  const poster = pick(video, "poster");
   if (!poster) return false;
   video.setAttribute("poster", poster);
-  delete video.dataset.poster;
   return true;
 }
 
@@ -27,11 +37,10 @@ export function hydratePoster(video) {
  */
 export function hydrateVideo(video, preloadMode = "metadata") {
   hydratePoster(video);
-  const src = video.dataset?.src;
+  const src = video.getAttribute("src") === null && pick(video, "src");
   if (src) {
     video.preload = preloadMode;
     video.setAttribute("src", src);
-    delete video.dataset.src;
     if (typeof video.load === "function") video.load();
     return true;
   }
