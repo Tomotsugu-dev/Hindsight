@@ -10,27 +10,31 @@ pub struct Step2Chat {
     model: LanguageModel,
     label: String,
     max_tokens: u32,
+    reasoning: Reasoning,
 }
 
 impl Step2Chat {
     /// 打开本机 llama-server 上的模型。
     ///
     /// `model` 是 GGUF 文件名。`max_tokens` 是回答的 token 上限，见 [`Request::max_output_tokens`]。
-    pub fn local(port: u16, model: &str, max_tokens: u32) -> Result<Self> {
+    /// 每次请求都带 `reasoning`。
+    pub fn local(port: u16, model: &str, max_tokens: u32, reasoning: Reasoning) -> Result<Self> {
         Ok(Self {
             model: LanguageModel::ChatCompletions(ChatCompletionsModel::local(port, model)?),
             label: model.to_string(),
             max_tokens,
+            reasoning,
         })
     }
 
-    /// 打开云端模型。前四个参数同 [`ChatCompletionsModel::cloud`]。
+    /// 打开云端模型。前四个参数同 [`ChatCompletionsModel::cloud`]，后两个同 [`Self::local`]。
     pub fn cloud(
         endpoint: &str,
         model: &str,
         api_key: &str,
         provider: &str,
         max_tokens: u32,
+        reasoning: Reasoning,
     ) -> Result<Self> {
         Ok(Self {
             model: LanguageModel::ChatCompletions(ChatCompletionsModel::cloud(
@@ -38,6 +42,7 @@ impl Step2Chat {
             )?),
             label: model.to_string(),
             max_tokens,
+            reasoning,
         })
     }
 
@@ -50,7 +55,7 @@ impl Step2Chat {
                 images: Vec::new(),
             }],
             tools: Vec::new(),
-            reasoning: Reasoning::Default,
+            reasoning: self.reasoning,
             max_output_tokens: self.max_tokens,
             temperature: Some(0.4),
         };
@@ -90,7 +95,8 @@ mod tests {
             eprintln!("跳过:未设 HINDSIGHT_E2E_* 三个环境变量");
             return;
         };
-        let c = Step2Chat::cloud(&base, &model, &key, "custom", 512).expect("客户端构造");
+        let c = Step2Chat::cloud(&base, &model, &key, "custom", 512, Reasoning::Default)
+            .expect("客户端构造");
         let t = std::time::Instant::now();
         let text = c
             .chat("你是一个简洁的助手。", "用一句话说明什么是 TCP 超时。")
@@ -107,7 +113,15 @@ mod tests {
     // ---- 以下从网络这一侧锁住日报发请求的行为 ----
 
     fn cloud(server: &FakeServer) -> Step2Chat {
-        Step2Chat::cloud(&server.base_url(), "m", "sk-test", "custom", 4096).unwrap()
+        Step2Chat::cloud(
+            &server.base_url(),
+            "m",
+            "sk-test",
+            "custom",
+            4096,
+            Reasoning::Default,
+        )
+        .unwrap()
     }
 
     /// 一段完整的流：正文一块，末块只带用量，最后 [DONE]。
@@ -193,7 +207,7 @@ mod tests {
             json!({"choices": [{"message": {"role": "assistant", "content": "好"}}]}),
         )])
         .await;
-        let local = Step2Chat::local(server.port, "m.gguf", 1024).unwrap();
+        let local = Step2Chat::local(server.port, "m.gguf", 1024, Reasoning::Default).unwrap();
         assert!(local.is_local());
         assert_eq!(local.model_label(), "m.gguf");
         assert_eq!(local.chat("sys", "user").await.unwrap(), "好");
@@ -211,7 +225,7 @@ mod tests {
             json!({"error": {"message": "Unknown parameter: 'temperature'."}}),
         )])
         .await;
-        let err = Step2Chat::local(server.port, "m.gguf", 1024)
+        let err = Step2Chat::local(server.port, "m.gguf", 1024, Reasoning::Default)
             .unwrap()
             .chat("sys", "user")
             .await

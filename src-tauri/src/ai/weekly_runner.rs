@@ -26,6 +26,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::ai::config::{ModelRef, Pick, Task};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
@@ -105,8 +106,9 @@ impl WeekSummaryRunner {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = cfg.ai.clone();
 
-        // step2 模型校验：本地 summary main 非空 或 选定走云端
-        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
+        // 周报要有模型：云端，或者一个本机文件
+        let model = ai.task_model(Task::Weekly);
+        if matches!(&model, ModelRef::Local { file } if file.trim().is_empty()) {
             return Err(Error::InvalidInput(
                 "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
             ));
@@ -249,14 +251,14 @@ impl WeekSummaryRunner {
         }
 
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
-        // 让前端显示"加载模型中…"。云端路径（summary_use_cloud()）跳过，不动 supervisor。
-        let port = if !ai.summary_use_cloud() {
+        // 让前端显示"加载模型中…"。走云端时跳过，不动 supervisor。
+        let port = if let ModelRef::Local { file } = &model {
             let st = self.supervisor.status().await;
             if st.state != EngineState::Running {
                 // message 留空：前端按 phase 显示本地化的"加载模型中…"（weeklySummary.ts）
                 self.emit_phase("engine_starting", &week_key, None, None);
             }
-            self.ensure_engine_running(&ai).await?
+            self.ensure_engine_running(&ai, file).await?
         } else {
             // 云端路径用不到端口；step2 客户端会忽略它。占位 0。
             0
@@ -278,7 +280,7 @@ impl WeekSummaryRunner {
         let system = build_weekly_system_prompt(&ai);
         let user_text = build_weekly_user_prompt(&ai, &ctx);
 
-        let step2 = build_step2(&ai, port, ai.effective_summary_main())?;
+        let step2 = build_step2(&ai, Task::Weekly, port)?;
         let step2_model = step2.model_label().to_string();
 
         // 推一条 summarizing 让前端段卡片切到"生成中"
@@ -375,9 +377,19 @@ impl WeekSummaryRunner {
     ///
     /// 跟 `DaySummaryRunner::ensure_engine_running` 同语义——但只关心 Step::Summary
     /// 因为周报全程纯文本，不需要 vision describe 的 mmproj。
-    async fn ensure_engine_running(&self, ai: &crate::ai::config::AiConfig) -> Result<u16> {
-        let main_name = ai.effective_summary_main();
-        let mmproj_name = ai.effective_summary_mmproj();
+    ///
+    /// `main_name` 是周报用的本机模型文件。跟日报用同一个模型时，也带上日报的 mmproj，
+    /// 这样引擎可以两边共用。
+    async fn ensure_engine_running(
+        &self,
+        ai: &crate::ai::config::AiConfig,
+        main_name: &str,
+    ) -> Result<u16> {
+        let mmproj_name = if ai.picks.weekly == Pick::Inherit {
+            ai.effective_summary_mmproj()
+        } else {
+            ""
+        };
         let models_dir = models::root_dir(ai);
         let main_path = models_dir.join(main_name);
         if !main_path.exists() {

@@ -743,6 +743,16 @@ mod tests {
                 summary_main: "sum.gguf".into(),
                 batch_size: Some(256),
                 summary_ctx_size: Some(4096),
+                picks: crate::ai::config::Picks {
+                    weekly: crate::ai::config::Pick::Local {
+                        file: "week.gguf".into(),
+                    },
+                },
+                advanced: vec![crate::ai::config::Advanced {
+                    task: crate::ai::config::Task::Weekly,
+                    model: crate::ai::config::ModelRef::Cloud,
+                    reasoning: Some(crate::ai::config::ReasoningLevel::High),
+                }],
                 ..AiConfig::default()
             },
             // 两种形态都走一遍往返：带标题关键词 + 整进程（title_keyword: None）
