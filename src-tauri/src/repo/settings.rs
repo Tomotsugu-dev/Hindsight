@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ai::config::AiConfig;
+use crate::ai::config::{AiConfig, VisibilityProfile};
 use crate::ai::download_sources::DownloadSources;
 use crate::capture::ignore::IgnoreRule;
 use crate::error::Result;
@@ -380,6 +380,20 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         }
     }
 
+    // Migrate the legacy `ai.excludedCategories` list to visibility profiles.
+    // Saving the updated `Settings` drops the unknown field, so this runs once.
+    if !parse_failed {
+        if let Some(excluded) = old_excluded_categories(&data) {
+            let category_ids: Vec<String> = super::categories::list(pool)
+                .await?
+                .into_iter()
+                .map(|c| c.id)
+                .collect();
+            migrate_excluded_categories(&mut settings.ai, &excluded, &category_ids);
+            dirty = true;
+        }
+    }
+
     // 解析失败时的 dirty 全是"默认值缺路径"造成的，绝不能把这份默认值写回去
     // 覆盖用户仅存的原始 JSON。
     if dirty && !parse_failed {
@@ -387,6 +401,64 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
     }
 
     Ok(settings)
+}
+
+/// Stable ID assigned to the visibility profile created when migrating
+/// legacy `ai.excludedCategories`.
+const MIGRATED_PROFILE_ID: &str = "p_migrated";
+
+/// Extracts the legacy `ai.excludedCategories` list from raw settings JSON.
+///
+/// `AiConfig` no longer has this field, so deserializing into [`Settings`]
+/// drops it before migration can inspect it.
+fn old_excluded_categories(data: &str) -> Option<Vec<String>> {
+    let value: serde_json::Value = serde_json::from_str(data).ok()?;
+    serde_json::from_value(value.pointer("/ai/excludedCategories")?.clone()).ok()
+}
+
+/// Converts legacy `ai.excludedCategories` into an auto-run [`VisibilityProfile`]
+/// for daily and weekly reports.
+///
+/// Chat never read `excludedCategories`, so its profiles are left unchanged.
+/// Migration is skipped unless the user excluded at least one active category
+/// beyond the legacy defaults (`other`, `hidden`, `private`).
+fn migrate_excluded_categories(ai: &mut AiConfig, excluded: &[String], category_ids: &[String]) {
+    // `hidden` and `private` are always invisible to AI, and `other` was
+    // excluded by default in older versions, so ignore them when checking
+    // for user customization.
+    let user_excluded = category_ids
+        .iter()
+        .any(|id| excluded.contains(id) && !["other", "hidden", "private"].contains(&id.as_str()));
+    if !user_excluded {
+        return;
+    }
+    let profile = VisibilityProfile {
+        name: migrated_profile_name(&ai.prompt_language).to_string(),
+        categories: category_ids
+            .iter()
+            .filter(|id| !excluded.contains(id) && !["hidden", "private"].contains(&id.as_str()))
+            .cloned()
+            .collect(),
+    };
+    for module in [&mut ai.visibility.daily, &mut ai.visibility.weekly] {
+        module
+            .profiles
+            .insert(MIGRATED_PROFILE_ID.to_string(), profile.clone());
+        module.auto_profile = Some(MIGRATED_PROFILE_ID.to_string());
+    }
+}
+
+/// Returns the localized display name for the migrated profile based on
+/// `AiConfig::prompt_language`, falling back to English.
+fn migrated_profile_name(lang: &str) -> &'static str {
+    match lang {
+        "zh" => "原设置",
+        "tw" => "原設定",
+        "ja" => "旧設定",
+        "pt" => "Anterior",
+        "es" => "Anterior",
+        _ => "Previous",
+    }
 }
 
 /// 整组覆盖 settings_store。调用方应先 [`load`] 再传 patch 后的完整 [`Settings`]。
@@ -1184,6 +1256,99 @@ mod tests {
                 v.get(key).is_some(),
                 "settings JSON 缺 {key} 字段——字段改名会让老数据静默失效"
             );
+        }
+    }
+
+    /// 旧版的设置：`excludedCategories` 是 AI 不看的分类。
+    fn old_settings(excluded: &str, lang: &str) -> String {
+        format!(
+            r#"{{"screenshotPath":"/sp","ai":{{"modelsPath":"/mp","promptLanguage":"{lang}","excludedCategories":{excluded}}}}}"#
+        )
+    }
+
+    /// 旧版排除了「浏览」和「其他」：升级后日报、周报各有一套配置，自动生成用它，
+    /// AI 看到的分类跟升级前一样。
+    #[tokio::test]
+    async fn old_category_filter_becomes_the_auto_profile() {
+        let pool = fresh_test_pool().await;
+        let ids: Vec<String> = crate::repo::categories::list(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert!(ids.iter().any(|id| id == "browse"), "{ids:?}");
+        put_raw(&pool, &old_settings(r#"["browse","other"]"#, "zh")).await;
+
+        let s = load(&pool).await.unwrap();
+
+        // 升级前 AI 看得到的：没删的分类，去掉旧列表、隐藏和私密
+        let expected: Vec<String> = ids
+            .into_iter()
+            .filter(|id| !["browse", "other", "hidden", "private"].contains(&id.as_str()))
+            .collect();
+        assert!(expected.iter().any(|id| id == "code"), "{expected:?}");
+        for module in [&s.ai.visibility.daily, &s.ai.visibility.weekly] {
+            assert_eq!(module.profiles.len(), 1, "{module:?}");
+            let id = module
+                .auto_profile
+                .as_deref()
+                .expect("自动生成要用迁移出来的配置");
+            assert_eq!(module.profiles[id].categories, expected);
+        }
+        assert!(
+            s.ai.visibility.chat.profiles.is_empty(),
+            "旧版聊天不读这个列表"
+        );
+    }
+
+    /// 旧列表只排除了「其他」、隐藏、私密或已删的分类：不建配置，用新的默认分类。
+    #[tokio::test]
+    async fn default_category_filter_is_not_migrated() {
+        let pool = fresh_test_pool().await;
+        for old in [
+            r#"["other"]"#,
+            "[]",
+            r#"["hidden","private"]"#,
+            r#"["other","gone"]"#,
+        ] {
+            put_raw(&pool, &old_settings(old, "zh")).await;
+            let s = load(&pool).await.unwrap();
+            assert_eq!(
+                s.ai.visibility,
+                crate::ai::config::Visibility::default(),
+                "{old}"
+            );
+        }
+    }
+
+    /// 迁完写回，旧字段就没了；再启动不会再建一套。
+    #[tokio::test]
+    async fn category_filter_is_migrated_once() {
+        let pool = fresh_test_pool().await;
+        put_raw(&pool, &old_settings(r#"["browse"]"#, "zh")).await;
+
+        let first = load(&pool).await.unwrap();
+        assert!(!raw_json(&pool).await.contains("excludedCategories"));
+        let second = load(&pool).await.unwrap();
+        assert_eq!(second.ai.visibility, first.ai.visibility);
+    }
+
+    /// 迁移出来的配置按 AI 总结的语言起名。
+    #[tokio::test]
+    async fn migrated_profile_is_named_in_the_prompt_language() {
+        let pool = fresh_test_pool().await;
+        for (lang, name) in [("zh", "原设置"), ("en", "Previous"), ("fr", "Previous")] {
+            put_raw(&pool, &old_settings(r#"["browse"]"#, lang)).await;
+            let s = load(&pool).await.unwrap();
+            let names: Vec<&str> =
+                s.ai.visibility
+                    .daily
+                    .profiles
+                    .values()
+                    .map(|p| p.name.as_str())
+                    .collect();
+            assert_eq!(names, [name], "{lang}");
         }
     }
 }
