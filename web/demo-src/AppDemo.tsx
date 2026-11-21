@@ -44,7 +44,6 @@ const ChatPage = routeChunks.chat.Component;
 const HistoryPage = routeChunks.history.Component;
 const HistoryStatsTab = routeChunks.historyStats.Component;
 const SearchPage = routeChunks.search.Component;
-const DebugTab = routeChunks.aiDebug.Component;
 const AISettingsPage = routeChunks.aiSettings.Component;
 const EngineTab = routeChunks.aiEngine.Component;
 const ModelsTab = routeChunks.aiModels.Component;
@@ -118,7 +117,7 @@ function DemoLayout() {
               <Route path="week" element={<WeeklyTab />} />
               <Route path="month" element={<MonthlyTab />} />
               <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
-              <Route path="debug" element={<DebugTab />} />
+              <Route path="debug" element={<Navigate to={ROUTES.aiSummary} replace />} />
             </Route>
             <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
               <Route index element={<Navigate to="models" replace />} />

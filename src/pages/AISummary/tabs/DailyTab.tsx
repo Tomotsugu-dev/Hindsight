@@ -608,7 +608,7 @@ export default function DailyTab() {
         onConfirm={async () => {
           setConfirmingDelete(false);
           try {
-            await api.clearDaySummary(date, "daily");
+            await api.clearDaySummary(date);
             setRows(new Map());
             clearTopError();
           } catch (e) {

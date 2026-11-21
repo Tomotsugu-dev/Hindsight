@@ -1551,8 +1551,7 @@
     "tabs": {
       "daily": "Daily",
       "week": "Weekly",
-      "month": "Monthly",
-      "debug": "Debug"
+      "month": "Monthly"
     },
     "model": {
       "title": "Model and thinking",
@@ -1772,98 +1771,6 @@
       },
       "ocrLoading": "Loading OCR model…",
       "ocrRunning": "Reading screenshot text {{done}}/{{total}}…"
-    },
-    "debug": {
-      "scope": {
-        "daily": "Daily",
-        "weekly": "Weekly",
-        "monthly": "Monthly"
-      },
-      "dateNav": {
-        "prevDayAria": "Previous day",
-        "nextDayAria": "Next day",
-        "prevWeekAria": "Previous week",
-        "nextWeekAria": "Next week",
-        "prevMonthAria": "Previous month",
-        "nextMonthAria": "Next month",
-        "todayBack": "Back to today",
-        "thisWeekBack": "Back to this week",
-        "thisMonthBack": "Back to this month",
-        "today": "Today",
-        "yesterday": "Yesterday",
-        "thisWeek": "This week",
-        "lastWeek": "Last week",
-        "weekBeforeLast": "2 weeks ago",
-        "weeksAgo": "{{count}} weeks ago",
-        "thisMonth": "This month",
-        "lastMonth": "Last month",
-        "monthsAgo": "{{count}} months ago"
-      },
-      "actions": {
-        "stop": "Stop",
-        "start": "Regenerate",
-        "startInfo": "Regenerate segment summaries for this day.",
-        "startInfoAria": "Regenerate scope info",
-        "clearSummaries": "Delete",
-        "clearSummariesTooltip": "Clear all segment summaries for this day (cannot be undone).",
-        "clearSummariesConfirm": "Delete all segment summaries for {{date}}? This cannot be undone.",
-        "clearSummariesConfirmTitle": "Delete all segment summaries for {{date}}?",
-        "clearSummariesConfirmMessage": "This cannot be undone.",
-        "exportSummariesMd": "Export Markdown",
-        "exportSummariesMdTooltip": "Export all segment summaries for this day as a Markdown file.",
-        "exportSummariesMdEmptyTooltip": "No segment summaries to export yet.",
-        "exportSaveTitle": "Save as Markdown",
-        "exportSavedAt": "Exported to {{path}}",
-        "exportFailed": "Export failed: {{err}}",
-        "startTooltipPending": "{{type}} debug pending backend implementation.",
-        "startTooltipReady": "Debug mode: re-runs every segment for the day (clears existing results), segment summaries stream live.",
-        "startTooltipNoModel": "Pick a model in AI Settings → Models first."
-      },
-      "errors": {
-        "scopePending": "{{type}} debug pending backend implementation.",
-        "runFailed": "Debug run failed",
-        "noModel": "Pick a model in AI Settings → Models first."
-      },
-      "engineLoading": "Loading model…",
-      "scopePlaceholder": "{{type}} debug pending backend implementation. Switch back to \"Daily\" to debug the daily segment-summary flow.",
-      "segPrompt": {
-        "title": "Segment summary prompt",
-        "description": "Used when summarizing the segment's activity timeline into a segment summary. Changes apply to this window only.",
-        "label": "Prompt"
-      },
-      "segments": {
-        "title": "Segment summary",
-        "empty": "No segment summary yet. Click \"Run\" above to have the model summarize the segment's activity timeline.",
-        "chipTitle": "Segment idx={{idx}}",
-        "skippedFallback": "(no screenshots in this segment)",
-        "skippedNoActivityFallback": "(no activity in this segment)",
-        "emptyFallback": "(empty)"
-      },
-      "events": {
-        "label": "Event stream (rolling 200)",
-        "empty": "No events yet. They will scroll in here once you click Run."
-      },
-      "engineLogs": {
-        "label": "Engine log",
-        "refresh": "Refresh",
-        "refreshing": "Refreshing…",
-        "refreshTooltip": "Fetch recent stderr / stdout from the llama-server child process.",
-        "copy": "Copy",
-        "copied": "Copied",
-        "copyTooltip": "Copy all log lines to the clipboard.",
-        "emptyPrefix": "No log fetched yet. Click \"Refresh\" above to fetch once; content appears only after the engine has run a summary. Look for ",
-        "emptySuffix": " lines to tell whether the GPU is being used."
-      },
-      "engineBar": {
-        "loading": "Loading engine status…",
-        "notInstalled": "Not installed",
-        "port": "Port: ",
-        "version": "llama.cpp version: ",
-        "accel": "Accel: ",
-        "state": "State: ",
-        "error": "Error: ",
-        "accelTitle": "Binary variant ID: {{id}}"
-      }
     }
   },
   "chat": {

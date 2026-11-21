@@ -1546,8 +1546,7 @@
     "tabs": {
       "daily": "日次",
       "week": "週次",
-      "month": "月次",
-      "debug": "デバッグ"
+      "month": "月次"
     },
     "model": {
       "title": "モデルと思考モード",
@@ -1767,98 +1766,6 @@
       },
       "ocrLoading": "OCR モデルを読み込み中…",
       "ocrRunning": "スクリーンショットの文字を認識中 {{done}}/{{total}}…"
-    },
-    "debug": {
-      "scope": {
-        "daily": "日次",
-        "weekly": "週次",
-        "monthly": "月次"
-      },
-      "dateNav": {
-        "prevDayAria": "前の日",
-        "nextDayAria": "次の日",
-        "prevWeekAria": "前の週",
-        "nextWeekAria": "次の週",
-        "prevMonthAria": "前の月",
-        "nextMonthAria": "次の月",
-        "todayBack": "今日に戻る",
-        "thisWeekBack": "今週に戻る",
-        "thisMonthBack": "今月に戻る",
-        "today": "今日",
-        "yesterday": "昨日",
-        "thisWeek": "今週",
-        "lastWeek": "先週",
-        "weekBeforeLast": "先々週",
-        "weeksAgo": "{{count}} 週間前",
-        "thisMonth": "今月",
-        "lastMonth": "先月",
-        "monthsAgo": "{{count}} か月前"
-      },
-      "actions": {
-        "stop": "停止",
-        "start": "再生成",
-        "startInfo": "この日の時間帯サマリーを再生成します。",
-        "startInfoAria": "再生成範囲の説明",
-        "clearSummaries": "削除",
-        "clearSummariesTooltip": "この日のすべての時間帯サマリーを消去します（取り消し不可）。",
-        "clearSummariesConfirm": "{{date}} のすべての時間帯サマリーを削除しますか? この操作は取り消せません。",
-        "clearSummariesConfirmTitle": "{{date}} のすべての時間帯サマリーを削除しますか?",
-        "clearSummariesConfirmMessage": "この操作は取り消せません。",
-        "exportSummariesMd": "Markdown 出力",
-        "exportSummariesMdTooltip": "この日のすべての時間帯サマリーを Markdown ファイルとしてエクスポート。",
-        "exportSummariesMdEmptyTooltip": "エクスポートできる時間帯サマリーがまだありません。",
-        "exportSaveTitle": "Markdown として保存",
-        "exportSavedAt": "{{path}} にエクスポートしました",
-        "exportFailed": "エクスポート失敗：{{err}}",
-        "startTooltipPending": "{{type}}デバッグはバックエンド実装待ちです。",
-        "startTooltipReady": "デバッグモード：1 日の全時間帯を実行（既存結果を消去して再実行）、時間帯の要約をリアルタイム表示。",
-        "startTooltipNoModel": "先に AI 設定 → モデル でモデルを選んでください。"
-      },
-      "errors": {
-        "scopePending": "{{type}}デバッグはバックエンド実装待ちです。",
-        "runFailed": "デバッグ実行に失敗しました",
-        "noModel": "先に AI 設定 → モデル でモデルを選んでください。"
-      },
-      "engineLoading": "モデルを読み込み中…",
-      "scopePlaceholder": "{{type}}デバッグはバックエンド実装待ちです。「日次」に戻すと、日次サマリーの生成フローをデバッグできます。",
-      "segPrompt": {
-        "title": "時間帯要約プロンプト",
-        "description": "時間帯のアクティビティを要約に集約する際に使用。変更は本ウィンドウのみ反映されます。",
-        "label": "プロンプト"
-      },
-      "segments": {
-        "title": "時間帯の要約",
-        "empty": "まだ時間帯の要約がありません。上の「実行」をクリックすると、モデルが時間帯内のアクティビティを要約します。",
-        "chipTitle": "区間 idx={{idx}}",
-        "skippedFallback": "（この時間帯にはスクリーンショットなし）",
-        "skippedNoActivityFallback": "（この時間帯には何も記録されていません）",
-        "emptyFallback": "（空）"
-      },
-      "events": {
-        "label": "イベントストリーム（rolling 200 件）",
-        "empty": "イベントはまだありません。実行をクリックすると、ここにスクロール表示されます。"
-      },
-      "engineLogs": {
-        "label": "エンジンログ",
-        "refresh": "更新",
-        "refreshing": "更新中…",
-        "refreshTooltip": "llama-server 子プロセスの最新の stderr / stdout を取得。",
-        "copy": "コピー",
-        "copied": "コピー済み",
-        "copyTooltip": "全ログをクリップボードにコピー。",
-        "emptyPrefix": "まだログを取得していません。上の「更新」を押して取得してください。エンジンがサマリーを実行した後に内容が表示されます。",
-        "emptySuffix": " のような行で GPU が使われているかを判断できます。"
-      },
-      "engineBar": {
-        "loading": "エンジン状態を読み込み中…",
-        "notInstalled": "未インストール",
-        "port": "ポート：",
-        "version": "llama.cpp バージョン：",
-        "accel": "アクセラレーション：",
-        "state": "状態：",
-        "error": "エラー：",
-        "accelTitle": "バイナリバリアント ID: {{id}}"
-      }
     }
   },
   "chat": {

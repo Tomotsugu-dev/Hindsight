@@ -1551,8 +1551,7 @@
     "tabs": {
       "daily": "Diario",
       "week": "Semanal",
-      "month": "Mensual",
-      "debug": "Depuración"
+      "month": "Mensual"
     },
     "model": {
       "title": "Modelo y razonamiento",
@@ -1772,98 +1771,6 @@
       },
       "ocrLoading": "Cargando el modelo de OCR…",
       "ocrRunning": "Leyendo el texto de las capturas {{done}}/{{total}}…"
-    },
-    "debug": {
-      "scope": {
-        "daily": "Diario",
-        "weekly": "Semanal",
-        "monthly": "Mensual"
-      },
-      "dateNav": {
-        "prevDayAria": "Día anterior",
-        "nextDayAria": "Día siguiente",
-        "prevWeekAria": "Semana anterior",
-        "nextWeekAria": "Semana siguiente",
-        "prevMonthAria": "Mes anterior",
-        "nextMonthAria": "Mes siguiente",
-        "todayBack": "Volver a hoy",
-        "thisWeekBack": "Volver a esta semana",
-        "thisMonthBack": "Volver a este mes",
-        "today": "Hoy",
-        "yesterday": "Ayer",
-        "thisWeek": "Esta semana",
-        "lastWeek": "Semana pasada",
-        "weekBeforeLast": "Hace 2 semanas",
-        "weeksAgo": "Hace {{count}} semanas",
-        "thisMonth": "Este mes",
-        "lastMonth": "Mes pasado",
-        "monthsAgo": "Hace {{count}} meses"
-      },
-      "actions": {
-        "stop": "Detener",
-        "start": "Regenerar",
-        "startInfo": "Regenerar los resúmenes por tramos de este día.",
-        "startInfoAria": "Información sobre el alcance de la regeneración",
-        "clearSummaries": "Eliminar",
-        "clearSummariesTooltip": "Borrar todos los resúmenes por tramos de este día (no se puede deshacer).",
-        "clearSummariesConfirm": "¿Eliminar todos los resúmenes por tramos del {{date}}? Esto no se puede deshacer.",
-        "clearSummariesConfirmTitle": "¿Eliminar todos los resúmenes por tramos del {{date}}?",
-        "clearSummariesConfirmMessage": "Esto no se puede deshacer.",
-        "exportSummariesMd": "Exportar Markdown",
-        "exportSummariesMdTooltip": "Exportar como archivo Markdown todos los resúmenes por tramos de este día.",
-        "exportSummariesMdEmptyTooltip": "Aún no hay resúmenes por tramos que exportar.",
-        "exportSaveTitle": "Guardar como Markdown",
-        "exportSavedAt": "Exportado a {{path}}",
-        "exportFailed": "Falló la exportación: {{err}}",
-        "startTooltipPending": "La depuración de {{type}} está pendiente de implementar en el backend.",
-        "startTooltipReady": "Modo de depuración: vuelve a ejecutar cada tramo del día (borra los resultados existentes) y transmite los resúmenes en vivo.",
-        "startTooltipNoModel": "Elige primero un modelo en Ajustes de IA → Modelos."
-      },
-      "errors": {
-        "scopePending": "La depuración de {{type}} está pendiente de implementar en el backend.",
-        "runFailed": "Falló la ejecución de depuración",
-        "noModel": "Elige primero un modelo en Ajustes de IA → Modelos."
-      },
-      "engineLoading": "Cargando el modelo…",
-      "scopePlaceholder": "La depuración de {{type}} está pendiente de implementar en el backend. Vuelve a «Diario» para depurar el flujo de resumen por tramos.",
-      "segPrompt": {
-        "title": "Prompt del resumen por tramos",
-        "description": "Se usa al resumir la línea de tiempo de actividad del tramo. Los cambios solo se aplican a esta ventana.",
-        "label": "Prompt"
-      },
-      "segments": {
-        "title": "Resumen del tramo",
-        "empty": "Aún no hay resúmenes por tramos. Pulsa «Ejecutar» arriba para que el modelo resuma la línea de tiempo de actividad del tramo.",
-        "chipTitle": "Tramo idx={{idx}}",
-        "skippedFallback": "(ninguna captura de pantalla en este tramo)",
-        "skippedNoActivityFallback": "(ninguna actividad en este tramo)",
-        "emptyFallback": "(vacío)"
-      },
-      "events": {
-        "label": "Flujo de eventos (últimos 200)",
-        "empty": "Aún no hay eventos. Aparecerán aquí en cuanto pulses Ejecutar."
-      },
-      "engineLogs": {
-        "label": "Registro del motor",
-        "refresh": "Actualizar",
-        "refreshing": "Actualizando…",
-        "refreshTooltip": "Obtener el stderr / stdout reciente del proceso hijo llama-server.",
-        "copy": "Copiar",
-        "copied": "Copiado",
-        "copyTooltip": "Copiar todas las líneas del registro al portapapeles.",
-        "emptyPrefix": "Aún no se ha obtenido ningún registro. Pulsa «Actualizar» arriba para obtenerlo una vez; el contenido solo aparece después de que el motor haya generado un resumen. Busca líneas ",
-        "emptySuffix": " para saber si se está usando la GPU."
-      },
-      "engineBar": {
-        "loading": "Cargando el estado del motor…",
-        "notInstalled": "No instalado",
-        "port": "Puerto: ",
-        "version": "Versión de llama.cpp: ",
-        "accel": "Aceleración: ",
-        "state": "Estado: ",
-        "error": "Error: ",
-        "accelTitle": "ID de la variante del binario: {{id}}"
-      }
     }
   },
   "chat": {

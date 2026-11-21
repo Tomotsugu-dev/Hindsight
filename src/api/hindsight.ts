@@ -416,7 +416,7 @@ export type SummaryPhase =
   | "error";
 
 export interface SummaryProgress {
-  /** "daily" / "debug"——前端两个 tab 各 listen 自己 source 的事件，避免串台 */
+  /** "daily" / "weekly"——日报、周报各 listen 自己 source 的事件，避免串台 */
   source: string;
   date: string;
   phase: SummaryPhase;
@@ -434,29 +434,6 @@ export interface SummaryProgress {
   message: string | null;
 }
 
-/** 单次 generate 调用对 settings.ai 的局部覆盖（不写 settings 全局）。
- *  调试 tab 用：跑总结时传这个 patch，跑完不留痕。 */
-export interface AiOverrides {
-  /** 段总结的 system prompt 文本覆盖（按当前 promptLanguage 生效） */
-  systemPrompt?: string;
-  /** llama-server `--batch-size` / `--ubatch-size`（取一致值）。
-   *  双套参数语义：旧字段是 fallback——`summary*` 未设时降级使用。 */
-  batchSize?: number;
-  /** llama-server `-np`（并行槽位数）。详见 [batchSize] 关于 fallback 语义。 */
-  parallelSlots?: number;
-  /** 每个 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
-  ctxSize?: number;
-  /** 段总结阶段的 batch；`undefined` = fallback 到 [batchSize]。 */
-  summaryBatchSize?: number;
-  /** 段总结阶段的 `-np`（推荐恒为 1）；`undefined` = fallback 到 [parallelSlots]。 */
-  summaryParallelSlots?: number;
-  /** 段总结阶段的每槽 ctx；`undefined` = fallback 到 [ctxSize]。 */
-  summaryCtxSize?: number;
-  /** 本次跑段总结走云端 (true) 还是本地 (false)。`undefined` = 沿用 settings.ai.externalEnabled。
-   *  endpoint / model / apiKey 永远沿用 settings 全局值——这里只控制路径选择。 */
-  externalEnabled?: boolean;
-}
-
 /** 段总结落库状态。
  *  - `ok`：含总结模型写的 markdown 正文
  *  - `skipped_no_screenshots`：该段无截图（旧值，保留兼容；新生成的段不会再写此值）
@@ -470,7 +447,7 @@ export type SummarySegmentStatus =
 
 /** ai_summaries 表的一行，前端拿来渲染 SegmentSummaryCard。 */
 export interface SegmentSummaryRow {
-  /** "daily"（DailyTab 写读）/ "debug"（DebugTab 写读）；PK 含 source */
+  /** "daily"（日报）/ "weekly"（周报）；PK 含 source */
   source: string;
   localDate: string;
   segmentIdx: number;
@@ -1040,9 +1017,6 @@ export const api = {
   downloadOcrRuntime: (force = false) => invoke<void>("download_ocr_runtime", { force }),
   deleteOcrRuntime: () => invoke<void>("delete_ocr_runtime"),
   openEngineDir: () => invoke<void>("open_engine_dir"),
-  /** 拿 llama-server 子进程最近 stderr/stdout（最多 500 行）。调试 tab 用，
-   *  看 GPU 加载日志。每次启动会清空 ring，所以拿到的是"本次启动以来"。 */
-  getEngineLogs: () => invoke<string[]>("get_engine_logs"),
   /** 启动 llama-server 子进程；返回监听端口。
    *  Phase 1B-α 不传模型，会因为缺模型 fail；Phase 1B-β 起会真传值。 */
   startEngine: () => invoke<number>("start_engine"),
@@ -1094,23 +1068,17 @@ export const api = {
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；
-   *  overrides 是调试 tab 用的局部参数覆盖，传 null = 走 settings.ai 全局值。
    *  profile 是用户选的配置 id，null = 按默认分类；配置不存在时报 `[AI_PROFILE_GONE]`。 */
   generateDaySummary: (
     date: string,
     forceRefresh: boolean,
     deviceId: string | null,
-    overrides: AiOverrides | null = null,
-    /** "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据 */
-    source: string = "daily",
     profile: string | null = null,
   ) =>
     invoke<void>("generate_day_summary", {
       date,
       forceRefresh,
       deviceId,
-      overrides,
-      source,
       profile,
     }),
   /** 单段重试——只重跑指定一段，复用已在跑的 server。 */
@@ -1118,24 +1086,19 @@ export const api = {
     date: string,
     segmentIdx: number,
     deviceId: string | null,
-    overrides: AiOverrides | null = null,
-    source: string = "daily",
     profile: string | null = null,
   ) =>
     invoke<void>("retry_summary_segment", {
       date,
       segmentIdx,
       deviceId,
-      overrides,
-      source,
       profile,
     }),
   /** 设取消标记——下一段循环开头会感知到然后早 return。
    *  已经在路上的单段 LLM 请求**不会**被中断（一段 30-180s 必须跑完）。 */
   cancelDaySummary: () => invoke<void>("cancel_day_summary"),
   /** 拉某天已落库的总结。前端进页面调一次：有就直接渲染，没有就显示"开始总结"按钮。 */
-  getDaySummary: (date: string, source: string = "daily") =>
-    invoke<SegmentSummaryRow[]>("get_day_summary", { date, source }),
+  getDaySummary: (date: string) => invoke<SegmentSummaryRow[]>("get_day_summary", { date }),
   /** 用用户自己写的文字替换一段总结，返回改好的行（status 变 ok，generatedAt 更新）。
    *  周报传 source="weekly"、date=周一、segmentIdx=0。重新生成会覆盖这次修改。 */
   editSummarySegment: (source: string, date: string, segmentIdx: number, content: string) =>
@@ -1171,13 +1134,9 @@ export const api = {
     invoke<SegmentSummaryRow | null>("get_week_summary", { weekStart }),
   /** 删除某周已生成的周报行。weekStart 不是周一时自动对齐。 */
   clearWeekSummary: (weekStart: string) => invoke<void>("clear_week_summary", { weekStart }),
-  /** 清当天所有 AI 段总结。调试 tab 的「删除」按钮调，
+  /** 清当天所有 AI 段总结。日报的「删除」按钮调，
    *  给用户在不重跑的情况下手动清历史。 */
-  clearDaySummary: (date: string, source: string = "daily") =>
-    invoke<void>("clear_day_summary", { date, source }),
-  /** 只删当天段总结。调试 tab「段总结结果」Section 删除按钮用。 */
-  clearDaySegmentSummaries: (date: string, source: string = "daily") =>
-    invoke<void>("clear_day_segment_summaries", { date, source }),
+  clearDaySummary: (date: string) => invoke<void>("clear_day_summary", { date }),
   /** Chat 问答：后端 agent 循环（工具查询 + LLM 归纳）跑完一次性返回。
    *  可能长达数十秒，调用方自己管 loading 态。历史由后端从库里读；
    *  conversationId 传 null = 新会话（后端隐式创建并返回 id）；

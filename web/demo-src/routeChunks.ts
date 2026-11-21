@@ -39,7 +39,6 @@ export const routeChunks = {
   aiDaily: createPreloadable(() => import("@app/pages/AISummary/tabs/DailyTab")),
   aiWeekly: createPreloadable(() => import("@app/pages/AISummary/tabs/WeeklyTab")),
   aiMonthly: createPreloadable(() => import("@app/pages/AISummary/tabs/MonthlyTab")),
-  aiDebug: createPreloadable(() => import("@app/pages/AISummary/tabs/DebugTab")),
   aiSettings: createPreloadable(() => import("@app/pages/AISettings/AISettingsPage")),
   aiModels: createPreloadable(() => import("@app/pages/AISettings/tabs/ModelsTab")),
   aiGeneral: createPreloadable(() => import("@app/pages/AISettings/tabs/GeneralTab")),
@@ -90,8 +89,6 @@ export function chunkKeysForPath(to: string): RouteChunkKey[] {
       return ["aiSummary", "aiWeekly"];
     case `${ROUTES.aiSummary}/month`:
       return ["aiSummary", "aiMonthly"];
-    case `${ROUTES.aiSummary}/debug`:
-      return ["aiSummary", "aiDebug"];
     case ROUTES.aiSettings:
     case `${ROUTES.aiSettings}/models`:
       return ["aiSettings", "aiModels"];
