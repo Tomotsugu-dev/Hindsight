@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use super::{Advanced, AiConfig, CloudConnection, DaySegment, ModelRef, Pick};
+use super::{Advanced, AiConfig, CloudConnection, DaySegment, ModelRef, Pick, Task};
 
 pub(super) const MAX_CLOUD_CONNECTIONS: usize = 10;
 const MAX_AUTO_SUMMARY_TIMES: usize = 6;
@@ -14,8 +14,9 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
     next.user_brief = next.user_brief.trim().to_string();
     next.models_path = next.models_path.trim().to_string();
 
-    // Cloud connections: trim fields, validate dialect, drop entries missing id or endpoint,
-    // deduplicate by id (keep first), cap at MAX_CLOUD_CONNECTIONS.
+    // 云端连接：去掉首尾空白，方言不认识的改成 custom，没有 id 的和 id 重复的丢掉
+    // （重复的留第一条），最多留 MAX_CLOUD_CONNECTIONS 条。地址为空的留着：
+    // 设置页边输边存，用户删空地址准备重输时，连接和指向它的选择不能跟着没了。
     let mut seen_ids: HashSet<String> = HashSet::new();
     let mut cloud: Vec<CloudConnection> = Vec::new();
     for mut c in next.cloud {
@@ -26,7 +27,7 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         c.model = c.model.trim().to_string();
         c.api_key = c.api_key.trim().to_string();
         c.context_length = c.context_length.map(|n| n.clamp(512, 2_000_000));
-        if c.id.is_empty() || c.endpoint.is_empty() || !seen_ids.insert(c.id.clone()) {
+        if c.id.is_empty() || !seen_ids.insert(c.id.clone()) {
             continue;
         }
         cloud.push(c);
@@ -74,6 +75,12 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         };
         a.model = model;
         match a.model {
+            // 聊天起引擎只用上下文，批大小和并发路数存了也不生效
+            ModelRef::Local { .. } if a.task == Task::Chat => {
+                a.batch_size = None;
+                a.parallel_slots = None;
+                a.ctx_size = a.ctx_size.map(|c| c.clamp(512, 262_144));
+            }
             ModelRef::Local { .. } => {
                 a.batch_size = a.batch_size.map(|b| b.clamp(32, 32_768));
                 a.parallel_slots = a.parallel_slots.map(|n| n.clamp(1, 32));
@@ -228,21 +235,59 @@ mod tests {
             conn("c3", "unknown-vendor", "https://custom.example.com/v1"),
         ];
         let out = sanitize(cfg, &old).cloud;
-        assert_eq!(out.len(), 2);
+        assert_eq!(out.len(), 3);
         assert_eq!(out[0].id, "c1");
         assert_eq!(out[0].name, "n- c1");
         assert_eq!(out[0].dialect, "deepseek");
         assert_eq!(out[0].endpoint, "https://api.deepseek.com/v1");
         assert_eq!(out[0].model, "gpt-4o-mini");
         assert_eq!(out[0].api_key, "sk-1");
-        assert_eq!(out[1].id, "c3");
-        assert_eq!(out[1].dialect, "custom");
+        assert_eq!(out[1].id, "c2");
+        assert_eq!(out[1].endpoint, "");
+        assert_eq!(out[2].id, "c3");
+        assert_eq!(out[2].dialect, "custom");
 
         let mut many = base();
         many.cloud = (0..12)
             .map(|i| conn(&format!("c{i}"), "openai", &format!("https://e{i}")))
             .collect();
         assert_eq!(sanitize(many, &old).cloud.len(), MAX_CLOUD_CONNECTIONS);
+    }
+
+    /// 设置页每次输入都会自动保存。用户把已存连接的地址删空、准备重输时，
+    /// 连接和指向它的选择都要留着，否则列表里这条连接会突然消失。
+    #[test]
+    fn sanitize_keeps_connection_and_its_picks_while_endpoint_is_blank() {
+        let mut cfg = base();
+        cfg.cloud = vec![conn("c1", "openai", "")];
+        let pick = ModelRef::Cloud {
+            connection: "c1".into(),
+        };
+        cfg.picks.daily = Some(pick.clone());
+        cfg.picks.weekly = Pick::Cloud {
+            connection: "c1".into(),
+        };
+        cfg.advanced = vec![Advanced {
+            task: Task::Daily,
+            model: pick.clone(),
+            reasoning: Some(ReasoningLevel::High),
+            ctx_size: None,
+            parallel_slots: None,
+            batch_size: None,
+        }];
+
+        let out = sanitize(cfg, &base());
+        assert_eq!(out.cloud.len(), 1);
+        assert_eq!(out.cloud[0].endpoint, "");
+        assert!(!out.cloud[0].is_ready(), "地址为空的连接不能用");
+        assert_eq!(out.picks.daily, Some(pick.clone()));
+        assert_eq!(
+            out.picks.weekly,
+            Pick::Cloud {
+                connection: "c1".into()
+            }
+        );
+        assert_eq!(out.advanced.len(), 1);
     }
 
     #[test]
@@ -382,11 +427,55 @@ mod tests {
                     model: local("c.gguf"),
                     reasoning: None,
                     ctx_size: Some(512),
-                    parallel_slots: Some(1),
-                    batch_size: Some(32),
+                    parallel_slots: None,
+                    batch_size: None,
                 },
             ]
         );
+    }
+
+    /// 聊天起引擎时不用批大小和并发路数，存下来也不生效，所以保存时清掉。
+    /// 只剩这两项的聊天设置整项删掉。
+    #[test]
+    fn sanitize_drops_batch_and_slots_for_chat() {
+        let local = |f: &str| ModelRef::Local { file: f.into() };
+        let mut cfg = base();
+        cfg.advanced = vec![
+            Advanced {
+                task: Task::Chat,
+                model: local("c.gguf"),
+                reasoning: None,
+                ctx_size: Some(16_384),
+                parallel_slots: Some(4),
+                batch_size: Some(2048),
+            },
+            Advanced {
+                task: Task::Chat,
+                model: local("only-engine.gguf"),
+                reasoning: None,
+                ctx_size: None,
+                parallel_slots: Some(2),
+                batch_size: Some(512),
+            },
+            Advanced {
+                task: Task::Daily,
+                model: local("c.gguf"),
+                reasoning: None,
+                ctx_size: None,
+                parallel_slots: Some(2),
+                batch_size: Some(512),
+            },
+        ];
+
+        let out = sanitize(cfg, &base()).advanced;
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].task, Task::Chat);
+        assert_eq!(out[0].ctx_size, Some(16_384));
+        assert_eq!(out[0].parallel_slots, None);
+        assert_eq!(out[0].batch_size, None);
+        assert_eq!(out[1].task, Task::Daily, "日报照常保留这两项");
+        assert_eq!(out[1].parallel_slots, Some(2));
+        assert_eq!(out[1].batch_size, Some(512));
     }
 
     #[test]

@@ -107,11 +107,14 @@ export default function EngineTab() {
     );
   }, [localTarget, hwSnapshot]);
 
+  // 聊天起引擎只用上下文；批大小和并发路数后端保存时会清掉，这里也不显示
+  const ctxOnly = localTarget?.task === "chat";
+
   const summaryApplied =
     recommendSummary != null &&
     isRecommendedApplied(recommendSummary, {
-      batchSize: summaryBatch,
-      parallelSlots: summarySlots,
+      batchSize: ctxOnly ? recommendSummary.batchSize : summaryBatch,
+      parallelSlots: ctxOnly ? recommendSummary.parallelSlots : summarySlots,
       ctxSize: summaryCtx,
     });
 
@@ -128,11 +131,15 @@ export default function EngineTab() {
 
   const handleApplySummary = () => {
     if (!recommendSummary) return;
-    updateEngineParam({
-      batchSize: recommendSummary.batchSize,
-      parallelSlots: recommendSummary.parallelSlots,
-      ctxSize: recommendSummary.ctxSize,
-    });
+    updateEngineParam(
+      ctxOnly
+        ? { ctxSize: recommendSummary.ctxSize }
+        : {
+            batchSize: recommendSummary.batchSize,
+            parallelSlots: recommendSummary.parallelSlots,
+            ctxSize: recommendSummary.ctxSize,
+          },
+    );
   };
 
   if (!ai) return null;
@@ -151,20 +158,26 @@ export default function EngineTab() {
 
       {localTarget && (
         <Section title={t("aiSettings.summaryParams.sectionTitle")} icon={Pilcrow}>
-          <Row label={t("aiSettings.engineParams.batch")}>
-            <SimplePicker<EngineBatchKey>
-              value={engineBatchToOption(summaryBatch)}
-              options={ENGINE_BATCH_OPTIONS}
-              onChange={(next) => updateEngineParam({ batchSize: engineOptionToBatch(next) })}
-            />
-          </Row>
-          <Row label={t("aiSettings.engineParams.slots")}>
-            <SimplePicker<EngineSlotsKey>
-              value={engineSlotsToOption(summarySlots)}
-              options={ENGINE_SLOTS_OPTIONS}
-              onChange={(next) => updateEngineParam({ parallelSlots: engineOptionToSlots(next) })}
-            />
-          </Row>
+          {!ctxOnly && (
+            <>
+              <Row label={t("aiSettings.engineParams.batch")}>
+                <SimplePicker<EngineBatchKey>
+                  value={engineBatchToOption(summaryBatch)}
+                  options={ENGINE_BATCH_OPTIONS}
+                  onChange={(next) => updateEngineParam({ batchSize: engineOptionToBatch(next) })}
+                />
+              </Row>
+              <Row label={t("aiSettings.engineParams.slots")}>
+                <SimplePicker<EngineSlotsKey>
+                  value={engineSlotsToOption(summarySlots)}
+                  options={ENGINE_SLOTS_OPTIONS}
+                  onChange={(next) =>
+                    updateEngineParam({ parallelSlots: engineOptionToSlots(next) })
+                  }
+                />
+              </Row>
+            </>
+          )}
           <Row label={t("aiSettings.engineParams.ctx")}>
             <SimplePicker<EngineCtxKey>
               value={engineCtxToOption(summaryCtx)}
