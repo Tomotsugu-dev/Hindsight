@@ -1091,7 +1091,7 @@ mod tests {
             .is_empty());
     }
 
-    /// force_refresh 清某天日报时误伤 debug 沙盒或相邻日期会让用户丢历史报告——
+    /// force_refresh 清某天日报时误伤别的 source 或相邻日期会让用户丢历史报告——
     /// DELETE 少写一个 WHERE 条件就是这个后果。
     #[tokio::test]
     async fn clear_day_spares_other_source_and_date() {
@@ -1102,7 +1102,7 @@ mod tests {
         upsert_skipped_no_activity(&pool, "daily", "2026-05-16", 0, "上午", 9, 12, "m".into())
             .await
             .unwrap();
-        upsert_skipped_no_activity(&pool, "debug", "2026-05-15", 0, "上午", 9, 12, "m".into())
+        upsert_skipped_no_activity(&pool, "weekly", "2026-05-15", 0, "上午", 9, 12, "m".into())
             .await
             .unwrap();
 
@@ -1126,12 +1126,12 @@ mod tests {
             "相邻日期不应误伤"
         );
         assert_eq!(
-            ai_summaries::get_day(&pool, "debug", "2026-05-15")
+            ai_summaries::get_day(&pool, "weekly", "2026-05-15")
                 .await
                 .unwrap()
                 .len(),
             1,
-            "debug 沙盒不应误伤"
+            "别的 source 不应误伤"
         );
     }
 
@@ -1290,7 +1290,7 @@ mod tests {
             &step2,
             &supervisor,
             &ai,
-            "debug",
+            "daily",
             "2026-05-15",
             "上午",
             9,
@@ -1312,7 +1312,7 @@ mod tests {
         );
         assert!(row.error.is_none());
 
-        let rows = ai_summaries::get_day(&pool, "debug", "2026-05-15")
+        let rows = ai_summaries::get_day(&pool, "daily", "2026-05-15")
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "ok 行必须已落库: {rows:?}");

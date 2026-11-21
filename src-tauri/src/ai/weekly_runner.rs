@@ -407,7 +407,7 @@ impl WeekSummaryRunner {
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
                 // 校验装的确实是 summary 模型 **且启动参数一致** 才复用——不校验的话，
-                // 2 分钟前调试跑留下的 vision 模型（小 ctx），或模型相同但按默认 8K ctx
+                // 2 分钟前日报留下的 vision 模型（小 ctx），或模型相同但按默认 8K ctx
                 // 手动启动的引擎，会被直接拿来生成周报：整周日报塞不下，
                 // 输出截断或直接报错。不符则重启换模。复用前 touch 防 idle 猝杀。
                 if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())

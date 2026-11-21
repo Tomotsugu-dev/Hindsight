@@ -603,7 +603,7 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         valid_segments
     };
 
-    // 引擎启动级参数 clamp（跟 AiOverrides 一致）：
+    // 引擎启动级参数 clamp：
     // batch ≥ 32 是 llama-server 不接受过小值的安全下限
     // ctx 上限给 256K（极限场景，超出基本任何卡都装不下，没必要再大）
     // parallel_slots ≥ 1，给 32 上限避免误填出格的值

@@ -25,13 +25,15 @@ use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
     build_activity_timeline, build_step2, summarize_segment, upsert_skipped_no_activity,
 };
-use crate::ai::summary_overrides::AiOverrides;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, list_segment_top_apps};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
+
+/// 日报在 ai_summaries 里的 `source`。
+pub const DAILY_SOURCE: &str = "daily";
 
 /// 进度事件出口的最小抽象。生产代码里就是 [`AppHandle`]（emit 给前端）；
 /// 抽成 trait 是为了让编排逻辑能脱离 Tauri 运行时做单元测试——`tauri` 依赖
@@ -83,48 +85,23 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     /// 跑某一天的全部段。
     ///
     /// `force_refresh = true` 会先清空当天 ai_summaries 行，否则已有 ok 段直接复用。
-    /// `source` = "daily" / "debug" — DailyTab 跟 DebugTab 写各自命名空间互不污染。
     /// `profile` 决定 AI 能看到哪些活动。
     pub async fn run(
         &self,
-        source: &str,
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
-        overrides: Option<AiOverrides>,
         profile: &ProfileChoice,
     ) -> Result<()> {
-        // needs_restart：debug 路径（AiOverrides 显式带了 engine 覆盖）下才触发
-        // 「跑前 stop+start with overrides，跑后再 stop」；daily 路径靠 settings.ai
-        // 的 engine 字段，引擎按需 lazy spawn 不主动重启
-        let needs_restart = overrides
-            .as_ref()
-            .map(|o| o.needs_engine_restart())
-            .unwrap_or(false);
-
         let result = self
-            .run_inner(
-                source,
-                local_date,
-                device,
-                force_refresh,
-                overrides,
-                profile,
-                needs_restart,
-            )
+            .run_inner(DAILY_SOURCE, local_date, device, force_refresh, profile)
             .await;
-
-        // 调试用 override 跑完无条件 stop 引擎——保证下次正常日报跑会以默认参数
-        // lazy start，不让调试值污染后续会话
-        if needs_restart {
-            let _ = self.supervisor.stop().await;
-        }
 
         // 停止按钮中断在途请求 / 引擎加载时从深处抛 SummaryCancelled——不是失败，
         // 这里统一优雅收尾：emit cancelled 让前端复位，命令返回 Ok
         if matches!(result, Err(Error::SummaryCancelled)) {
             let p = SummaryProgress::base(
-                source.to_string(),
+                DAILY_SOURCE.to_string(),
                 local_date.format("%Y-%m-%d").to_string(),
                 "cancelled",
                 0,
@@ -150,23 +127,15 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn run_inner(
         &self,
         source: &str,
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
-        overrides: Option<AiOverrides>,
         profile: &ProfileChoice,
-        needs_restart: bool,
     ) -> Result<()> {
-        let cfg = settings_repo::load(&self.pool).await?;
-        // overrides 只对本次调用生效，不写回 settings
-        let ai = match overrides {
-            Some(o) => o.with_overrides(cfg.ai.clone()),
-            None => cfg.ai.clone(),
-        };
+        let ai = settings_repo::load(&self.pool).await?.ai;
 
         if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
             return Err(Error::InvalidInput(
@@ -187,11 +156,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         // force_refresh 在下面退化为"不复用已 ok 的段",语义不变。
 
         let total_segments = ai.segments.len() as u32;
-
-        // 调试 override 触发的强制重启：先 stop 把现役 llama-server 收掉
-        if needs_restart {
-            let _ = self.supervisor.stop().await;
-        }
 
         // 单一引擎全程复用：云端不起本地引擎（0 为占位端口，External 分支不使用）
         let summary_overrides = EngineStartOverrides {
@@ -476,51 +440,12 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     /// "重试某段"专用：只跑指定一段，复用现有引擎。
     pub async fn run_one_segment_only(
         &self,
-        source: &str,
         local_date: NaiveDate,
         segment_idx: u32,
         device: DeviceFilter,
-        overrides: Option<AiOverrides>,
         profile: &ProfileChoice,
     ) -> Result<()> {
-        let needs_restart = overrides
-            .as_ref()
-            .map(|o| o.needs_engine_restart())
-            .unwrap_or(false);
-
-        let result = self
-            .run_one_segment_only_inner(
-                source,
-                local_date,
-                segment_idx,
-                device,
-                overrides,
-                profile,
-                needs_restart,
-            )
-            .await;
-        if needs_restart {
-            let _ = self.supervisor.stop().await;
-        }
-        result
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn run_one_segment_only_inner(
-        &self,
-        source: &str,
-        local_date: NaiveDate,
-        segment_idx: u32,
-        device: DeviceFilter,
-        overrides: Option<AiOverrides>,
-        profile: &ProfileChoice,
-        needs_restart: bool,
-    ) -> Result<()> {
-        let cfg = settings_repo::load(&self.pool).await?;
-        let ai = match overrides {
-            Some(o) => o.with_overrides(cfg.ai.clone()),
-            None => cfg.ai.clone(),
-        };
+        let ai = settings_repo::load(&self.pool).await?.ai;
 
         if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
             return Err(Error::InvalidInput(
@@ -542,9 +467,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
 
-        if needs_restart {
-            let _ = self.supervisor.stop().await;
-        }
         let summary_overrides = EngineStartOverrides {
             batch_size: ai.summary_batch_size_effective(),
             parallel_slots: ai.summary_parallel_slots_effective(),
@@ -552,7 +474,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         };
         let port = self
             .ensure_summary_engine(
-                source,
+                DAILY_SOURCE,
                 &date_str,
                 &ai,
                 summary_overrides,
@@ -562,7 +484,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let step2 = build_step2(&ai, Task::Daily, port)?;
 
         self.run_one_segment(
-            source,
+            DAILY_SOURCE,
             &step2,
             &ai,
             &date_str,
@@ -892,11 +814,9 @@ mod tests {
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -986,11 +906,9 @@ mod tests {
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1058,11 +976,9 @@ mod tests {
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(true)));
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1101,11 +1017,9 @@ mod tests {
         let runner = make_runner(&pool, sink, cancel);
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1156,11 +1070,9 @@ mod tests {
         let runner = make_runner(&pool, sink, cancel);
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1207,11 +1119,9 @@ mod tests {
         );
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1225,11 +1135,9 @@ mod tests {
         let runner2 = make_runner(&pool, sink2, Arc::new(AtomicBool::new(false)));
         runner2
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1256,11 +1164,9 @@ mod tests {
         );
         runner3
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 true,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1292,11 +1198,9 @@ mod tests {
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         let r = runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await;
@@ -1358,11 +1262,9 @@ mod tests {
         );
         runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::Only(TEST_SELF_ID.to_string()),
                 false,
-                None,
                 &ProfileChoice::Picked("p_work".to_string()),
             )
             .await
@@ -1411,11 +1313,9 @@ mod tests {
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         runner
             .run_one_segment_only(
-                "daily",
                 date_2026_05_15(),
                 1,
                 DeviceFilter::All,
-                None,
                 &ProfileChoice::Main,
             )
             .await
@@ -1457,11 +1357,9 @@ mod tests {
 
         let r = runner
             .run_one_segment_only(
-                "daily",
                 date_2026_05_15(),
                 5,
                 DeviceFilter::All,
-                None,
                 &ProfileChoice::Main,
             )
             .await;
@@ -1472,11 +1370,9 @@ mod tests {
 
         let r = runner
             .run_one_segment_only(
-                "daily",
                 date_2026_05_15(),
                 1,
                 DeviceFilter::All,
-                None,
                 &ProfileChoice::Main,
             )
             .await;
@@ -1519,11 +1415,9 @@ mod tests {
         let runner = make_runner(&pool, sink, Arc::new(AtomicBool::new(false)));
         let r = runner
             .run(
-                "daily",
                 date_2026_05_15(),
                 DeviceFilter::All,
                 false,
-                None,
                 &ProfileChoice::Main,
             )
             .await;

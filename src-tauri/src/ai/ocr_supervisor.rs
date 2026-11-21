@@ -305,15 +305,6 @@ impl OcrSupervisor {
         }))
     }
 
-    /// worker stderr 环形日志(调试页/错误信息用;暂无 UI 消费方,保留 API)。
-    #[allow(dead_code)]
-    pub fn recent_logs(&self) -> Vec<String> {
-        self.logs
-            .lock()
-            .map(|g| g.iter().cloned().collect())
-            .unwrap_or_default()
-    }
-
     fn stderr_tail(&self) -> String {
         self.logs
             .lock()

@@ -27,7 +27,7 @@ use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentSummaryRow {
-    /// "daily"（日报页写入读取）/ "debug"（调试 tab 写入读取）。
+    /// "daily"（日报）/ "weekly"（周报）。
     /// PK 含 source 让两支独立，互不覆盖、互不擦除。
     pub source: String,
     pub local_date: String,
@@ -44,7 +44,6 @@ pub struct SegmentSummaryRow {
 }
 
 /// 拿某天某 source 下所有段的总结，按 segment_idx 升序。
-/// `source` = "daily" / "debug" — 区分日报正式产物与调试沙盒产物。
 pub async fn get_day(
     pool: &DbPool,
     source: &str,
@@ -174,7 +173,7 @@ pub async fn get_segment_status(
 }
 
 /// 写入或覆盖一段。`generated_at` 自动用当前 UTC 时间填，调用方不用管。
-/// PK = (source, local_date, segment_idx)，所以 daily / debug 互不冲突。
+/// PK = (source, local_date, segment_idx)，所以 daily / weekly 互不冲突。
 pub async fn upsert_segment(pool: &DbPool, row: &SegmentSummaryRow) -> Result<()> {
     let mut row = row.clone();
     if row.generated_at.is_empty() {
@@ -715,7 +714,7 @@ mod tests {
         );
 
         // 别的 source / 别的日子不受影响
-        assert!(!has_error_segment(&pool, "debug", "2026-08-05")
+        assert!(!has_error_segment(&pool, "weekly", "2026-08-05")
             .await
             .unwrap());
         assert!(!has_error_segment(&pool, "daily", "2026-08-06")
@@ -734,7 +733,7 @@ mod tests {
                 .unwrap();
         }
         // 同日别的 source + 同 source 别的日子:都不该被误伤
-        upsert_segment(&pool, &seg("debug", "2026-08-05", 3))
+        upsert_segment(&pool, &seg("weekly", "2026-08-05", 3))
             .await
             .unwrap();
         upsert_segment(&pool, &seg("daily", "2026-08-06", 3))
@@ -753,7 +752,7 @@ mod tests {
             .collect();
         assert_eq!(idxs, vec![0, 1]);
         assert_eq!(
-            get_day(&pool, "debug", "2026-08-05").await.unwrap().len(),
+            get_day(&pool, "weekly", "2026-08-05").await.unwrap().len(),
             1
         );
         assert_eq!(
@@ -817,36 +816,33 @@ mod tests {
         assert_eq!(r1.error, None);
     }
 
-    /// daily / debug / weekly 共用一张表，只靠 PK 里的 source 区分。
-    /// 真实翻车场景：调试 tab 重跑总结把日报页当天数据覆盖掉（v21 迁移就是
-    /// 为修这个）。同 (date, idx) 三支各写一行，互相不覆盖、互相读不到。
+    /// daily / weekly 共用一张表，只靠 PK 里的 source 区分。
+    /// 同 (date, idx) 两支各写一行，互相不覆盖、互相读不到。
     #[tokio::test]
     async fn sources_are_fully_isolated() {
         let pool = fresh_test_pool().await;
         let date = "2026-07-20";
-        for src in ["daily", "debug", "weekly"] {
+        for src in ["daily", "weekly"] {
             upsert_segment(&pool, &seg(src, date, 0)).await.unwrap();
         }
-        // debug 支再覆盖一次自己——不能波及 daily/weekly
-        let mut dbg2 = seg("debug", date, 0);
-        dbg2.content = "debug 第二版".to_string();
-        upsert_segment(&pool, &dbg2).await.unwrap();
+        // weekly 支再覆盖一次自己——不能波及 daily
+        let mut weekly2 = seg("weekly", date, 0);
+        weekly2.content = "weekly 第二版".to_string();
+        upsert_segment(&pool, &weekly2).await.unwrap();
 
-        for src in ["daily", "weekly"] {
-            let rows = get_day(&pool, src, date).await.unwrap();
-            assert_eq!(rows.len(), 1, "{src} 支应只有自己那一行");
-            assert_eq!(
-                rows[0].content,
-                format!("{src}/{date}/0 的总结正文"),
-                "{src} 支内容被别的 source 覆盖了"
-            );
-        }
-        let dbg = get_day(&pool, "debug", date).await.unwrap();
-        assert_eq!(dbg.len(), 1);
-        assert_eq!(dbg[0].content, "debug 第二版");
+        let rows = get_day(&pool, "daily", date).await.unwrap();
+        assert_eq!(rows.len(), 1, "daily 支应只有自己那一行");
+        assert_eq!(
+            rows[0].content,
+            format!("daily/{date}/0 的总结正文"),
+            "daily 支内容被别的 source 覆盖了"
+        );
+        let weekly = get_day(&pool, "weekly", date).await.unwrap();
+        assert_eq!(weekly.len(), 1);
+        assert_eq!(weekly[0].content, "weekly 第二版");
 
         // get_segment_status 同样按 source 隔离：查不存在的 source 必须是 None，
-        // 否则 Phase 2 会把 debug 的状态误判成 daily 已跑过而跳段。
+        // 否则会把别的 source 的状态误判成 daily 已跑过而跳段。
         assert_eq!(
             get_segment_status(&pool, "daily", date, 0).await.unwrap(),
             Some("ok".to_string())
@@ -969,7 +965,7 @@ mod tests {
     #[tokio::test]
     async fn get_range_is_inclusive_sorted_and_source_scoped() {
         let pool = fresh_test_pool().await;
-        // 乱序写入：区间内 4 行 + 区间外 2 行 + 区间内的 debug 干扰行
+        // 乱序写入：区间内 4 行 + 区间外 2 行 + 区间内的 weekly 干扰行
         for (date, idx) in [
             ("2026-07-22", 0u32),
             ("2026-07-20", 1),
@@ -982,7 +978,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        upsert_segment(&pool, &seg("debug", "2026-07-21", 0))
+        upsert_segment(&pool, &seg("weekly", "2026-07-21", 0))
             .await
             .unwrap();
 
@@ -1005,7 +1001,7 @@ mod tests {
         );
         assert!(
             rows.iter().all(|r| r.source == "daily"),
-            "debug 行混进了周报材料"
+            "weekly 行混进了周报材料"
         );
     }
 
@@ -1051,8 +1047,7 @@ mod tests {
     }
 
     /// clear_day 是 force_refresh 的实现：同 source 同日的段总结 + 逐图描述
-    /// 一起清，但绝不能误删别的 source / 别的日期。真实翻车场景：调试 tab 的
-    /// 删除按钮把日报页当天数据也清了。
+    /// 一起清，但绝不能误删别的 source / 别的日期。
     #[tokio::test]
     async fn clear_day_scopes_to_source_and_date() {
         let pool = fresh_test_pool().await;
@@ -1062,11 +1057,11 @@ mod tests {
         upsert_segment(&pool, &seg("daily", "2026-07-21", 0))
             .await
             .unwrap();
-        upsert_segment(&pool, &seg("debug", "2026-07-20", 0))
+        upsert_segment(&pool, &seg("weekly", "2026-07-20", 0))
             .await
             .unwrap();
         insert_image_desc(&pool, "daily", "2026-07-20").await;
-        insert_image_desc(&pool, "debug", "2026-07-20").await;
+        insert_image_desc(&pool, "weekly", "2026-07-20").await;
 
         clear_day(&pool, "daily", "2026-07-20").await.unwrap();
 
@@ -1084,10 +1079,10 @@ mod tests {
             1
         );
         assert_eq!(
-            get_day(&pool, "debug", "2026-07-20").await.unwrap().len(),
+            get_day(&pool, "weekly", "2026-07-20").await.unwrap().len(),
             1
         );
-        assert_eq!(count_image_descs(&pool, "debug", "2026-07-20").await, 1);
+        assert_eq!(count_image_descs(&pool, "weekly", "2026-07-20").await, 1);
     }
 
     /// clear_day_summaries_only 只清段总结、留逐图描述——step2 重跑复用 step1
@@ -1326,7 +1321,7 @@ mod tests {
             matches!(missing, Err(Error::InvalidInput(_))),
             "{missing:?}"
         );
-        let other_source = edit_content(&pool, "debug", "2026-07-20", 0, "正文").await;
+        let other_source = edit_content(&pool, "weekly", "2026-07-20", 0, "正文").await;
         assert!(
             matches!(other_source, Err(Error::InvalidInput(_))),
             "{other_source:?}"

@@ -93,10 +93,6 @@ pub struct EngineRuntimeStatus {
 }
 
 /// 启动 llama-server 时可选的命令行调参。
-///
-/// 调试 tab 用：调一次跑一次的 batch / 并发槽位，不进 settings.ai 全局，每次
-/// 调试 generate 之前先 stop + start with overrides，跑完再 stop 让下次正常
-/// 日报 lazy start 时回到默认值。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EngineStartOverrides {
     /// 同时设 `--batch-size N --ubatch-size N`。`None` = 用 llama.cpp 默认（512）。
@@ -115,10 +111,7 @@ pub struct EngineStartOverrides {
 /// llama-server 子进程的单例守护者。
 pub struct EngineSupervisor {
     inner: Mutex<Inner>,
-    /// 启动期间（前 STARTUP_LINES 行）保留下来的日志——cuBLAS init / offloaded
-    /// XX/YY layers to GPU 这种关键诊断信息在这里，不被后续 chat 日志冲掉。
-    startup_logs: Arc<Mutex<Vec<String>>>,
-    /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout（含启动日志的副本）。
+    /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout。
     /// Arc 让 spawn 出来的 reader task 能持有它而不锁 inner。
     logs: Arc<Mutex<VecDeque<String>>>,
     /// 推理请求计数 + 最后一次使用时间——给 idle watcher 自动 stop 用。
@@ -127,7 +120,7 @@ pub struct EngineSupervisor {
     inflight_state: std::sync::Mutex<InflightState>,
     /// 当前（或最近一次启动时）加载的 main GGUF 路径。调用方在"复用 Running 引擎"
     /// 之前用 [`Self::loaded_main`] 校验装的是不是自己需要的模型——否则周报可能
-    /// 被 2 分钟前调试跑留下的 vision 模型+小上下文生成（截断/低质/报错）。
+    /// 被 2 分钟前日报留下的 vision 模型+小上下文生成（截断/低质/报错）。
     loaded_main: std::sync::Mutex<Option<PathBuf>>,
     /// 当前（或最近一次启动时）的 EngineStartOverrides。与 [`Self::loaded_main`] 配套：
     /// 复用 Running 引擎前还要校验 ctx / slots / batch 是否匹配——模型相同但用默认
@@ -136,8 +129,6 @@ pub struct EngineSupervisor {
 }
 
 const LOGS_RING_SIZE: usize = 500;
-/// 启动日志保留行数——头 200 行（cuBLAS init、模型加载、layer offload 等都在这里）。
-const STARTUP_LINES: usize = 200;
 
 #[derive(Default)]
 struct Inner {
@@ -202,7 +193,6 @@ impl EngineSupervisor {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(Inner::default()),
-            startup_logs: Arc::new(Mutex::new(Vec::with_capacity(STARTUP_LINES))),
             logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
             inflight_state: std::sync::Mutex::new(InflightState::default()),
             loaded_main: std::sync::Mutex::new(None),
@@ -328,23 +318,6 @@ impl EngineSupervisor {
         s
     }
 
-    /// 拿日志：启动头 N 行（保留区） + 最近 ring buffer，拼一起。
-    /// 前端调试 tab 用来看 llama-server 启动时的 GPU 加载日志。
-    pub async fn recent_logs(&self) -> Vec<String> {
-        let startup = self.startup_logs.lock().await.clone();
-        let ring = self.logs.lock().await;
-        let mut out = Vec::with_capacity(startup.len() + ring.len() + 1);
-        if !startup.is_empty() {
-            out.extend(startup);
-            out.push(format!(
-                "──── 上面是启动日志（保留前 {} 行），下面是最近滚动日志 ────",
-                STARTUP_LINES
-            ));
-        }
-        out.extend(ring.iter().cloned());
-        out
-    }
-
     /// 启动 llama-server。
     ///
     /// `model_path` / `mmproj_path` 可为 None——α.4 还没模型选择，留待 β。传 None
@@ -361,7 +334,7 @@ impl EngineSupervisor {
             .await
     }
 
-    /// 跟 [`start`] 一样，但允许调试 tab 临时覆盖 batch_size / parallel_slots。
+    /// 跟 [`start`] 一样，但带上 batch_size / parallel_slots / ctx_size。
     pub async fn start_with_overrides(
         &self,
         model_path: Option<PathBuf>,
@@ -457,28 +430,16 @@ impl EngineSupervisor {
                 }
             }
 
-            // 启动前清空两份日志缓冲，让本次启动从空白开始
+            // 启动前清空日志缓冲，让本次启动从空白开始
             self.logs.lock().await.clear();
-            self.startup_logs.lock().await.clear();
 
-            // spawn 异步 task 消费 stderr / stdout：写一份到 ring buffer（持续滚动），
-            // 同时前 STARTUP_LINES 行额外写一份到 startup_logs（永久保留，不被冲掉）。
+            // spawn 异步 task 消费 stderr / stdout，写进 ring buffer（持续滚动）。
             // 不消费的话 buffer 满会阻塞 llama-server。
             if let Some(stderr) = child.stderr.take() {
-                spawn_drain_task(
-                    stderr,
-                    "stderr",
-                    Arc::clone(&self.logs),
-                    Arc::clone(&self.startup_logs),
-                );
+                spawn_drain_task(stderr, "stderr", Arc::clone(&self.logs));
             }
             if let Some(stdout) = child.stdout.take() {
-                spawn_drain_task(
-                    stdout,
-                    "stdout",
-                    Arc::clone(&self.logs),
-                    Arc::clone(&self.startup_logs),
-                );
+                spawn_drain_task(stdout, "stdout", Arc::clone(&self.logs));
             }
 
             inner.state = EngineRuntimeStatus {
@@ -763,7 +724,7 @@ async fn wait_child_with_timeout(child: &mut Child) {
     }
 }
 
-/// 读 logs ring 末尾 N 行拼成多行字符串，给错误信息 / 调试 UI 用。
+/// 读 logs ring 末尾 N 行拼成多行字符串，给错误信息用。
 async fn log_tail(logs: &Arc<Mutex<VecDeque<String>>>, n: usize) -> String {
     let g = logs.lock().await;
     let start = g.len().saturating_sub(n);
@@ -771,16 +732,11 @@ async fn log_tail(logs: &Arc<Mutex<VecDeque<String>>>, n: usize) -> String {
 }
 
 /// spawn 一个 tokio task，按行 drain stderr / stdout：
-/// - 每行都进 ring buffer（最近 LOGS_RING_SIZE 行，老的被淘汰）
-/// - 启动期间（startup_logs 还没满）的同一行也额外写一份进 startup_logs，永久保留
+/// 每行都进 ring buffer（最近 LOGS_RING_SIZE 行，老的被淘汰）。
 ///
 /// `tag` = "stderr" / "stdout"，给行前面带个前缀方便区分。
-fn spawn_drain_task<R>(
-    reader: R,
-    tag: &'static str,
-    ring: Arc<Mutex<VecDeque<String>>>,
-    startup: Arc<Mutex<Vec<String>>>,
-) where
+fn spawn_drain_task<R>(reader: R, tag: &'static str, ring: Arc<Mutex<VecDeque<String>>>)
+where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {
     tokio::spawn(async move {
@@ -796,13 +752,6 @@ fn spawn_drain_task<R>(
                     log::info!("[llama-server] {prefixed}");
                     #[cfg(debug_assertions)]
                     eprintln!("[llama-server] {prefixed}");
-                    // 启动日志保留区（前 STARTUP_LINES 行；满了不再写）
-                    {
-                        let mut s = startup.lock().await;
-                        if s.len() < STARTUP_LINES {
-                            s.push(prefixed.clone());
-                        }
-                    }
                     // ring buffer
                     let mut g = ring.lock().await;
                     if g.len() >= LOGS_RING_SIZE {

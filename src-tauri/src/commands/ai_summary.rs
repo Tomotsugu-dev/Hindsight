@@ -14,8 +14,8 @@ use super::screen_memory::MemoryState;
 use crate::ai::policy::ProfileChoice;
 use crate::ai::server::EngineSupervisor;
 use crate::ai::summary::{
-    precheck_week, AiOverrides, DaySummaryRunner, SummaryProgress, WeekPrecheckResp,
-    WeekSummaryRunner, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,
+    precheck_week, DaySummaryRunner, SummaryProgress, WeekPrecheckResp, WeekSummaryRunner,
+    DAILY_SOURCE, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,
 };
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
@@ -68,9 +68,6 @@ pub async fn generate_day_summary(
     date: String,
     force_refresh: bool,
     device_id: Option<String>,
-    overrides: Option<AiOverrides>,
-    // "daily"（DailyTab，默认）/ "debug"（DebugTab）—— PK 级隔离两支数据
-    source: Option<String>,
     // 用户选的配置 id；None = 按主库设置
     profile: Option<String>,
 ) -> Result<(), String> {
@@ -80,13 +77,12 @@ pub async fn generate_day_summary(
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = DeviceFilter::from_option(device_id);
-    let source = source.unwrap_or_else(|| "daily".to_string());
     let profile = ProfileChoice::from(profile);
 
     cancel.0.store(false, Ordering::Relaxed);
     // 一条龙第一棒:未识别的截图先全部 OCR(尽力而为,零积压零开销;
     // 进度经同一事件流推给前端)。之后才进 LLM 阶段。
-    crate::ai::ocr_catchup::run(&pool, mem.0.as_ref(), &app, &source, &date, &cancel.0).await;
+    crate::ai::ocr_catchup::run(&pool, mem.0.as_ref(), &app, DAILY_SOURCE, &date, &cancel.0).await;
     let runner = DaySummaryRunner::new(
         (*pool).clone(),
         Arc::clone(&supervisor),
@@ -95,18 +91,11 @@ pub async fn generate_day_summary(
     );
 
     if let Err(e) = runner
-        .run(
-            &source,
-            parsed_date,
-            device,
-            force_refresh,
-            overrides,
-            &profile,
-        )
+        .run(parsed_date, device, force_refresh, &profile)
         .await
     {
         // 顶层失败也 emit 一条 error，前端 UI 能 toast
-        let mut p = SummaryProgress::base(source.clone(), date.clone(), "error", 0);
+        let mut p = SummaryProgress::base(DAILY_SOURCE.to_string(), date.clone(), "error", 0);
         p.message = Some(e.to_string());
         let _ = app.emit(SUMMARY_PROGRESS_EVENT, &p);
         return Err(e.to_string());
@@ -126,8 +115,6 @@ pub async fn retry_summary_segment(
     date: String,
     segment_idx: u32,
     device_id: Option<String>,
-    overrides: Option<AiOverrides>,
-    source: Option<String>,
     profile: Option<String>,
 ) -> Result<(), String> {
     let Ok(_run) = run_lock.0.try_lock() else {
@@ -136,7 +123,6 @@ pub async fn retry_summary_segment(
     let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
         .map_err(|e| format!("日期格式应为 YYYY-MM-DD：{e}"))?;
     let device = DeviceFilter::from_option(device_id);
-    let source = source.unwrap_or_else(|| "daily".to_string());
     let profile = ProfileChoice::from(profile);
 
     cancel.0.store(false, Ordering::Relaxed);
@@ -147,14 +133,7 @@ pub async fn retry_summary_segment(
         Arc::clone(&cancel.0),
     );
     runner
-        .run_one_segment_only(
-            &source,
-            parsed_date,
-            segment_idx,
-            device,
-            overrides,
-            &profile,
-        )
+        .run_one_segment_only(parsed_date, segment_idx, device, &profile)
         .await
         .map_err(String::from)
 }
@@ -173,10 +152,8 @@ pub async fn cancel_day_summary(cancel: State<'_, SummaryCancel>) -> Result<(), 
 pub async fn get_day_summary(
     pool: State<'_, DbPool>,
     date: String,
-    source: Option<String>,
 ) -> Result<Vec<SegmentSummaryRow>, String> {
-    let src = source.unwrap_or_else(|| "daily".to_string());
-    ai_summaries::get_day(&pool, &src, &date)
+    ai_summaries::get_day(&pool, DAILY_SOURCE, &date)
         .await
         .map_err(String::from)
 }
@@ -200,26 +177,8 @@ pub async fn edit_summary_segment(
 
 /// 删除某天的全部 AI 产物（段总结 + 历史遗留的逐图描述行）。DailyTab 删除按钮用。
 #[tauri::command]
-pub async fn clear_day_summary(
-    pool: State<'_, DbPool>,
-    date: String,
-    source: Option<String>,
-) -> Result<(), String> {
-    let src = source.unwrap_or_else(|| "daily".to_string());
-    ai_summaries::clear_day(&pool, &src, &date)
-        .await
-        .map_err(String::from)
-}
-
-/// 只删某天的段总结。调试 tab「段总结结果」Section header 删除按钮用。
-#[tauri::command]
-pub async fn clear_day_segment_summaries(
-    pool: State<'_, DbPool>,
-    date: String,
-    source: Option<String>,
-) -> Result<(), String> {
-    let src = source.unwrap_or_else(|| "daily".to_string());
-    ai_summaries::clear_day_summaries_only(&pool, &src, &date)
+pub async fn clear_day_summary(pool: State<'_, DbPool>, date: String) -> Result<(), String> {
+    ai_summaries::clear_day(&pool, DAILY_SOURCE, &date)
         .await
         .map_err(String::from)
 }
