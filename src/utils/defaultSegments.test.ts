@@ -49,8 +49,14 @@ describe("retranslateDefaultSegments", () => {
     expect(out[0].startHour).toBe(0);
     expect(out[0].color).toBe("#111111");
   });
-  it("未知语言回退英文;zh 家族归并到 zh-CN", () => {
+  it("未知语言回退英文;zh-TW 使用独立繁中标签", () => {
     expect(retranslateDefaultSegments(ZH, "fr")[0].label).toBe("Late Night");
-    expect(retranslateDefaultSegments(ZH, "zh-TW")[0].label).toBe("深夜");
+    expect(retranslateDefaultSegments(ZH, "zh-TW").map((s) => s.label)).toEqual([
+      "凌晨",
+      "清晨",
+      "上午",
+      "下午",
+      "晚上",
+    ]);
   });
 });

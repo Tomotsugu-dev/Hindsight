@@ -28,11 +28,13 @@ import {
 } from "lucide-react";
 import {
   api,
-  SUMMARY_CLOUD_SENTINEL,
+  type CloudConnection,
   type ModelDownloadProgress,
   type ModelEntry,
   type RecommendedModel,
 } from "../../../api/hindsight";
+import { readyCloudConnections } from "../../Chat/chatRouting";
+import { profileLabel } from "../../../utils/profileLabel";
 import {
   cancelModelDownload,
   clearModelDownloadProgress,
@@ -190,15 +192,11 @@ function autoPairMmproj(mainName: string, mmprojs: ModelEntry[]): ModelEntry | n
  */
 export function ModelsSection() {
   const { t } = useTranslation();
-  // settings 用来读 summaryMain：判断每张推荐卡是不是被选为段总结模型，
-  // 在卡上显示对应 chip。reload 让下载完成后能拉到刚刷新的本地文件清单。
   const { settings, reload } = useAiSettings();
-  // 注意：raw summary_main 可能是 SUMMARY_CLOUD_SENTINEL（用户在云端卡选了 Text）。
-  // 走 fallback 链拿到的字符串可能是 sentinel 或真实文件名；本地卡的 usedForSummary
-  // 比较时永远拿 sentinel 跟 rec.mainFile 比，永远不命中——所以本地卡正确显示成"未选"。
-  const summaryMain = settings?.ai.summaryMain || settings?.ai.activeMain || "";
-  // 云端卡用 RAW 字段判，避免 fallback 链上 activeMain 的干扰。
-  const cloudIsSelectedAsSummary = (settings?.ai.summaryMain || "") === SUMMARY_CLOUD_SENTINEL;
+  const dailyPick = settings?.ai.picks.daily ?? null;
+  const dailyLocalFile = dailyPick?.kind === "local" ? dailyPick.file.trim() : "";
+  const dailyCloudId = dailyPick?.kind === "cloud" ? dailyPick.connection : null;
+  const readyClouds = settings ? readyCloudConnections(settings.ai) : [];
 
   const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
   const [local, setLocal] = useState<ModelEntry[]>([]);
@@ -241,9 +239,7 @@ export function ModelsSection() {
   // 不能仅靠 busyFiles：所有 unsloth 镜像的 mmproj 都叫 mmproj-F16.gguf，单看
   // busyFiles.has("mmproj-F16.gguf") 会让所有 vision 卡都判定为 busy，进度条串扰。
   const [confirmingUninstall, setConfirmingUninstall] = useState<RecommendedModel | null>(null);
-  // 云端选择的隐私确认弹窗：选 Text = 轻警示（上传应用名/分类/活动时间线）。
-  // 取消选择不弹。
-  const [cloudConfirm, setCloudConfirm] = useState(false);
+  const [cloudConfirm, setCloudConfirm] = useState<CloudConnection | null>(null);
   const [busyRecs, setBusyRecs] = useState<ReadonlySet<string>>(new Set<string>());
 
   const refresh = async () => {
@@ -395,26 +391,13 @@ export function ModelsSection() {
     }
   };
 
-  /**
-   * 给某个推荐模型 toggle 段总结（summary）分配。
-   *
-   * 互斥由后端隐式保证（setStepModel 直接覆盖，不累加）；前端这里只负责
-   * 区分"当前已在用 → 清空"和"否则 → 切换到该模型"两种情况。
-   */
   const onToggleStep = async (rec: RecommendedModel) => {
     setError(null);
-    const current = settings?.ai.summaryMain || settings?.ai.activeMain || "";
     try {
-      if (current === rec.mainFile) {
-        // 已在用 → 清空覆盖（后端 fallback 到 activeMain）
-        await api.setStepModel("summary", "", null);
+      if (dailyLocalFile === rec.mainFile) {
+        await api.setTaskModel("daily", null);
       } else {
-        // mmproj 用 saveAs（落盘文件名），且只在本地真的存在时才写——
-        // "已安装"只看 main，用户手动导入 main 时 mmproj 多半缺席，
-        // 写个不存在的文件名会让引擎启动时加载失败
-        const mmprojLocal =
-          rec.mmprojFile && localFilenames.has(mmprojSaveAs(rec)) ? mmprojSaveAs(rec) : null;
-        await api.setStepModel("summary", rec.mainFile, mmprojLocal);
+        await api.setTaskModel("daily", { kind: "local", file: rec.mainFile });
       }
       await reload();
     } catch (e) {
@@ -422,34 +405,26 @@ export function ModelsSection() {
     }
   };
 
-  /**
-   * 云端卡 Text 按钮 toggle：在「选中云端为段总结」和「fallback 回本地」之间切换。
-   *
-   * 通过把 `summary_main` 写成 [`SUMMARY_CLOUD_SENTINEL`] 来表示选中云端，后端
-   * 看到 sentinel + `external_enabled=true` 才路由到 External。
-   * 跟本地卡的 toggle 互斥：本地卡 set summary 是真实文件名、覆盖 sentinel；
-   * 云端卡 set sentinel、覆盖任何本地文件名。一处状态，互斥自然成立。
-   */
-  const onToggleCloudSummary = async () => {
+  const onToggleCloudSummary = async (conn: CloudConnection) => {
     setError(null);
-    if (!cloudIsSelectedAsSummary) {
-      // 启用方向：先弹隐私确认（应用名/分类/活动时间线将上传），确认后再真正切换
-      setCloudConfirm(true);
+    if (dailyCloudId !== conn.id) {
+      setCloudConfirm(conn);
       return;
     }
     try {
-      await api.setStepModel("summary", "", null);
+      await api.setTaskModel("daily", null);
       await reload();
     } catch (e) {
       setError(typeof e === "string" ? e : String(e));
     }
   };
 
-  /** 隐私确认弹窗点了"确认"：真正把 summary 槽位写成云端 sentinel。 */
   const onConfirmCloudSelect = async () => {
-    setCloudConfirm(false);
+    const conn = cloudConfirm;
+    setCloudConfirm(null);
+    if (!conn) return;
     try {
-      await api.setStepModel("summary", SUMMARY_CLOUD_SENTINEL, null);
+      await api.setTaskModel("daily", { kind: "cloud", connection: conn.id });
       await reload();
     } catch (e) {
       setError(typeof e === "string" ? e : String(e));
@@ -542,16 +517,13 @@ export function ModelsSection() {
     }
   };
 
-  /** 本地模型卡的 summary toggle：跟推荐卡同逻辑，但 main/mmproj 用本地真实落盘名。
-   *  mmproj 为自动配对的结果（纯文本模型为 null，只写 main）。 */
-  const onToggleLocalStep = async (main: ModelEntry, mmproj: ModelEntry | null) => {
+  const onToggleLocalStep = async (main: ModelEntry, _mmproj: ModelEntry | null) => {
     setError(null);
-    const current = settings?.ai.summaryMain || settings?.ai.activeMain || "";
     try {
-      if (current === main.filename) {
-        await api.setStepModel("summary", "", null);
+      if (dailyLocalFile === main.filename) {
+        await api.setTaskModel("daily", null);
       } else {
-        await api.setStepModel("summary", main.filename, mmproj?.filename ?? null);
+        await api.setTaskModel("daily", { kind: "local", file: main.filename });
       }
       await reload();
     } catch (e) {
@@ -627,44 +599,40 @@ export function ModelsSection() {
       </div>
 
       <div className={styles.modelList}>
-        {/* 云端 API 启用时第一行展示云端卡——表明段总结当前不走本地推荐里的任何
-            模型，而是路由到 Cloud API tab 配的 endpoint + model。固定置顶，不参与筛选/
-            排序。Text 是可点 toggle，跟本地卡的 summary 是 radio 关系；
-            启用方向先过隐私确认弹窗。 */}
-        {settings?.ai.externalEnabled ? (
-          <div className={`${styles.modelCard} ${styles.modelCardCloud}`}>
-            <div className={styles.modelCardRow}>
-              <div className={styles.modelCardLeft}>
-                <Cloud size={22} strokeWidth={2} className={styles.modelCardCloudIcon} />
-                <span className={styles.modelCardName}>
-                  {t("aiSettings.models.cloud.cardTitle", {
-                    provider: settings.ai.externalProvider || "cloud",
-                  })}
-                </span>
-                <span className={styles.modelCardSize}>
-                  {settings.ai.model || t("aiSettings.models.cloud.modelUnset")}
-                </span>
-              </div>
-              <div className={styles.modelCardRight}>
-                {/* Text（段总结）：可点击 toggle，跟本地卡的 summary 是 radio 关系 */}
-                <button
-                  type="button"
-                  className={`${styles.modelStepToggle} ${
-                    cloudIsSelectedAsSummary ? styles.modelStepToggleActive : ""
-                  }`}
-                  onClick={onToggleCloudSummary}
-                  title={
-                    cloudIsSelectedAsSummary
-                      ? t("aiSettings.models.card.step2ToggleOffTooltip")
-                      : t("aiSettings.models.card.step2ToggleOnTooltip")
-                  }
-                >
-                  {t("aiSettings.models.card.step2")}
-                </button>
+        {readyClouds.map((conn) => {
+          const selected = dailyCloudId === conn.id;
+          return (
+            <div key={conn.id} className={`${styles.modelCard} ${styles.modelCardCloud}`}>
+              <div className={styles.modelCardRow}>
+                <div className={styles.modelCardLeft}>
+                  <Cloud size={22} strokeWidth={2} className={styles.modelCardCloudIcon} />
+                  <span className={styles.modelCardName}>
+                    {t("aiSettings.models.cloud.cardTitle", {
+                      provider: conn.dialect || "cloud",
+                    })}
+                  </span>
+                  <span className={styles.modelCardSize}>{profileLabel(conn)}</span>
+                </div>
+                <div className={styles.modelCardRight}>
+                  <button
+                    type="button"
+                    className={`${styles.modelStepToggle} ${
+                      selected ? styles.modelStepToggleActive : ""
+                    }`}
+                    onClick={() => void onToggleCloudSummary(conn)}
+                    title={
+                      selected
+                        ? t("aiSettings.models.card.step2ToggleOffTooltip")
+                        : t("aiSettings.models.card.step2ToggleOnTooltip")
+                    }
+                  >
+                    {t("aiSettings.models.card.step2")}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ) : null}
+          );
+        })}
 
         {displayed.map((rec) => (
           <RecommendedCard
@@ -672,7 +640,7 @@ export function ModelsSection() {
             rec={rec}
             installed={isInstalled(rec)}
             supportsTools={local.find((m) => m.filename === rec.mainFile)?.supportsTools ?? null}
-            usedForSummary={summaryMain === rec.mainFile}
+            usedForSummary={dailyLocalFile === rec.mainFile}
             busyFiles={busyFiles}
             partialMap={partialMap}
             progress={progress}
@@ -694,7 +662,7 @@ export function ModelsSection() {
                 key={main.filename}
                 main={main}
                 mmproj={mmproj}
-                usedForSummary={summaryMain === main.filename}
+                usedForSummary={dailyLocalFile === main.filename}
                 onToggleStep={onToggleLocalStep}
                 onDelete={onDeleteLocal}
               />
@@ -752,17 +720,16 @@ export function ModelsSection() {
         }}
         onCancel={() => setConfirmingUninstall(null)}
       />
-      {/* 云端选择的隐私确认：Text（段总结）= 应用名/分类/活动时间线上传（轻警示）。 */}
       <ConfirmDialog
-        open={cloudConfirm}
+        open={cloudConfirm !== null}
         title={t("aiSettings.models.cloud.summaryConfirmTitle")}
         message={t("aiSettings.models.cloud.summaryConfirmMessage", {
-          provider: settings?.ai.externalProvider || "cloud",
+          provider: cloudConfirm?.dialect || "cloud",
         })}
         confirmLabel={t("aiSettings.models.cloud.summaryConfirmAccept")}
         variant="primary"
         onConfirm={() => void onConfirmCloudSelect()}
-        onCancel={() => setCloudConfirm(false)}
+        onCancel={() => setCloudConfirm(null)}
       />
     </div>
   );

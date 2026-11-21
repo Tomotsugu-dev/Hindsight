@@ -147,7 +147,7 @@ export default function WeeklyTab() {
 
   // 周报用自己的模型（没单独选就跟日报），走云端或有本地文件就能生成
   const route = settings ? reportRoute(settings.ai, "weekly") : null;
-  const hasModel = !!route && (route.cloud || route.local !== "");
+  const hasModel = !!route && (Boolean(route.cloud) || route.local !== "");
 
   // 全局 store 订阅——切走再回来还在跑的 weekly run 仍能保持"停止"按钮
   const runSnap = useSyncExternalStore(

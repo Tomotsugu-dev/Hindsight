@@ -17,6 +17,9 @@ const CODE_KEYS: Record<string, string> = {
   LLM_EMPTY: "aiSummary.errors.llmEmpty",
   AI_RUN_BUSY: "aiSummary.errors.runBusy",
   AI_PROFILE_GONE: "aiSummary.errors.profileGone",
+  AI_NO_MODEL: "aiSummary.errors.noModel",
+  AI_CLOUD_UNAVAILABLE: "aiSummary.errors.cloudUnavailable",
+  AI_MODEL_MISSING: "aiSummary.errors.modelMissing",
 };
 
 /** 把后端原始错误串映射成本地化文案：命中已知 `[CODE]` 码走 i18n，否则原样返回。

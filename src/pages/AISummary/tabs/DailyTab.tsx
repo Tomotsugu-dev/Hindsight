@@ -5,16 +5,11 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { logError } from "../../../lib/logger";
 import { localizeAiError } from "../../../lib/aiErrors";
 import { AlertCircle, Download, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
-import {
-  api,
-  SUMMARY_CLOUD_SENTINEL,
-  type AiSegment,
-  type SegmentSummaryRow,
-} from "../../../api/hindsight";
+import { api, type AiSegment, type SegmentSummaryRow } from "../../../api/hindsight";
 import { useSettings } from "../../../state/settings";
 import { useAiProfiles } from "../../../state/aiProfiles";
 import { reportRoute } from "../../../state/reportModel";
-import { chatCloudReady } from "../../Chat/chatRouting";
+import { readyCloudConnections } from "../../Chat/chatRouting";
 import { AiProfilePicker } from "../../../components/AiProfiles/AiProfilePicker";
 import { ReportModelPickers } from "../../../components/ReportModel/ReportModelPickers";
 import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
@@ -102,14 +97,12 @@ export default function DailyTab() {
     [date, i18n.language],
   );
   const segments = settings?.ai.segments ?? [];
-  const activeMain = settings?.ai.activeMain ?? "";
-  // 走云端或有本地文件就能生成，和后端 summary_runner 的检查一致
   const route = settings ? reportRoute(settings.ai, "daily") : null;
-  const hasModel = !!route && (route.cloud || route.local !== "");
-  // 云端总结真正可跑 = 路由选中云端 + 三元组配齐(endpoint/model 任一缺失时
-  // 后端 External 分支会直接报错,不该拿"下载本地引擎"去引导)
-  const cloudConfigured = !!settings && chatCloudReady(settings.ai);
-  const cloudSummaryReady = !!route?.cloud && cloudConfigured;
+  const activeModelLabel = route?.cloud?.model ?? route?.local ?? "";
+  const hasModel = !!route && (Boolean(route.cloud) || route.local !== "");
+  const fallbackCloud = settings ? (readyCloudConnections(settings.ai)[0] ?? null) : null;
+  const cloudConfigured = fallbackCloud !== null;
+  const cloudSummaryReady = Boolean(route?.cloud);
 
   // 把 dayOffset 转人话标签——0/-1 走"今天/昨天"，其它走相对日期。
   // 依赖 t，所以在组件里定义，跟随 i18n.language 自动重渲。
@@ -147,12 +140,10 @@ export default function DailyTab() {
     };
   }, [date]);
 
-  // 用 ref 让 segmentDone 回调读到最新值（避免每次 segments / activeMain 变都
-  // 重订阅 listener；这两个值变化频率很低也不影响事件流处理逻辑）
   const segmentsRef = useRef<AiSegment[]>(segments);
   segmentsRef.current = segments;
-  const activeMainRef = useRef(activeMain);
-  activeMainRef.current = activeMain;
+  const activeModelRef = useRef(activeModelLabel);
+  activeModelRef.current = activeModelLabel;
   const dateRef = useRef(date);
   dateRef.current = date;
 
@@ -172,7 +163,7 @@ export default function DailyTab() {
         startHour: seg.startHour,
         endHour: seg.endHour,
         content: ev.content ?? "",
-        model: activeMainRef.current,
+        model: activeModelRef.current,
         status: ev.status,
         error: ev.message ?? null,
         generatedAt: new Date().toISOString(),
@@ -217,10 +208,8 @@ export default function DailyTab() {
     setPendingAfterDownload(null);
     if (!action) return;
     try {
-      if (cloudConfigured) {
-        // 云端 API 已配齐但总结槽位没选云端——用户点「使用云端生成」:
-        // 把总结切到云端(等价于模型页云端卡点 Text)后直接继续生成
-        await api.setStepModel("summary", SUMMARY_CLOUD_SENTINEL, null);
+      if (fallbackCloud) {
+        await api.setTaskModel("daily", { kind: "cloud", connection: fallbackCloud.id });
         await reloadSettings();
       } else {
         await api.downloadBinary();
@@ -625,10 +614,10 @@ export default function DailyTab() {
             : t("aiSummary.daily.runtimeMissing.title")
         }
         message={
-          cloudConfigured
+          fallbackCloud
             ? t("aiSummary.daily.cloudOffer.message", {
-                provider: settings?.ai.externalProvider || "cloud",
-                model: settings?.ai.model || "",
+                provider: fallbackCloud.dialect || "cloud",
+                model: fallbackCloud.model || "",
               })
             : t("aiSummary.daily.runtimeMissing.message")
         }

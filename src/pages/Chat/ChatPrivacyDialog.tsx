@@ -5,7 +5,7 @@ import { Cloud, HardDrive } from "lucide-react";
 import { Button } from "../../components/Button/Button";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import type { AiConfig } from "../../api/hindsight";
-import { chatLocalModelName, chatUsesCloud } from "./chatRouting";
+import { chatCloudConnection, chatLocalModelName } from "./chatRouting";
 import styles from "./ChatPrivacyDialog.module.css";
 
 interface ChatPrivacyDialogProps {
@@ -37,11 +37,12 @@ export function ChatPrivacyDialog({ open, ai, onConfirm, onCancel }: ChatPrivacy
 
   if (!open) return null;
 
-  const cloud = chatUsesCloud(ai);
-  // 服务商显示名走既有 i18n(aiSettings.external.provider.*),未知值回落原文
-  const provider = t(`aiSettings.external.provider.${ai.externalProvider}`, {
-    defaultValue: ai.externalProvider || ai.endpoint,
-  });
+  const cloud = chatCloudConnection(ai);
+  const provider = cloud
+    ? t(`aiSettings.external.provider.${cloud.dialect}`, {
+        defaultValue: cloud.dialect || cloud.endpoint,
+      })
+    : "";
 
   return createPortal(
     <div className={styles.backdrop} onMouseDown={onCancel} role="presentation">
@@ -63,7 +64,7 @@ export function ChatPrivacyDialog({ open, ai, onConfirm, onCancel }: ChatPrivacy
         {cloud ? (
           <div className={`${styles.routeRow} ${styles.routeCloud}`}>
             <Cloud size={14} strokeWidth={2} />
-            {t("chat.privacy.routeCloud", { provider, model: ai.model })}
+            {t("chat.privacy.routeCloud", { provider, model: cloud.model })}
           </div>
         ) : (
           <div className={styles.routeRow}>
