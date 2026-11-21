@@ -3,10 +3,10 @@
 //! 问答:前端一问,后端跑完整个 agent 循环再一次性返回;历史落 memory.sqlite,
 //! LLM 的多轮上下文由后端从库里读(库是唯一真源,前端不再维护历史镜像)。
 //!
-//! 路由(设计定稿:云端 first-class):
-//! - 设置里启用了云端 API(`external_enabled` + endpoint/model 非空)→ 云端原生 tools;
-//! - 否则走本地 llama-server(grammar 约束解码),按 step 2 文本模型 lazy 启动;
-//! - 两边都不可用 → 明确报错引导用户去配置。
+//! 路由按设置里聊天选的模型(`picks.chat`):
+//! - 云端连接 → 云端原生 tools;
+//! - 本机模型 → 本地 llama-server(grammar 约束解码),用到时才启动;
+//! - 没选,或选的连接不能用 → 报错,前端按错误码引导用户去配置。
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -338,6 +338,10 @@ async fn run_ask(
                     "[AI_MODEL_MISSING] Selected local model file not found: {file}"
                 ));
             }
+            // 复用条件是模型一致、引擎每槽上下文够聊天用，不要求参数完全相等。
+            // 要求完全相等的话，「没设」和「设成 8192」、日报留下的更大上下文这些
+            // 本可以复用的情况都会重启，聊天和日报来回切就来回重启，还会在日报
+            // 两段之间把引擎杀掉。上下文不够时必须重启，否则会溢出报 400。
             let overrides = chat_engine_overrides(ai);
             let needs_restart = supervisor
                 .loaded_main()
@@ -355,6 +359,7 @@ async fn run_ask(
                     .await
                     .map_err(String::from)?
             };
+            // 整个问答循环都拿着它，空闲回收不会中途关掉引擎
             let guard = supervisor.acquire_inference();
             (
                 ChatLlm::local(port, &file, thinking).map_err(String::from)?,
@@ -492,6 +497,7 @@ mod overrides_tests {
     use super::chat_engine_overrides;
     use crate::ai::config::{Advanced, AiConfig, ModelRef, Task};
 
+    /// 回归:chat 两条启动路径曾传 default() 把 ctx 钉死 8K,用户配置的 ctx 对聊天从不生效。
     #[test]
     fn chat_overrides_pass_user_ctx_through() {
         let model = ModelRef::Local {
@@ -508,15 +514,19 @@ mod overrides_tests {
             batch_size: Some(4096),
         });
         let o = chat_engine_overrides(&ai);
-        assert_eq!(o.ctx_size, Some(16384));
-        assert_eq!(o.batch_size, None);
-        assert_eq!(o.parallel_slots, None);
+        assert_eq!(o.ctx_size, Some(16384), "用户 ctx_size 必须透传");
+        assert_eq!(
+            o.batch_size, None,
+            "聊天不用大 batch(--ubatch-size 同步顶大,compute buffer 吃显存)"
+        );
+        assert_eq!(o.parallel_slots, None, "聊天单流,不开并行槽");
 
+        // 8K 下限:设得太小,单槽聊天的窗口装不下工具结果
         ai.advanced[0].ctx_size = Some(2048);
         assert_eq!(chat_engine_overrides(&ai).ctx_size, Some(8192));
 
         let d = chat_engine_overrides(&AiConfig::default());
-        assert_eq!(d.ctx_size, None);
+        assert_eq!(d.ctx_size, None, "未配置时维持引擎默认(8K)");
         assert_eq!(d.batch_size, None);
     }
 

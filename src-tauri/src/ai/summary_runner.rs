@@ -261,15 +261,18 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 "engine_starting",
                 total_segments,
             );
+            // message 留空：前端按 phase 显示本地化的「加载模型中…」（dailySummary.ts）
             p.message = None;
             self.emit(p);
         }
         let main_path = self.resolve_local_model_path(ai, &main_name)?;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
+                // 模型和启动参数都一致才复用，不一致就重启换参数
                 if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
                     && self.supervisor.loaded_overrides() == engine_overrides
                 {
+                    // 准备材料要几秒，先续上空闲计时，免得空闲回收在这期间关掉引擎
                     self.supervisor.touch();
                     return Ok(p);
                 }
@@ -1170,7 +1173,7 @@ mod tests {
     async fn run_without_model_or_cloud_errors_before_any_work() {
         let pool = fresh_test_pool().await;
         insert_act(&pool, "2026-05-15", 9, "VSCode", "a.rs", 300).await;
-        // 默认 settings：external_enabled=false 且 summary/active main 全空
+        // 默认 settings：没有云端连接，日报也没选模型
         let mut s = settings_repo::Settings {
             screenshot_path: "/tmp/hindsight-test-shots".to_string(),
             ..Default::default()

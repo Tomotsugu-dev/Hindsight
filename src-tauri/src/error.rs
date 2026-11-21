@@ -161,7 +161,7 @@ pub enum Error {
         details: String,
     },
 
-    /// 选中的 GGUF 文件（active_main / active_mmproj）在磁盘上找不到。
+    /// 选中的本机模型文件在磁盘上找不到。
     /// caller 一般会引导用户去重新选模型
     #[error("model file missing: {0}")]
     ModelFileMissing(String),

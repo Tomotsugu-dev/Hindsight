@@ -10,7 +10,7 @@
 //!   前端按 `source = "weekly"` 过滤跟 daily 互不干扰。
 //!
 //! 校验链：
-//! 1. 必须有可用的 step2 模型（本地 summary main 非空 或 external_enabled=true）
+//! 1. 周报必须有能用的模型（自己选的，或者跟日报的；云端连接要填完）
 //! 2. 严格模式（`allow_missing_days=false`）下：这一周内必须至少有一天的 daily
 //!    段总结落库（`status = ok`），否则直接写 `status = error` 行让前端引导。
 //!    宽松模式（前端 precheck → 用户在确认弹框点了"继续生成"）下：缺日报的天
@@ -398,6 +398,9 @@ impl WeekSummaryRunner {
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
+                // 模型和启动参数都一致才复用。不查的话，日报留下的小上下文引擎，
+                // 或者同一模型按默认 8K 手动启动的引擎，会被拿来生成周报：
+                // 整周日报塞不下，输出被截断或直接报错。复用前 touch，免得空闲回收关掉它。
                 if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
                     && self.supervisor.loaded_overrides() == wanted_overrides
                 {
