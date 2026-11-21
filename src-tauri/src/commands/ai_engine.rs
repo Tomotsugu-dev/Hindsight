@@ -10,7 +10,10 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::ai::binary::{self, EngineBinaryStatus};
-use crate::ai::config::{sanitize as sanitize_ai, AiConfig, ModelRef, Pick, Task};
+use crate::ai::config::{
+    sanitize as sanitize_ai, AiConfig, ModelRef, Pick, Task, CLOUD_UNAVAILABLE_ERROR,
+    NO_MODEL_ERROR,
+};
 use crate::ai::embedding_runtime::{self, RuntimeStatus};
 use crate::ai::job_guard::{self, JobInitState};
 use crate::ai::platform::{self, VramInfo};
@@ -124,7 +127,7 @@ pub async fn test_ai_connections(
                     kind: "unconfigured",
                     model: String::new(),
                     ok: false,
-                    message: "[AI_NO_MODEL] No language model is configured.".to_string(),
+                    message: NO_MODEL_ERROR.to_string(),
                 });
             }
             Some(ModelRef::Cloud { connection }) => {
@@ -134,8 +137,7 @@ pub async fn test_ai_connections(
                         kind: "cloud",
                         model: connection,
                         ok: false,
-                        message: "[AI_CLOUD_UNAVAILABLE] Selected cloud connection is incomplete or unavailable."
-                            .to_string(),
+                        message: CLOUD_UNAVAILABLE_ERROR.to_string(),
                     });
                     continue;
                 };

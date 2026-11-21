@@ -16,7 +16,9 @@ use model_choice::known_items;
 pub use legacy::migrate_legacy_models;
 #[cfg(test)]
 pub use model_choice::ReasoningLevel;
-pub use model_choice::{Advanced, ModelRef, Pick, Picks, Task};
+pub use model_choice::{
+    Advanced, ModelRef, Pick, Picks, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR,
+};
 pub use sanitize::sanitize;
 pub use segments::{default_segments_for, DaySegment};
 pub use visibility::{ModuleProfiles, Visibility, VisibilityProfile};

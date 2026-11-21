@@ -26,7 +26,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::ai::config::{ModelRef, Task};
+use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
@@ -106,16 +106,10 @@ impl WeekSummaryRunner {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = cfg.ai.clone();
 
+        ai.check_ready(Task::Weekly).map_err(Error::InvalidInput)?;
         let Some(model) = ai.model_for(Task::Weekly) else {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给周报或日报选一个模型，或选定云端连接",
-            ));
+            return Err(Error::InvalidInput(NO_MODEL_ERROR));
         };
-        if !ai.is_ready_for(Task::Weekly) {
-            return Err(Error::InvalidInput(
-                "周报选中的云端连接配置不完整，请先补全端点和模型名",
-            ));
-        }
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
             .await?
             .main_filter();

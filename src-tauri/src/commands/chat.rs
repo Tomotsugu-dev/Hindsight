@@ -15,7 +15,7 @@ use serde::Serialize;
 use tauri::{Emitter, State};
 
 use super::screen_memory::MemoryState;
-use crate::ai::config::{ModelRef, Task};
+use crate::ai::config::{ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
 use crate::ai::policy::ProfileChoice;
 use crate::ai::server::EngineSupervisor;
 use crate::ai::tools::Tools;
@@ -317,10 +317,7 @@ async fn run_ask(
             let conn = ai
                 .cloud_connection(&connection)
                 .filter(|c| c.is_ready())
-                .ok_or_else(|| {
-                    "[AI_CLOUD_UNAVAILABLE] Selected cloud connection is incomplete or unavailable."
-                        .to_string()
-                })?;
+                .ok_or_else(|| CLOUD_UNAVAILABLE_ERROR.to_string())?;
             (
                 ChatLlm::cloud(
                     &conn.endpoint,
@@ -364,9 +361,7 @@ async fn run_ask(
                 Some(guard),
             )
         }
-        None => {
-            return Err("[AI_NO_MODEL] No language model is configured for chat.".to_string());
-        }
+        None => return Err(NO_MODEL_ERROR.to_string()),
     };
 
     // 生成可被"停止"打断:cancel 分支丢弃生成 future——reqwest 连接随之断开,

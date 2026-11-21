@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter};
 
-use crate::ai::config::{AiConfig, ModelRef, Task};
+use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
@@ -137,11 +137,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     ) -> Result<()> {
         let ai = settings_repo::load(&self.pool).await?.ai;
 
-        if !ai.is_ready_for(Task::Daily) {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给日报选一个模型，或选定云端连接",
-            ));
-        }
+        ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
         // 在启动引擎之前读：配置被删了就不白等模型加载
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
             .await?
@@ -255,11 +251,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 return Ok(0);
             }
             Some(ModelRef::Local { file }) => file,
-            None => {
-                return Err(Error::InvalidInput(
-                    "请先在「模型」给日报选一个模型，或选定云端连接",
-                ));
-            }
+            None => return Err(Error::InvalidInput(NO_MODEL_ERROR)),
         };
         let st = self.supervisor.status().await;
         if st.state != EngineState::Running {
@@ -436,11 +428,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     ) -> Result<()> {
         let ai = settings_repo::load(&self.pool).await?.ai;
 
-        if !ai.is_ready_for(Task::Daily) {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给日报选一个模型，或选定云端连接",
-            ));
-        }
+        ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
 
         let seg = ai
             .segments

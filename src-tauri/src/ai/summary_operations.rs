@@ -10,7 +10,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::ai::config::{AiConfig, ModelRef, Task};
+use crate::ai::config::{AiConfig, ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
 use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
@@ -147,7 +147,7 @@ pub(crate) fn build_step2(ai: &AiConfig, task: Task, local_port: u16) -> Result<
         Some(ModelRef::Cloud { connection }) => {
             let conn = ai
                 .cloud_connection(&connection)
-                .ok_or(Error::InvalidInput("选中的云端连接不存在，请重新选择模型"))?;
+                .ok_or(Error::InvalidInput(CLOUD_UNAVAILABLE_ERROR))?;
             Step2Chat::cloud(
                 &conn.endpoint,
                 &conn.model,
@@ -160,9 +160,7 @@ pub(crate) fn build_step2(ai: &AiConfig, task: Task, local_port: u16) -> Result<
         Some(ModelRef::Local { file }) => {
             Step2Chat::local(local_port, &file, max_tokens, reasoning)
         }
-        None => Err(Error::InvalidInput(
-            "请先在「模型」给报告选一个模型，或选定云端连接",
-        )),
+        None => Err(Error::InvalidInput(NO_MODEL_ERROR)),
     }
 }
 

@@ -9,6 +9,12 @@ use crate::ai::model::Reasoning;
 /// Minimum per-slot context size for chat when a user sets an explicit override.
 const CHAT_MIN_CTX_SIZE: u32 = 8192;
 
+/// 任务没选模型时的错误。方括号里是前端认的错误码，后面的英文给日志看。
+pub const NO_MODEL_ERROR: &str = "[AI_NO_MODEL] no language model is configured";
+/// 任务选的云端连接不存在或没填完时的错误。
+pub const CLOUD_UNAVAILABLE_ERROR: &str =
+    "[AI_CLOUD_UNAVAILABLE] the selected cloud connection is incomplete or unavailable";
+
 /// AI tasks that pick a language model.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -190,6 +196,17 @@ impl AiConfig {
         }
     }
 
+    /// 检查 `task` 有没有能用的模型。
+    ///
+    /// 没选模型时返回 [`NO_MODEL_ERROR`]，选的云端连接不能用时返回 [`CLOUD_UNAVAILABLE_ERROR`]。
+    pub fn check_ready(&self, task: Task) -> Result<(), &'static str> {
+        match self.model_for(task) {
+            None => Err(NO_MODEL_ERROR),
+            Some(_) if !self.is_ready_for(task) => Err(CLOUD_UNAVAILABLE_ERROR),
+            Some(_) => Ok(()),
+        }
+    }
+
     /// Returns the [`Advanced`] override entry matching `task` and its resolved model.
     pub fn advanced_for(&self, task: Task) -> Option<&Advanced> {
         let model = self.model_for(task)?;
@@ -310,6 +327,27 @@ mod tests {
         assert!(c.is_ready_for(Task::Daily));
         assert!(!c.is_ready_for(Task::Chat), "missing model means not ready");
         assert!(!c.is_ready_for(Task::Weekly), "unknown id means not ready");
+    }
+
+    /// 没选模型和云端连接没填完是两种错，前端按错误码给出不同的引导。
+    #[test]
+    fn check_ready_tells_missing_model_from_unusable_cloud() {
+        let mut c = base();
+        assert_eq!(c.check_ready(Task::Daily), Err(NO_MODEL_ERROR));
+
+        c.cloud.push(cloud_conn("c1", "https://api.x/v1", ""));
+        c.picks.daily = Some(ModelRef::Cloud {
+            connection: "c1".into(),
+        });
+        assert_eq!(c.check_ready(Task::Daily), Err(CLOUD_UNAVAILABLE_ERROR));
+
+        c.cloud[0].model = "m1".into();
+        assert_eq!(c.check_ready(Task::Daily), Ok(()));
+        assert_eq!(c.check_ready(Task::Weekly), Ok(()), "周报跟日报");
+        assert_eq!(c.check_ready(Task::Chat), Err(NO_MODEL_ERROR));
+
+        assert!(NO_MODEL_ERROR.starts_with("[AI_NO_MODEL]"));
+        assert!(CLOUD_UNAVAILABLE_ERROR.starts_with("[AI_CLOUD_UNAVAILABLE]"));
     }
 
     #[test]
