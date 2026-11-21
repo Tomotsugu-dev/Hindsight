@@ -7,14 +7,14 @@ import type { AiProfilesState } from "../../state/aiProfiles";
 import styles from "./ChatPage.module.css";
 
 /**
- * 输入框里的「AI 能看到的数据」下拉，样子和交互跟思考档位一样：向上弹菜单。
+ * 左栏会话列表下面的「AI 能看到的数据」下拉，贴着页面底部，所以向上弹菜单。
  * 换了之后只影响后面的提问，已经回答的不变。
  */
 export default function ChatProfileToggle({ state }: { state: AiProfilesState }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -46,10 +46,10 @@ export default function ChatProfileToggle({ state }: { state: AiProfilesState })
   };
 
   return (
-    <span ref={wrapRef} className={styles.thinkWrap}>
+    <div ref={wrapRef} className={styles.profileWrap}>
       <button
         type="button"
-        className={styles.thinkBtn}
+        className={styles.profileBtn}
         title={t("aiProfiles.pickerTitle")}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
@@ -62,7 +62,7 @@ export default function ChatProfileToggle({ state }: { state: AiProfilesState })
       </button>
 
       {open && (
-        <div className={`${styles.badgeMenu} ${styles.thinkMenu}`} role="menu">
+        <div className={`${styles.badgeMenu} ${styles.profileMenu}`} role="menu">
           {items.map(([id, label]) => (
             <button
               key={id ?? "main"}
@@ -87,6 +87,6 @@ export default function ChatProfileToggle({ state }: { state: AiProfilesState })
           </button>
         </div>
       )}
-    </span>
+    </div>
   );
 }
