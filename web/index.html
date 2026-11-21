@@ -175,7 +175,7 @@
       <ul class="cards" id="feature-cards" tabindex="0" aria-labelledby="features-title">
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/sync_zh.mp4" poster="/assets/home/sync_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/sync_zh.mp4" data-poster="/assets/home/sync_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="我的工作站和 MacBook Pro 两台电脑的日统计合到一起，变成所有设备的合计"></video>
           </div>
@@ -183,7 +183,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/plugins_zh.mp4" poster="/assets/home/plugins_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/plugins_zh.mp4" data-poster="/assets/home/plugins_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Focus 插件：鼠标移到屏幕顶部的灵动岛上，岛展开，显示今天的目标进度、专注倒计时和分心次数"></video>
           </div>
@@ -191,7 +191,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/garden.mp4" poster="/assets/home/garden.webp" width="960" height="720"
+            <video data-src="/assets/home/garden.mp4" data-poster="/assets/home/garden.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="社区插件时光花园：花园里先有 5 株花，一圈圈长到 25 株，开满整个花园"></video>
           </div>
@@ -199,7 +199,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/themes_zh.mp4" poster="/assets/home/themes_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/themes_zh.mp4" data-poster="/assets/home/themes_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="同一个月统计页依次换成简约、暗色、社区主题 Vermillion Cover、留白扁平和社区主题 Sakura Notes"></video>
           </div>
@@ -207,7 +207,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/ai_chat_zh.mp4" poster="/assets/home/ai_chat_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/ai_chat_zh.mp4" data-poster="/assets/home/ai_chat_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="在对话页提问：这周我在 Hindsight 项目上花了多少时间？AI 根据记录回答约 12 小时 36 分钟，并列出三条依据：各自的时间段和应用"></video>
           </div>
@@ -215,7 +215,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/ai_summary_zh.mp4" poster="/assets/home/ai_summary_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/ai_summary_zh.mp4" data-poster="/assets/home/ai_summary_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="AI 总结的日报：深夜、早上、上午三个时段依次生成总结，然后导出为 Markdown，提示已导出到「下载」文件夹"></video>
           </div>
@@ -223,7 +223,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/search_zh.mp4" poster="/assets/home/search_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/search_zh.mp4" data-poster="/assets/home/search_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="在 Hindsight 里搜 OCR，打开结果，回到当时的截图并框出那几行字"></video>
           </div>
@@ -231,7 +231,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/categories_zh.mp4" poster="/assets/home/categories_zh.webp" width="960" height="720"
+            <video data-src="/assets/home/categories_zh.mp4" data-poster="/assets/home/categories_zh.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="归类应用列表里，Code、Chrome、Cursor 三行起初是黄色（未指派）；逐行点开右边的「指派」，分别选编程、浏览、编程，下面今天的时间条随之长出编程和浏览两段"></video>
           </div>
@@ -246,9 +246,9 @@
     <section class="section page film" id="demo">
       <h2>1 分钟看懂</h2>
       <div class="frame">
-        <video src="/assets/video/Hindsight_zh.mp4"
-               controls muted autoplay loop playsinline preload="metadata"
-               poster="/assets/video/Hindsight_zh.jpg"></video>
+        <video data-src="/assets/video/Hindsight_zh.mp4"
+               data-poster="/assets/video/Hindsight_zh.jpg" width="1920" height="1080"
+               controls muted loop playsinline preload="none"></video>
       </div>
     </section>
 
@@ -408,18 +408,6 @@
       }).observe(frame);
     })();
 
-    // 功能卡片的视频：卡片露出一半以上才下载、播放，滑走就暂停，免得一打开首页就下载全部视频。
-    // 系统要求减少动态效果时只显示封面
-    (function () {
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
-      const seen = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) e.target.play().catch(() => {});
-          else e.target.pause();
-        });
-      }, { threshold: 0.5 });
-      document.querySelectorAll('.card-media video').forEach(v => seen.observe(v));
-    })();
 
     // 功能卡片的 Dock 放大：按鼠标到每张卡片中心的距离算放大倍数，再按放大后的宽度重新排开，
     // 整排平移到鼠标下面那一点不动，卡片不会互相重叠。只认鼠标；系统要求减少动态效果时不做
@@ -512,6 +500,7 @@
       });
     })();
   </script>
+  <script type="module" src="/home-media.js"></script>
 
 </body>
 </html>

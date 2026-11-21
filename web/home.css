@@ -254,6 +254,8 @@ h2 {
 .film video {
   width: 100%;
   height: auto;
+  aspect-ratio: 16 / 9;
+  background: var(--band);
 }
 
 /* ============ 功能：横向滑动 ============ */
