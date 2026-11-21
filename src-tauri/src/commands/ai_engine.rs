@@ -15,7 +15,8 @@ use crate::ai::embedding_runtime::{self, RuntimeStatus};
 use crate::ai::job_guard::{self, JobInitState};
 use crate::ai::platform::{self, VramInfo};
 use crate::ai::server::{EngineRuntimeStatus, EngineStartOverrides, EngineSupervisor};
-use crate::commands::ai_endpoint::{test_ai_chat, test_ai_endpoint};
+use crate::commands::ai_endpoint::{self, test_ai_chat, test_ai_endpoint};
+use crate::commands::ai_summary::{RunLock, AI_RUN_BUSY};
 use crate::repo::settings;
 use crate::storage::DbPool;
 
@@ -96,16 +97,20 @@ fn overrides_for_task(ai: &AiConfig, task: Task) -> EngineStartOverrides {
 
 /// 探测日报、周报、对话三个任务当前配置的 AI 连接。
 ///
-/// 本地模型会按各自任务的高级参数启动，测试完成后停止以释放显存；
+/// 本地模型会按各自任务的高级参数启动，测试完成后没人在用就停止，释放显存；
 /// 若相邻任务共用相同的本地模型与启动参数，则复用同一次启动。
+/// 日报、周报或聊天正在用引擎时，本地模型那一项不测，报忙。
 #[tauri::command]
 pub async fn test_ai_connections(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
+    run_lock: State<'_, RunLock>,
 ) -> Result<Vec<TaskConnectionTest>, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     let ai = &cfg.ai;
     let models_dir = crate::ai::models::root_dir(ai);
+    // 拿不到锁 = 日报或周报正在跑。拿到了就一直拿着，测试期间它们不会启动
+    let run_guard = run_lock.0.try_lock().ok();
 
     let mut results = Vec::with_capacity(3);
     let mut started_local = false;
@@ -135,7 +140,9 @@ pub async fn test_ai_connections(
                     continue;
                 };
                 let key = (!conn.api_key.is_empty()).then(|| conn.api_key.clone());
-                let endpoint_resp = test_ai_endpoint(conn.endpoint.clone(), key.clone()).await?;
+                let endpoint_resp = test_ai_endpoint(conn.endpoint.clone(), key.clone())
+                    .await
+                    .unwrap_or_else(|e| ai_endpoint::fail(&e));
                 if !endpoint_resp.ok {
                     results.push(TaskConnectionTest {
                         task,
@@ -146,8 +153,9 @@ pub async fn test_ai_connections(
                     });
                     continue;
                 }
-                let chat_resp =
-                    test_ai_chat(conn.endpoint.clone(), key, conn.model.clone(), false).await?;
+                let chat_resp = test_ai_chat(conn.endpoint.clone(), key, conn.model.clone(), false)
+                    .await
+                    .unwrap_or_else(|e| ai_endpoint::fail(&e));
                 results.push(TaskConnectionTest {
                     task,
                     kind: "cloud",
@@ -178,6 +186,17 @@ pub async fn test_ai_connections(
                         Ok(*prev_port)
                     }
                     _ => {
+                        // 要重启引擎时，别的任务正在用就不动它，这一项报忙
+                        if run_guard.is_none() || supervisor.in_use().await {
+                            results.push(TaskConnectionTest {
+                                task,
+                                kind: "local",
+                                model: file,
+                                ok: false,
+                                message: AI_RUN_BUSY.to_string(),
+                            });
+                            continue;
+                        }
                         started_local = true;
                         match supervisor
                             .restart_with_overrides(
@@ -200,8 +219,9 @@ pub async fn test_ai_connections(
                 };
                 match port {
                     Ok(p) => {
-                        let resp =
-                            test_ai_endpoint(format!("http://127.0.0.1:{p}/v1"), None).await?;
+                        let resp = test_ai_endpoint(format!("http://127.0.0.1:{p}/v1"), None)
+                            .await
+                            .unwrap_or_else(|e| ai_endpoint::fail(&e));
                         results.push(TaskConnectionTest {
                             task,
                             kind: "local",
@@ -224,7 +244,8 @@ pub async fn test_ai_connections(
         }
     }
 
-    if started_local {
+    // 测试期间聊天可能已经用上这个引擎。有人在用就不停，交给空闲回收
+    if started_local && !supervisor.in_use().await {
         let _ = supervisor.stop().await;
     }
 

@@ -318,6 +318,15 @@ impl EngineSupervisor {
         s
     }
 
+    /// 引擎正在启动，或者有请求正在用它时返回 `true`。
+    pub async fn in_use(&self) -> bool {
+        match self.inner.lock().await.state.state {
+            EngineState::Starting => true,
+            EngineState::Running => self.idle_eta().is_none(),
+            EngineState::Stopped | EngineState::Error => false,
+        }
+    }
+
     /// Starts llama-server with explicit engine parameter overrides.
     ///
     /// Returns the running port without respawning if already `Running`, or errors if `Starting`.
@@ -750,4 +759,28 @@ where
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 正在启动、或者有请求正在用，都算在用；跑着但空闲、或者没在跑，都不算。
+    /// 测试连接收尾停引擎前靠它判断，算错了会打断正在回答的聊天。
+    #[tokio::test]
+    async fn in_use_while_starting_or_serving_a_request() {
+        let sup = Arc::new(EngineSupervisor::new());
+        assert!(!sup.in_use().await, "没在跑");
+
+        sup.inner.lock().await.state.state = EngineState::Starting;
+        assert!(sup.in_use().await, "正在启动");
+
+        sup.inner.lock().await.state.state = EngineState::Running;
+        assert!(!sup.in_use().await, "跑着但空闲");
+
+        let guard = sup.acquire_inference();
+        assert!(sup.in_use().await, "有请求在用");
+        drop(guard);
+        assert!(!sup.in_use().await, "请求结束");
+    }
 }
