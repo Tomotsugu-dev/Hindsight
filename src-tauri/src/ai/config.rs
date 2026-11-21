@@ -38,10 +38,6 @@ pub struct AiSegment {
     pub color: String,
 }
 
-/// AI 子系统的所有用户配置。嵌进 [`crate::repo::settings::Settings::ai`]。
-///
-/// `#[serde(default)]` 让旧 settings JSON（没有 ai 字段）反序列化时自动填默认值，
-/// 不需要 schema migration。
 /// 云端 API 的一组已保存配置(provider/端点/Key/模型)。
 /// 只是"预设收藏":应用某组 = 把四个字段拷进 AiConfig 的激活字段,
 /// 聊天/总结消费方仍只读激活字段,不感知本列表。
@@ -187,6 +183,10 @@ where
         .collect())
 }
 
+/// AI 子系统的所有用户配置。嵌进 [`crate::repo::settings::Settings::ai`]。
+///
+/// `#[serde(default)]` 让旧 settings JSON（没有 ai 字段）反序列化时自动填默认值，
+/// 不需要 schema migration。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AiConfig {
@@ -317,10 +317,6 @@ impl AiConfig {
     pub fn summary_ctx_size_effective(&self) -> Option<u32> {
         self.summary_ctx_size.or(self.ctx_size)
     }
-    /// chat 引擎的每槽 ctx:全局 `ctx_size` 兜底,但不低于 8192——
-    /// 旧配置里的小 ctx(为多槽段总结调的 2048/4096)对单槽聊天会立刻溢出:
-    /// 工具结果预算(chat/engine.rs TOOL_RESULT_MAX_CHARS=4000 字符/条)按 ~8K 窗口设计。
-    /// `None` = 维持引擎默认([`crate::ai::server::DEFAULT_CTX_SIZE`],同为 8K)。
     /// 自动总结的**有效**时间点:新列表优先,空则回落旧单时刻字段;
     /// 两者都空 = 尽快模式(调用方据 is_empty 判定)。
     pub fn effective_auto_summary_times(&self) -> Vec<String> {
@@ -330,6 +326,10 @@ impl AiConfig {
         self.auto_summary_at.clone().into_iter().collect()
     }
 
+    /// chat 引擎的每槽 ctx:全局 `ctx_size` 兜底,但不低于 8192——
+    /// 旧配置里的小 ctx(为多槽段总结调的 2048/4096)对单槽聊天会立刻溢出:
+    /// 工具结果预算(chat/engine.rs TOOL_RESULT_MAX_CHARS=4000 字符/条)按 ~8K 窗口设计。
+    /// `None` = 维持引擎默认([`crate::ai::server::DEFAULT_CTX_SIZE`],同为 8K)。
     pub fn chat_ctx_size_effective(&self) -> Option<u32> {
         self.ctx_size.map(|c| c.max(8192))
     }
@@ -498,12 +498,12 @@ impl Default for AiConfig {
     }
 }
 
-/// 默认 5 段，覆盖整 24 小时（00-06 / 06-09 / 09-12 / 12-18 / 18-24）；
-/// 标签按用户语言取一套。新装首启时通过 [`crate::platform::system_language`] 拿系统语言。
 fn default_chat_thinking() -> String {
     "auto".to_string()
 }
 
+/// 默认 5 段，覆盖整 24 小时（00-06 / 06-09 / 09-12 / 12-18 / 18-24）；
+/// 标签按用户语言取一套。新装首启时通过 [`crate::platform::system_language`] 拿系统语言。
 pub fn default_segments_for(lang: &str) -> Vec<AiSegment> {
     let labels: [&str; 5] = match lang {
         "en" => [
@@ -603,10 +603,6 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         valid_segments
     };
 
-    // 引擎启动级参数 clamp：
-    // batch ≥ 32 是 llama-server 不接受过小值的安全下限
-    // ctx 上限给 256K（极限场景，超出基本任何卡都装不下，没必要再大）
-    // parallel_slots ≥ 1，给 32 上限避免误填出格的值
     // 已保存云端配置:字段 trim;端点为空的条目没有意义,丢弃;上限 10
     next.external_profiles = next
         .external_profiles
@@ -645,6 +641,10 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         out
     };
 
+    // 引擎启动级参数 clamp：
+    // batch ≥ 32 是 llama-server 不接受过小值的安全下限
+    // ctx 上限给 256K（极限场景，超出基本任何卡都装不下，没必要再大）
+    // parallel_slots ≥ 1，给 32 上限避免误填出格的值
     next.batch_size = next.batch_size.map(|b| b.clamp(32, 32_768));
     next.parallel_slots = next.parallel_slots.map(|n| n.clamp(1, 32));
     next.ctx_size = next.ctx_size.map(|c| c.clamp(512, 262_144));
