@@ -378,7 +378,7 @@
   outline: none;
 }
 
-/* 三档颜色：< 16 GB 绿、16-24 GB 橙警告、> 24 GB 红危险（跟 DebugTab 一致）*/
+/* 三档颜色：< 16 GB 绿、16-24 GB 橙警告、> 24 GB 红危险 */
 .vramEstOk .vramEstValue {
   color: var(--status-ok-strong);
 }

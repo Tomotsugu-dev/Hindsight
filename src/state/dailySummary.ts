@@ -63,7 +63,7 @@ function ensureListener(): void {
   if (listenerInit) return;
   listenerInit = listen<SummaryProgress>(SUMMARY_PROGRESS_EVENT, (ev) => {
     const p = ev.payload;
-    // 只接 daily source；调试 tab 的事件 (source="debug") 走它自己的 listener
+    // 只接 daily source；周报的事件 (source="weekly") 走它自己的 listener
     if (p.source !== "daily") return;
 
     switch (p.phase) {
@@ -210,7 +210,7 @@ export async function startDailyGenerate(
   });
   notify();
   try {
-    await api.generateDaySummary(date, forceRefresh, null, null, "daily", profile);
+    await api.generateDaySummary(date, forceRefresh, null, profile);
     // generateDaySummary 在 all_done 后 resolve；事件流已经把 generating 置回 false
   } catch (e) {
     setTopError(localizeAiError(typeof e === "string" ? e : String(e)));
@@ -251,7 +251,7 @@ export async function retryDailySegment(
   });
   notify();
   try {
-    await api.retrySummarySegment(date, segmentIdx, null, null, "daily", profile);
+    await api.retrySummarySegment(date, segmentIdx, null, profile);
     // retry 后端不发 all_done；这里命令 resolve 时显式复位
     snap = Object.freeze({ ...EMPTY_SNAP, topError: snap.topError });
     notify();

@@ -1551,8 +1551,7 @@
     "tabs": {
       "daily": "Diário",
       "week": "Semanal",
-      "month": "Mensal",
-      "debug": "Depuração"
+      "month": "Mensal"
     },
     "model": {
       "title": "Modelo e raciocínio",
@@ -1714,7 +1713,7 @@
         "deleteTooltip": "Limpar o relatório diário deste dia (não pode ser desfeito)",
         "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
         "deleteConfirmTitle": "Excluir os dados do relatório diário de {{date}}?",
-        "deleteConfirmMessage": "Todos os resumos de segmento deste dia serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
+        "deleteConfirmMessage": "Todos os resumos de segmento deste dia serão limpos. Isto não pode ser desfeito.",
         "exportMarkdown": "Exportar Markdown",
         "exportTooltip": "Exportar todos os resumos de segmento da data atual como um arquivo Markdown.",
         "exportEmptyTooltip": "Ainda não há resumos de segmento para exportar.",
@@ -1772,98 +1771,6 @@
       },
       "ocrLoading": "Carregando modelo OCR…",
       "ocrRunning": "Lendo texto das capturas {{done}}/{{total}}…"
-    },
-    "debug": {
-      "scope": {
-        "daily": "Diário",
-        "weekly": "Semanal",
-        "monthly": "Mensal"
-      },
-      "dateNav": {
-        "prevDayAria": "Dia anterior",
-        "nextDayAria": "Próximo dia",
-        "prevWeekAria": "Semana anterior",
-        "nextWeekAria": "Próxima semana",
-        "prevMonthAria": "Mês anterior",
-        "nextMonthAria": "Próximo mês",
-        "todayBack": "Voltar para hoje",
-        "thisWeekBack": "Voltar para esta semana",
-        "thisMonthBack": "Voltar para este mês",
-        "today": "Hoje",
-        "yesterday": "Ontem",
-        "thisWeek": "Esta semana",
-        "lastWeek": "Semana passada",
-        "weekBeforeLast": "2 semanas atrás",
-        "weeksAgo": "{{count}} semanas atrás",
-        "thisMonth": "Este mês",
-        "lastMonth": "Mês passado",
-        "monthsAgo": "{{count}} meses atrás"
-      },
-      "actions": {
-        "stop": "Parar",
-        "start": "Regenerar",
-        "startInfo": "Regenerar os resumos de segmento deste dia.",
-        "startInfoAria": "Informações sobre o escopo de regeneração",
-        "clearSummaries": "Excluir",
-        "clearSummariesTooltip": "Limpar todos os resumos de segmento deste dia (não pode ser desfeito).",
-        "clearSummariesConfirm": "Excluir todos os resumos de segmento de {{date}}? Isto não pode ser desfeito.",
-        "clearSummariesConfirmTitle": "Excluir todos os resumos de segmento de {{date}}?",
-        "clearSummariesConfirmMessage": "Isto não pode ser desfeito.",
-        "exportSummariesMd": "Exportar Markdown",
-        "exportSummariesMdTooltip": "Exportar todos os resumos de segmento deste dia como um arquivo Markdown.",
-        "exportSummariesMdEmptyTooltip": "Ainda não há resumos de segmento para exportar.",
-        "exportSaveTitle": "Salvar como Markdown",
-        "exportSavedAt": "Exportado para {{path}}",
-        "exportFailed": "Falha na exportação: {{err}}",
-        "startTooltipPending": "Depuração de {{type}} pendente de implementação no backend.",
-        "startTooltipReady": "Modo de depuração: executa novamente cada segmento do dia (limpa os resultados existentes), os resumos de segmento são transmitidos ao vivo.",
-        "startTooltipNoModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
-      },
-      "errors": {
-        "scopePending": "Depuração de {{type}} pendente de implementação no backend.",
-        "runFailed": "Falha na execução de depuração",
-        "noModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
-      },
-      "engineLoading": "Carregando modelo…",
-      "scopePlaceholder": "Depuração de {{type}} pendente de implementação no backend. Volte para \"Diário\" para depurar o fluxo de resumo de segmento diário.",
-      "segPrompt": {
-        "title": "Prompt de resumo de segmento",
-        "description": "Usado ao resumir a linha do tempo de atividades do segmento. As alterações se aplicam apenas a esta janela.",
-        "label": "Prompt"
-      },
-      "segments": {
-        "title": "Resumo de segmento",
-        "empty": "Nenhum resumo de segmento ainda. Clique em \"Executar\" acima para que o modelo resuma a linha do tempo de atividades do segmento.",
-        "chipTitle": "Segmento idx={{idx}}",
-        "skippedFallback": "(nenhuma captura de tela neste segmento)",
-        "skippedNoActivityFallback": "(nenhuma atividade neste segmento)",
-        "emptyFallback": "(vazio)"
-      },
-      "events": {
-        "label": "Fluxo de eventos (últimos 200)",
-        "empty": "Nenhum evento ainda. Eles aparecerão rolando aqui assim que você clicar em Executar."
-      },
-      "engineLogs": {
-        "label": "Log do mecanismo",
-        "refresh": "Atualizar",
-        "refreshing": "Atualizando…",
-        "refreshTooltip": "Buscar o stderr / stdout recente do processo filho llama-server.",
-        "copy": "Copiar",
-        "copied": "Copiado",
-        "copyTooltip": "Copiar todas as linhas de log para a área de transferência.",
-        "emptyPrefix": "Nenhum log buscado ainda. Clique em \"Atualizar\" acima para buscar uma vez; o conteúdo aparece somente depois que o mecanismo tiver gerado um resumo. Procure por linhas ",
-        "emptySuffix": " para saber se a GPU está sendo usada."
-      },
-      "engineBar": {
-        "loading": "Carregando o status do mecanismo…",
-        "notInstalled": "Não instalado",
-        "port": "Porta: ",
-        "version": "Versão do llama.cpp: ",
-        "accel": "Aceleração: ",
-        "state": "Estado: ",
-        "error": "Erro: ",
-        "accelTitle": "ID da variante de binário: {{id}}"
-      }
     }
   },
   "chat": {

@@ -1546,8 +1546,7 @@
     "tabs": {
       "daily": "日报",
       "week": "周报",
-      "month": "月报",
-      "debug": "调试"
+      "month": "月报"
     },
     "model": {
       "title": "模型和思考模式",
@@ -1709,7 +1708,7 @@
         "deleteTooltip": "清空当天的日报（不可撤销）",
         "deleteEmptyTooltip": "当天还没有日报数据可删除",
         "deleteConfirmTitle": "删除 {{date}} 当天日报数据？",
-        "deleteConfirmMessage": "当天所有段总结都会清空，不影响调试 tab，操作不可撤销。",
+        "deleteConfirmMessage": "当天所有段总结都会清空，操作不可撤销。",
         "exportMarkdown": "导出为 Markdown",
         "exportTooltip": "导出当前日期的所有段总结为 Markdown 文件",
         "exportEmptyTooltip": "还没有任何段总结可导出",
@@ -1767,98 +1766,6 @@
       },
       "ocrLoading": "加载 OCR 模型中…",
       "ocrRunning": "识别截图文字 {{done}}/{{total}}…"
-    },
-    "debug": {
-      "scope": {
-        "daily": "日报",
-        "weekly": "周报",
-        "monthly": "月报"
-      },
-      "dateNav": {
-        "prevDayAria": "前一天",
-        "nextDayAria": "后一天",
-        "prevWeekAria": "上一周",
-        "nextWeekAria": "下一周",
-        "prevMonthAria": "上一月",
-        "nextMonthAria": "下一月",
-        "todayBack": "回到今天",
-        "thisWeekBack": "回到本周",
-        "thisMonthBack": "回到本月",
-        "today": "今天",
-        "yesterday": "昨天",
-        "thisWeek": "本周",
-        "lastWeek": "上周",
-        "weekBeforeLast": "上上周",
-        "weeksAgo": "{{count}} 周前",
-        "thisMonth": "本月",
-        "lastMonth": "上月",
-        "monthsAgo": "{{count}} 月前"
-      },
-      "actions": {
-        "stop": "停止",
-        "start": "重新生成",
-        "startInfo": "重新生成当天的时段总结",
-        "startInfoAria": "重新生成范围说明",
-        "clearSummaries": "删除",
-        "clearSummariesTooltip": "清空当天所有段总结（不可撤销）",
-        "clearSummariesConfirm": "删除 {{date}} 当天所有段总结？（操作不可撤销）",
-        "clearSummariesConfirmTitle": "删除 {{date}} 当天所有段总结？",
-        "clearSummariesConfirmMessage": "操作不可撤销。",
-        "exportSummariesMd": "导出 Markdown",
-        "exportSummariesMdTooltip": "把当天所有段总结导出成 Markdown 文件",
-        "exportSummariesMdEmptyTooltip": "还没有段总结可导出",
-        "exportSaveTitle": "保存为 Markdown",
-        "exportSavedAt": "已导出到 {{path}}",
-        "exportFailed": "导出失败：{{err}}",
-        "startTooltipPending": "{{type}}调试待后端实现",
-        "startTooltipReady": "调试模式：跑当天全部段（清空已有结果重跑），段总结实时显示",
-        "startTooltipNoModel": "请先到 AI 设置 → 模型 选一个模型"
-      },
-      "errors": {
-        "scopePending": "{{type}}调试待后端实现",
-        "runFailed": "调试运行失败",
-        "noModel": "请先到 AI 设置 → 模型 选一个模型"
-      },
-      "engineLoading": "加载模型中…",
-      "scopePlaceholder": "{{type}}调试待后端实现。切回「日报」可以调试当前日报的段总结生成流程。",
-      "segPrompt": {
-        "title": "时间段总结提示词",
-        "description": "把该段的活动时间线汇总成段总结时使用，改动仅在本窗口生效。",
-        "label": "提示词"
-      },
-      "segments": {
-        "title": "段总结结果",
-        "empty": "还没有段总结结果。点上方「开始」让模型把段内活动时间线总结成一段文字。",
-        "chipTitle": "段 idx={{idx}}",
-        "skippedFallback": "(该段无截图)",
-        "skippedNoActivityFallback": "(该段无任何活动)",
-        "emptyFallback": "(空)"
-      },
-      "events": {
-        "label": "事件流（rolling 200 条）",
-        "empty": "暂无事件。点开始后这里会滚动出现。"
-      },
-      "engineLogs": {
-        "label": "引擎日志",
-        "refresh": "刷新",
-        "refreshing": "刷新中…",
-        "refreshTooltip": "拉取 llama-server 子进程最近的 stderr / stdout",
-        "copy": "复制",
-        "copied": "已复制",
-        "copyTooltip": "复制全部日志到剪贴板",
-        "emptyPrefix": "还没拉过日志。点上方\"刷新\"拉一次；引擎跑过总结后才有内容。找 ",
-        "emptySuffix": " 这种行可判断 GPU 是否在用。"
-      },
-      "engineBar": {
-        "loading": "引擎状态加载中…",
-        "notInstalled": "未安装",
-        "port": "端口：",
-        "version": "llama.cpp 版本：",
-        "accel": "加速：",
-        "state": "状态：",
-        "error": "错误：",
-        "accelTitle": "binary 变体 ID: {{id}}"
-      }
     }
   },
   "chat": {

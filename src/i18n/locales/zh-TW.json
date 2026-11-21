@@ -1546,8 +1546,7 @@
     "tabs": {
       "daily": "日報",
       "week": "週報",
-      "month": "月報",
-      "debug": "除錯"
+      "month": "月報"
     },
     "model": {
       "title": "模型和思考模式",
@@ -1709,7 +1708,7 @@
         "deleteTooltip": "清空當天的日報（不可撤銷）",
         "deleteEmptyTooltip": "當天還沒有日報資料可刪除",
         "deleteConfirmTitle": "刪除 {{date}} 當天日報資料？",
-        "deleteConfirmMessage": "當天所有段總結都會清空，不影響除錯 tab，操作不可撤銷。",
+        "deleteConfirmMessage": "當天所有段總結都會清空，操作不可撤銷。",
         "exportMarkdown": "匯出為 Markdown",
         "exportTooltip": "匯出當前日期的所有段總結為 Markdown 檔案",
         "exportEmptyTooltip": "還沒有任何段總結可匯出",
@@ -1767,98 +1766,6 @@
       },
       "ocrLoading": "載入 OCR 模型中…",
       "ocrRunning": "辨識截圖文字 {{done}}/{{total}}…"
-    },
-    "debug": {
-      "scope": {
-        "daily": "日報",
-        "weekly": "週報",
-        "monthly": "月報"
-      },
-      "dateNav": {
-        "prevDayAria": "前一天",
-        "nextDayAria": "後一天",
-        "prevWeekAria": "上一週",
-        "nextWeekAria": "下一週",
-        "prevMonthAria": "上一月",
-        "nextMonthAria": "下一月",
-        "todayBack": "回到今天",
-        "thisWeekBack": "回到本週",
-        "thisMonthBack": "回到本月",
-        "today": "今天",
-        "yesterday": "昨天",
-        "thisWeek": "本週",
-        "lastWeek": "上週",
-        "weekBeforeLast": "上上週",
-        "weeksAgo": "{{count}} 周前",
-        "thisMonth": "本月",
-        "lastMonth": "上月",
-        "monthsAgo": "{{count}} 月前"
-      },
-      "actions": {
-        "stop": "停止",
-        "start": "重新生成",
-        "startInfo": "重新生成當天的時段總結",
-        "startInfoAria": "重新生成範圍說明",
-        "clearSummaries": "刪除",
-        "clearSummariesTooltip": "清空當天所有段總結（不可撤銷）",
-        "clearSummariesConfirm": "刪除 {{date}} 當天所有段總結？（操作不可撤銷）",
-        "clearSummariesConfirmTitle": "刪除 {{date}} 當天所有段總結？",
-        "clearSummariesConfirmMessage": "操作不可撤銷。",
-        "exportSummariesMd": "匯出 Markdown",
-        "exportSummariesMdTooltip": "把當天所有段總結匯出成 Markdown 檔案",
-        "exportSummariesMdEmptyTooltip": "還沒有段總結可匯出",
-        "exportSaveTitle": "儲存為 Markdown",
-        "exportSavedAt": "已匯出到 {{path}}",
-        "exportFailed": "匯出失敗：{{err}}",
-        "startTooltipPending": "{{type}}除錯待後端實現",
-        "startTooltipReady": "除錯模式：跑當天全部段（清空已有結果重跑），段總結即時顯示",
-        "startTooltipNoModel": "請先到 AI 設定 → 模型 選一個模型"
-      },
-      "errors": {
-        "scopePending": "{{type}}除錯待後端實現",
-        "runFailed": "除錯執行失敗",
-        "noModel": "請先到 AI 設定 → 模型 選一個模型"
-      },
-      "engineLoading": "載入模型中…",
-      "scopePlaceholder": "{{type}}除錯待後端實現。切回「日報」可以除錯當前日報的段總結生成流程。",
-      "segPrompt": {
-        "title": "時間段總結提示詞",
-        "description": "把該段的活動時間線彙總成段總結時使用，改動僅在本視窗生效。",
-        "label": "提示詞"
-      },
-      "segments": {
-        "title": "段總結結果",
-        "empty": "還沒有段總結結果。點上方「開始」讓模型把段內活動時間線總結成一段文字。",
-        "chipTitle": "段 idx={{idx}}",
-        "skippedFallback": "(該段無截圖)",
-        "skippedNoActivityFallback": "(該段無任何活動)",
-        "emptyFallback": "(空)"
-      },
-      "events": {
-        "label": "事件流（rolling 200 條）",
-        "empty": "暫無事件。點開始後這裡會滾動出現。"
-      },
-      "engineLogs": {
-        "label": "引擎日誌",
-        "refresh": "重新整理",
-        "refreshing": "重新整理中…",
-        "refreshTooltip": "拉取 llama-server 子程序最近的 stderr / stdout",
-        "copy": "複製",
-        "copied": "已複製",
-        "copyTooltip": "複製全部日誌到剪貼簿",
-        "emptyPrefix": "還沒拉過日誌。點上方\"重新整理\"拉一次；引擎跑過總結後才有內容。找 ",
-        "emptySuffix": " 這種行可判斷 GPU 是否在用。"
-      },
-      "engineBar": {
-        "loading": "引擎狀態載入中…",
-        "notInstalled": "未安裝",
-        "port": "埠：",
-        "version": "llama.cpp 版本：",
-        "accel": "加速：",
-        "state": "狀態：",
-        "error": "錯誤：",
-        "accelTitle": "binary 變體 ID: {{id}}"
-      }
     }
   },
   "chat": {

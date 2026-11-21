@@ -1,9 +1,9 @@
 // 段 chip 颜色解析的单一来源。
 //
 // 历史 bug：AISettings 的 SegmentList 里"未配置颜色"会回退到按时段中点
-// 自动 HSL 渐变（早亮晚暗），而 AISummary 的 DailyTab / DebugTab 各自
+// 自动 HSL 渐变（早亮晚暗），而 AISummary 的 DailyTab
 // 写了 fallback = 固定 #cbd5e1 浅灰。同一个 seg 在两个页面颜色不同。
-// 抽成共用工具，三处都调它，保证设置和总结视觉一致。
+// 抽成共用工具，两处都调它，保证设置和总结视觉一致。
 
 type HSL = { h: number; s: number; l: number };
 

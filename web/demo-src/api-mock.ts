@@ -53,7 +53,6 @@ import type {
   TestAiEndpointResp,
   UnclassifiedApp,
   WeekPrecheckResp,
-  AiOverrides,
 } from "@app/api/hindsight";
 import { barMinutes } from "@app/lib/segments";
 import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
@@ -885,13 +884,6 @@ export const api = {
   },
   deleteOcrRuntime: async (): Promise<void> => {},
   openEngineDir: async (): Promise<void> => {},
-  getEngineLogs: async (): Promise<string[]> => [
-    "[demo] llama-server started on port 8088",
-    "[demo] loaded model Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-    "[demo] vocab size = 152064",
-    "[demo] context window = 8192",
-    "[demo] CUDA device: NVIDIA GeForce RTX 4070 Ti",
-  ],
   startEngine: async (): Promise<number> => 8088,
   stopEngine: async (): Promise<void> => {},
 
@@ -935,28 +927,23 @@ export const api = {
     date: string,
     _forceRefresh: boolean,
     _deviceId: string | null,
-    _overrides: AiOverrides | null = null,
-    source: string = "daily",
-    _step1Only: boolean = false,
-    _step2Only: boolean = false,
+    _profile: string | null = null,
   ): Promise<void> => {
-    await simulateSummaryProgress(date, source);
+    await simulateSummaryProgress(date, "daily");
   },
   retrySummarySegment: async (
     date: string,
     segmentIdx: number,
     _deviceId: string | null,
-    _overrides: AiOverrides | null = null,
-    source: string = "daily",
+    _profile: string | null = null,
   ): Promise<void> => {
-    await simulateSegmentRetry(date, segmentIdx, source);
+    await simulateSegmentRetry(date, segmentIdx, "daily");
   },
   cancelDaySummary: async (): Promise<void> => {},
-  getDaySummary: async (date: string, source: string = "daily"): Promise<SegmentSummaryRow[]> => {
-    const key = `${source}:${date}`;
-    // 只有 daily 段总结按当前 i18n 语言动态返回；其它 source（weekly/monthly）保持
-    // 落在 state 里的拷贝。这样切语言后日报立刻跟随，不需要清缓存。
-    if (state.daySummaries.has(key) && source === "daily") {
+  getDaySummary: async (date: string): Promise<SegmentSummaryRow[]> => {
+    const key = `daily:${date}`;
+    // 段总结按当前 i18n 语言动态返回，这样切语言后日报立刻跟随，不需要清缓存。
+    if (state.daySummaries.has(key)) {
       const segs = dailySegmentsForLocale(i18n.language || "zh-CN");
       for (const s of segs) s.localDate = date;
       return segs;
@@ -973,7 +960,7 @@ export const api = {
     const rows =
       source === "weekly"
         ? [await api.getWeekSummary(date)].filter((r) => r !== null)
-        : await api.getDaySummary(date, source);
+        : await api.getDaySummary(date);
     const row = rows.find((r) => r.segmentIdx === segmentIdx);
     if (!row) throw "invalid input: summary segment not found";
     return { ...row, content, status: "ok", error: null, generatedAt: new Date().toISOString() };
@@ -1007,11 +994,8 @@ export const api = {
   getWeekSummary: async (_weekStart: string): Promise<SegmentSummaryRow | null> => null,
   clearWeekSummary: async (_weekStart: string): Promise<void> => {},
 
-  clearDaySummary: async (date: string, source: string = "daily"): Promise<void> => {
-    state.daySummaries.delete(`${source}:${date}`);
-  },
-  clearDaySegmentSummaries: async (date: string, source: string = "daily"): Promise<void> => {
-    state.daySummaries.delete(`${source}:${date}`);
+  clearDaySummary: async (date: string): Promise<void> => {
+    state.daySummaries.delete(`daily:${date}`);
   },
   // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
   getAppBuckets: async (

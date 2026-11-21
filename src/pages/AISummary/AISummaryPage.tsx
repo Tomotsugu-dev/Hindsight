@@ -5,12 +5,9 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { IconButton } from "../../components/Button/IconButton";
 import { AiSettingsIcon } from "../../components/icons/AiSettingsIcon";
 import { ROUTES } from "../../config/nav";
-import { DebugStateProvider } from "./DebugStateContext";
 import styles from "./AISummaryPage.module.css";
 
-/** Tab 配置：分 2 组用竖线分隔，视觉上区分语义不同的 tab：
- *  - 时间维度报告：日报 / 周报 / 月报
- *  - 调试：跑总结 + 看结果（旧版"调试设置"已删，参数直接走 AI 设置主页）
+/** Tab 配置：日报 / 周报 / 月报。
  *  对话已提升为独立侧栏页面（/chat），搜索搬到了全部历史（/history/search）。
  */
 const TAB_GROUPS: TabDef[][] = [
@@ -19,13 +16,9 @@ const TAB_GROUPS: TabDef[][] = [
     { to: "week", labelKey: "aiSummary.tabs.week" },
     { to: "month", labelKey: "aiSummary.tabs.month" },
   ],
-  [{ to: "debug", labelKey: "aiSummary.tabs.debug" }],
 ];
 
-/**
- * AI 总结页外壳：标题 + 4 个 tab + 进 AI 设置的按钮 + Outlet。
- * DebugStateProvider 仍保留——DebugTab 自己用 debug 参数 state（之前由 settings tab 写入）。
- */
+/** AI 总结页外壳：标题 + 3 个 tab + 进 AI 设置的按钮 + Outlet。 */
 export default function AISummaryPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -51,9 +44,7 @@ export default function AISummaryPage() {
       />
 
       <section className={styles.tabContent}>
-        <DebugStateProvider>
-          <Outlet />
-        </DebugStateProvider>
+        <Outlet />
       </section>
     </div>
   );

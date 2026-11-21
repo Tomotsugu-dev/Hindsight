@@ -21,7 +21,6 @@ const AISummaryPage = lazy(() => import("./pages/AISummary/AISummaryPage"));
 const DailyTab = lazy(() => import("./pages/AISummary/tabs/DailyTab"));
 const WeeklyTab = lazy(() => import("./pages/AISummary/tabs/WeeklyTab"));
 const MonthlyTab = lazy(() => import("./pages/AISummary/tabs/MonthlyTab"));
-const DebugTab = lazy(() => import("./pages/AISummary/tabs/DebugTab"));
 const ChatPage = lazy(() => import("./pages/Chat/ChatPage"));
 const SearchPage = lazy(() => import("./pages/Search/SearchPage"));
 const AISettingsPage = lazy(() => import("./pages/AISettings/AISettingsPage"));
@@ -71,7 +70,7 @@ function App() {
   const navigate = useNavigate();
 
   // UI 语言切换时同步 AI 设置：
-  //  1. promptLanguage —— 让 AISettings 提示词编辑器、DebugTab、后端 generate 的 prompt 都跟随 UI 语言
+  //  1. promptLanguage —— 让 AISettings 提示词编辑器、后端 generate 的 prompt 都跟随 UI 语言
   //  2. 时段标签若仍是某语言的默认 → 跟着重译成新语言的默认（用户自定义过则不动，颜色保留）
   useEffect(() => {
     if (!settings) return;
@@ -146,7 +145,8 @@ function App() {
             <Route path="chat" element={<Navigate to={ROUTES.chat} replace />} />
             {/* 旧地址重定向:搜索已搬到全部历史 */}
             <Route path="search" element={<Navigate to={`${ROUTES.history}/search`} replace />} />
-            <Route path="debug" element={<DebugTab />} />
+            {/* 旧地址重定向:调试页已删除 */}
+            <Route path="debug" element={<Navigate to={ROUTES.aiSummary} replace />} />
           </Route>
           <Route path={ROUTES.aiSettings} element={<AISettingsPage />}>
             <Route index element={<Navigate to="models" replace />} />
