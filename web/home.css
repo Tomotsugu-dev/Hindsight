@@ -359,6 +359,13 @@ h2 {
   object-fit: cover;
 }
 
+/* 视频的 src 由 home-media.js 从 data-src 填。没有脚本时视频一直是空的，藏起来，改显示 <noscript> 里的浅色版 */
+@media (scripting: none) {
+  video[data-src] {
+    display: none;
+  }
+}
+
 /* Dock 放大：离鼠标越近的卡片放得越大，从底边往上长。倍数和位置由页面底部的脚本算 */
 .card {
   position: relative;

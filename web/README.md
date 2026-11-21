@@ -12,6 +12,7 @@ web/
 ├── site.css           各页共用的配色变量（浅色、深色两套）、顶栏和页脚（首页、文档站、主题页、404 都先加载它）
 ├── color-mode.js      各页共用的深浅色切换，在 <head> 里同步加载
 ├── home.css           首页样式
+├── home-media.js      首页视频和封面的分批加载：首屏 demo 优先，其余按从上到下的顺序
 ├── linux.svg          Linux 下载按钮的图标，取自 Simple Icons 13.21.0（CC0），home.css 用 mask 引用
 ├── 404.html           找不到页面时返回
 ├── _headers           响应头（缓存）规则
@@ -38,12 +39,13 @@ npx wrangler dev --config web/wrangler.jsonc   # 按线上规则（_headers、40
 
 ## 资源
 
-- **视频**：`docs/intro/<lang>/shot_video/Hindsight_<lang>.mp4`，单个文件不能超过 25 MiB。
+- **视频**：`docs/intro/<lang>/shot_video/Hindsight_<lang>.mp4`，单个文件不能超过 25 MiB。深色版是同目录的 `Hindsight_<lang>_dark.mp4`。
+- **首页视频**（宣传片、功能卡片）：标记里不写 `src` / `poster`，写在 `data-src` / `data-poster`，由 `home-media.js` 在首屏 demo 加载完后按顺序填。有深色版的再写 `data-dark-src` / `data-dark-poster`：填的时候按当前深浅色取一版，只下载看得到的那一版；换色时 `color-mode.js` 把已经填上的换成另一版。没有脚本时显示 `<noscript>` 里的浅色版。
 - **视频封面**：同目录的同名 `.jpg`，是视频第一帧。重录视频后重新生成：
   ```bash
   for v in docs/intro/*/shot_video/*.mp4; do ffmpeg -v error -y -i "$v" -frames:v 1 -q:v 4 "${v%.mp4}.jpg"; done
   ```
-- **首页功能卡片**：`web/assets/home/<名字>_<lang>.mp4` 和同名 `.webp`（第一帧，当封面）。960×720，30 fps，H.264，无音轨，单个不超过 400 KB。卡片只有约 340 CSS px 宽，所以画面里的字至少 31 px 高。
+- **首页功能卡片**：`web/assets/home/<名字>_<lang>.mp4` 和同名 `.webp`（第一帧，当封面）。960×720，30 fps，H.264，无音轨，单个不超过 400 KB。卡片只有约 340 CSS px 宽，所以画面里的字至少 31 px 高。深色版是 `<名字>_<lang>_dark.mp4` / `.webp`，和浅色版时长相同，换色时接着播；时光花园、主题两张只有一版。
 - **logo** 通过 [jsDelivr](https://www.jsdelivr.com/) 引用主分支文件 `https://cdn.jsdelivr.net/gh/Tomotsugu-dev/Hindsight@main/...`。
 - **下载按钮** 默认指向 `releases/latest`，JS 加载后改写为具体安装包直链，并显示文件大小。
 
@@ -76,7 +78,7 @@ npx wrangler deploy --config web/wrangler.jsonc
 - 新页面：`<head>` 里先加载 `/color-mode.js`，顶栏放 `.mode-toggle` 按钮
 - 首页其余样式：`home.css`；文档站样式：`scripts/docs/docs.css`
 - 各 section 文案：各语言 `index.html` 里有注释 `<!-- ============ XXX ============ -->` 分隔
-- 视频：替换 `docs/intro/<lang>/shot_video/` 下的 mp4，并重新生成封面
+- 视频：替换 `docs/intro/<lang>/shot_video/` 下的 mp4（浅色、深色两版），并重新生成封面
 - 缓存时长：`_headers`
 
 ## 后续可加
