@@ -6,7 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::ai::model::Reasoning;
 
 /// `summary_main` 的特殊值——"用云端 API 跑 step 2"。
 ///
@@ -83,6 +86,107 @@ pub struct VisibilityProfile {
     pub categories: Vec<String>,
 }
 
+/// 每个任务用哪个模型。现在只有周报。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Picks {
+    #[serde(deserialize_with = "or_default")]
+    pub weekly: Pick,
+}
+
+/// 一个任务选的模型。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Pick {
+    /// 和日报用同一个模型。
+    #[default]
+    Inherit,
+    /// 本机模型。`file` 是模型目录里的文件名。
+    Local { file: String },
+    /// 云端 API。
+    Cloud,
+}
+
+/// 一个模型。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ModelRef {
+    /// 本机模型。`file` 是模型目录里的文件名。
+    Local { file: String },
+    /// 云端 API。
+    Cloud,
+}
+
+/// 用 AI 的任务。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Task {
+    Daily,
+    Weekly,
+    Chat,
+}
+
+/// 用户给「一个任务 + 一个模型」设的参数。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Advanced {
+    pub task: Task,
+    pub model: ModelRef,
+    /// 思考档位。`None` 是自动。
+    #[serde(default)]
+    pub reasoning: Option<ReasoningLevel>,
+}
+
+/// 用户能选的思考档位。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningLevel {
+    Off,
+    Low,
+    Medium,
+    High,
+    Max,
+}
+
+impl From<ReasoningLevel> for Reasoning {
+    fn from(level: ReasoningLevel) -> Self {
+        match level {
+            ReasoningLevel::Off => Self::Off,
+            ReasoningLevel::Low => Self::Low,
+            ReasoningLevel::Medium => Self::Medium,
+            ReasoningLevel::High => Self::High,
+            ReasoningLevel::Max => Self::Max,
+        }
+    }
+}
+
+/// 读不懂的值当默认值，免得新版本写的值让旧版本读不出整份设置。
+fn or_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned + Default,
+{
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// 读不懂的项跳过，原因同 [`or_default`]。
+fn known_items<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    let value = serde_json::Value::deserialize(d)?;
+    let items = match value {
+        serde_json::Value::Array(items) => items,
+        _ => Vec::new(),
+    };
+    Ok(items
+        .into_iter()
+        .filter_map(|item| serde_json::from_value(item).ok())
+        .collect())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AiConfig {
@@ -113,6 +217,11 @@ pub struct AiConfig {
     /// The profiles of the daily report, the weekly report and chat: which categories the
     /// AI can see.
     pub visibility: Visibility,
+    /// 每个任务用哪个模型。
+    pub picks: Picks,
+    /// 用户给「任务 + 模型」设的参数。
+    #[serde(deserialize_with = "known_items")]
+    pub advanced: Vec<Advanced>,
     /// 模型（GGUF 文件）保存路径。
     ///
     /// 空字符串 = 走 [`crate::ai::models::default_root_dir`]（`<data_root>/ai/models/`）；
@@ -282,6 +391,44 @@ impl AiConfig {
         }
     }
 
+    /// 返回这个任务实际用的模型。
+    pub fn task_model(&self, task: Task) -> ModelRef {
+        let summary = if self.summary_use_cloud() {
+            ModelRef::Cloud
+        } else {
+            ModelRef::Local {
+                file: self.effective_summary_main().to_string(),
+            }
+        };
+        match task {
+            Task::Daily => summary,
+            Task::Weekly => match &self.picks.weekly {
+                Pick::Inherit => summary,
+                Pick::Local { file } => ModelRef::Local { file: file.clone() },
+                Pick::Cloud if self.external_enabled => ModelRef::Cloud,
+                // 和日报一样：云端没开就用 active_main
+                Pick::Cloud => ModelRef::Local {
+                    file: self.active_main.clone(),
+                },
+            },
+            Task::Chat if self.chat_use_cloud() => ModelRef::Cloud,
+            Task::Chat => ModelRef::Local {
+                file: self.effective_chat_main().to_string(),
+            },
+        }
+    }
+
+    /// 返回日报或周报的思考档位：`advanced` 里这个任务、这个模型的那一项。没有就是
+    /// [`Reasoning::Default`]。
+    pub fn report_reasoning(&self, task: Task) -> Reasoning {
+        let model = self.task_model(task);
+        self.advanced
+            .iter()
+            .find(|a| a.task == task && a.model == model)
+            .and_then(|a| a.reasoning)
+            .map_or(Reasoning::Default, Reasoning::from)
+    }
+
     /// 段总结单次响应 max_tokens：取 effective ctx 的一半（给 prompt 留另一半），
     /// 下界 2048（给 reasoning 模型思考链最低保障）。
     pub fn summary_max_tokens(&self) -> u32 {
@@ -327,6 +474,8 @@ impl Default for AiConfig {
             user_brief: String::new(),
             segments: default_segments_for(lang),
             visibility: Visibility::default(),
+            picks: Picks::default(),
+            advanced: Vec::new(),
             models_path: String::new(),
             active_main: String::new(),
             active_mmproj: String::new(),
@@ -413,6 +562,30 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
         v @ ("off" | "low" | "medium" | "high" | "max") => v.to_string(),
         _ => "auto".to_string(),
     };
+
+    // 文件名为空的本机模型等于没选
+    if let Pick::Local { file } = &mut next.picks.weekly {
+        *file = file.trim().to_string();
+        if file.is_empty() {
+            next.picks.weekly = Pick::Inherit;
+        }
+    }
+    // 自动的项不用存；同一个「任务 + 模型」只留最后一项
+    let mut advanced: Vec<Advanced> = Vec::new();
+    for mut a in next.advanced.into_iter().rev() {
+        if let ModelRef::Local { file } = &mut a.model {
+            *file = file.trim().to_string();
+        }
+        if a.reasoning.is_some()
+            && !advanced
+                .iter()
+                .any(|kept| kept.task == a.task && kept.model == a.model)
+        {
+            advanced.push(a);
+        }
+    }
+    advanced.reverse();
+    next.advanced = advanced;
 
     let valid_segments: Vec<AiSegment> = next
         .segments
@@ -1288,5 +1461,125 @@ mod tests {
         c.summary_ctx_size = None;
         c.ctx_size = Some(16_384);
         assert_eq!(c.summary_max_tokens(), 8192, "fallback 全局 ctx 的一半");
+    }
+
+    /// 旧设置里没有 picks、advanced：周报跟日报用同一个模型，思考是自动。
+    #[test]
+    fn report_settings_default_when_missing() {
+        let c: AiConfig = serde_json::from_str(r#"{"summaryMain":"sum.gguf"}"#).unwrap();
+        assert_eq!(c.picks.weekly, Pick::Inherit);
+        assert!(c.advanced.is_empty());
+        assert_eq!(c.task_model(Task::Weekly), c.task_model(Task::Daily));
+        assert_eq!(c.report_reasoning(Task::Weekly), Reasoning::Default);
+    }
+
+    /// 读不懂的 kind、档位按默认读，同一份设置里别的字段照常读出来。
+    #[test]
+    fn unknown_report_settings_read_as_default() {
+        let c: AiConfig = serde_json::from_str(
+            r#"{
+                "userBrief": "写代码",
+                "picks": {"weekly": {"kind": "apple_fm"}},
+                "advanced": [
+                    {"task": "daily", "model": {"kind": "local", "file": "a.gguf"}, "reasoning": "ultra"},
+                    {"task": "screen", "model": {"kind": "cloud"}, "reasoning": "high"},
+                    {"task": "weekly", "model": {"kind": "cloud"}, "reasoning": "low"}
+                ]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(c.user_brief, "写代码");
+        assert_eq!(c.picks.weekly, Pick::Inherit);
+        assert_eq!(
+            c.advanced,
+            vec![Advanced {
+                task: Task::Weekly,
+                model: ModelRef::Cloud,
+                reasoning: Some(ReasoningLevel::Low),
+            }]
+        );
+    }
+
+    /// 周报的模型按 picks.weekly 选；选云端但云端没开时，和日报一样用 active_main。
+    #[test]
+    fn weekly_model_follows_the_pick() {
+        let local = |f: &str| ModelRef::Local { file: f.into() };
+        let mut c = AiConfig {
+            summary_main: "sum.gguf".into(),
+            active_main: "active.gguf".into(),
+            ..AiConfig::default()
+        };
+        assert_eq!(c.task_model(Task::Weekly), local("sum.gguf"), "inherit");
+
+        c.summary_main = SUMMARY_CLOUD_SENTINEL.into();
+        c.external_enabled = true;
+        assert_eq!(c.task_model(Task::Weekly), ModelRef::Cloud, "inherit 云端");
+
+        c.picks.weekly = Pick::Local {
+            file: "week.gguf".into(),
+        };
+        assert_eq!(c.task_model(Task::Weekly), local("week.gguf"));
+        assert_eq!(c.task_model(Task::Daily), ModelRef::Cloud, "日报不受影响");
+
+        c.picks.weekly = Pick::Cloud;
+        assert_eq!(c.task_model(Task::Weekly), ModelRef::Cloud);
+        c.external_enabled = false;
+        assert_eq!(c.task_model(Task::Weekly), local("active.gguf"));
+    }
+
+    /// 思考档位按「任务 + 实际用的模型」找；周报 inherit 时用日报的模型找。
+    #[test]
+    fn report_reasoning_is_found_by_task_and_model() {
+        let mut c = AiConfig {
+            summary_main: "sum.gguf".into(),
+            advanced: vec![
+                Advanced {
+                    task: Task::Weekly,
+                    model: ModelRef::Local {
+                        file: "sum.gguf".into(),
+                    },
+                    reasoning: Some(ReasoningLevel::High),
+                },
+                Advanced {
+                    task: Task::Daily,
+                    model: ModelRef::Local {
+                        file: "sum.gguf".into(),
+                    },
+                    reasoning: Some(ReasoningLevel::Off),
+                },
+            ],
+            ..AiConfig::default()
+        };
+        assert_eq!(c.report_reasoning(Task::Weekly), Reasoning::High);
+        assert_eq!(c.report_reasoning(Task::Daily), Reasoning::Off);
+
+        // 换了模型，这个模型没设过：自动
+        c.picks.weekly = Pick::Local {
+            file: "week.gguf".into(),
+        };
+        assert_eq!(c.report_reasoning(Task::Weekly), Reasoning::Default);
+    }
+
+    /// 存设置时：空文件名的本机模型当没选；自动的项不存；同一个「任务 + 模型」只留最后一项。
+    #[test]
+    fn sanitize_cleans_report_settings() {
+        let item = |file: &str, reasoning| Advanced {
+            task: Task::Daily,
+            model: ModelRef::Local { file: file.into() },
+            reasoning,
+        };
+        let mut next = base();
+        next.picks.weekly = Pick::Local { file: "  ".into() };
+        next.advanced = vec![
+            item("a.gguf", Some(ReasoningLevel::Low)),
+            item(" a.gguf ", Some(ReasoningLevel::Max)),
+            item("b.gguf", None),
+        ];
+        let out = sanitize(next, &base());
+        assert_eq!(out.picks.weekly, Pick::Inherit);
+        assert_eq!(
+            out.advanced,
+            vec![item("a.gguf", Some(ReasoningLevel::Max))]
+        );
     }
 }

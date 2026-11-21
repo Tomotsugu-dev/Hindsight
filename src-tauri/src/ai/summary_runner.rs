@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter};
 
-use crate::ai::config::AiConfig;
+use crate::ai::config::{AiConfig, Task};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
@@ -202,7 +202,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let port = self
             .ensure_summary_engine(source, &date_str, &ai, summary_overrides, total_segments)
             .await?;
-        let step2 = build_step2(&ai, port, ai.effective_summary_main())?;
+        let step2 = build_step2(&ai, Task::Daily, port)?;
 
         // 本轮实际有效的段下标——循环结束后用它收敛掉孤儿行
         let mut kept: Vec<u32> = Vec::new();
@@ -559,7 +559,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 ai.segments.len() as u32,
             )
             .await?;
-        let step2 = build_step2(&ai, port, ai.effective_summary_main())?;
+        let step2 = build_step2(&ai, Task::Daily, port)?;
 
         self.run_one_segment(
             source,

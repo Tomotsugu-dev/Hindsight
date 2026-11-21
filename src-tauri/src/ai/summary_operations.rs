@@ -10,7 +10,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::ai::config::AiConfig;
+use crate::ai::config::{AiConfig, ModelRef, Task};
 use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::ai::server::EngineSupervisor;
@@ -137,25 +137,22 @@ pub(crate) async fn summarize_segment(
     Ok((row, status_str))
 }
 
-/// 按 [`AiConfig::summary_use_cloud`] 打开日报和周报用的模型。
+/// 打开日报或周报用的模型，带上这份报告的思考档位。
 ///
-/// 用本机模型时，`local_model_label` 是引擎加载的 GGUF 文件名。
-pub(crate) fn build_step2(
-    ai: &AiConfig,
-    local_port: u16,
-    local_model_label: &str,
-) -> Result<Step2Chat> {
+/// 用本机模型时，`local_port` 是已经加载好这个模型的引擎的端口。
+pub(crate) fn build_step2(ai: &AiConfig, task: Task, local_port: u16) -> Result<Step2Chat> {
     let max_tokens = ai.summary_max_tokens();
-    if ai.summary_use_cloud() {
-        Step2Chat::cloud(
+    let reasoning = ai.report_reasoning(task);
+    match ai.task_model(task) {
+        ModelRef::Cloud => Step2Chat::cloud(
             &ai.endpoint,
             &ai.model,
             &ai.api_key,
             &ai.external_provider,
             max_tokens,
-        )
-    } else {
-        Step2Chat::local(local_port, local_model_label, max_tokens)
+            reasoning,
+        ),
+        ModelRef::Local { file } => Step2Chat::local(local_port, &file, max_tokens, reasoning),
     }
 }
 
@@ -362,6 +359,7 @@ fn pick_titles(titles: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::model::Reasoning;
     use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
 
@@ -396,7 +394,7 @@ mod tests {
 
         let supervisor = Arc::new(EngineSupervisor::new());
         let cancel = Arc::new(AtomicBool::new(false));
-        let step2 = build_step2(&ai, 0, "").unwrap();
+        let step2 = build_step2(&ai, Task::Daily, 0).unwrap();
         let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
             .await
             .unwrap()
@@ -953,9 +951,10 @@ mod tests {
         let ai = AiConfig {
             summary_main: crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string(),
             external_enabled: false,
+            active_main: "qwen.gguf".to_string(),
             ..AiConfig::default()
         };
-        let s = build_step2(&ai, 8080, "qwen.gguf").unwrap();
+        let s = build_step2(&ai, Task::Daily, 8080).unwrap();
         assert!(s.is_local(), "external 未启用时 sentinel 应退化为本地");
         assert_eq!(s.model_label(), "qwen.gguf");
 
@@ -966,11 +965,41 @@ mod tests {
             summary_main: "local.gguf".to_string(),
             ..AiConfig::default()
         };
-        let s2 = build_step2(&ai2, 8080, "local.gguf").unwrap();
+        let s2 = build_step2(&ai2, Task::Daily, 8080).unwrap();
         assert!(
             s2.is_local(),
             "没标 sentinel 时即使 external 配好也应走本地"
         );
+    }
+
+    /// 报告按设置里的思考档位发请求：日报的本机模型选了「高」，请求里就打开思考。
+    #[tokio::test]
+    async fn reports_send_their_reasoning() {
+        use crate::ai::config::{Advanced, ReasoningLevel};
+        use crate::ai::transport::fake::{FakeServer, Reply};
+        let server = FakeServer::start(vec![Reply::json(
+            200,
+            serde_json::json!({"choices": [{"message": {"role": "assistant", "content": "好"}}]}),
+        )])
+        .await;
+        let ai = AiConfig {
+            summary_main: "m.gguf".into(),
+            advanced: vec![Advanced {
+                task: Task::Daily,
+                model: ModelRef::Local {
+                    file: "m.gguf".into(),
+                },
+                reasoning: Some(ReasoningLevel::High),
+            }],
+            ..AiConfig::default()
+        };
+        build_step2(&ai, Task::Daily, server.port)
+            .unwrap()
+            .chat("sys", "user")
+            .await
+            .unwrap();
+        let body = &server.received()[0].body;
+        assert_eq!(body["chat_template_kwargs"]["enable_thinking"], true);
     }
 
     /// 云端路由时落库 model 必须是用户填的云端模型 ID——取成本地 GGUF 文件名
@@ -984,7 +1013,7 @@ mod tests {
             model: "deepseek-chat".to_string(),
             ..AiConfig::default()
         };
-        let s = build_step2(&ai, 8080, "local.gguf").unwrap();
+        let s = build_step2(&ai, Task::Daily, 8080).unwrap();
         assert!(!s.is_local());
         assert_eq!(s.model_label(), "deepseek-chat");
     }
@@ -1003,7 +1032,10 @@ mod tests {
         // 必须是 InvalidInput：顶层错误条按这个类型渲染"去补配置"的引导文案，
         // 换成别的错误类型用户只会看到一条不可操作的通用报错。
         assert!(
-            matches!(build_step2(&ai, 0, ""), Err(Error::InvalidInput(_))),
+            matches!(
+                build_step2(&ai, Task::Daily, 0),
+                Err(Error::InvalidInput(_))
+            ),
             "endpoint 全空白应报 InvalidInput"
         );
 
@@ -1013,7 +1045,10 @@ mod tests {
             ..ai
         };
         assert!(
-            matches!(build_step2(&ai2, 0, ""), Err(Error::InvalidInput(_))),
+            matches!(
+                build_step2(&ai2, Task::Daily, 0),
+                Err(Error::InvalidInput(_))
+            ),
             "model 全空白应报 InvalidInput"
         );
     }
@@ -1106,7 +1141,7 @@ mod tests {
     async fn summarize_segment_chat_failure_writes_error_row() {
         let pool = fresh_test_pool().await;
         let port = free_local_port();
-        let step2 = Step2Chat::local(port, "dead.gguf", 1024).unwrap();
+        let step2 = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -1158,7 +1193,7 @@ mod tests {
             .unwrap();
 
         let port = free_local_port();
-        let step2 = Step2Chat::local(port, "dead.gguf", 1024).unwrap();
+        let step2 = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -1200,7 +1235,7 @@ mod tests {
         // 挂起的假服务：backlog 完成握手但永不回包，让请求停在途中等 cancel 打断
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let step2 = Step2Chat::local(port, "m.gguf", 1024).unwrap();
+        let step2 = Step2Chat::local(port, "m.gguf", 1024, Reasoning::Default).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(true)); // 预先按下停止
@@ -1243,7 +1278,7 @@ mod tests {
     async fn summarize_segment_ok_writes_ok_row_and_trims_content() {
         let pool = fresh_test_pool().await;
         let port = spawn_canned_openai_server("  上午主要在写 Hindsight 的单元测试。  ").await;
-        let step2 = Step2Chat::local(port, "qwen.gguf", 1024).unwrap();
+        let step2 = Step2Chat::local(port, "qwen.gguf", 1024, Reasoning::Default).unwrap();
         let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
