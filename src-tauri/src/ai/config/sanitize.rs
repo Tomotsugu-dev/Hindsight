@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use super::{Advanced, AiConfig, CloudConnection, DaySegment, ModelRef, Pick};
 
-const MAX_CLOUD_CONNECTIONS: usize = 10;
+pub(super) const MAX_CLOUD_CONNECTIONS: usize = 10;
 const MAX_AUTO_SUMMARY_TIMES: usize = 6;
 
 /// Normalizes and clamps user-submitted [`AiConfig`] values into valid ranges.
@@ -145,7 +145,7 @@ pub fn sanitize(mut next: AiConfig, old: &AiConfig) -> AiConfig {
 }
 
 /// Validates a provider dialect key against the frontend allowlist; unknown values fall back to `custom`.
-fn sanitize_dialect(raw: &str) -> String {
+pub(super) fn sanitize_dialect(raw: &str) -> String {
     match raw.trim() {
         v @ ("openai" | "deepseek" | "kimi" | "kimi-cn" | "openrouter" | "together" | "groq"
         | "custom") => v.to_string(),

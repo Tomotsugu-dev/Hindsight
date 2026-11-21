@@ -3,6 +3,7 @@
 //! [`AiConfig`] is embedded in `Settings::ai` and persisted as JSON.
 //! [`sanitize()`] normalizes and clamps values before settings are saved.
 
+mod legacy;
 mod model_choice;
 mod sanitize;
 mod segments;
@@ -12,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use model_choice::known_items;
 
+pub use legacy::migrate_legacy_models;
 #[cfg(test)]
 pub use model_choice::ReasoningLevel;
 pub use model_choice::{Advanced, ModelRef, Pick, Picks, Task};

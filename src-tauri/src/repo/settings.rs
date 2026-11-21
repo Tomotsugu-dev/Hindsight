@@ -385,6 +385,11 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         }
     }
 
+    // 旧版的云端连接和日报模型迁到新结构。写回后旧字段消失，所以只迁一次。
+    if !parse_failed && crate::ai::config::migrate_legacy_models(&data, &mut settings.ai) {
+        dirty = true;
+    }
+
     // 解析失败时的 dirty 全是"默认值缺路径"造成的，绝不能把这份默认值写回去
     // 覆盖用户仅存的原始 JSON。
     if dirty && !parse_failed {
@@ -1306,6 +1311,37 @@ mod tests {
         assert!(!raw_json(&pool).await.contains("excludedCategories"));
         let second = load(&pool).await.unwrap();
         assert_eq!(second.ai.visibility, first.ai.visibility);
+    }
+
+    /// 旧版的云端连接和日报模型在第一次读取时迁过来，并且写回数据库：
+    /// 旧字段从此消失，再启动不会再迁一遍。
+    #[tokio::test]
+    async fn legacy_cloud_and_daily_model_are_migrated_once() {
+        let pool = fresh_test_pool().await;
+        put_raw(
+            &pool,
+            r#"{"screenshotPath":"/sp","ai":{"modelsPath":"/mp","externalEnabled":true,"externalProvider":"deepseek","endpoint":"https://api.deepseek.com/v1","model":"deepseek-chat","apiKey":"sk-1","summaryMain":"__cloud__"}}"#,
+        )
+        .await;
+
+        let first = load(&pool).await.unwrap();
+        assert_eq!(first.ai.cloud.len(), 1);
+        assert_eq!(first.ai.cloud[0].api_key, "sk-1");
+        assert_eq!(
+            first.ai.picks.daily,
+            Some(crate::ai::config::ModelRef::Cloud {
+                connection: first.ai.cloud[0].id.clone()
+            })
+        );
+        let raw = raw_json(&pool).await;
+        assert!(
+            !raw.contains("summaryMain"),
+            "迁完要写回，旧字段消失: {raw}"
+        );
+
+        let second = load(&pool).await.unwrap();
+        assert_eq!(second.ai.cloud, first.ai.cloud);
+        assert_eq!(second.ai.picks, first.ai.picks);
     }
 
     /// 迁移出来的配置按 AI 总结的语言起名。
