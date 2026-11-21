@@ -1708,7 +1708,7 @@
         "deleteTooltip": "この日の日報を消去します（取り消し不可）",
         "deleteEmptyTooltip": "この日にはまだ削除できる日次データがありません。",
         "deleteConfirmTitle": "{{date}} の日次レポートデータを削除しますか?",
-        "deleteConfirmMessage": "この日のすべての時間帯サマリーが消去されます。デバッグタブには影響しません。この操作は取り消せません。",
+        "deleteConfirmMessage": "この日のすべての時間帯サマリーが消去されます。この操作は取り消せません。",
         "exportMarkdown": "Markdown でエクスポート",
         "exportTooltip": "現在の日付の全時間帯のサマリーを Markdown ファイルとしてエクスポートします。",
         "exportEmptyTooltip": "エクスポートできる時間帯のサマリーがまだありません。",

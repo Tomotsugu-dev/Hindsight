@@ -1708,7 +1708,7 @@
         "deleteTooltip": "清空当天的日报（不可撤销）",
         "deleteEmptyTooltip": "当天还没有日报数据可删除",
         "deleteConfirmTitle": "删除 {{date}} 当天日报数据？",
-        "deleteConfirmMessage": "当天所有段总结都会清空，不影响调试 tab，操作不可撤销。",
+        "deleteConfirmMessage": "当天所有段总结都会清空，操作不可撤销。",
         "exportMarkdown": "导出为 Markdown",
         "exportTooltip": "导出当前日期的所有段总结为 Markdown 文件",
         "exportEmptyTooltip": "还没有任何段总结可导出",

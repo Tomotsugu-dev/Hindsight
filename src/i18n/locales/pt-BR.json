@@ -1713,7 +1713,7 @@
         "deleteTooltip": "Limpar o relatório diário deste dia (não pode ser desfeito)",
         "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
         "deleteConfirmTitle": "Excluir os dados do relatório diário de {{date}}?",
-        "deleteConfirmMessage": "Todos os resumos de segmento deste dia serão limpos. A aba Depuração não é afetada. Isto não pode ser desfeito.",
+        "deleteConfirmMessage": "Todos os resumos de segmento deste dia serão limpos. Isto não pode ser desfeito.",
         "exportMarkdown": "Exportar Markdown",
         "exportTooltip": "Exportar todos os resumos de segmento da data atual como um arquivo Markdown.",
         "exportEmptyTooltip": "Ainda não há resumos de segmento para exportar.",

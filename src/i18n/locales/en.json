@@ -1713,7 +1713,7 @@
         "deleteTooltip": "Clear the daily report for this day (cannot be undone)",
         "deleteEmptyTooltip": "No daily data yet to delete.",
         "deleteConfirmTitle": "Delete daily report data for {{date}}?",
-        "deleteConfirmMessage": "All segment summaries for this day will be cleared. The Debug tab is unaffected. This cannot be undone.",
+        "deleteConfirmMessage": "All segment summaries for this day will be cleared. This cannot be undone.",
         "exportMarkdown": "Export Markdown",
         "exportTooltip": "Export all segment summaries for the current date as a Markdown file.",
         "exportEmptyTooltip": "No segment summaries to export yet.",

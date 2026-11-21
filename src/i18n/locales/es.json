@@ -1713,7 +1713,7 @@
         "deleteTooltip": "Borrar el informe diario de este día (no se puede deshacer)",
         "deleteEmptyTooltip": "Aún no hay datos diarios que eliminar.",
         "deleteConfirmTitle": "¿Eliminar los datos del informe diario del {{date}}?",
-        "deleteConfirmMessage": "Se borrarán todos los resúmenes por tramos de este día. La pestaña Depuración no se ve afectada. Esto no se puede deshacer.",
+        "deleteConfirmMessage": "Se borrarán todos los resúmenes por tramos de este día. Esto no se puede deshacer.",
         "exportMarkdown": "Exportar Markdown",
         "exportTooltip": "Exportar como archivo Markdown todos los resúmenes por tramos de la fecha actual.",
         "exportEmptyTooltip": "Aún no hay resúmenes por tramos que exportar.",

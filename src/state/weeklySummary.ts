@@ -64,7 +64,7 @@ function ensureListener(): void {
   if (listenerInit) return;
   listenerInit = listen<SummaryProgress>(SUMMARY_PROGRESS_EVENT, (ev) => {
     const p = ev.payload;
-    // 只接 weekly source；daily / debug 各走自己的 listener
+    // 只接 weekly source；daily 走自己的 listener
     if (p.source !== "weekly") return;
 
     switch (p.phase) {

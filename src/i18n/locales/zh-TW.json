@@ -1708,7 +1708,7 @@
         "deleteTooltip": "清空當天的日報（不可撤銷）",
         "deleteEmptyTooltip": "當天還沒有日報資料可刪除",
         "deleteConfirmTitle": "刪除 {{date}} 當天日報資料？",
-        "deleteConfirmMessage": "當天所有段總結都會清空，不影響除錯 tab，操作不可撤銷。",
+        "deleteConfirmMessage": "當天所有段總結都會清空，操作不可撤銷。",
         "exportMarkdown": "匯出為 Markdown",
         "exportTooltip": "匯出當前日期的所有段總結為 Markdown 檔案",
         "exportEmptyTooltip": "還沒有任何段總結可匯出",
