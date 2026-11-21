@@ -156,6 +156,13 @@
   min-height: calc(28px * var(--density));
 }
 
+.panelHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--density));
+  min-width: 0;
+}
+
 .panelTitle {
   margin: 0;
   font-size: calc(var(--font-size-headline) * var(--font-scale));

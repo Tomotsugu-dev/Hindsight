@@ -48,8 +48,10 @@
   background: var(--border-default);
 }
 
-/* 竖线从第一个点开始，到最后一个点结束 */
-.row:first-child .rail::before {
+/* 竖线从第一个点开始，到最后一个点结束。框顶上可能先有一行别的（日报的日期和生成情况），
+   紧跟在它后面的那段也算第一段 */
+.row:first-child .rail::before,
+:not(.row) + .row .rail::before {
   top: calc(var(--dot-center) * var(--density));
 }
 
@@ -58,7 +60,8 @@
   height: calc(var(--dot-center) * var(--density));
 }
 
-.row:only-child .rail::before {
+.row:only-child .rail::before,
+:not(.row) + .row:last-child .rail::before {
   display: none;
 }
 

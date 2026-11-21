@@ -28,6 +28,15 @@
   gap: calc(4px * var(--density));
 }
 
+/* 左边和日期切换对齐：小下拉框自带 6px 内边距，往左挪回去 */
+.pickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2px * var(--density));
+  margin: calc(-4px * var(--density)) 0 calc(-6px * var(--density)) calc(-6px * var(--density));
+}
+
 /* —— 状态行 —— */
 .statusLine {
   display: flex;

@@ -1,4 +1,4 @@
-// 日报、周报共用的控件：页面顶部（副标题、时段切换、操作按钮、状态行）和提示条。
+// 日报、周报共用的控件：页面顶部（副标题、时段切换、操作按钮、模型）、内容框里的状态行和提示条。
 // 样式在 ReportControls.module.css；占位条、错误框这类正文里的样式也在那里，各 tab 直接引用。
 import type { ReactNode } from "react";
 import { AlertTriangle, Check, Loader2, Play, RefreshCcw, Square, X } from "lucide-react";
@@ -12,14 +12,12 @@ interface ReportHeaderProps {
   nav: ReactNode;
   /** 右边：主按钮、导出、删除 */
   actions: ReactNode;
-  /** 正在看的具体日期，如「11月5日周四」；切换按钮上只写相对时间，日期写在这里 */
-  period: string;
-  /** 工具栏下面那行小字；busy 时前面带转圈 */
-  status: { busy: boolean; text: string };
+  /** 工具栏下面一行：用哪个模型、什么思考模式 */
+  pickers?: ReactNode;
 }
 
-/** 页面顶部：副标题、工具栏、状态行。 */
-export function ReportHeader({ subtitle, nav, actions, period, status }: ReportHeaderProps) {
+/** 页面顶部：副标题、工具栏、模型那一行。 */
+export function ReportHeader({ subtitle, nav, actions, pickers }: ReportHeaderProps) {
   return (
     <div className={styles.top}>
       <p className={styles.subtitle}>{subtitle}</p>
@@ -27,16 +25,34 @@ export function ReportHeader({ subtitle, nav, actions, period, status }: ReportH
         {nav}
         <div className={styles.actions}>{actions}</div>
       </header>
-      <div className={styles.statusLine} aria-live="polite">
-        <span className={styles.statusPeriod}>{period}</span>
+      {pickers ? <div className={styles.pickers}>{pickers}</div> : null}
+    </div>
+  );
+}
+
+interface ReportStatusProps {
+  /** 正在看的具体日期，如「11月5日周四」；切换按钮上只写相对时间，日期写在这里 */
+  period: string;
+  /** 生成到哪了、什么时候生成的、用的模型；busy 时前面带转圈，空串时只写日期 */
+  status: { busy: boolean; text: string };
+  className?: string;
+}
+
+/** 内容框顶上那行小字：日期和这份报告的生成情况。 */
+export function ReportStatus({ period, status, className }: ReportStatusProps) {
+  return (
+    <div
+      className={className ? `${styles.statusLine} ${className}` : styles.statusLine}
+      aria-live="polite"
+    >
+      <span className={styles.statusPeriod}>{period}</span>
+      {status.busy || status.text ? (
         <span className={styles.statusSep} aria-hidden>
           ·
         </span>
-        {status.busy ? (
-          <Loader2 size={14} className={`${styles.spin} ${styles.statusSpin}`} />
-        ) : null}
-        <span>{status.text}</span>
-      </div>
+      ) : null}
+      {status.busy ? <Loader2 size={14} className={`${styles.spin} ${styles.statusSpin}`} /> : null}
+      {status.text ? <span>{status.text}</span> : null}
     </div>
   );
 }

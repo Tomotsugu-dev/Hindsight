@@ -1,0 +1,12 @@
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(8px * var(--density));
+}
+
+.empty {
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}

@@ -1140,6 +1140,11 @@
     "models": {
       "sectionTitle": "Modelos",
       "sectionDesc": "LLM usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
+      "reports": {
+        "title": "Modelos dos relatórios diário e semanal",
+        "description": "Os relatórios automáticos também usam esta escolha. Os níveis de raciocínio dependem do serviço. Quanto mais alto, mais lento.",
+        "inUse": "Em uso: {{model}}"
+      },
       "toolbar": {
         "statusAll": "Todos",
         "statusInstalled": "Baixados",
@@ -1549,6 +1554,12 @@
       "month": "Mensal",
       "debug": "Depuração"
     },
+    "model": {
+      "title": "Modelo e raciocínio",
+      "modelGroup": "Modelo",
+      "followDaily": "Igual ao diário",
+      "cloudConfirmMessage": "Com a nuvem, cada relatório envia os nomes dos aplicativos, as categorias e a linha do tempo de atividades para {{provider}}. Capturas de tela não são enviadas."
+    },
     "placeholder": {
       "hint": "Recurso em desenvolvimento."
     },
@@ -1580,8 +1591,7 @@
       },
       "status": {
         "generated": "Gerado em {{time}}",
-        "failed": "A última geração falhou",
-        "empty": "Ainda não há resumo desta semana."
+        "failed": "A última geração falhou"
       },
       "days": {
         "aria": "Relatórios diários da semana",
@@ -1690,8 +1700,7 @@
       "status": {
         "done": "{{count}} segmentos gerados",
         "partial": "{{done}} de {{total}} segmentos gerados",
-        "running": "Resumindo \"{{label}}\" · segmento {{index}} de {{total}}",
-        "empty": "Ainda não há relatório para este dia. Clique em \"Iniciar resumo\" para gerá-lo segmento por segmento."
+        "running": "Resumindo \"{{label}}\" · segmento {{index}} de {{total}}"
       },
       "actions": {
         "stop": "Parar",

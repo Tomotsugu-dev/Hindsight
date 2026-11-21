@@ -1135,6 +1135,11 @@
     "models": {
       "sectionTitle": "モデル",
       "sectionDesc": "ローカル推論に使う LLM。GGUF ファイルは HuggingFace からダウンロードします。",
+      "reports": {
+        "title": "日次・週次レポートのモデル",
+        "description": "自動生成でもここで選んだものを使います。選べる思考の強さはサービスによって違い、強いほど遅くなります。",
+        "inUse": "使用中：{{model}}"
+      },
       "toolbar": {
         "statusAll": "すべて",
         "statusInstalled": "ダウンロード済み",
@@ -1544,6 +1549,12 @@
       "month": "月次",
       "debug": "デバッグ"
     },
+    "model": {
+      "title": "モデルと思考モード",
+      "modelGroup": "モデル",
+      "followDaily": "日次と同じ",
+      "cloudConfirmMessage": "クラウドにすると、レポートを作るたびにアプリ名・分類・アクティビティのタイムラインが {{provider}} に送信されます。スクリーンショットは送信されません。"
+    },
     "placeholder": {
       "hint": "開発中の機能です。"
     },
@@ -1575,8 +1586,7 @@
       },
       "status": {
         "generated": "{{time}} に生成",
-        "failed": "前回の生成に失敗しました",
-        "empty": "この週の週報はまだありません。"
+        "failed": "前回の生成に失敗しました"
       },
       "days": {
         "aria": "この週の毎日の日報",
@@ -1685,8 +1695,7 @@
       "status": {
         "done": "{{count}} 帯を生成済み",
         "partial": "{{total}} 帯中 {{done}} 帯を生成済み",
-        "running": "「{{label}}」を要約中 · {{total}} 帯中 {{index}} 帯目",
-        "empty": "この日の日報はまだありません。「サマリー開始」で時間帯ごとに生成します。"
+        "running": "「{{label}}」を要約中 · {{total}} 帯中 {{index}} 帯目"
       },
       "actions": {
         "stop": "停止",

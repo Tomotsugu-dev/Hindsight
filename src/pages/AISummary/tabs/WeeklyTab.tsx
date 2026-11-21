@@ -24,17 +24,18 @@ import {
 } from "../../../state/weeklySummary";
 import {
   api,
-  SUMMARY_CLOUD_SENTINEL,
   type AiSegment,
   type SegmentSummaryRow,
   type WeekPrecheckDay,
   type WeekPrecheckResp,
 } from "../../../api/hindsight";
+import { reportRoute } from "../../../state/reportModel";
+import { ReportModelPickers } from "../../../components/ReportModel/ReportModelPickers";
 import { MarkdownText } from "../../../components/MarkdownText/MarkdownText";
 import { Button } from "../../../components/Button/Button";
 import { IconButton } from "../../../components/Button/IconButton";
 import { PeriodNav } from "../../../components/PeriodNav/PeriodNav";
-import { MainButton, NoticeBars, ReportHeader } from "./ReportControls";
+import { MainButton, NoticeBars, ReportHeader, ReportStatus } from "./ReportControls";
 import ctl from "./ReportControls.module.css";
 import { SegmentTimeline, SegmentTimelineRow } from "./SegmentTimeline";
 import tl from "./SegmentTimeline.module.css";
@@ -144,14 +145,9 @@ export default function WeeklyTab() {
   const mondayRef = useRef(monday);
   mondayRef.current = monday;
 
-  // hasModel：周报走纯文本段总结——本地 summary 模型或选定云端 二选一即可。
-  const activeMain = settings?.ai.activeMain ?? "";
-  const rawSummaryMain = settings?.ai.summaryMain ?? "";
-  const externalEnabled = settings?.ai.externalEnabled ?? false;
-  const cloudRoute = externalEnabled && rawSummaryMain === SUMMARY_CLOUD_SENTINEL;
-  const localSummaryAvailable =
-    (rawSummaryMain !== "" && rawSummaryMain !== SUMMARY_CLOUD_SENTINEL) || activeMain !== "";
-  const hasModel = cloudRoute || localSummaryAvailable;
+  // 周报用自己的模型（没单独选就跟日报），走云端或有本地文件就能生成
+  const route = settings ? reportRoute(settings.ai, "weekly") : null;
+  const hasModel = !!route && (route.cloud || route.local !== "");
 
   // 全局 store 订阅——切走再回来还在跑的 weekly run 仍能保持"停止"按钮
   const runSnap = useSyncExternalStore(
@@ -460,9 +456,8 @@ export default function WeeklyTab() {
     if (!row) {
       return {
         busy: false,
-        text: hasModel
-          ? t("aiSummary.weekly.status.empty")
-          : t("aiSummary.weekly.actions.noModelTooltip"),
+        // 还没生成时只写日期；没有模型时说一声
+        text: hasModel ? "" : t("aiSummary.weekly.actions.noModelTooltip"),
       };
     }
     if (row.status !== "ok") return { busy: false, text: t("aiSummary.weekly.status.failed") };
@@ -544,8 +539,7 @@ export default function WeeklyTab() {
     <>
       <ReportHeader
         subtitle={t("aiSummary.weekly.subtitle")}
-        period={weekText}
-        status={status}
+        pickers={<ReportModelPickers module="weekly" disabled={generating} />}
         nav={
           <PeriodNav
             groupLabel={t("aiSummary.weekly.weekNav.groupAria")}
@@ -581,8 +575,11 @@ export default function WeeklyTab() {
                 }
               />
             )}
+            {/* 带框，和左边的下拉框、主按钮看着一样高；平时灰，悬停才上色 */}
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               icon={Pencil}
               label={t("aiSummary.edit.action")}
               onClick={() => {
@@ -594,6 +591,8 @@ export default function WeeklyTab() {
             />
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               icon={Download}
               label={t("aiSummary.weekly.actions.exportMarkdown")}
               onClick={() => void onExportMarkdown()}
@@ -608,6 +607,8 @@ export default function WeeklyTab() {
             />
             <IconButton
               size="lg"
+              variant="outline"
+              quiet
               tone="danger"
               icon={Trash2}
               label={t("aiSummary.weekly.actions.delete")}
@@ -669,11 +670,15 @@ export default function WeeklyTab() {
 
       <section ref={panelRef} className={styles.panel} data-part="card">
         <header className={styles.panelHead}>
-          <h3 className={styles.panelTitle}>
-            {selectedCell
-              ? t("aiSummary.weekly.panel.day", { date: selectedCell.longDate })
-              : t("aiSummary.weekly.panel.week")}
-          </h3>
+          <div className={styles.panelHeadText}>
+            <h3 className={styles.panelTitle}>
+              {selectedCell
+                ? t("aiSummary.weekly.panel.day", { date: selectedCell.longDate })
+                : t("aiSummary.weekly.panel.week")}
+            </h3>
+            {/* 生成情况说的是整周回顾，看某一天的日报时不写 */}
+            {selectedCell ? null : <ReportStatus period={weekText} status={status} />}
+          </div>
           {selectedCell ? (
             <div className={styles.panelActions}>
               {dayRows && dayRows.length > 0 ? (

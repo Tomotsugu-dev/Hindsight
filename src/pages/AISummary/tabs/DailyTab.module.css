@@ -14,6 +14,12 @@
     0 8px 20px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
 }
 
+/* 框顶上的日期和生成情况：左边和各段的时间对齐，下面一条细线隔开时间轴 */
+.cardStatus {
+  padding: calc(12px * var(--density)) 0 calc(10px * var(--density)) calc(14px * var(--density));
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .runningChip {
   display: inline-flex;
   align-items: center;

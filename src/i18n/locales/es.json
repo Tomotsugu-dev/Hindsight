@@ -1140,6 +1140,11 @@
     "models": {
       "sectionTitle": "Modelos",
       "sectionDesc": "El LLM que se usa para la inferencia local; los archivos GGUF se descargan de HuggingFace.",
+      "reports": {
+        "title": "Modelos de los informes diario y semanal",
+        "description": "Los informes automáticos también usan esta elección. Los niveles de razonamiento dependen del servicio. Cuanto más alto, más lento.",
+        "inUse": "En uso: {{model}}"
+      },
       "toolbar": {
         "statusAll": "Todos",
         "statusInstalled": "Descargados",
@@ -1549,6 +1554,12 @@
       "month": "Mensual",
       "debug": "Depuración"
     },
+    "model": {
+      "title": "Modelo y razonamiento",
+      "modelGroup": "Modelo",
+      "followDaily": "Igual que el diario",
+      "cloudConfirmMessage": "Con la nube, cada informe envía los nombres de las aplicaciones, las categorías y la línea de tiempo de actividad a {{provider}}. No se envían capturas de pantalla."
+    },
     "placeholder": {
       "hint": "Función en desarrollo."
     },
@@ -1580,8 +1591,7 @@
       },
       "status": {
         "generated": "Generado el {{time}}",
-        "failed": "La última generación falló",
-        "empty": "Todavía no hay resumen de esta semana."
+        "failed": "La última generación falló"
       },
       "days": {
         "aria": "Informes diarios de la semana",
@@ -1690,8 +1700,7 @@
       "status": {
         "done": "{{count}} tramos generados",
         "partial": "{{done}} de {{total}} tramos generados",
-        "running": "Resumiendo «{{label}}» · tramo {{index}} de {{total}}",
-        "empty": "Todavía no hay informe de este día. Pulsa «Iniciar el resumen» para generarlo tramo a tramo."
+        "running": "Resumiendo «{{label}}» · tramo {{index}} de {{total}}"
       },
       "actions": {
         "stop": "Detener",

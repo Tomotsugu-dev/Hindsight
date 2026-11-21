@@ -1140,6 +1140,11 @@
     "models": {
       "sectionTitle": "Models",
       "sectionDesc": "LLM used for local inference; GGUF files are downloaded from HuggingFace.",
+      "reports": {
+        "title": "Models for daily and weekly reports",
+        "description": "Automatic reports use these choices too. The thinking levels depend on the service. Higher levels are slower.",
+        "inUse": "In use: {{model}}"
+      },
       "toolbar": {
         "statusAll": "All",
         "statusInstalled": "Downloaded",
@@ -1549,6 +1554,12 @@
       "month": "Monthly",
       "debug": "Debug"
     },
+    "model": {
+      "title": "Model and thinking",
+      "modelGroup": "Model",
+      "followDaily": "Same as daily",
+      "cloudConfirmMessage": "With the cloud, each report sends app names, categories and your activity timeline to {{provider}}. Screenshots are not sent."
+    },
     "placeholder": {
       "hint": "Feature in development."
     },
@@ -1580,8 +1591,7 @@
       },
       "status": {
         "generated": "Generated {{time}}",
-        "failed": "The last run failed",
-        "empty": "No weekly review for this week yet."
+        "failed": "The last run failed"
       },
       "days": {
         "aria": "Daily reports this week",
@@ -1690,8 +1700,7 @@
       "status": {
         "done": "{{count}} segments generated",
         "partial": "{{done}} of {{total}} segments generated",
-        "running": "Summarizing \"{{label}}\" · segment {{index}} of {{total}}",
-        "empty": "No daily report for this day yet. Click \"Start summary\" to write it segment by segment."
+        "running": "Summarizing \"{{label}}\" · segment {{index}} of {{total}}"
       },
       "actions": {
         "stop": "Stop",

@@ -1,0 +1,176 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* 平时没有边框和底色，悬停、打开时才有浅底，和 VS Code 对话框底部的选择器一样 */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--density));
+  min-width: 0;
+  height: calc(26px * var(--density));
+  padding: 0 calc(6px * var(--density));
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-regular);
+  transition:
+    color 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+.trigger:hover:not(:disabled),
+.triggerOpen {
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+.trigger:disabled {
+  opacity: 0.5;
+}
+
+.icon {
+  flex-shrink: 0;
+  width: calc(13px * var(--font-scale));
+  height: calc(13px * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.icon.cloud,
+.itemIcon.cloud {
+  color: var(--status-pending);
+}
+
+/* 按钮上只放得下短名字，全名在菜单里 */
+.label {
+  min-width: 0;
+  max-width: calc(180px * var(--font-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chev {
+  flex-shrink: 0;
+  width: calc(11px * var(--font-scale));
+  height: calc(11px * var(--font-scale));
+  color: var(--text-faint);
+}
+
+/* 菜单从按钮左边往右展开，比按钮宽 */
+.menu {
+  position: absolute;
+  top: calc(100% + 4px * var(--density));
+  left: 0;
+  z-index: var(--z-dropdown);
+  width: max-content;
+  min-width: calc(220px * var(--font-scale));
+  max-width: calc(380px * var(--font-scale));
+  max-height: min(60vh, calc(420px * var(--density)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(4px * var(--density));
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow:
+    0 1px 0 var(--hairline-hi) inset,
+    0 4px 12px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
+    0 12px 28px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
+  transform-origin: top left;
+  animation: menuIn 160ms var(--ease-out);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.heading {
+  margin: 0;
+  padding: calc(5px * var(--density)) calc(8px * var(--density)) calc(3px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--text-faint);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+  width: 100%;
+  height: calc(30px * var(--density));
+  padding: 0 calc(8px * var(--density));
+  border-radius: var(--radius-sm);
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-regular);
+  text-align: left;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.item:hover {
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+.itemChecked {
+  color: var(--text-strong);
+}
+
+.itemIcon {
+  flex-shrink: 0;
+  width: calc(13px * var(--font-scale));
+  height: calc(13px * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemDetail {
+  flex-shrink: 0;
+  max-width: calc(140px * var(--font-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+}
+
+/* 没选中的项也留着勾的位置，换选中项时文字不跳 */
+.itemCheck {
+  flex-shrink: 0;
+  width: calc(13px * var(--font-scale));
+  height: calc(13px * var(--font-scale));
+  color: var(--color-accent);
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.note {
+  margin: calc(2px * var(--density)) 0 0;
+  padding: calc(6px * var(--density)) calc(8px * var(--density)) calc(4px * var(--density));
+  border-top: 1px solid var(--border-subtle);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  line-height: 1.5;
+  color: var(--text-faint);
+}
