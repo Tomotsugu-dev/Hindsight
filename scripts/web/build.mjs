@@ -80,7 +80,7 @@ function check(pages) {
   const errors = [];
   for (const file of pages) {
     const page = "/" + path.relative(OUT, file);
-    for (const [, url] of readFileSync(file, "utf8").matchAll(/(?:src|href|poster)="(\/(?!\/)[^"]*)"/g)) {
+    for (const [, url] of readFileSync(file, "utf8").matchAll(/(?:data-)?(?:src|href|poster)="(\/(?!\/)[^"]*)"/g)) {
       const p = decodeURIComponent(url.split(/[?#]/)[0]);
       const target = path.join(OUT, p.endsWith("/") ? `${p}index.html` : p);
       if (!existsSync(target)) errors.push(`${page}: 文件不存在 ${url}`);

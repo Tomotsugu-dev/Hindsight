@@ -148,7 +148,7 @@
       <ul class="cards" id="feature-cards" tabindex="0" aria-labelledby="features-title">
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/sync_ja.mp4" poster="/assets/home/sync_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/sync_ja.mp4" data-poster="/assets/home/sync_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="マイワークステーションと MacBook Pro、2 台のパソコンの日次統計が合わさって、すべてのデバイスの合計になる"></video>
           </div>
@@ -156,7 +156,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/plugins_ja.mp4" poster="/assets/home/plugins_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/plugins_ja.mp4" data-poster="/assets/home/plugins_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Focus プラグイン：画面上部のアイランドにマウスを乗せると広がり、今日の目標の進み具合、集中の残り時間、脱線した回数が表示される"></video>
           </div>
@@ -164,7 +164,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/garden.mp4" poster="/assets/home/garden.webp" width="960" height="720"
+            <video data-src="/assets/home/garden.mp4" data-poster="/assets/home/garden.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="コミュニティプラグイン Time Garden：最初は 5 本だった花がひと回りずつ増えて 25 本になり、庭いっぱいに咲く"></video>
           </div>
@@ -172,7 +172,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/themes_ja.mp4" poster="/assets/home/themes_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/themes_ja.mp4" data-poster="/assets/home/themes_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="同じ月次ページが、シンプル、ダーク、コミュニティテーマ Vermillion Cover、余白フラット、コミュニティテーマ Sakura Notes の順に切り替わる"></video>
           </div>
@@ -180,7 +180,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/ai_chat_ja.mp4" poster="/assets/home/ai_chat_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/ai_chat_ja.mp4" data-poster="/assets/home/ai_chat_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="チャット画面で質問：今週、Hindsight プロジェクトにどのくらい時間を使いましたか？AI が記録をもとに約 12 時間 36 分と答え、時間帯とアプリを示す 3 件の根拠を並べる"></video>
           </div>
@@ -188,7 +188,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/ai_summary_ja.mp4" poster="/assets/home/ai_summary_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/ai_summary_ja.mp4" data-poster="/assets/home/ai_summary_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="AI サマリーの日次：深夜と早朝の時間帯の要約が順に生成され、Markdown でエクスポートすると「ダウンロード」フォルダへのエクスポート完了が表示される"></video>
           </div>
@@ -196,7 +196,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/search_ja.mp4" poster="/assets/home/search_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/search_ja.mp4" data-poster="/assets/home/search_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Hindsight で OCR を検索して結果を開くと、当時のスクリーンショットに戻り、該当する行が枠で囲まれる"></video>
           </div>
@@ -204,7 +204,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/categories_ja.mp4" poster="/assets/home/categories_ja.webp" width="960" height="720"
+            <video data-src="/assets/home/categories_ja.mp4" data-poster="/assets/home/categories_ja.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="アプリの割り当て一覧で、Code、Chrome、Cursor の行は最初は黄色（未割り当て）。行ごとに右の「割り当て」を開いてコーディング、ブラウジング、コーディングを選ぶと、下の今日のバーにコーディングとブラウジングの区間が伸びる"></video>
           </div>
@@ -219,9 +219,9 @@
     <section class="section page film" id="demo">
       <h2>1 分でわかる Hindsight</h2>
       <div class="frame">
-        <video src="/assets/video/Hindsight_ja.mp4"
-               controls muted autoplay loop playsinline preload="metadata"
-               poster="/assets/video/Hindsight_ja.jpg"></video>
+        <video data-src="/assets/video/Hindsight_ja.mp4"
+               data-poster="/assets/video/Hindsight_ja.jpg" width="1920" height="1080"
+               controls muted loop playsinline preload="none"></video>
       </div>
     </section>
 
@@ -381,18 +381,6 @@
       }).observe(frame);
     })();
 
-    // 功能卡片的视频：卡片露出一半以上才下载、播放，滑走就暂停，免得一打开首页就下载全部视频。
-    // 系统要求减少动态效果时只显示封面
-    (function () {
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
-      const seen = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) e.target.play().catch(() => {});
-          else e.target.pause();
-        });
-      }, { threshold: 0.5 });
-      document.querySelectorAll('.card-media video').forEach(v => seen.observe(v));
-    })();
 
     // 功能卡片的 Dock 放大：按鼠标到每张卡片中心的距离算放大倍数，再按放大后的宽度重新排开，
     // 整排平移到鼠标下面那一点不动，卡片不会互相重叠。只认鼠标；系统要求减少动态效果时不做
@@ -485,6 +473,7 @@
       });
     })();
   </script>
+  <script type="module" src="/home-media.js"></script>
 
 </body>
 </html>

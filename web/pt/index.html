@@ -148,7 +148,7 @@
       <ul class="cards" id="feature-cards" tabindex="0" aria-labelledby="features-title">
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/sync_pt.mp4" poster="/assets/home/sync_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/sync_pt.mp4" data-poster="/assets/home/sync_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="As estatísticas do dia de Minha estação de trabalho e do MacBook Pro se juntam no total de Todos os dispositivos"></video>
           </div>
@@ -156,7 +156,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/plugins_pt.mp4" poster="/assets/home/plugins_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/plugins_pt.mp4" data-poster="/assets/home/plugins_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Plugin Focus: o mouse passa sobre a ilha no topo da tela, e ela se abre e mostra o progresso da meta de hoje, a contagem regressiva de foco e as distrações"></video>
           </div>
@@ -164,7 +164,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/garden.mp4" poster="/assets/home/garden.webp" width="960" height="720"
+            <video data-src="/assets/home/garden.mp4" data-poster="/assets/home/garden.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Plugin da comunidade Time Garden: o jardim começa com 5 flores e cresce, em círculos, até 25, cobrindo todo o jardim"></video>
           </div>
@@ -172,7 +172,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/themes_pt.mp4" poster="/assets/home/themes_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/themes_pt.mp4" data-poster="/assets/home/themes_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="A mesma página de estatísticas mensais troca de tema: Minimalista, Escuro, o tema da comunidade Vermillion Cover, Plano e espaçoso e o tema da comunidade Sakura Notes"></video>
           </div>
@@ -180,7 +180,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/ai_chat_pt.mp4" poster="/assets/home/ai_chat_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/ai_chat_pt.mp4" data-poster="/assets/home/ai_chat_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Pergunta na página Chat: Quanto tempo passei no projeto Hindsight esta semana? A IA responde com base nos seus registros, cerca de 12 h 36 min, e lista três fontes, cada uma com seu período e app."></video>
           </div>
@@ -188,7 +188,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/ai_summary_pt.mp4" poster="/assets/home/ai_summary_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/ai_summary_pt.mp4" data-poster="/assets/home/ai_summary_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Resumo de IA diário: os segmentos Madrugada e Manhã cedo são resumidos um após o outro e depois exportados em Markdown, com uma mensagem confirmando a exportação para a pasta de Downloads"></video>
           </div>
@@ -196,7 +196,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/search_pt.mp4" poster="/assets/home/search_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/search_pt.mp4" data-poster="/assets/home/search_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Uma busca por OCR no Hindsight: o resultado abre a captura de tela daquele momento, com as linhas encontradas destacadas"></video>
           </div>
@@ -204,7 +204,7 @@
         </li>
         <li class="card">
           <div class="card-media">
-            <video src="/assets/home/categories_pt.mp4" poster="/assets/home/categories_pt.webp" width="960" height="720"
+            <video data-src="/assets/home/categories_pt.mp4" data-poster="/assets/home/categories_pt.webp" width="960" height="720"
                    muted loop playsinline preload="none"
                    aria-label="Na lista Atribuir apps, as linhas Code, Chrome e Cursor começam amarelas (sem categoria). Em cada linha, o menu Atribuir é aberto para escolher Programação, Navegação e Programação, e a barra de hoje, abaixo, ganha os trechos Programação e Navegação"></video>
           </div>
@@ -219,9 +219,9 @@
     <section class="section page film" id="demo">
       <h2>Hindsight em 1 minuto</h2>
       <div class="frame">
-        <video src="/assets/video/Hindsight_pt.mp4"
-               controls muted autoplay loop playsinline preload="metadata"
-               poster="/assets/video/Hindsight_pt.jpg"></video>
+        <video data-src="/assets/video/Hindsight_pt.mp4"
+               data-poster="/assets/video/Hindsight_pt.jpg" width="1920" height="1080"
+               controls muted loop playsinline preload="none"></video>
       </div>
     </section>
 
@@ -381,18 +381,6 @@
       }).observe(frame);
     })();
 
-    // 功能卡片的视频：卡片露出一半以上才下载、播放，滑走就暂停，免得一打开首页就下载全部视频。
-    // 系统要求减少动态效果时只显示封面
-    (function () {
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
-      const seen = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) e.target.play().catch(() => {});
-          else e.target.pause();
-        });
-      }, { threshold: 0.5 });
-      document.querySelectorAll('.card-media video').forEach(v => seen.observe(v));
-    })();
 
     // 功能卡片的 Dock 放大：按鼠标到每张卡片中心的距离算放大倍数，再按放大后的宽度重新排开，
     // 整排平移到鼠标下面那一点不动，卡片不会互相重叠。只认鼠标；系统要求减少动态效果时不做
@@ -485,6 +473,7 @@
       });
     })();
   </script>
+  <script type="module" src="/home-media.js"></script>
 
 </body>
 </html>

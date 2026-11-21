@@ -17,7 +17,7 @@ test("public site build preserves public pages and omits source-only files", (t)
     writeFileSync(target, contents);
   };
   const publicFiles = new Map([
-    ["index.html", '<!doctype html><link href="/assets/site.css"><a href="/demo/">Demo</a><a href="/docs/">Docs</a><video src="/assets/video/fixture.mp4" poster="/assets/video/fixture.jpg"></video>'],
+    ["index.html", '<!doctype html><link href="/assets/site.css"><a href="/demo/">Demo</a><a href="/docs/">Docs</a><video data-src="/assets/video/fixture.mp4" data-poster="/assets/video/fixture.jpg"></video>'],
     ["assets/site.css", "body { color: #123; }"],
     ["demo/index.html", "<!doctype html><title>Public demo</title>"],
     ["themes/index.html", "<!doctype html><title>Public themes</title>"],
