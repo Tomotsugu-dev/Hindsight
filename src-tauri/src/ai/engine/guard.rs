@@ -1,11 +1,14 @@
-//! 日报、周报、聊天、测试连接要用本机引擎时，都从这里拿一个 [`EngineGuard`]：
+//! Lease acquisition, reuse, and concurrency coordination for the local engine.
 //!
-//! - 没在跑：按要求启动。
-//! - 在跑，模型相同，每槽上下文不小于要求：直接用。
-//! - 不满足要求，没人拿着 guard：重启成要求的参数。
-//! - 不满足要求，有人拿着 guard：报忙。
+//! Callers borrow the local engine through [`EngineSupervisor::acquire`]:
+//! - Not running: starts the engine with the requested parameters.
+//! - Running and compatible (same model and per-slot context size >= requested):
+//!   reuses it and shares the port.
+//! - Running, incompatible, and unused: stops it and restarts with the requested parameters.
+//! - Running, incompatible, and held by another caller: returns [`Error::EngineBusy`].
 //!
-//! 一次只处理一个来要引擎的。后来的等前一个起完再判断。
+//! Acquisition decisions are serialized so later callers wait for an in-progress
+//! start or restart before deciding.
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -14,21 +17,24 @@ use std::time::Instant;
 
 use tokio::sync::OwnedMutexGuard;
 
-use super::server::Loaded;
-use super::{EngineStartOverrides, EngineSupervisor, InflightState, Slot, DEFAULT_CTX_SIZE};
+use super::server::LoadedEngine;
+use super::{EngineSlot, EngineStartOverrides, EngineSupervisor, HolderState, DEFAULT_CTX_SIZE};
 use crate::error::{Error, Result};
 
-/// 拿着它就占着引擎。丢掉就归还，全部归还后空闲回收才会关引擎。
+/// RAII lease on the local engine.
+///
+/// While at least one guard is held, idle shutdown leaves the engine running.
+/// Dropping the guard decrements the active lease count and refreshes the last-used timestamp.
 pub struct EngineGuard {
     port: u16,
-    holders: Arc<Mutex<InflightState>>,
+    holders: Arc<Mutex<HolderState>>,
 }
 
 impl EngineGuard {
-    fn new(holders: &Arc<Mutex<InflightState>>) -> Self {
-        if let Ok(mut s) = holders.lock() {
-            s.count += 1;
-            s.last_used_at = Instant::now();
+    fn new(holders: &Arc<Mutex<HolderState>>) -> Self {
+        if let Ok(mut state) = holders.lock() {
+            state.active_count += 1;
+            state.last_used_at = Instant::now();
         }
         Self {
             port: 0,
@@ -36,7 +42,7 @@ impl EngineGuard {
         }
     }
 
-    /// 引擎的端口。
+    /// Returns the local TCP port the running `llama-server` listens on.
     pub fn port(&self) -> u16 {
         self.port
     }
@@ -44,55 +50,57 @@ impl EngineGuard {
 
 impl Drop for EngineGuard {
     fn drop(&mut self) {
-        if let Ok(mut s) = self.holders.lock() {
-            s.count = s.count.saturating_sub(1);
-            s.last_used_at = Instant::now();
+        if let Ok(mut state) = self.holders.lock() {
+            state.active_count = state.active_count.saturating_sub(1);
+            state.last_used_at = Instant::now();
         }
     }
 }
 
 impl EngineSupervisor {
-    /// 按 `wants` 拿一个装着 `model` 的引擎。规则见模块文档。
+    /// Acquires a lease on a local engine serving `model` with at least the requested `overrides`.
+    ///
+    /// Reuse, restart, and queueing rules are documented at the module level.
     ///
     /// # Errors
     ///
-    /// 引擎被别人占着、要的又不一样时，返回 [`Error::EngineBusy`]。
+    /// - Returns [`Error::EngineBusy`] if another caller holds a lease on an incompatible engine.
+    /// - Propagates startup errors from starting or restarting the engine process.
     pub async fn acquire(
         self: &Arc<Self>,
         model: PathBuf,
-        wants: EngineStartOverrides,
+        overrides: EngineStartOverrides,
     ) -> Result<EngineGuard> {
-        self.guards.acquire(self, model, wants).await
+        self.guards.acquire(self, model, overrides).await
     }
 
-    /// 没人拿着 guard 就关掉引擎。
+    /// Stops the local engine if no [`EngineGuard`] is currently held.
     pub async fn stop_if_unused(self: &Arc<Self>) -> Result<()> {
         self.guards.stop_if_unused(self).await
     }
 }
 
-/// guard 通过它看引擎、启动、停止。测试里换成假的。
-pub(super) trait Process: Send + Sync + 'static {
-    /// 在跑的话，返回它的端口、模型和参数。
-    fn running(&self) -> impl Future<Output = Option<Loaded>> + Send;
+// Engine process operations needed by lease coordination; mocked in unit tests.
+pub(super) trait EngineProcess: Send + Sync + 'static {
+    fn running(&self) -> impl Future<Output = Option<LoadedEngine>> + Send;
     fn start(
         &self,
         model: PathBuf,
-        wants: EngineStartOverrides,
+        overrides: EngineStartOverrides,
     ) -> impl Future<Output = Result<u16>> + Send;
     fn stop(&self) -> impl Future<Output = Result<()>> + Send;
 }
 
-impl Process for EngineSupervisor {
-    async fn running(&self) -> Option<Loaded> {
-        match &self.inner.lock().await.slot {
-            Slot::Running(s) => Some(s.loaded.clone()),
+impl EngineProcess for EngineSupervisor {
+    async fn running(&self) -> Option<LoadedEngine> {
+        match &self.state.lock().await.slot {
+            EngineSlot::Running(server) => Some(server.loaded.clone()),
             _ => None,
         }
     }
 
-    async fn start(&self, model: PathBuf, wants: EngineStartOverrides) -> Result<u16> {
-        EngineSupervisor::start(self, model, wants).await
+    async fn start(&self, model: PathBuf, overrides: EngineStartOverrides) -> Result<u16> {
+        EngineSupervisor::start(self, model, overrides).await
     }
 
     async fn stop(&self) -> Result<()> {
@@ -100,88 +108,97 @@ impl Process for EngineSupervisor {
     }
 }
 
-/// 发出去的 guard，和让来要引擎的排队的锁。
 #[derive(Default)]
 pub(super) struct Guards {
-    pub(super) holders: Arc<Mutex<InflightState>>,
-    turn: Arc<tokio::sync::Mutex<()>>,
+    pub(super) holders: Arc<Mutex<HolderState>>,
+    // Serializes `acquire` and `stop_if_unused` decisions.
+    acquire_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Guards {
-    fn count(&self) -> usize {
-        self.holders.lock().map(|s| s.count).unwrap_or(0)
+    fn active_count(&self) -> usize {
+        self.holders
+            .lock()
+            .map(|state| state.active_count)
+            .unwrap_or(0)
     }
 
-    async fn acquire<P: Process>(
+    async fn acquire<P: EngineProcess>(
         &self,
         process: &Arc<P>,
         model: PathBuf,
-        wants: EngineStartOverrides,
+        overrides: EngineStartOverrides,
     ) -> Result<EngineGuard> {
-        let turn = Arc::clone(&self.turn).lock_owned().await;
-        // 先占上：判断完到返回之间，空闲回收不会关掉引擎
+        let acquire_guard = Arc::clone(&self.acquire_lock).lock_owned().await;
+        // Reserve a lease up front so idle shutdown cannot stop the engine between check and return.
         let mut guard = EngineGuard::new(&self.holders);
-        let others = self.count().saturating_sub(1);
+        let other_holders = self.active_count().saturating_sub(1);
         match process.running().await {
-            Some(loaded) if fits(&loaded, &model, &wants) => guard.port = loaded.port,
-            Some(_) if others > 0 => return Err(Error::EngineBusy),
+            Some(loaded) if can_reuse(&loaded, &model, &overrides) => guard.port = loaded.port,
+            Some(_) if other_holders > 0 => return Err(Error::EngineBusy),
             running => {
-                let undo = StopIfDropped {
+                // Hand `acquire_guard` to the cancel guard: if this future is dropped mid-start
+                // before `disarm()`, `Drop` stops the half-started engine first and only releases
+                // `acquire_lock` afterward; normal completion releases it immediately on `disarm()`.
+                let cancel_guard = StartupCancelGuard {
                     process: Arc::clone(process),
-                    turn: Some(turn),
+                    acquire_guard: Some(acquire_guard),
                 };
                 let started = async {
                     if running.is_some() {
                         process.stop().await?;
                     }
-                    process.start(model, wants).await
+                    process.start(model, overrides).await
                 }
                 .await;
-                undo.disarm();
+                cancel_guard.disarm();
                 guard.port = started?;
             }
         }
         Ok(guard)
     }
 
-    async fn stop_if_unused<P: Process>(&self, process: &Arc<P>) -> Result<()> {
-        // 排在来要引擎的后面：判断完到关掉之间，没人能拿到 guard
-        let _turn = self.turn.lock().await;
-        if self.count() == 0 {
+    async fn stop_if_unused<P: EngineProcess>(&self, process: &Arc<P>) -> Result<()> {
+        // Queue behind `acquire` so a new caller cannot acquire a lease after the zero check.
+        let _acquire_guard = self.acquire_lock.lock().await;
+        if self.active_count() == 0 {
             process.stop().await?;
         }
         Ok(())
     }
 }
 
-/// 模型相同、每槽上下文不小于要求，就能直接用。批大小和并发路数不看。
-fn fits(loaded: &Loaded, model: &Path, wants: &EngineStartOverrides) -> bool {
-    let ctx = |p: &EngineStartOverrides| p.ctx_size.unwrap_or(DEFAULT_CTX_SIZE);
-    loaded.model == model && ctx(&loaded.params) >= ctx(wants)
+// Ignore batch size and parallel slots so concurrent tasks with the same model and sufficient
+// per-slot context can share the running engine instead of failing with `EngineBusy`.
+fn can_reuse(loaded: &LoadedEngine, model: &Path, requested: &EngineStartOverrides) -> bool {
+    let effective_ctx =
+        |overrides: &EngineStartOverrides| overrides.ctx_size.unwrap_or(DEFAULT_CTX_SIZE);
+    loaded.model == model && effective_ctx(&loaded.params) >= effective_ctx(requested)
 }
 
-/// 启动途中 acquire 被取消时，关掉这次启动的引擎。关完才放下一个来要引擎的进来。
-struct StopIfDropped<P: Process> {
+struct StartupCancelGuard<P: EngineProcess> {
     process: Arc<P>,
-    turn: Option<OwnedMutexGuard<()>>,
+    acquire_guard: Option<OwnedMutexGuard<()>>,
 }
 
-impl<P: Process> StopIfDropped<P> {
+impl<P: EngineProcess> StartupCancelGuard<P> {
     fn disarm(mut self) {
-        self.turn = None;
+        self.acquire_guard = None;
     }
 }
 
-impl<P: Process> Drop for StopIfDropped<P> {
+impl<P: EngineProcess> Drop for StartupCancelGuard<P> {
     fn drop(&mut self) {
-        let Some(turn) = self.turn.take() else {
+        let Some(acquire_guard) = self.acquire_guard.take() else {
             return;
         };
         let process = Arc::clone(&self.process);
-        if let Ok(rt) = tokio::runtime::Handle::try_current() {
-            rt.spawn(async move {
+        // `Drop` is synchronous and cannot block the runtime, so stop asynchronously and release
+        // `acquire_lock` only after the half-started process has exited.
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
                 let _ = process.stop().await;
-                drop(turn);
+                drop(acquire_guard);
             });
         }
     }
@@ -194,33 +211,32 @@ mod tests {
 
     use super::*;
 
-    /// 假引擎：启动、停止只改内存里的状态，记下次数。
+    // In-memory fake engine that tracks start/stop counts and pauses startup via `start_gate`.
     #[derive(Default)]
     struct FakeProcess {
-        running: Mutex<Option<Loaded>>,
+        running: Mutex<Option<LoadedEngine>>,
         starts: AtomicUsize,
         stops: AtomicUsize,
-        fail: AtomicBool,
-        /// 测试拿着这把锁时，启动卡在半路。
-        gate: tokio::sync::Mutex<()>,
+        fail_start: AtomicBool,
+        start_gate: tokio::sync::Mutex<()>,
     }
 
-    impl Process for FakeProcess {
-        async fn running(&self) -> Option<Loaded> {
+    impl EngineProcess for FakeProcess {
+        async fn running(&self) -> Option<LoadedEngine> {
             self.running.lock().unwrap().clone()
         }
 
-        async fn start(&self, model: PathBuf, wants: EngineStartOverrides) -> Result<u16> {
-            let n = self.starts.fetch_add(1, SeqCst) + 1;
-            let _open = self.gate.lock().await;
-            if self.fail.load(SeqCst) {
-                return Err(Error::EngineStart("假引擎起不来".into()));
+        async fn start(&self, model: PathBuf, overrides: EngineStartOverrides) -> Result<u16> {
+            let seq = self.starts.fetch_add(1, SeqCst) + 1;
+            let _gate = self.start_gate.lock().await;
+            if self.fail_start.load(SeqCst) {
+                return Err(Error::EngineStart("fake engine failed to start".into()));
             }
-            let port = 5000 + n as u16;
-            *self.running.lock().unwrap() = Some(Loaded {
+            let port = 5000 + seq as u16;
+            *self.running.lock().unwrap() = Some(LoadedEngine {
                 port,
                 model,
-                params: wants,
+                params: overrides,
             });
             Ok(port)
         }
@@ -236,19 +252,21 @@ mod tests {
         fn starts(&self) -> usize {
             self.starts.load(SeqCst)
         }
+
         fn stops(&self) -> usize {
             self.stops.load(SeqCst)
         }
+
         fn loaded_model(&self) -> Option<PathBuf> {
             self.running
                 .lock()
                 .unwrap()
                 .as_ref()
-                .map(|l| l.model.clone())
+                .map(|loaded| loaded.model.clone())
         }
-        /// 假装引擎已经装着 `model`、按 `params` 在 4242 端口跑着。
-        fn run(&self, model: &str, params: EngineStartOverrides) {
-            *self.running.lock().unwrap() = Some(Loaded {
+
+        fn set_running(&self, model: &str, params: EngineStartOverrides) {
+            *self.running.lock().unwrap() = Some(LoadedEngine {
                 port: 4242,
                 model: PathBuf::from(model),
                 params,
@@ -263,9 +281,9 @@ mod tests {
         )
     }
 
-    fn ctx(n: Option<u32>) -> EngineStartOverrides {
+    fn with_ctx(ctx_size: Option<u32>) -> EngineStartOverrides {
         EngineStartOverrides {
-            ctx_size: n,
+            ctx_size,
             ..Default::default()
         }
     }
@@ -276,36 +294,35 @@ mod tests {
         model: &str,
     ) -> tokio::task::JoinHandle<Result<EngineGuard>> {
         let (guards, fake, model) = (Arc::clone(guards), Arc::clone(fake), PathBuf::from(model));
-        tokio::spawn(async move { guards.acquire(&fake, model, ctx(None)).await })
+        tokio::spawn(async move { guards.acquire(&fake, model, with_ctx(None)).await })
     }
 
-    /// 等到 `done` 成立，最多 5 秒。
-    async fn until(done: impl Fn() -> bool) {
+    async fn wait_until(done: impl Fn() -> bool) {
         tokio::time::timeout(Duration::from_secs(5), async {
             while !done() {
                 tokio::task::yield_now().await;
             }
         })
         .await
-        .expect("等了 5 秒还没到");
+        .expect("timed out after 5s waiting for condition");
     }
 
     #[tokio::test]
     async fn starts_the_engine_when_none_is_running() {
         let (guards, fake) = setup();
-        let g = guards
-            .acquire(&fake, "a.gguf".into(), ctx(None))
+        let guard = guards
+            .acquire(&fake, "a.gguf".into(), with_ctx(None))
             .await
             .unwrap();
         assert_eq!(fake.starts(), 1);
-        assert_eq!(g.port(), 5001);
+        assert_eq!(guard.port(), 5001);
     }
 
-    /// 批大小、并发路数不同也直接用；别人拿着也能一起用。
+    // Differences in batch size and parallel slots are ignored, and multiple guards can share.
     #[tokio::test]
     async fn reuses_an_engine_with_the_same_model_and_enough_context() {
         let (guards, fake) = setup();
-        fake.run(
+        fake.set_running(
             "a.gguf",
             EngineStartOverrides {
                 ctx_size: Some(16384),
@@ -313,13 +330,13 @@ mod tests {
                 parallel_slots: Some(2),
             },
         );
-        // 没设上下文 = 8K，小于 16K
+        // Unspecified ctx defaults to 8K, which fits within the loaded 16K.
         let first = guards
-            .acquire(&fake, "a.gguf".into(), ctx(None))
+            .acquire(&fake, "a.gguf".into(), with_ctx(None))
             .await
             .unwrap();
         let second = guards
-            .acquire(&fake, "a.gguf".into(), ctx(Some(16384)))
+            .acquire(&fake, "a.gguf".into(), with_ctx(Some(16384)))
             .await
             .unwrap();
         assert_eq!((first.port(), second.port()), (4242, 4242));
@@ -329,45 +346,51 @@ mod tests {
     #[tokio::test]
     async fn waits_for_a_start_in_progress_then_reuses_it() {
         let (guards, fake) = setup();
-        let hold = fake.gate.lock().await;
-        let a = spawn_acquire(&guards, &fake, "a.gguf");
-        until(|| fake.starts() == 1).await;
-        let b = spawn_acquire(&guards, &fake, "a.gguf");
+        let gate = fake.start_gate.lock().await;
+        let first = spawn_acquire(&guards, &fake, "a.gguf");
+        wait_until(|| fake.starts() == 1).await;
+        let second = spawn_acquire(&guards, &fake, "a.gguf");
         for _ in 0..10 {
             tokio::task::yield_now().await;
         }
-        assert!(!b.is_finished(), "前一个还没起完，后来的要等");
+        assert!(
+            !second.is_finished(),
+            "second caller must wait while the first start is still in progress"
+        );
 
-        drop(hold);
-        let (a, b) = (a.await.unwrap().unwrap(), b.await.unwrap().unwrap());
-        assert_eq!(a.port(), b.port());
+        drop(gate);
+        let (first, second) = (
+            first.await.unwrap().unwrap(),
+            second.await.unwrap().unwrap(),
+        );
+        assert_eq!(first.port(), second.port());
         assert_eq!(fake.starts(), 1);
     }
 
     #[tokio::test]
     async fn restarts_when_the_engine_does_not_fit_and_nobody_holds_it() {
         let (guards, fake) = setup();
-        fake.run("a.gguf", ctx(None));
+        fake.set_running("a.gguf", with_ctx(None));
 
-        // 没设上下文就是 8K，要 8K 直接用
-        let g = guards
-            .acquire(&fake, "a.gguf".into(), ctx(Some(8192)))
+        // Unspecified ctx equals 8K, so requesting 8K reuses directly.
+        let guard = guards
+            .acquire(&fake, "a.gguf".into(), with_ctx(Some(8192)))
             .await
             .unwrap();
         assert_eq!((fake.stops(), fake.starts()), (0, 0));
-        drop(g);
+        drop(guard);
 
-        // 上下文不够
-        let g = guards
-            .acquire(&fake, "a.gguf".into(), ctx(Some(32768)))
+        // Insufficient context restarts once nobody holds a guard.
+        let guard = guards
+            .acquire(&fake, "a.gguf".into(), with_ctx(Some(32768)))
             .await
             .unwrap();
         assert_eq!((fake.stops(), fake.starts()), (1, 1));
-        drop(g);
+        drop(guard);
 
-        // 模型不同
+        // Different model restarts once nobody holds a guard.
         guards
-            .acquire(&fake, "b.gguf".into(), ctx(Some(32768)))
+            .acquire(&fake, "b.gguf".into(), with_ctx(Some(32768)))
             .await
             .unwrap();
         assert_eq!((fake.stops(), fake.starts()), (2, 2));
@@ -377,25 +400,25 @@ mod tests {
     #[tokio::test]
     async fn reports_busy_and_leaves_the_engine_alone_while_someone_holds_it() {
         let (guards, fake) = setup();
-        fake.run("a.gguf", ctx(None));
+        fake.set_running("a.gguf", with_ctx(None));
         let held = guards
-            .acquire(&fake, "a.gguf".into(), ctx(None))
+            .acquire(&fake, "a.gguf".into(), with_ctx(None))
             .await
             .unwrap();
 
         let err = guards
-            .acquire(&fake, "b.gguf".into(), ctx(None))
+            .acquire(&fake, "b.gguf".into(), with_ctx(None))
             .await
             .err()
-            .expect("别人拿着，要报忙");
+            .expect("should report busy while another caller holds the engine");
         assert!(err.to_string().contains("[AI_RUN_BUSY]"), "{err}");
         assert_eq!((fake.stops(), fake.starts()), (0, 0));
         assert_eq!(fake.loaded_model(), Some("a.gguf".into()));
 
-        // 还回来以后就能重启
+        // Restart succeeds once the existing guard is dropped.
         drop(held);
         guards
-            .acquire(&fake, "b.gguf".into(), ctx(None))
+            .acquire(&fake, "b.gguf".into(), with_ctx(None))
             .await
             .unwrap();
         assert_eq!(fake.loaded_model(), Some("b.gguf".into()));
@@ -404,76 +427,75 @@ mod tests {
     #[tokio::test]
     async fn gives_no_guard_when_the_start_fails() {
         let (guards, fake) = setup();
-        fake.fail.store(true, SeqCst);
+        fake.fail_start.store(true, SeqCst);
         assert!(guards
-            .acquire(&fake, "a.gguf".into(), ctx(None))
+            .acquire(&fake, "a.gguf".into(), with_ctx(None))
             .await
             .is_err());
-        assert_eq!(guards.count(), 0);
+        assert_eq!(guards.active_count(), 0);
     }
 
     #[tokio::test]
     async fn stops_its_own_engine_when_cancelled_while_starting() {
         let (guards, fake) = setup();
-        let _hold = fake.gate.lock().await;
-        let a = spawn_acquire(&guards, &fake, "a.gguf");
-        until(|| fake.starts() == 1).await;
+        let _gate = fake.start_gate.lock().await;
+        let first = spawn_acquire(&guards, &fake, "a.gguf");
+        wait_until(|| fake.starts() == 1).await;
 
-        a.abort();
-        let _ = a.await;
-        until(|| fake.stops() == 1).await;
-        assert_eq!(guards.count(), 0);
+        first.abort();
+        let _ = first.await;
+        wait_until(|| fake.stops() == 1).await;
+        assert_eq!(guards.active_count(), 0);
     }
 
     #[tokio::test]
     async fn leaves_the_engine_alone_when_cancelled_while_waiting() {
         let (guards, fake) = setup();
-        let hold = fake.gate.lock().await;
-        let a = spawn_acquire(&guards, &fake, "a.gguf");
-        until(|| fake.starts() == 1).await;
-        let b = spawn_acquire(&guards, &fake, "b.gguf");
+        let gate = fake.start_gate.lock().await;
+        let first = spawn_acquire(&guards, &fake, "a.gguf");
+        wait_until(|| fake.starts() == 1).await;
+        let second = spawn_acquire(&guards, &fake, "b.gguf");
         tokio::task::yield_now().await;
-        b.abort();
-        let _ = b.await;
+        second.abort();
+        let _ = second.await;
 
-        drop(hold);
-        a.await.unwrap().unwrap();
+        drop(gate);
+        first.await.unwrap().unwrap();
         assert_eq!(fake.stops(), 0);
         assert_eq!(fake.loaded_model(), Some("a.gguf".into()));
     }
 
-    /// 测试连接测完用它关引擎：别的任务还拿着 guard 时不关。
     #[tokio::test]
     async fn stop_if_unused_keeps_an_engine_someone_holds() {
         let (guards, fake) = setup();
-        fake.run("a.gguf", ctx(None));
-        let g = guards
-            .acquire(&fake, "a.gguf".into(), ctx(None))
+        fake.set_running("a.gguf", with_ctx(None));
+        let guard = guards
+            .acquire(&fake, "a.gguf".into(), with_ctx(None))
             .await
             .unwrap();
 
         guards.stop_if_unused(&fake).await.unwrap();
         assert_eq!(fake.stops(), 0);
 
-        drop(g);
+        drop(guard);
         guards.stop_if_unused(&fake).await.unwrap();
         assert_eq!(fake.stops(), 1);
     }
 
-    /// 别的任务正在启动引擎时，不会把它关掉。
+    // `stop_if_unused` queues behind an in-progress start and does not kill its new lease.
     #[tokio::test]
     async fn stop_if_unused_waits_for_a_start_in_progress() {
         let (guards, fake) = setup();
-        let hold = fake.gate.lock().await;
-        let a = spawn_acquire(&guards, &fake, "a.gguf");
-        until(|| fake.starts() == 1).await;
+        let gate = fake.start_gate.lock().await;
+        let first = spawn_acquire(&guards, &fake, "a.gguf");
+        wait_until(|| fake.starts() == 1).await;
         let stopper = {
             let (guards, fake) = (Arc::clone(&guards), Arc::clone(&fake));
             tokio::spawn(async move { guards.stop_if_unused(&fake).await })
         };
 
-        drop(hold);
-        let _a = a.await.unwrap().unwrap();
+        drop(gate);
+        let _guard = first.await.unwrap().unwrap();
         stopper.await.unwrap().unwrap();
         assert_eq!(fake.stops(), 0);
     }

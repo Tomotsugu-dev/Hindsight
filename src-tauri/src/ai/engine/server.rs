@@ -1,4 +1,4 @@
-//! 一个 llama-server 子进程：拉起、关掉，没起来时说原因。
+//! 单个 `llama-server` 子进程的拉起、存活检测、终止与失败诊断。
 
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -7,104 +7,100 @@ use std::time::Duration;
 use tokio::process::Child;
 
 use super::command::build_command;
-use super::logs::Logs;
+use super::logs::EngineLogs;
 use super::{EngineStartOverrides, HEALTH_TIMEOUT};
 
-/// 跑着的引擎装着什么。
+/// 等待子进程退出回收的上限时长，避免进程卡死在不可中断状态导致上层调用挂死。
+const SHUTDOWN_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 运行中引擎的绑定元信息（监听端口、模型路径与启动参数）。
 #[derive(Debug, Clone)]
-pub(super) struct Loaded {
+pub(super) struct LoadedEngine {
     pub port: u16,
     pub model: PathBuf,
     pub params: EngineStartOverrides,
 }
 
-/// 拉起来的 llama-server 进程。
+/// 已拉起的 `llama-server` 子进程句柄及其绑定信息。
 pub(super) struct LlamaServer {
     pub(super) child: Child,
-    pub(super) loaded: Loaded,
+    pub(super) loaded: LoadedEngine,
 }
 
 impl LlamaServer {
-    /// 在空闲端口上用 `bin` 拉起装着 `model` 的引擎，不等它能用。
+    /// 挑选空闲本地端口并拉起加载 `model` 的 `llama-server`（不等待 `/health` 就绪）。
     ///
-    /// 输出记进 `logs`，上一次的先清掉。
+    /// 启动前会清空 `logs` 缓冲，并为子进程的 `stderr` / `stdout` 启动后台收集任务。
     pub(super) async fn spawn(
-        bin: &Path,
+        binary_path: &Path,
         model: PathBuf,
-        params: EngineStartOverrides,
-        logs: &Logs,
+        overrides: EngineStartOverrides,
+        logs: &EngineLogs,
     ) -> std::io::Result<Self> {
         let port = pick_free_port()?;
-        let mut cmd = build_command(bin, port, &model, &params);
-        // 装平台特定的 spawn 前钩子（Linux/macOS 设 setpgid + PDEATHSIG）；
-        // Windows 是 no-op，post-spawn 才装 Job
-        if let Err(e) = crate::ai::job_guard::prepare_command(&mut cmd) {
-            log::warn!("job_guard::prepare_command 失败（保护可能降级）: {e}");
+        let mut cmd = build_command(binary_path, port, &model, &overrides);
+        // 挂载平台相关的 spawn 前子进程保护钩子（Linux/macOS 设 setpgid / PDEATHSIG；Windows 为 no-op）。
+        if let Err(err) = crate::ai::job_guard::prepare_command(&mut cmd) {
+            log::warn!("job_guard::prepare_command 失败（保护可能降级）: {err}");
         }
-        // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效，
-        // 同时打模型文件名，确认日报、周报、聊天之间切换时加载的是哪个模型。
-        // 标记 [engine-spawn] 让用户在长 log 里 grep 能直接定位。
-        let main_name = model
+        // 记录关键启动参数与模型文件名，便于从日志中排查 -np / --batch-size 及模型切换问题。
+        let model_name = model
             .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
+            .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "<none>".to_string());
         log::info!(
-            "[engine-spawn] port={port} main={main_name} batch={:?} -np={:?} ctx_per_slot={:?}",
-            params.batch_size,
-            params.parallel_slots,
-            params.ctx_size,
+            "[engine-spawn] port={port} main={model_name} batch={:?} -np={:?} ctx_per_slot={:?}",
+            overrides.batch_size,
+            overrides.parallel_slots,
+            overrides.ctx_size,
         );
 
         let mut child = cmd.spawn()?;
 
-        // 把 child 加到全局 Job Object —— Hindsight 进程死时 OS 内核会同步杀光
-        // 所有 Job 成员，无视父进程怎么死（panic / Ctrl+C / taskkill）。
-        // assign 失败不阻塞启动，只 log 警告退化到原 Exit hook 路径。
-        // Linux / macOS 上 assign_child_pid 是 no-op。
+        // Windows 上将子进程加入全局 Job Object，确保父进程异常崩溃时由内核一并清理；
+        // Linux / macOS 上为空操作。失败仅记录警告，不阻断引擎启动。
         if let Some(pid) = child.id() {
-            if let Err(e) = crate::ai::job_guard::assign_child_pid(pid) {
-                log::warn!("AssignProcessToJobObject pid={pid} 失败: {e}");
+            if let Err(err) = crate::ai::job_guard::assign_child_pid(pid) {
+                log::warn!("AssignProcessToJobObject pid={pid} 失败: {err}");
             }
         }
 
-        // 启动前清空日志缓冲，让本次启动从空白开始
         logs.clear().await;
         if let Some(stderr) = child.stderr.take() {
-            logs.collect(stderr, "stderr");
+            logs.spawn_reader(stderr, "stderr");
         }
         if let Some(stdout) = child.stdout.take() {
-            logs.collect(stdout, "stdout");
+            logs.spawn_reader(stdout, "stdout");
         }
 
         Ok(Self {
             child,
-            loaded: Loaded {
+            loaded: LoadedEngine {
                 port,
                 model,
-                params,
+                params: overrides,
             },
         })
     }
 
-    /// 进程自己退出了。
+    /// 返回子进程是否已经退出（非阻塞检查）。
     pub(super) fn exited(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(Some(_)))
     }
 
-    /// 关掉进程，限时等它退出。
+    /// 终止子进程并在 [`SHUTDOWN_WAIT_TIMEOUT`] 内等待回收。
     pub(super) async fn kill(mut self) {
         let _ = self.child.kill().await;
         wait_child_with_timeout(&mut self.child).await;
     }
 
-    /// 没等到它能用时调：还活着就关掉，再从日志末尾拿原因给前端看。
-    pub(super) async fn failure_reason(mut self, logs: &Logs) -> String {
+    /// 启动未就绪时调用：若进程仍存活则强制终止，并从日志末尾整理可读失败原因。
+    pub(super) async fn failure_reason(mut self, logs: &EngineLogs) -> String {
         let exit_status = self.child.try_wait();
         if matches!(exit_status, Ok(None)) {
-            // 还活着但 hang——强制 kill
             let _ = self.child.kill().await;
             wait_child_with_timeout(&mut self.child).await;
-            // 等 50ms 让 drain task 把残余 stderr 行写完
+            // 给日志读取任务留出短暂时间刷完残余 stderr 输出。
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         let tail = logs.tail(12).await;
@@ -129,26 +125,17 @@ impl LlamaServer {
                     )
                 }
             }
-            Err(e) => format!("无法读取子进程状态：{e}"),
+            Err(err) => format!("无法读取子进程状态：{err}"),
         }
     }
 }
 
-/// 让 OS 挑一个未占用的端口然后立刻释放——子进程 spawn 用这个端口。
-///
-/// drop 与 spawn 之间有 race window（~ms 级），其它进程可能抢到这个端口，
-/// 但概率极低。如果真撞上，llama-server 启动会 bind 失败，被我们的错误捕获处理。
+/// 绑定 `127.0.0.1:0` 让系统分配一个当前空闲端口后立即释放。
+/// 释放到子进程真正 bind 之间存在极短竞态窗口，若撞车会由后续启动失败逻辑捕获。
 fn pick_free_port() -> std::io::Result<u16> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     Ok(listener.local_addr()?.port())
 }
-
-/// 限时等子进程 wait()，避免子进程卡住把 idle watcher / stop() 调用栈吊死。
-///
-/// kill 信号已发送到内核层；child.wait() 主要等内核回收 PID，正常 ms 级返回。
-/// 超过 [`SHUTDOWN_WAIT_TIMEOUT`] 还没回 = 进程被 D 状态卡死或者僵尸表满了，
-/// 此时再等下去也意义不大，放弃等待让上层流程往下走。
-const SHUTDOWN_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 
 async fn wait_child_with_timeout(child: &mut Child) {
     if tokio::time::timeout(SHUTDOWN_WAIT_TIMEOUT, child.wait())

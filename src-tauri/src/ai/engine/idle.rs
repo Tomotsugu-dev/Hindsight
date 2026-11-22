@@ -1,45 +1,47 @@
-//! 空闲回收：所有 guard 都还回来、又闲了一阵，就关掉引擎释放显存。
+//! 引擎空闲回收：全部租约归还且持续空闲超过阈值后，自动停止 `llama-server` 释放显存。
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::{EngineSupervisor, Slot};
+use super::{EngineSlot, EngineSupervisor};
 
-/// 引擎闲置多久没新请求 → 自动 stop 释放显存。
-/// 跑一段 step1+step2 大约 60-120s；阈值取 120s 让用户在跑总结之间稍稍歇会儿
-/// 也不会被释放，但跑完真闲下来 2 分钟就回收 GPU。
+/// 无活跃租约且持续空闲超过该时长后，自动停止引擎释放显存。
+/// 连续使用报告/对话的间隔通常在几十秒内，取 120s 兼顾避免频繁冷启动与及时释放 GPU 资源。
 pub(super) const IDLE_THRESHOLD: Duration = Duration::from_secs(120);
-/// idle watcher 检查频率。
-const IDLE_TICK: Duration = Duration::from_secs(10);
+/// 后台空闲检查轮询间隔。
+const IDLE_POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 impl EngineSupervisor {
-    /// 启动 idle watcher：每 [`IDLE_TICK`] 检查一次，引擎 Running + in-flight==0
-    /// + idle > [`IDLE_THRESHOLD`] 时自动 stop 释放显存。
+    /// 启动后台空闲回收任务，每 [`IDLE_POLL_INTERVAL`] 检查一次是否达到 [`IDLE_THRESHOLD`]。
     ///
-    /// watcher 持 [`Weak`](std::sync::Weak) 引用——supervisor 被 drop 后 watcher 自然退出，
-    /// 不会泄漏 task。lib.rs 里 supervisor 创建后调一次即可，永久后台跑。
+    /// 后台任务仅持有 [`Weak`](std::sync::Weak) 引用，当 `EngineSupervisor` 被销毁时自动退出，
+    /// 不会泄漏任务。由 `lib.rs` 在应用启动时调用一次即可。
     pub fn spawn_idle_watcher(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
         let weak = Arc::downgrade(self);
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(IDLE_TICK);
-            // 第一次 tick 是立即触发，跳过它——避免刚启动就检查
+            let mut interval = tokio::time::interval(IDLE_POLL_INTERVAL);
+            // `tokio::time::interval` 首次 `tick()` 立即返回，跳过以避免刚启动就检查。
             interval.tick().await;
             loop {
                 interval.tick().await;
-                let Some(sup) = weak.upgrade() else { break };
-                let _ = sup.maybe_idle_stop().await;
+                let Some(supervisor) = weak.upgrade() else {
+                    break;
+                };
+                let _ = supervisor.maybe_idle_stop().await;
             }
         })
     }
 
-    /// 返回距离下次 idle 触发还有多久（用户可观测）。
-    /// 引擎不在 Running / 还有 in-flight 时返回 None。
+    /// 返回距离达到空闲回收阈值的剩余时间。
+    ///
+    /// 若当前仍有未归还的 [`EngineGuard`](super::EngineGuard) 返回 `None`。
+    /// 注意：本方法仅根据租约状态计算，不校验进程是否处于 `Running`，调用方需自行结合状态使用。
     pub fn idle_eta(&self) -> Option<Duration> {
-        let s = self.guards.holders.lock().ok()?;
-        if s.count > 0 {
+        let holders = self.guards.holders.lock().ok()?;
+        if holders.active_count > 0 {
             return None;
         }
-        let elapsed = s.last_used_at.elapsed();
+        let elapsed = holders.last_used_at.elapsed();
         if elapsed >= IDLE_THRESHOLD {
             Some(Duration::ZERO)
         } else {
@@ -47,21 +49,18 @@ impl EngineSupervisor {
         }
     }
 
-    /// 检查当前是否满足 idle 释放条件，是则 stop 引擎。
-    /// 持 inner mutex 期间检查 in-flight + 取走进程，保证 watcher 与 acquire 不抢同一窗口。
-    /// 返回 true 表示真的执行了一次 idle stop。
+    /// 检查当前是否满足空闲回收条件，满足则停止运行中的引擎并返回 `true`。
     pub(super) async fn maybe_idle_stop(&self) -> bool {
         let server = {
-            let mut inner = self.inner.lock().await;
-            // 倒计时没到 0：有 guard 没还，或者闲得不够久。
-            // 持着 inner 再取 holders，顺序 inner → holders，全程不反向
+            let mut state = self.state.lock().await;
+            // 持有 `state` 锁期间再读 `holders`，严格遵守 `state → holders` 的锁顺序。
             if self.idle_eta() != Some(Duration::ZERO) {
                 return false;
             }
-            match std::mem::take(&mut inner.slot) {
-                Slot::Running(s) => s,
+            match std::mem::take(&mut state.slot) {
+                EngineSlot::Running(server) => server,
                 other => {
-                    inner.slot = other;
+                    state.slot = other;
                     return false;
                 }
             }
@@ -80,44 +79,44 @@ mod tests {
     use std::time::Instant;
 
     use super::*;
-    use crate::ai::engine::server::{LlamaServer, Loaded};
+    use crate::ai::engine::server::{LlamaServer, LoadedEngine};
     use crate::ai::engine::{EngineStartOverrides, EngineState};
 
-    /// 引擎在跑、闲了很久，有 guard 没还时也不关；全还了才关。
-    #[cfg(unix)] // 拿 sleep 冒充 llama-server
+    // 引擎处于 Running 且空闲超时时：只要仍有租约未归还就不停机，全部归还后立即停机。
+    #[cfg(unix)] // 使用 sleep 子进程模拟 llama-server
     #[tokio::test]
     async fn idle_stop_waits_until_every_guard_is_returned() {
-        let sup = Arc::new(EngineSupervisor::new());
+        let supervisor = Arc::new(EngineSupervisor::new());
         let child = tokio::process::Command::new("sleep")
             .arg("60")
             .kill_on_drop(true)
             .spawn()
             .unwrap();
-        sup.inner.lock().await.slot = Slot::Running(LlamaServer {
+        supervisor.state.lock().await.slot = EngineSlot::Running(LlamaServer {
             child,
-            loaded: Loaded {
+            loaded: LoadedEngine {
                 port: 4242,
                 model: "a.gguf".into(),
                 params: EngineStartOverrides::default(),
             },
         });
-        let g = sup
+        let guard = supervisor
             .acquire("a.gguf".into(), EngineStartOverrides::default())
             .await
             .unwrap();
-        assert_eq!(g.port(), 4242);
+        assert_eq!(guard.port(), 4242);
 
-        let idle_too_long = || {
-            sup.guards.holders.lock().unwrap().last_used_at =
+        let expire_idle = || {
+            supervisor.guards.holders.lock().unwrap().last_used_at =
                 Instant::now() - IDLE_THRESHOLD - Duration::from_secs(1);
         };
-        idle_too_long();
-        assert!(!sup.maybe_idle_stop().await);
-        assert_eq!(sup.status().await.state, EngineState::Running);
+        expire_idle();
+        assert!(!supervisor.maybe_idle_stop().await);
+        assert_eq!(supervisor.status().await.state, EngineState::Running);
 
-        drop(g);
-        idle_too_long();
-        assert!(sup.maybe_idle_stop().await);
-        assert_eq!(sup.status().await.state, EngineState::Stopped);
+        drop(guard);
+        expire_idle();
+        assert!(supervisor.maybe_idle_stop().await);
+        assert_eq!(supervisor.status().await.state, EngineState::Stopped);
     }
 }
