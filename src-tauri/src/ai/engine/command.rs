@@ -40,6 +40,9 @@ pub(super) fn build_command(
     cmd.arg("--host").arg("127.0.0.1");
     cmd.arg("--port").arg(port.to_string());
     cmd.arg("-m").arg(model);
+    // TODO: Use `--fit`, which llama-server turns on by default. Stop passing -ngl,
+    // --ctx-size and -np, so it sizes them to the device memory. The guard must then ask
+    // the engine for its real context before reuse. Upgrade llama.cpp first (TODO.md step 6).
     if platform::has_gpu_backend(platform::detect()) {
         cmd.arg("-ngl").arg("all");
     }

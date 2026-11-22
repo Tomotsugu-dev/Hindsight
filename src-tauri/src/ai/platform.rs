@@ -30,6 +30,8 @@ use serde::Serialize;
 /// 升级流程：换这里的常量 + 同步 [`sha256`] 表 + 跑端到端冒烟测试。
 /// 不要在前端 / 用户 settings 里暴露这个值——它是 Hindsight 自身发布物的一部分，
 /// 不是用户偏好。
+// TODO: b9025 是 2026-05-04 发布的，2026-11-22 已到 b12633。升级时注意：CUDA 13 的包名从 13.1
+// 变成了 13.5，检测驱动的门槛要跟着改；确认 -ngl all、--cache-ram、--ctx-checkpoints 还认
 pub const PINNED_TAG: &str = "b9025";
 
 /// 当前机器对应哪个 llama-server binary 变体。
