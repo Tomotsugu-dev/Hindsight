@@ -107,25 +107,25 @@ impl LlamaServer {
         match exit_status {
             Ok(Some(_)) => {
                 if tail.is_empty() {
-                    "子进程已退出但无日志输出".to_string()
+                    "llama-server exited with no output".to_string()
                 } else {
-                    format!("子进程退出；日志末尾：\n{tail}")
+                    format!("llama-server exited. Last output:\n{tail}")
                 }
             }
             Ok(None) => {
                 if tail.is_empty() {
                     format!(
-                        "启动 {}s 未响应 /health，已强制 kill",
+                        "llama-server was not ready after {}s, so it was stopped",
                         HEALTH_TIMEOUT.as_secs()
                     )
                 } else {
                     format!(
-                        "启动 {}s 未响应 /health，已强制 kill；日志末尾：\n{tail}",
+                        "llama-server was not ready after {}s, so it was stopped. Last output:\n{tail}",
                         HEALTH_TIMEOUT.as_secs()
                     )
                 }
             }
-            Err(err) => format!("无法读取子进程状态：{err}"),
+            Err(err) => format!("Could not read the llama-server process status: {err}"),
         }
     }
 }

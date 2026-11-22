@@ -157,7 +157,7 @@ impl EngineSupervisor {
             }
             let binary_path = binary::binary_path()?;
             if !binary_path.exists() {
-                let message = "AI 引擎 binary 未安装，先去下载".to_string();
+                let message = "[AI_ENGINE_MISSING] llama-server is not installed".to_string();
                 state.slot = EngineSlot::Failed(message.clone());
                 return Err(Error::EngineStart(message));
             }
@@ -165,7 +165,7 @@ impl EngineSupervisor {
             {
                 Ok(server) => server,
                 Err(err) => {
-                    state.slot = EngineSlot::Failed(format!("spawn 失败：{err}"));
+                    state.slot = EngineSlot::Failed(format!("Could not start llama-server: {err}"));
                     return Err(Error::Io(err));
                 }
             };
@@ -184,7 +184,7 @@ impl EngineSupervisor {
                 // `stop()` or a newer `start()` took over while waiting; leave the slot untouched.
                 state.slot = other;
                 return Err(Error::EngineStart(
-                    "启动等待期间引擎被 stop/新的 start 接管".to_string(),
+                    "The engine was stopped or restarted while it was starting".to_string(),
                 ));
             }
         };
