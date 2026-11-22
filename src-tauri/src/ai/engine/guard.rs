@@ -104,7 +104,7 @@ impl Process for EngineSupervisor {
     }
 
     async fn start(&self, model: PathBuf, wants: EngineStartOverrides) -> Result<u16> {
-        self.start_with_overrides(Some(model), None, wants).await
+        self.start_with_overrides(model, wants).await
     }
 
     async fn stop(&self) -> Result<()> {
@@ -205,7 +205,7 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::ai::engine::IDLE_THRESHOLD;
+    use crate::ai::engine::idle::IDLE_THRESHOLD;
 
     /// 假引擎：启动、停止只改内存里的状态，记下次数。
     #[derive(Default)]

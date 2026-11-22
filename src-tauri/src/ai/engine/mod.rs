@@ -25,43 +25,31 @@
 //! [`EngineGuard`] 的 drop 能同步访问（drop 不能 await）；临界区只是 usize +
 //! Instant 赋值，几纳秒级别，不会因同步锁阻塞 runtime。
 
-use std::collections::VecDeque;
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Child;
 use tokio::sync::Mutex;
 
-/// 引擎闲置多久没新请求 → 自动 stop 释放显存。
-/// 跑一段 step1+step2 大约 60-120s；阈值取 120s 让用户在跑总结之间稍稍歇会儿
-/// 也不会被释放，但跑完真闲下来 2 分钟就回收 GPU。
-const IDLE_THRESHOLD: Duration = Duration::from_secs(120);
-/// idle watcher 检查频率。
-const IDLE_TICK: Duration = Duration::from_secs(10);
-
 use crate::ai::binary;
-use crate::ai::platform::{self, Platform};
 use crate::error::{Error, Result};
 
+mod command;
 mod guard;
+mod idle;
+mod logs;
+pub use command::{EngineStartOverrides, DEFAULT_CTX_SIZE};
 pub use guard::EngineGuard;
+
+use command::build_command;
+use logs::Logs;
 
 /// 启动后等 `/health` 返回 200 的最大时长。
 /// vision LLM 加载耗时随模型大小，9B 量级模型 CPU 上加载 30-60s 是常态。
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(90);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(500);
-
-/// llama-server 上下文窗口大小。
-///
-/// Vision 模型每张图被分成多个 patch，token 数比纯文本对话大很多：
-/// 768 px max_dim 下一张图 ~256 tokens × 12 张 = ~3000 tokens，加 system / user
-/// prompt 和输出空间 (max_tokens=768)，4K 容易超。8K 给足余量；GPU 上 KV cache
-/// 多用一倍 RAM 不痛——5090/Apple Silicon 都装得下，CPU fallback 也可接受。
-pub const DEFAULT_CTX_SIZE: u32 = 8192;
 
 /// 引擎进程的离散状态。
 ///
@@ -91,28 +79,10 @@ pub struct EngineRuntimeStatus {
     pub idle_seconds_remaining: Option<u64>,
 }
 
-/// 启动 llama-server 时可选的命令行调参。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct EngineStartOverrides {
-    /// 同时设 `--batch-size N --ubatch-size N`。`None` = 用 llama.cpp 默认（512）。
-    /// 加大能提升 prompt eval 速度，代价是 KV cache 高水位 ↑（5090 32GB 装得下 4096）。
-    pub batch_size: Option<u32>,
-    /// `-np N`：llama-server 同时处理的并行槽位数；`None` = 1（单槽）。
-    /// 配合 `summary.rs` 的 `buffer_unordered` 才能真正并发——只设 -np 不并发调用没用。
-    pub parallel_slots: Option<u32>,
-    /// **每个 slot** 的 ctx 上限。`None` = [`DEFAULT_CTX_SIZE`]（8K）。
-    /// 实际传给 llama-server 的 `--ctx-size` 是 `ctx_size × parallel_slots`，
-    /// 让每个 slot 都拿到 user 选的 budget；llama.cpp 启动时按这个总量
-    /// 一次性 mmap KV cache（VRAM / RAM 直接吃掉，不是按需增长）。
-    pub ctx_size: Option<u32>,
-}
-
 /// llama-server 子进程的单例守护者。
 pub struct EngineSupervisor {
     inner: Mutex<Inner>,
-    /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout。
-    /// Arc 让 spawn 出来的 reader task 能持有它而不锁 inner。
-    logs: Arc<Mutex<VecDeque<String>>>,
+    logs: Logs,
     /// 发出去的 guard。空闲回收看它。
     guards: guard::Guards,
     /// 当前（或最近一次启动时）加载的 main GGUF 路径。调用方在"复用 Running 引擎"
@@ -124,8 +94,6 @@ pub struct EngineSupervisor {
     /// 8K ctx 起的引擎（如手动 start_engine）拿去跑配了 64K ctx 的 step 会请求超限。
     loaded_overrides: std::sync::Mutex<EngineStartOverrides>,
 }
-
-const LOGS_RING_SIZE: usize = 500;
 
 #[derive(Default)]
 struct Inner {
@@ -166,7 +134,7 @@ impl EngineSupervisor {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(Inner::default()),
-            logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
+            logs: Logs::new(),
             guards: guard::Guards::default(),
             loaded_main: std::sync::Mutex::new(None),
             loaded_overrides: std::sync::Mutex::new(EngineStartOverrides::default()),
@@ -187,76 +155,6 @@ impl EngineSupervisor {
             .unwrap_or_default()
     }
 
-    /// 启动 idle watcher：每 [`IDLE_TICK`] 检查一次，引擎 Running + in-flight==0
-    /// + idle > [`IDLE_THRESHOLD`] 时自动 stop 释放显存。
-    ///
-    /// watcher 持 [`Weak`](std::sync::Weak) 引用——supervisor 被 drop 后 watcher 自然退出，
-    /// 不会泄漏 task。lib.rs 里 supervisor 创建后调一次即可，永久后台跑。
-    pub fn spawn_idle_watcher(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
-        let weak = Arc::downgrade(self);
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(IDLE_TICK);
-            // 第一次 tick 是立即触发，跳过它——避免刚启动就检查
-            interval.tick().await;
-            loop {
-                interval.tick().await;
-                let Some(sup) = weak.upgrade() else { break };
-                let _ = sup.maybe_idle_stop().await;
-            }
-        })
-    }
-
-    /// 返回距离下次 idle 触发还有多久（用户可观测）。
-    /// 引擎不在 Running / 还有 in-flight 时返回 None。
-    pub fn idle_eta(&self) -> Option<Duration> {
-        let s = self.guards.holders.lock().ok()?;
-        if s.count > 0 {
-            return None;
-        }
-        let elapsed = s.last_used_at.elapsed();
-        if elapsed >= IDLE_THRESHOLD {
-            Some(Duration::ZERO)
-        } else {
-            Some(IDLE_THRESHOLD - elapsed)
-        }
-    }
-
-    /// 检查当前是否满足 idle 释放条件，是则 stop 引擎。
-    /// 持 inner mutex 期间检查 in-flight + take child，保证 watcher 与 acquire 不抢同一窗口。
-    /// 返回 true 表示真的执行了一次 idle stop。
-    async fn maybe_idle_stop(&self) -> bool {
-        let child = {
-            let mut inner = self.inner.lock().await;
-            if inner.state.state != EngineState::Running {
-                return false;
-            }
-            // inflight 锁的临界区极短（usize 比较 + Instant.elapsed），不会因为
-            // 持着 inner 锁阻塞而拉长——nested lock 顺序：inner → inflight，
-            // 全程不反向，无死锁风险
-            let s = match self.guards.holders.lock() {
-                Ok(g) => g,
-                Err(_) => return false,
-            };
-            if s.count > 0 || s.last_used_at.elapsed() < IDLE_THRESHOLD {
-                return false;
-            }
-            drop(s);
-            inner.state = EngineRuntimeStatus::default();
-            inner.child.take()
-        };
-        if let Some(mut child) = child {
-            let _ = child.kill().await;
-            wait_child_with_timeout(&mut child).await;
-            log::info!(
-                "AI 引擎 idle 超过 {}s，已自动释放显存",
-                IDLE_THRESHOLD.as_secs()
-            );
-            true
-        } else {
-            false
-        }
-    }
-
     /// 当前状态快照（前端用）。Running 时附带 idle 倒计时，让前端能展示
     /// "X 秒后自动释放显存"。
     pub async fn status(&self) -> EngineRuntimeStatus {
@@ -272,13 +170,12 @@ impl EngineSupervisor {
     /// Returns the running port without respawning if already `Running`, or errors if `Starting`.
     async fn start_with_overrides(
         &self,
-        model_path: Option<PathBuf>,
-        mmproj_path: Option<PathBuf>,
+        model_path: PathBuf,
         overrides: EngineStartOverrides,
     ) -> Result<u16> {
         // 记录本次要加载的 main 路径（Running 早退分支不覆盖——那时装的还是旧的）。
         // 供 loaded_main() 查询："复用已在跑的引擎"前调用方能校验装的是不是自己要的模型。
-        let requested_main = model_path.clone();
+        let requested_main = Some(model_path.clone());
         // 第一段：占锁、预检、置 starting、spawn、释放锁
         let (port, my_gen) = {
             let mut inner = self.inner.lock().await;
@@ -312,28 +209,21 @@ impl EngineSupervisor {
             }
 
             let port = pick_free_port()?;
-            // 在 build_command 消费 path 之前抽出文件名给 log 用——验证 step 间确实加载不同模型
             let main_name = model_path
-                .as_ref()
-                .and_then(|p| p.file_name())
+                .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "<none>".to_string());
-            let mmproj_name = mmproj_path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "<none>".to_string());
-            let mut cmd = build_command(&bin_path, port, model_path, mmproj_path, &overrides);
+            let mut cmd = build_command(&bin_path, port, &model_path, &overrides);
             // 装平台特定的 spawn 前钩子（Linux/macOS 设 setpgid + PDEATHSIG）；
             // Windows 是 no-op，post-spawn 才装 Job
             if let Err(e) = crate::ai::job_guard::prepare_command(&mut cmd) {
                 log::warn!("job_guard::prepare_command 失败（保护可能降级）: {e}");
             }
             // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效，
-            // 同时打 main / mmproj 文件名，确认日报、周报、聊天之间切换时加载的是哪个模型。
+            // 同时打模型文件名，确认日报、周报、聊天之间切换时加载的是哪个模型。
             // 标记 [engine-spawn] 让用户在长 log 里 grep 能直接定位。
             log::info!(
-                "[engine-spawn] port={port} main={main_name} mmproj={mmproj_name} batch={:?} -np={:?} ctx_per_slot={:?}",
+                "[engine-spawn] port={port} main={main_name} batch={:?} -np={:?} ctx_per_slot={:?}",
                 overrides.batch_size,
                 overrides.parallel_slots,
                 overrides.ctx_size,
@@ -364,15 +254,12 @@ impl EngineSupervisor {
             }
 
             // 启动前清空日志缓冲，让本次启动从空白开始
-            self.logs.lock().await.clear();
-
-            // spawn 异步 task 消费 stderr / stdout，写进 ring buffer（持续滚动）。
-            // 不消费的话 buffer 满会阻塞 llama-server。
+            self.logs.clear().await;
             if let Some(stderr) = child.stderr.take() {
-                spawn_drain_task(stderr, "stderr", Arc::clone(&self.logs));
+                self.logs.collect(stderr, "stderr");
             }
             if let Some(stdout) = child.stdout.take() {
-                spawn_drain_task(stdout, "stdout", Arc::clone(&self.logs));
+                self.logs.collect(stdout, "stdout");
             }
 
             inner.state = EngineRuntimeStatus {
@@ -468,76 +355,6 @@ fn pick_free_port() -> Result<u16> {
     Ok(port)
 }
 
-/// 根据 platform 决定 `-ngl`（GPU layer 数）：CUDA / Metal binary 全 offload，
-/// CPU binary 不传。
-fn gpu_layers_for(p: Platform) -> Option<u32> {
-    match p {
-        Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 => Some(99),
-        Platform::MacOSArm64Metal => Some(99),
-        // CPU binary 不支持 -ngl
-        Platform::WindowsX64Cpu | Platform::MacOSX64 | Platform::LinuxX64Cpu => None,
-    }
-}
-
-fn build_command(
-    bin: &std::path::Path,
-    port: u16,
-    model_path: Option<PathBuf>,
-    mmproj_path: Option<PathBuf>,
-    overrides: &EngineStartOverrides,
-) -> Command {
-    let mut cmd = Command::new(bin);
-    cmd.arg("--host").arg("127.0.0.1");
-    cmd.arg("--port").arg(port.to_string());
-    if let Some(m) = model_path {
-        cmd.arg("-m").arg(m);
-    }
-    if let Some(p) = mmproj_path {
-        cmd.arg("--mmproj").arg(p);
-    }
-    if let Some(n) = gpu_layers_for(platform::detect()) {
-        cmd.arg("-ngl").arg(n.to_string());
-    }
-    // batch / ubatch：同时设两值保持 logical=physical batch 一致，
-    // 用户能预测显存占用；不像 llama.cpp 默认 batch=2048 / ubatch=512 拉开两倍。
-    if let Some(b) = overrides.batch_size {
-        let b = b.max(32); // llama-server 拒绝过小的 batch；32 是安全下限
-        cmd.arg("--batch-size").arg(b.to_string());
-        cmd.arg("--ubatch-size").arg(b.to_string());
-    }
-    // ctx-size + parallel slots 协同：llama-server 把 --ctx-size 平均分给
-    // np 个 slot（per-slot = ctx_size / np）。所以这里实际传的 --ctx-size
-    // 必须是 (per-slot 上限 × np)，让每个 slot 都拿到用户选的 budget。
-    // 否则 -np 4 时 user 看到的 8K base 会缩成每槽 2048，长 prompt 直接 400。
-    let np = overrides.parallel_slots.unwrap_or(1).max(1);
-    let per_slot_ctx = overrides.ctx_size.unwrap_or(DEFAULT_CTX_SIZE);
-    cmd.arg("--ctx-size")
-        .arg(per_slot_ctx.saturating_mul(np).to_string());
-    // 总是显式传 -np，哪怕是 1。不传时 llama-server auto-fallback 到 4 slot，
-    // 让用户的"段总结 single slot"配置失效——summary phase 也起 4 槽，浪费 KV 预算 +
-    // 让 checkpoint 池跨 slot 翻 4 倍。
-    cmd.arg("-np").arg(np.to_string());
-    // 关掉 llama.cpp 新版默认开的 prompt cache：8 GB 上限，纯吃显存（日报场景每段
-    // prompt 都不同，命中率几乎为 0）。
-    cmd.arg("--cache-ram").arg("0");
-    // 关掉 context checkpoints：每个 50 MiB × max 32 个 × N slots 持续累积——大模型 +
-    // 多 slot 时能堆出 GB 级开销，导致段总结生成途中 server 崩
-    // （"connection closed before message completed"）。我们没复用 prompt prefix 的
-    // 场景，关掉无副作用。
-    cmd.arg("--ctx-checkpoints").arg("0");
-    // 截 stderr/stdout 用于失败时回放给用户；不让它们污染 Hindsight 自己的终端
-    cmd.stderr(std::process::Stdio::piped());
-    cmd.stdout(std::process::Stdio::piped());
-
-    // Windows 下抑制控制台窗口闪一下
-    // tokio::process::Command 自带 creation_flags 方法（inherent on Windows），
-    // 不用 import std::os::windows::process::CommandExt
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-
-    cmd
-}
-
 /// 轮询 /health 等启动完成。每轮前先检查 inner：
 /// - generation 变了（stop() / 新的 start 接管）→ 立刻 break，不再等
 /// - state 不是 Starting（stop() 改成了 Stopped）→ 立刻 break，不再等
@@ -585,9 +402,8 @@ async fn poll_health(port: u16, timeout: Duration, inner: &Mutex<Inner>, my_gen:
     false
 }
 
-/// 启动失败时调，给前端可读的错误描述。
-/// stderr 已被 [`spawn_drain_task`] 持续消费到 logs ring，这里直接读末尾几行。
-async fn resolve_failure(child: &mut Child, logs: &Arc<Mutex<VecDeque<String>>>) -> String {
+/// 启动失败时调，给前端可读的错误描述：读 `logs` 的末尾几行。
+async fn resolve_failure(child: &mut Child, logs: &Logs) -> String {
     let exit_status = child.try_wait();
     let killed = matches!(exit_status, Ok(None));
     if killed {
@@ -597,7 +413,7 @@ async fn resolve_failure(child: &mut Child, logs: &Arc<Mutex<VecDeque<String>>>)
         // 等 50ms 让 drain task 把残余 stderr 行写完
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    let tail = log_tail(logs, 12).await;
+    let tail = logs.tail(12).await;
     match exit_status {
         Ok(Some(_)) => {
             if tail.is_empty() {
@@ -640,46 +456,4 @@ async fn wait_child_with_timeout(child: &mut Child) {
             SHUTDOWN_WAIT_TIMEOUT.as_secs()
         );
     }
-}
-
-/// 读 logs ring 末尾 N 行拼成多行字符串，给错误信息用。
-async fn log_tail(logs: &Arc<Mutex<VecDeque<String>>>, n: usize) -> String {
-    let g = logs.lock().await;
-    let start = g.len().saturating_sub(n);
-    g.iter().skip(start).cloned().collect::<Vec<_>>().join("\n")
-}
-
-/// spawn 一个 tokio task，按行 drain stderr / stdout：
-/// 每行都进 ring buffer（最近 LOGS_RING_SIZE 行，老的被淘汰）。
-///
-/// `tag` = "stderr" / "stdout"，给行前面带个前缀方便区分。
-fn spawn_drain_task<R>(reader: R, tag: &'static str, ring: Arc<Mutex<VecDeque<String>>>)
-where
-    R: tokio::io::AsyncRead + Unpin + Send + 'static,
-{
-    tokio::spawn(async move {
-        let mut lines = BufReader::new(reader).lines();
-        loop {
-            match lines.next_line().await {
-                Ok(Some(line)) => {
-                    let prefixed = format!("[{tag}] {line}");
-                    // llama-server 的 stderr / stdout 转发到 log 框架。release 时跟
-                    // `env_logger` 的 RUST_LOG 过滤一致；dev 模式（debug_assertions）
-                    // 再额外 eprintln 一份到 console，确保 cuBLAS init / offloaded
-                    // layers 这种启动诊断信息一定能在终端看到。
-                    log::info!("[llama-server] {prefixed}");
-                    #[cfg(debug_assertions)]
-                    eprintln!("[llama-server] {prefixed}");
-                    // ring buffer
-                    let mut g = ring.lock().await;
-                    if g.len() >= LOGS_RING_SIZE {
-                        g.pop_front();
-                    }
-                    g.push_back(prefixed);
-                }
-                Ok(None) => break, // EOF：子进程关闭了管道
-                Err(_) => break,   // 读错误：直接退出 task
-            }
-        }
-    });
 }
