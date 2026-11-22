@@ -67,7 +67,7 @@ impl EngineSupervisor {
         };
         server.kill().await;
         log::info!(
-            "AI 引擎 idle 超过 {}s，已自动释放显存",
+            "AI engine was idle for over {}s; stopped it to free memory",
             IDLE_THRESHOLD.as_secs()
         );
         true

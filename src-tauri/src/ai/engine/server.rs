@@ -41,7 +41,7 @@ impl LlamaServer {
         let mut cmd = build_command(binary_path, port, &model, &overrides);
         // 挂载平台相关的 spawn 前子进程保护钩子（Linux/macOS 设 setpgid / PDEATHSIG；Windows 为 no-op）。
         if let Err(err) = crate::ai::job_guard::prepare_command(&mut cmd) {
-            log::warn!("job_guard::prepare_command 失败（保护可能降级）: {err}");
+            log::warn!("job_guard::prepare_command failed; child process protection may be degraded: {err}");
         }
         // 记录关键启动参数与模型文件名，便于从日志中排查 -np / --batch-size 及模型切换问题。
         let model_name = model
@@ -61,7 +61,7 @@ impl LlamaServer {
         // Linux / macOS 上为空操作。失败仅记录警告，不阻断引擎启动。
         if let Some(pid) = child.id() {
             if let Err(err) = crate::ai::job_guard::assign_child_pid(pid) {
-                log::warn!("AssignProcessToJobObject pid={pid} 失败: {err}");
+                log::warn!("AssignProcessToJobObject failed for pid={pid}: {err}");
             }
         }
 
@@ -143,7 +143,7 @@ async fn wait_child_with_timeout(child: &mut Child) {
         .is_err()
     {
         log::warn!(
-            "llama-server wait 超过 {}s 仍未退出，放弃等待（OS 应已收到 kill 信号自行清理）",
+            "llama-server did not exit {}s after kill; stopped waiting. The OS should clean it up.",
             SHUTDOWN_WAIT_TIMEOUT.as_secs()
         );
     }
