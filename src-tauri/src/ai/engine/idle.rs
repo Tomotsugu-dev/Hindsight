@@ -74,7 +74,8 @@ impl EngineSupervisor {
     }
 }
 
-#[cfg(test)]
+// 用 sleep 子进程模拟 llama-server，Windows 上没有 sleep。
+#[cfg(all(test, unix))]
 mod tests {
     use std::time::Instant;
 
@@ -83,7 +84,6 @@ mod tests {
     use crate::ai::engine::{EngineStartOverrides, EngineState};
 
     // 引擎处于 Running 且空闲超时时：只要仍有租约未归还就不停机，全部归还后立即停机。
-    #[cfg(unix)] // 使用 sleep 子进程模拟 llama-server
     #[tokio::test]
     async fn idle_stop_waits_until_every_guard_is_returned() {
         let supervisor = Arc::new(EngineSupervisor::new());
