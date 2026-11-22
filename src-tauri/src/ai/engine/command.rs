@@ -4,8 +4,6 @@ use std::path::Path;
 
 use tokio::process::Command;
 
-use crate::ai::platform;
-
 /// Default context size per slot, in tokens.
 ///
 /// Large enough for long daily report and chat input, without using too much memory.
@@ -40,12 +38,9 @@ pub(super) fn build_command(
     cmd.arg("--host").arg("127.0.0.1");
     cmd.arg("--port").arg(port.to_string());
     cmd.arg("-m").arg(model);
-    // TODO: Use `--fit`, which llama-server turns on by default. Stop passing -ngl,
-    // --ctx-size and -np, so it sizes them to the device memory. The guard must then ask
-    // the engine for its real context before reuse. Upgrade llama.cpp first (TODO.md step 6).
-    if platform::has_gpu_backend(platform::detect()) {
-        cmd.arg("-ngl").arg("all");
-    }
+    // Do not pass -ngl. `--fit`, which is on by default, then decides how many layers go to
+    // the GPU. If -ngl is set, `--fit` leaves it alone, and the engine fails to start when the
+    // GPU memory is too small.
     // Use one value for both. The defaults (2048 and 512) differ, which makes memory use
     // harder to predict.
     if let Some(batch_size) = overrides.batch_size {
@@ -101,12 +96,11 @@ mod tests {
         args.get(idx + 1).cloned()
     }
 
-    // 引擎能用显卡就把层全放进显存，不能用就不传。
+    // 不传 -ngl：传了的话显存不够时 fit 不会把层挪回 CPU，引擎起不来。
     #[test]
-    fn gpu_layers_are_all_or_not_passed() {
+    fn gpu_layers_are_left_to_fit() {
         let args = command_args(&EngineStartOverrides::default());
-        let want = platform::has_gpu_backend(platform::detect()).then(|| "all".to_string());
-        assert_eq!(flag_value(&args, "-ngl"), want);
+        assert!(!args.iter().any(|arg| arg == "-ngl"), "{args:?}");
     }
 
     // 传给 llama-server 的 --ctx-size 应等于「单槽上下文 × 槽位数」，默认 8K、1 槽。
