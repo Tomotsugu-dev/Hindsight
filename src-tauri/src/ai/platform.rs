@@ -191,6 +191,16 @@ pub fn cuda_runtime_asset_name(p: Platform) -> Option<&'static str> {
     }
 }
 
+/// 这个平台下载的引擎能不能把模型放进显存跑。
+pub fn has_gpu_backend(p: Platform) -> bool {
+    match p {
+        Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 | Platform::MacOSArm64Metal => true,
+        // TODO: 上面 `MacOSX64` 的文档说这个引擎自带 Metal，这里却当作没有显卡，两处至少一处不对
+        Platform::MacOSX64 => false,
+        Platform::WindowsX64Cpu | Platform::LinuxX64Cpu => false,
+    }
+}
+
 /// 解压后 `llama-server` 可执行文件的相对路径。
 ///
 /// llama.cpp release 包内布局是**扁平的**——所有可执行文件 + 动态库

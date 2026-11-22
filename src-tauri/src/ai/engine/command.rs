@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tokio::process::Command;
 
-use crate::ai::platform::{self, Platform};
+use crate::ai::platform;
 
 /// `llama-server` 默认单槽上下文窗口大小（8K tokens）。
 /// 兼顾日报/对话较长输入与本机显存/内存占用。
@@ -24,16 +24,6 @@ pub struct EngineStartOverrides {
     pub ctx_size: Option<u32>,
 }
 
-/// 按当前平台对应的后端能力决定 `-ngl`（GPU offload 层数）；CPU 构建不传该参数。
-fn gpu_layers_for(platform: Platform) -> Option<u32> {
-    match platform {
-        Platform::WindowsX64Cuda12 | Platform::WindowsX64Cuda13 | Platform::MacOSArm64Metal => {
-            Some(99)
-        }
-        Platform::WindowsX64Cpu | Platform::MacOSX64 | Platform::LinuxX64Cpu => None,
-    }
-}
-
 /// 组装在本地 `port` 上加载 `model` 的 `llama-server` 启动命令。
 pub(super) fn build_command(
     binary_path: &Path,
@@ -45,8 +35,8 @@ pub(super) fn build_command(
     cmd.arg("--host").arg("127.0.0.1");
     cmd.arg("--port").arg(port.to_string());
     cmd.arg("-m").arg(model);
-    if let Some(layers) = gpu_layers_for(platform::detect()) {
-        cmd.arg("-ngl").arg(layers.to_string());
+    if platform::has_gpu_backend(platform::detect()) {
+        cmd.arg("-ngl").arg("all");
     }
     // 同时设置 logical / physical batch 保持一致，避免默认 batch=2048、ubatch=512 拉大显存波动。
     if let Some(batch_size) = overrides.batch_size {
@@ -97,6 +87,14 @@ mod tests {
     fn flag_value(args: &[String], flag: &str) -> Option<String> {
         let idx = args.iter().position(|arg| arg == flag)?;
         args.get(idx + 1).cloned()
+    }
+
+    // 引擎能用显卡就把层全放进显存，不能用就不传。
+    #[test]
+    fn gpu_layers_are_all_or_not_passed() {
+        let args = command_args(&EngineStartOverrides::default());
+        let want = platform::has_gpu_backend(platform::detect()).then(|| "all".to_string());
+        assert_eq!(flag_value(&args, "-ngl"), want);
     }
 
     // 传给 llama-server 的 --ctx-size 应等于「单槽上下文 × 槽位数」，默认 8K、1 槽。
