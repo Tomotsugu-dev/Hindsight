@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown } from "lucide-react";
+import type { ReasoningLevel } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { findAdvanced, patchAdvanced } from "../../state/reportModel";
 import {
   hasLevels,
   normalizeThinking,
   thinkingLabelKey,
   thinkingModes,
 } from "../../lib/thinkingModes";
-import { chatUsesCloud } from "./chatRouting";
+import { chatCloudConnection, chatModel } from "./chatRouting";
 import styles from "./ChatPage.module.css";
 
 /**
- * 思考模式下拉(ChatGPT 式,composer 内右侧):钮面只显示当前档文字,
- * 点开向上弹菜单,交互与 ModelBadge 同款。档位跟着当前服务商走,
- * 切换服务商后残留的值域外强度就近归到 high(后端注入同样就近降级)。
- * 值直接写 ai.chatThinking,后端 chat_ask 每次现读,无需其它接线。
+ * 聊天的思考模式下拉：按「chat + 当前选中的模型」读写 `ai.advanced`。
  */
 export default function ThinkingToggle() {
   const { t } = useTranslation();
@@ -43,10 +42,15 @@ export default function ThinkingToggle() {
 
   if (!settings) return null;
   const ai = settings.ai;
-  const provider = chatUsesCloud(ai) ? ai.externalProvider : null;
+  const activeCloud = chatCloudConnection(ai);
+  const activeModel = chatModel(ai);
+  const provider = activeCloud?.dialect ?? null;
   // 对话总是发工具
   const modes = thinkingModes(provider, true);
-  const mode = normalizeThinking(ai.chatThinking, modes);
+  const stored = activeModel
+    ? (findAdvanced(ai, "chat", activeModel)?.reasoning ?? "auto")
+    : "auto";
+  const mode = normalizeThinking(stored, modes);
   const labelOf = (m: string) => t(thinkingLabelKey(m, modes));
   const hint = hasLevels(modes)
     ? "chat.thinkingMode.hintLevels"
@@ -56,7 +60,15 @@ export default function ThinkingToggle() {
 
   const select = (next: string) => {
     setOpen(false);
-    if (next !== ai.chatThinking) update({ ai: { ...ai, chatThinking: next } });
+    if (!activeModel || next === stored) return;
+    update({
+      ai: {
+        ...ai,
+        advanced: patchAdvanced(ai, "chat", activeModel, {
+          reasoning: next === "auto" ? null : (next as ReasoningLevel),
+        }),
+      },
+    });
   };
 
   return (

@@ -343,15 +343,6 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
         dirty = true;
     }
 
-    // 旧版本里 `external_enabled=true` 单一开关同时表示「云端配好」+「step 2 走云端」。
-    // 新版本把"是否选定云端"剥离到 `summary_main == SUMMARY_CLOUD_SENTINEL`。
-    // 一次性迁移：之前启用了云端且没设本地 summary main 的用户，自动补上 sentinel，
-    // 保持旧行为。已经设本地 summary main 的用户保留本地选择（更接近他们的实际意图）。
-    if settings.ai.external_enabled && settings.ai.summary_main.trim().is_empty() {
-        settings.ai.summary_main = crate::ai::config::SUMMARY_CLOUD_SENTINEL.to_string();
-        dirty = true;
-    }
-
     // 一次性迁移:日报管线从"截图描述"换代为"活动时间线"后,旧管线时代保存的
     // system prompt 覆盖必然与新输入格式错配(实测会导致输出混乱 + 旧示例文本泄漏)。
     // 按旧提示词的特征串识别并清空,让用户回落到新内置默认;用户后续在提示词页
@@ -392,6 +383,11 @@ pub async fn load(pool: &DbPool) -> Result<Settings> {
             migrate_excluded_categories(&mut settings.ai, &excluded, &category_ids);
             dirty = true;
         }
+    }
+
+    // 旧版的云端连接和日报模型迁到新结构。写回后旧字段消失，所以只迁一次。
+    if !parse_failed && crate::ai::config::migrate_legacy_models(&data, &mut settings.ai) {
+        dirty = true;
     }
 
     // 解析失败时的 dirty 全是"默认值缺路径"造成的，绝不能把这份默认值写回去
@@ -731,28 +727,38 @@ mod tests {
             sync_chat_history: true,
             sync_screen_memory: true,
             ai: AiConfig {
-                endpoint: "https://api.example.com/v1".into(),
-                model: "test-model".into(),
-                api_key: "sk-test".into(),
-                // false：避免触发 load 里的 cloud sentinel 一次性迁移，
-                // 该迁移有专门测试
-                external_enabled: false,
-                user_brief: "写代码".into(),
-                models_path: "/tmp/hs-models".into(),
-                active_main: "main.gguf".into(),
-                summary_main: "sum.gguf".into(),
-                batch_size: Some(256),
-                summary_ctx_size: Some(4096),
+                cloud: vec![crate::ai::config::CloudConnection {
+                    id: "c1".into(),
+                    name: "Test Cloud".into(),
+                    dialect: "openai".into(),
+                    endpoint: "https://api.example.com/v1".into(),
+                    model: "test-model".into(),
+                    api_key: "sk-test".into(),
+                    context_length: Some(32_768),
+                }],
                 picks: crate::ai::config::Picks {
+                    daily: Some(crate::ai::config::ModelRef::Local {
+                        file: "sum.gguf".into(),
+                    }),
                     weekly: crate::ai::config::Pick::Local {
                         file: "week.gguf".into(),
                     },
+                    chat: Some(crate::ai::config::ModelRef::Cloud {
+                        connection: "c1".into(),
+                    }),
                 },
                 advanced: vec![crate::ai::config::Advanced {
                     task: crate::ai::config::Task::Weekly,
-                    model: crate::ai::config::ModelRef::Cloud,
+                    model: crate::ai::config::ModelRef::Cloud {
+                        connection: "c1".into(),
+                    },
                     reasoning: Some(crate::ai::config::ReasoningLevel::High),
+                    ctx_size: None,
+                    parallel_slots: None,
+                    batch_size: None,
                 }],
+                user_brief: "写代码".into(),
+                models_path: "/tmp/hs-models".into(),
                 ..AiConfig::default()
             },
             // 两种形态都走一遍往返：带标题关键词 + 整进程（title_keyword: None）
@@ -846,10 +852,8 @@ mod tests {
         // 升级上来的用户没打开过，就不能去请求网站（ADR-0014）
         assert!(!s.download_site_icons);
         // 整个 ai 块缺失 → 嵌套结构整组回 Default（models_path 除外，会被回填）
-        assert_eq!(
-            s.ai.external_provider,
-            AiConfig::default().external_provider
-        );
+        assert!(s.ai.cloud.is_empty());
+        assert_eq!(s.ai.picks, AiConfig::default().picks);
         assert_eq!(s.ai.visibility, AiConfig::default().visibility);
         assert!(!s.ai.models_path.trim().is_empty());
 
@@ -961,41 +965,6 @@ mod tests {
         // 空输入 / 无密钥输入
         assert_eq!(redact_secrets(""), "");
         assert_eq!(redact_secrets("{}"), "{}");
-    }
-
-    /// external_enabled 单开关拆成「配好云端」+「选定云端」两概念后的一次性迁移：
-    /// 老用户开了云端且没选本地模型 → 自动补 sentinel 保持旧行为；
-    /// 已显式选了本地模型的用户 → 保留本地选择，不被迁移抢走。
-    #[tokio::test]
-    async fn cloud_sentinel_migration_respects_explicit_local_choice() {
-        let pool = fresh_test_pool().await;
-
-        // 场景 A：老用户，externalEnabled=true 且 summaryMain 缺失
-        put_raw(
-            &pool,
-            r#"{"screenshotPath":"/sp","ai":{"externalEnabled":true,"endpoint":"https://api.x/v1","model":"m","modelsPath":"/mp"}}"#,
-        )
-        .await;
-        let s = load(&pool).await.unwrap();
-        assert_eq!(s.ai.summary_main, crate::ai::config::SUMMARY_CLOUD_SENTINEL);
-        assert!(
-            s.ai.summary_use_cloud(),
-            "迁移后段总结应实际路由到云端，与旧版行为一致"
-        );
-        // 迁移结果必须持久化，否则每次启动都重复迁移
-        assert!(raw_json(&pool)
-            .await
-            .contains(crate::ai::config::SUMMARY_CLOUD_SENTINEL));
-
-        // 场景 B：用户已显式选了本地 summary 模型
-        put_raw(
-            &pool,
-            r#"{"screenshotPath":"/sp","ai":{"externalEnabled":true,"summaryMain":"local.gguf","modelsPath":"/mp"}}"#,
-        )
-        .await;
-        let s2 = load(&pool).await.unwrap();
-        assert_eq!(s2.ai.summary_main, "local.gguf", "本地选择不应被迁移覆盖");
-        assert!(!s2.ai.summary_use_cloud());
     }
 
     /// 日报管线换代后，旧管线时代的 system prompt 覆盖与新输入格式错配
@@ -1342,6 +1311,37 @@ mod tests {
         assert!(!raw_json(&pool).await.contains("excludedCategories"));
         let second = load(&pool).await.unwrap();
         assert_eq!(second.ai.visibility, first.ai.visibility);
+    }
+
+    /// 旧版的云端连接和日报模型在第一次读取时迁过来，并且写回数据库：
+    /// 旧字段从此消失，再启动不会再迁一遍。
+    #[tokio::test]
+    async fn legacy_cloud_and_daily_model_are_migrated_once() {
+        let pool = fresh_test_pool().await;
+        put_raw(
+            &pool,
+            r#"{"screenshotPath":"/sp","ai":{"modelsPath":"/mp","externalEnabled":true,"externalProvider":"deepseek","endpoint":"https://api.deepseek.com/v1","model":"deepseek-chat","apiKey":"sk-1","summaryMain":"__cloud__"}}"#,
+        )
+        .await;
+
+        let first = load(&pool).await.unwrap();
+        assert_eq!(first.ai.cloud.len(), 1);
+        assert_eq!(first.ai.cloud[0].api_key, "sk-1");
+        assert_eq!(
+            first.ai.picks.daily,
+            Some(crate::ai::config::ModelRef::Cloud {
+                connection: first.ai.cloud[0].id.clone()
+            })
+        );
+        let raw = raw_json(&pool).await;
+        assert!(
+            !raw.contains("summaryMain"),
+            "迁完要写回，旧字段消失: {raw}"
+        );
+
+        let second = load(&pool).await.unwrap();
+        assert_eq!(second.ai.cloud, first.ai.cloud);
+        assert_eq!(second.ai.picks, first.ai.picks);
     }
 
     /// 迁移出来的配置按 AI 总结的语言起名。

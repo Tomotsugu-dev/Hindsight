@@ -293,6 +293,15 @@ export interface EngineStatus extends EngineBinaryStatus {
   systemVram: VramInfo | null;
 }
 
+/** 单个任务（日报 / 周报 / 聊天）的连接测试结果。镜像后端 `commands::ai_engine::TaskConnectionTest`。 */
+export interface TaskConnectionTest {
+  task: "daily" | "weekly" | "chat";
+  kind: "local" | "cloud" | "unconfigured";
+  model: string;
+  ok: boolean;
+  message: string;
+}
+
 /** 本地磁盘上的 GGUF 文件条目（可能是主权重，也可能是 mmproj）。 */
 export interface ModelEntry {
   /** 文件名（含 .gguf 后缀） */
@@ -377,11 +386,6 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 /** AI 总结进度事件（Phase 1B-γ）。 */
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 
-/** `Settings.ai.summaryMain` / `Settings.ai.chatMain` 的特殊值——"这一步用云端 API"。
- *  跟后端 `crate::ai::config::SUMMARY_CLOUD_SENTINEL` 必须保持同步。
- *  路由真正生效还要 `externalEnabled=true`（云端 API tab 启用 toggle）。 */
-export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
-
 /** 周报 precheck 返回的"某天"元数据。 */
 export interface WeekPrecheckDay {
   /** "YYYY-MM-DD" */
@@ -465,15 +469,15 @@ export interface SegmentSummaryRow {
   generatedAt: string;
 }
 
-/** AI 子系统的所有用户配置；嵌进 Settings.ai。
- *  字段镜像后端 Rust `crate::ai::config::AiConfig`（camelCase）。 */
-export interface ExternalProfile {
-  /** 显示名(自动生成:provider · model) */
+/** 已保存的云端 API 连接，绑定一个模型。镜像后端 `crate::ai::config::CloudConnection`。 */
+export interface CloudConnection {
+  id: string;
   name: string;
-  provider: string;
+  dialect: string;
   endpoint: string;
-  apiKey: string;
   model: string;
+  apiKey: string;
+  contextLength: number | null;
 }
 
 /** 有配置的三个功能。 */
@@ -498,102 +502,44 @@ export interface ModuleProfiles {
 export type AiVisibility = Record<AiProfileModule, ModuleProfiles>;
 
 /** 一个模型。镜像后端 `crate::ai::config::ModelRef`。 */
-export type ModelRef = { kind: "local"; file: string } | { kind: "cloud" };
+export type ModelRef = { kind: "local"; file: string } | { kind: "cloud"; connection: string };
 
-/** 一个任务选的模型：inherit = 和日报用同一个。镜像后端 `crate::ai::config::Pick`。 */
+/** 一个任务选的模型：inherit = 和日报用同一个（仅周报）。镜像后端 `crate::ai::config::Pick`。 */
 export type ModelPick = { kind: "inherit" } | ModelRef;
+
+/** 每个任务用哪个模型。镜像后端 `crate::ai::config::Picks`。 */
+export interface AiPicks {
+  daily: ModelRef | null;
+  weekly: ModelPick;
+  chat: ModelRef | null;
+}
 
 /** 用户能选的思考档位。没设就是自动。 */
 export type ReasoningLevel = "off" | "low" | "medium" | "high" | "max";
 
-/** 用户给「一个任务 + 一个模型」设的参数。镜像后端 `crate::ai::config::Advanced`。 */
+/** 用户给「一个任务 + 一个模型」设的参数覆盖。镜像后端 `crate::ai::config::Advanced`。 */
 export interface AdvancedEntry {
   task: "daily" | "weekly" | "chat";
   model: ModelRef;
-  /** null = 自动 */
   reasoning: ReasoningLevel | null;
+  ctxSize: number | null;
+  parallelSlots: number | null;
+  batchSize: number | null;
 }
 
+/** AI 子系统的所有用户配置；嵌进 Settings.ai。镜像后端 `crate::ai::config::AiConfig`。 */
 export interface AiConfig {
-  /** 外部云端 API base URL（OpenAI 兼容，不含 /chat/completions）。
-   *  仅在 externalEnabled = true 时生效。 */
-  endpoint: string;
-  /** 外部 API 的模型 ID，如 gpt-4o-mini / deepseek-chat。
-   *  仅在 externalEnabled = true 时生效。 */
-  model: string;
-  /** 外部 API 的 Bearer token；明文落 settings JSON。 */
-  apiKey: string;
-  /** 是否启用云端 API。
-   *  false = 全程本地；true 时具体哪一步走云由各 step 槽位的 __cloud__ sentinel
-   *  决定（summaryMain / chatMain）。 */
-  externalEnabled: boolean;
-  /** Provider 预设 ID："openai" / "deepseek" / "kimi" / "kimi-cn" / "openrouter" / "together" / "groq" / "custom"。
-   *  仅控前端 Base URL / Model placeholder；后端只 sanitize。 */
-  externalProvider: string;
-  /** 用户对自己的简短描述，AI 总结时拼进 system prompt */
-  userBrief: string;
-  /** 一天的时段划分（按 startHour 排序、相邻段共边） */
-  segments: AiSegment[];
-  /** 日报、周报、聊天各自的配置：AI 能看到哪些分类 */
-  visibility: AiVisibility;
-  /** 模型（GGUF）保存路径。
-   *  空字符串 = 走默认 `<data_root>/ai/models/`；后端 settings load 启动时
-   *  会把空值填成实际默认路径，所以前端拿到的总是非空字符串。 */
+  cloud: CloudConnection[];
+  picks: AiPicks;
+  advanced: AdvancedEntry[];
   modelsPath: string;
-  /** 当前选中的主权重 GGUF 文件名（旧版字段；新代码读 `summaryMain` 的
-   *  effective 值，本字段当 fallback 用）。空 = 还没选；启动引擎会拒绝。 */
-  activeMain: string;
-  /** 当前选中的 mmproj GGUF 文件名（fallback 同上）。空 = 没有。 */
-  activeMmproj: string;
-  /** 段总结专用主权重；空 = fallback 到 `activeMain`。
-   *  特殊值 [`SUMMARY_CLOUD_SENTINEL`] = 用云端 API 跑段总结（需要同时
-   *  `externalEnabled=true`，由 `summary_use_cloud()` 后端 helper 一起判）。 */
-  summaryMain: string;
-  /** 段总结专用 mmproj；空 = fallback 到 `activeMmproj`。一般纯文本模型留空即可。 */
-  summaryMmproj: string;
-  /** 每个任务用哪个模型。现在只有周报。还没有这个字段的后端不返回它。 */
-  picks?: { weekly?: ModelPick };
-  /** 用户给「任务 + 模型」设的参数。还没有这个字段的后端不返回它。 */
-  advanced?: AdvancedEntry[];
-  /** 对话（Chat）模型槽位：空 = 自动（云端配好走云端，否则同 step 2）；
-   *  [`SUMMARY_CLOUD_SENTINEL`] = 明确云端；文件名 = 明确该本地 GGUF。 */
-  chatMain: string;
-  /** Chat 思考模式："auto"（默认，云端不注入参数、本地默认关）/ "on" / "off"。
-   *  开关对部分云端服务商可能不生效（best-effort）。 */
-  chatThinking: string;
-  /** AI 总结使用的提示词语言："zh" / "tw" / "en" / "ja" / "pt" / "es"。
-   *  决定模型用哪种语言写总结，也决定 UI 编辑时显示哪一份覆盖。 */
+  userBrief: string;
+  segments: AiSegment[];
+  visibility: AiVisibility;
   promptLanguage: PromptLanguage;
-  /** 用户对内置 system prompt（段总结）的覆盖；按语言独立。
-   *  对应字段为空 = 用内置默认。 */
   promptOverrides: PromptOverrides;
-  /** 引擎启动级参数：`--batch-size` / `--ubatch-size` 一致值。
-   *  双套参数语义：这三个旧字段（batchSize/parallelSlots/ctxSize）现在是 fallback——
-   *  对应的 summary* 字段未填时降级使用。详见 summaryBatchSize 等。 */
-  batchSize: number | null;
-  /** 引擎启动级参数：`-np` 并行槽位数。详见 [batchSize] 关于 fallback 语义。 */
-  parallelSlots: number | null;
-  /** 引擎启动级参数：每 slot 的 ctx 上限（token）。详见 [batchSize] 关于 fallback 语义。 */
-  ctxSize: number | null;
-
-  /** 自动总结：日/周结束后后台自动补齐日报与周报，无需手动点「开始总结」。
-   *  失败的目标不会自动重试（防坏配置反复烧钱）；月报生成器落地后自动纳入。 */
   autoSummary: boolean;
-  /** 已保存的云端 API 配置(上限 10;应用 = 拷进激活字段) */
-  externalProfiles: ExternalProfile[];
-  /** 自动总结定时(旧单时刻字段,仅兼容读取;写入走 autoSummaryTimes) */
-  autoSummaryAt: string | null;
-  /** 自动总结时间点列表("HH:MM",保持添加顺序,上限 6);每个点生成/刷新当天日报 */
   autoSummaryTimes: string[];
-
-  /** 段总结阶段（单段串行）的 batch；null = fallback 到 [batchSize]。 */
-  summaryBatchSize: number | null;
-  /** 段总结阶段的 `-np`；null = fallback 到 [parallelSlots]。
-   *  推荐恒为 1，给 ctx 让出预算。 */
-  summaryParallelSlots: number | null;
-  /** 段总结阶段的每槽 ctx；null = fallback 到 [ctxSize]。
-   *  summary 默认推荐高 ctx（容纳整段活动时间线）。 */
-  summaryCtxSize: number | null;
 }
 
 export type PromptLanguage = "zh" | "tw" | "en" | "ja" | "pt" | "es";
@@ -1017,9 +963,8 @@ export const api = {
   downloadOcrRuntime: (force = false) => invoke<void>("download_ocr_runtime", { force }),
   deleteOcrRuntime: () => invoke<void>("delete_ocr_runtime"),
   openEngineDir: () => invoke<void>("open_engine_dir"),
-  /** 启动 llama-server 子进程；返回监听端口。
-   *  Phase 1B-α 不传模型，会因为缺模型 fail；Phase 1B-β 起会真传值。 */
-  startEngine: () => invoke<number>("start_engine"),
+  /** 依次测试日报、周报、聊天三条当前配置的模型连接（本地测完自动停引擎释放显存）。 */
+  testAiConnections: () => invoke<TaskConnectionTest[]>("test_ai_connections"),
   stopEngine: () => invoke<void>("stop_engine"),
   /** 扫描 settings.ai.modelsPath 下所有 .gguf 文件（main + mmproj 平等列）。
    *  目录不存在或为空都返回 []，不抛错。 */
@@ -1055,16 +1000,9 @@ export const api = {
   /** 列扫所有 `<file>.partial` 半成品；用于渲染"继续"按钮 + 已下进度。
    *  目录不存在或没有 partial 时返回 `[]`。 */
   listPartialDownloads: () => invoke<PartialDownload[]>("list_partial_downloads"),
-  /** 切换 / 设置当前在用的模型（旧版 API；新代码请用 setStepModel）。写 settings 后会把
-   *  在跑的 server 停掉，让用户主动点"启动引擎"按新模型重起。
-   *  mmprojFile 传 null 表示没有（纯文本模型）。 */
-  setActiveModel: (mainFile: string, mmprojFile: string | null) =>
-    invoke<void>("set_active_model", { mainFile, mmprojFile }),
-  /** 单独设置 段总结（summary）/ 对话（chat）的模型；其它 step 不动。
-   *  mainFile 空字符串 = 清掉该 step 的覆盖（summary fallback 到 activeMain，
-   *  chat 回到自动路由）。同时会 stop 在跑的 server。chat 忽略 mmprojFile。 */
-  setStepModel: (step: "summary" | "chat", mainFile: string, mmprojFile: string | null) =>
-    invoke<void>("set_step_model", { step, mainFile, mmprojFile }),
+  /** 设置或清空某个 AI 任务的模型选择，并顺带停掉当前在跑的本地引擎。 */
+  setTaskModel: (task: "daily" | "weekly" | "chat", model: ModelPick | null) =>
+    invoke<void>("set_task_model", { task, model }),
   /** 跑某天全部段总结。命令本体异步等到所有段完成才 resolve（或 cancel 后早 return）。
    *  期间通过 listen(SUMMARY_PROGRESS_EVENT, ...) 拿进度事件，前端边跑边渲染。
    *  date 格式 "YYYY-MM-DD"；deviceId 传 null = 多设备聚合；

@@ -8,8 +8,10 @@ import {
   type MemoryPendingStats,
 } from "../../api/hindsight";
 import { useSettings } from "../../state/settings";
+import { useAiProfiles } from "../../state/aiProfiles";
 import { logError } from "../../lib/logger";
 import ChatView from "./ChatView";
+import ChatProfileToggle from "./ChatProfileToggle";
 import ConversationList from "./ConversationList";
 import ModelBadge from "./ModelBadge";
 import { chatLocalModelName, chatUsesCloud } from "./chatRouting";
@@ -35,11 +37,13 @@ function writeLastActive(id: number | null) {
 
 /**
  * 对话页外壳:标题行(右侧当前模型 badge)→ 未入索引 banner → 左右两栏
- * (左会话列表 / 右聊天区)。会话与消息都落 memory.sqlite,重启不丢。
+ * (左会话列表 + 底下的数据筛选 / 右聊天区)。会话与消息都落 memory.sqlite,重启不丢。
  */
 export default function ChatPage() {
   const { t } = useTranslation();
   const { settings, update } = useSettings();
+  // AI 能看到哪些数据;不存,进页面回到默认分类。换了只影响后面的提问
+  const profiles = useAiProfiles("chat");
   const [conversations, setConversations] = useState<ChatConversationMeta[]>([]);
   const [activeId, setActiveIdState] = useState<number | null>(readLastActive);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -155,14 +159,17 @@ export default function ChatPage() {
       {pendingStats && <BackfillBanner stats={pendingStats} onRefresh={refreshPendingStats} />}
 
       <div className={styles.columns}>
-        <ConversationList
-          conversations={conversations}
-          activeId={activeId}
-          onSelect={setActiveId}
-          onNew={() => setActiveId(null)}
-          onChanged={refreshConversations}
-          onDeletedActive={() => setActiveId(null)}
-        />
+        <div className={styles.side}>
+          <ConversationList
+            conversations={conversations}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onNew={() => setActiveId(null)}
+            onChanged={refreshConversations}
+            onDeletedActive={() => setActiveId(null)}
+          />
+          <ChatProfileToggle state={profiles} />
+        </div>
         <div className={styles.main}>
           <ChatView
             conversationId={activeId}
@@ -172,6 +179,7 @@ export default function ChatPage() {
             }}
             onConversationTouched={refreshConversations}
             ensurePrivacyAck={ensurePrivacyAck}
+            profiles={profiles}
           />
         </div>
       </div>

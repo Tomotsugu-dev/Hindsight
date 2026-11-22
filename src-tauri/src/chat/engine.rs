@@ -654,9 +654,17 @@ mod tests {
             .filter_level(log::LevelFilter::Warn)
             .is_test(true)
             .try_init();
-        let thinking = crate::chat::llm::reasoning_from_setting(
-            &std::env::var("CHAT_E2E_THINKING").unwrap_or_default(),
-        );
+        let thinking = match std::env::var("CHAT_E2E_THINKING")
+            .unwrap_or_default()
+            .as_str()
+        {
+            "on" | "high" => crate::ai::model::Reasoning::High,
+            "max" => crate::ai::model::Reasoning::Max,
+            "medium" => crate::ai::model::Reasoning::Medium,
+            "low" => crate::ai::model::Reasoning::Low,
+            "off" => crate::ai::model::Reasoning::Off,
+            _ => crate::ai::model::Reasoning::Default,
+        };
         let model = std::env::var("CHAT_E2E_MODEL").expect("设 CHAT_E2E_MODEL");
         let llm = if let Ok(endpoint) = std::env::var("CHAT_E2E_ENDPOINT") {
             ChatLlm::cloud(

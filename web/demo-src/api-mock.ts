@@ -37,6 +37,7 @@ import type {
   MemoryPendingStats,
   MemorySearchResp,
   ModelEntry,
+  ModelPick,
   PartialDownload,
   RecommendedModel,
   SegmentSummaryRow,
@@ -50,6 +51,7 @@ import type {
   SuperCategoryInput,
   SuperCategoryPatch,
   SyncStatus,
+  TaskConnectionTest,
   TestAiEndpointResp,
   UnclassifiedApp,
   WeekPrecheckResp,
@@ -73,9 +75,6 @@ export function dtoToDaySummary(dto: DaySummaryDto): DaySummary {
 export const MODEL_DOWNLOAD_EVENT = "ai://model-download-progress";
 export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
-/** demo 跟主 API hindsight.ts 同步：summary_main = "__cloud__" 表示 step 2 走云端。
- *  demo 里没真云端调用，仅作为类型 / 比较符号存在，让消费方代码能跑通。 */
-export const SUMMARY_CLOUD_SENTINEL = "__cloud__";
 /** OAuth 授权 URL 就绪事件——demo 里永不触发，仅满足消费方 import。 */
 export const OAUTH_URL_EVENT = "sync://oauth-url";
 /** Chat 问答落库完成广播——demo 里永不触发，仅满足消费方 import。 */
@@ -884,7 +883,11 @@ export const api = {
   },
   deleteOcrRuntime: async (): Promise<void> => {},
   openEngineDir: async (): Promise<void> => {},
-  startEngine: async (): Promise<number> => 8088,
+  testAiConnections: async (): Promise<TaskConnectionTest[]> => [
+    { task: "daily", kind: "local", model: "Qwen3.5-9B-Q4_K_M.gguf", ok: true, message: "" },
+    { task: "weekly", kind: "local", model: "Qwen3.5-9B-Q4_K_M.gguf", ok: true, message: "" },
+    { task: "chat", kind: "local", model: "Qwen3.5-9B-Q4_K_M.gguf", ok: true, message: "" },
+  ],
   stopEngine: async (): Promise<void> => {},
 
   // ─── Models ────────────────────────────────
@@ -903,21 +906,16 @@ export const api = {
   },
   cancelModelDownload: async (_file: string): Promise<void> => {},
   listPartialDownloads: async (): Promise<PartialDownload[]> => [],
-  setActiveModel: async (mainFile: string, mmprojFile: string | null): Promise<void> => {
-    state.settings.ai.activeMain = mainFile;
-    state.settings.ai.activeMmproj = mmprojFile ?? "";
-    persist();
-  },
-  setStepModel: async (
-    step: "summary" | "chat",
-    mainFile: string,
-    mmprojFile: string | null,
+  setTaskModel: async (
+    task: "daily" | "weekly" | "chat",
+    model: ModelPick | null,
   ): Promise<void> => {
-    if (step === "chat") {
-      state.settings.ai.chatMain = mainFile;
+    if (task === "weekly") {
+      state.settings.ai.picks.weekly = model ?? { kind: "inherit" };
+    } else if (task === "daily") {
+      state.settings.ai.picks.daily = model && model.kind !== "inherit" ? model : null;
     } else {
-      state.settings.ai.summaryMain = mainFile;
-      state.settings.ai.summaryMmproj = mmprojFile ?? "";
+      state.settings.ai.picks.chat = model && model.kind !== "inherit" ? model : null;
     }
     persist();
   },

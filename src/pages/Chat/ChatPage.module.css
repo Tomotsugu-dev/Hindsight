@@ -174,13 +174,55 @@
   max-width: 220px;
 }
 
-/* ── 「AI 能看到的数据」下拉:钮面 = 筛选图标 + 配置名,菜单跟思考档位同款 ── */
+/* ── 「AI 能看到的数据」下拉:在左栏会话列表下面,钮面 = 筛选图标 + 配置名 ── */
 
-/* 配置名太长时截断,不把输入框挤窄 */
+.profileWrap {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.profileBtn {
+  display: flex;
+  align-items: center;
+  gap: calc(5px * var(--density));
+  width: 100%;
+  height: calc(28px * var(--density));
+  padding: 0 calc(8px * var(--density));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+.profileBtn:hover {
+  color: var(--text-strong);
+  background: var(--surface-2);
+}
+
+/* 配置名占满剩下的宽度,太长时截断 */
 .profileLabel {
-  max-width: 96px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  text-align: left;
   text-overflow: ellipsis;
+}
+
+/* 必须排在 .badgeMenu 之后:向上弹,左边对齐按钮,不伸出左栏 */
+.profileMenu {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 6px * var(--density));
+  left: 0;
+  min-width: 100%;
+  max-width: 220px;
 }
 
 .menuDivider {
@@ -216,9 +258,19 @@
   flex-direction: column;
 }
 
+/* ── 左栏:会话列表在上,数据筛选贴底 ── */
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--density));
+  min-height: 0;
+}
+
 /* ── 会话列表(左栏) ── */
 
 .convList {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: calc(8px * var(--density));
@@ -349,7 +401,8 @@
   gap: calc(24px * var(--density));
 }
 
-:global([data-layout="flat"]) .convList {
-  padding-right: calc(16px * var(--density));
+/* 分隔线画在整个左栏上,下面的数据筛选也在线内 */
+:global([data-layout="flat"]) .side {
+  padding-right: calc(12px * var(--density));
   border-right: 1px solid var(--border-default);
 }

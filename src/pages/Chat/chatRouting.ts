@@ -1,29 +1,53 @@
-import { SUMMARY_CLOUD_SENTINEL, type AiConfig } from "../../api/hindsight";
+import type { AiConfig, CloudConnection, ModelRef } from "../../api/hindsight";
 
-/** 云端三元组是否配齐（enabled + endpoint + model 缺一不可）。 */
+/** 判断一条云端连接是否填齐了必填项（endpoint + model；apiKey 可选）。 */
+export function isCloudConnectionReady(c: CloudConnection): boolean {
+  return c.endpoint.trim() !== "" && c.model.trim() !== "";
+}
+
+/** 所有可用的云端连接。 */
+export function readyCloudConnections(ai: AiConfig): CloudConnection[] {
+  return ai.cloud.filter(isCloudConnectionReady);
+}
+
+/** 按 id 查找云端连接。 */
+export function findCloudConnection(ai: AiConfig, id: string): CloudConnection | null {
+  const key = id.trim();
+  return ai.cloud.find((c) => c.id === key) ?? null;
+}
+
+/** 是否至少有一条可用的云端连接。 */
 export function chatCloudReady(ai: AiConfig): boolean {
-  return ai.externalEnabled && ai.endpoint.trim() !== "" && ai.model.trim() !== "";
+  return readyCloudConnections(ai).length > 0;
 }
 
-/**
- * Chat 路由判定的前端镜像——必须与后端 AiConfig::chat_use_cloud 逐字对齐：
- * chatMain 显式本地文件名 → 永远本地；空（自动）或 sentinel → 云端配齐即云端。
- */
+/** 对话任务选中的模型引用（去掉空白占位）。 */
+export function chatModel(ai: AiConfig): ModelRef | null {
+  const pick = ai.picks.chat;
+  if (!pick) return null;
+  if (pick.kind === "local") {
+    const file = pick.file.trim();
+    return file ? { kind: "local", file } : null;
+  }
+  const connection = pick.connection.trim();
+  return connection ? { kind: "cloud", connection } : null;
+}
+
+/** 对话当前路由到的可用云端连接；走本地或未选时返回 null。 */
+export function chatCloudConnection(ai: AiConfig): CloudConnection | null {
+  const model = chatModel(ai);
+  if (model?.kind !== "cloud") return null;
+  const conn = findCloudConnection(ai, model.connection);
+  return conn && isCloudConnectionReady(conn) ? conn : null;
+}
+
+/** 对话当前是否走云端。 */
 export function chatUsesCloud(ai: AiConfig): boolean {
-  const c = ai.chatMain.trim();
-  if (c !== "" && c !== SUMMARY_CLOUD_SENTINEL) return false;
-  return chatCloudReady(ai);
+  return chatCloudConnection(ai) !== null;
 }
 
-/**
- * 本地路径实际加载的模型文件名，镜像后端 AiConfig::effective_chat_main：
- * chatMain 显式文件名优先；否则同 step 2 的 fallback 链
- * （summaryMain 空或 sentinel → activeMain）。
- * 返回空串 = 没有可用本地模型（后端会报"需要一个语言模型"）。
- */
+/** 对话当前使用的本地模型文件名；走云端或未选时返回空串。 */
 export function chatLocalModelName(ai: AiConfig): string {
-  const c = ai.chatMain.trim();
-  if (c !== "" && c !== SUMMARY_CLOUD_SENTINEL) return c;
-  const s = ai.summaryMain.trim();
-  return s === "" || s === SUMMARY_CLOUD_SENTINEL ? ai.activeMain.trim() : s;
+  const model = chatModel(ai);
+  return model?.kind === "local" ? model.file : "";
 }

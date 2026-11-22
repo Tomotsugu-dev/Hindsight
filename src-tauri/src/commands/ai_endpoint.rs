@@ -87,7 +87,7 @@ fn describe(e: TransportError, preview: usize) -> String {
     }
 }
 
-fn fail(msg: &str) -> TestAiEndpointResp {
+pub(crate) fn fail(msg: &str) -> TestAiEndpointResp {
     TestAiEndpointResp {
         ok: false,
         models: Vec::new(),

@@ -10,7 +10,7 @@
 //!   前端按 `source = "weekly"` 过滤跟 daily 互不干扰。
 //!
 //! 校验链：
-//! 1. 必须有可用的 step2 模型（本地 summary main 非空 或 external_enabled=true）
+//! 1. 周报必须有能用的模型（自己选的，或者跟日报的；云端连接要填完）
 //! 2. 严格模式（`allow_missing_days=false`）下：这一周内必须至少有一天的 daily
 //!    段总结落库（`status = ok`），否则直接写 `status = error` 行让前端引导。
 //!    宽松模式（前端 precheck → 用户在确认弹框点了"继续生成"）下：缺日报的天
@@ -26,7 +26,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::ai::config::{ModelRef, Pick, Task};
+use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
@@ -106,13 +106,10 @@ impl WeekSummaryRunner {
         let cfg = settings_repo::load(&self.pool).await?;
         let ai = cfg.ai.clone();
 
-        // 周报要有模型：云端，或者一个本机文件
-        let model = ai.task_model(Task::Weekly);
-        if matches!(&model, ModelRef::Local { file } if file.trim().is_empty()) {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
-            ));
-        }
+        ai.check_ready(Task::Weekly).map_err(Error::InvalidInput)?;
+        let Some(model) = ai.model_for(Task::Weekly) else {
+            return Err(Error::InvalidInput(NO_MODEL_ERROR));
+        };
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
             .await?
             .main_filter();
@@ -385,11 +382,6 @@ impl WeekSummaryRunner {
         ai: &crate::ai::config::AiConfig,
         main_name: &str,
     ) -> Result<u16> {
-        let mmproj_name = if ai.picks.weekly == Pick::Inherit {
-            ai.effective_summary_mmproj()
-        } else {
-            ""
-        };
         let models_dir = models::root_dir(ai);
         let main_path = models_dir.join(main_name);
         if !main_path.exists() {
@@ -399,17 +391,16 @@ impl WeekSummaryRunner {
             )));
         }
         let wanted_overrides = EngineStartOverrides {
-            batch_size: ai.summary_batch_size_effective(),
-            parallel_slots: ai.summary_parallel_slots_effective(),
-            ctx_size: ai.summary_ctx_size_effective(),
+            batch_size: ai.batch_size_for(Task::Weekly),
+            parallel_slots: ai.parallel_slots_for(Task::Weekly),
+            ctx_size: ai.ctx_size_for(Task::Weekly),
         };
         let st = self.supervisor.status().await;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
-                // 校验装的确实是 summary 模型 **且启动参数一致** 才复用——不校验的话，
-                // 2 分钟前日报留下的 vision 模型（小 ctx），或模型相同但按默认 8K ctx
-                // 手动启动的引擎，会被直接拿来生成周报：整周日报塞不下，
-                // 输出截断或直接报错。不符则重启换模。复用前 touch 防 idle 猝杀。
+                // 模型和启动参数都一致才复用。不查的话，日报留下的小上下文引擎，
+                // 或者同一模型按默认 8K 手动启动的引擎，会被拿来生成周报：
+                // 整周日报塞不下，输出被截断或直接报错。复用前 touch，免得空闲回收关掉它。
                 if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
                     && self.supervisor.loaded_overrides() == wanted_overrides
                 {
@@ -425,20 +416,8 @@ impl WeekSummaryRunner {
                 }
             }
         }
-        let mmproj_path = if mmproj_name.trim().is_empty() {
-            None
-        } else {
-            let p = models_dir.join(mmproj_name);
-            if !p.exists() {
-                return Err(Error::ModelFileMissing(format!(
-                    "vision 投影 {}",
-                    mmproj_name
-                )));
-            }
-            Some(p)
-        };
         self.supervisor
-            .start_with_overrides(Some(main_path), mmproj_path, wanted_overrides)
+            .start_with_overrides(Some(main_path), None, wanted_overrides)
             .await
     }
 

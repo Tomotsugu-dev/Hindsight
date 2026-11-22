@@ -27,22 +27,14 @@ export default function GeneralTab() {
   const { ai, updateAi } = useAiSettings();
   // 定时补识别是顶层 settings 字段(屏幕记忆域),不走 ai 子配置
   const { settings, update } = useSettings();
-  // legacy 自愈:此前"自动总结开 + 未指定时刻 = 尽快"的老配置,
-  // 首次进入本页补写默认 23:00,让滑条显示与实际行为一致
   useEffect(() => {
-    if (ai?.autoSummary && ai.autoSummaryTimes.length === 0 && ai.autoSummaryAt == null) {
+    if (ai?.autoSummary && ai.autoSummaryTimes.length === 0) {
       updateAi({ autoSummaryTimes: ["23:00"] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ai?.autoSummary, ai?.autoSummaryAt, ai?.autoSummaryTimes]);
+  }, [ai?.autoSummary, ai?.autoSummaryTimes]);
   if (!ai || !settings) return null;
-  // 与后端 effective_auto_summary_times 同口径:新列表优先,空回落旧单字段
-  const summaryTimes =
-    ai.autoSummaryTimes.length > 0
-      ? ai.autoSummaryTimes
-      : ai.autoSummaryAt != null
-        ? [ai.autoSummaryAt]
-        : [];
+  const summaryTimes = ai.autoSummaryTimes;
   // 与后端 effective_ocr_daily_times 同口径:新列表优先,空则回落旧单时刻字段
   const ocrTimes =
     settings.memoryOcrDailyTimes.length > 0
@@ -70,10 +62,7 @@ export default function GeneralTab() {
             onChange={(next) =>
               updateAi({
                 autoSummary: next,
-                // 开启即定下默认时刻(23:00):行为与时间轴显示保持一致
-                ...(next && summaryTimes.length === 0
-                  ? { autoSummaryTimes: ["23:00"], autoSummaryAt: null }
-                  : {}),
+                ...(next && summaryTimes.length === 0 ? { autoSummaryTimes: ["23:00"] } : {}),
               })
             }
             ariaLabel={t("aiSettings.autoSummary.enableLabel")}
@@ -98,7 +87,6 @@ export default function GeneralTab() {
                         ...summaryTimes,
                         formatHour(nextFreeHour(summaryTimes.map(parseHour))),
                       ],
-                      autoSummaryAt: null,
                     })
                   }
                   disabled={summaryTimes.length >= 6}
@@ -113,7 +101,6 @@ export default function GeneralTab() {
                   onClick={() =>
                     updateAi({
                       autoSummaryTimes: summaryTimes.slice(0, -1),
-                      autoSummaryAt: null,
                     })
                   }
                   disabled={summaryTimes.length <= 1}
@@ -123,7 +110,7 @@ export default function GeneralTab() {
           >
             <TimeOfDayPicker
               values={summaryTimes.length > 0 ? summaryTimes : ["23:00"]}
-              onChange={(next) => updateAi({ autoSummaryTimes: next, autoSummaryAt: null })}
+              onChange={(next) => updateAi({ autoSummaryTimes: next })}
               ariaLabel={t("aiSettings.autoSummary.timeLabel")}
               bands={ai.segments}
             />

@@ -41,9 +41,9 @@ export function ReportModelPickers({
         value={checkedModel(state, module)}
         options={models}
         onChange={state.chooseModel}
-        label={routeName(state.route, state.ai, t)}
+        label={routeName(state.route, t)}
         icon={state.route.cloud ? Cloud : HardDrive}
-        cloud={state.route.cloud}
+        cloud={Boolean(state.route.cloud)}
         title={t("aiSummary.model.modelGroup")}
         note={models.length === 0 ? t("chat.model.empty") : undefined}
         disabled={disabled}

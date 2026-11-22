@@ -372,10 +372,9 @@ pub fn run() {
             commands::ai_endpoint::test_ai_chat,
             // --- ai: 引擎运行时 ---
             commands::ai_engine::get_engine_status,
-            commands::ai_engine::start_engine,
+            commands::ai_engine::test_ai_connections,
             commands::ai_engine::stop_engine,
-            commands::ai_engine::set_active_model,
-            commands::ai_engine::set_step_model,
+            commands::ai_engine::set_task_model,
             // --- ai: binary ---
             commands::ai_binary::download_binary,
             commands::ai_binary::delete_binary,

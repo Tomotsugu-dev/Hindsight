@@ -24,10 +24,6 @@
 //! `inflight_state` 用 `std::sync::Mutex` 而非 `tokio::sync::Mutex` 是为了让
 //! [`InferenceGuard::drop`] 能同步访问（drop 不能 await）；临界区只是 usize +
 //! Instant 赋值，几纳秒级别，不会因同步锁阻塞 runtime。
-//!
-//! Phase 1B-α 阶段没有模型，[`start`](EngineSupervisor::start) 接 `None` 调用时
-//! llama-server 会 fail-fast（缺 `-m` 参数），supervisor 把 stderr 包成可读错误
-//! 给前端展示。Phase 1B-β 加模型选择后，会真传入 model / mmproj 路径。
 
 use std::collections::VecDeque;
 use std::net::TcpListener;
@@ -318,23 +314,18 @@ impl EngineSupervisor {
         s
     }
 
-    /// 启动 llama-server。
-    ///
-    /// `model_path` / `mmproj_path` 可为 None——α.4 还没模型选择，留待 β。传 None
-    /// 时 llama-server 会因为缺 `-m` 参数自己退出，supervisor 拿 stderr 包错误。
-    ///
-    /// 已经在 Running 状态时返回当前端口，不重复 spawn；已经在 Starting 状态时
-    /// 返回错误（避免并发抢同一进程）。
-    pub async fn start(
-        &self,
-        model_path: Option<PathBuf>,
-        mmproj_path: Option<PathBuf>,
-    ) -> Result<u16> {
-        self.start_with_overrides(model_path, mmproj_path, EngineStartOverrides::default())
-            .await
+    /// 引擎正在启动，或者有请求正在用它时返回 `true`。
+    pub async fn in_use(&self) -> bool {
+        match self.inner.lock().await.state.state {
+            EngineState::Starting => true,
+            EngineState::Running => self.idle_eta().is_none(),
+            EngineState::Stopped | EngineState::Error => false,
+        }
     }
 
-    /// 跟 [`start`] 一样，但带上 batch_size / parallel_slots / ctx_size。
+    /// Starts llama-server with explicit engine parameter overrides.
+    ///
+    /// Returns the running port without respawning if already `Running`, or errors if `Starting`.
     pub async fn start_with_overrides(
         &self,
         model_path: Option<PathBuf>,
@@ -395,10 +386,8 @@ impl EngineSupervisor {
                 log::warn!("job_guard::prepare_command 失败（保护可能降级）: {e}");
             }
             // 调试用：把最终拼出的命令行打到 log，方便排查 -np / --batch-size 是否生效，
-            // 同时打 main / mmproj 文件名验证 step 1/2 切换时确实加载了不同模型。
-            // 标记 [engine-spawn] 让用户在长 log 里 grep 能直接定位。mmproj=<none> 表示
-            // 此次启动**没**带 vision projection（应该是文本模型 step 2 的预期行为）；
-            // 文本模型这里仍带着某个 *-mmproj.gguf 说明 effective_summary_mmproj fallback 出 bug。
+            // 同时打 main / mmproj 文件名，确认日报、周报、聊天之间切换时加载的是哪个模型。
+            // 标记 [engine-spawn] 让用户在长 log 里 grep 能直接定位。
             log::info!(
                 "[engine-spawn] port={port} main={main_name} mmproj={mmproj_name} batch={:?} -np={:?} ctx_per_slot={:?}",
                 overrides.batch_size,
@@ -764,4 +753,28 @@ where
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 正在启动、或者有请求正在用，都算在用；跑着但空闲、或者没在跑，都不算。
+    /// 测试连接收尾停引擎前靠它判断，算错了会打断正在回答的聊天。
+    #[tokio::test]
+    async fn in_use_while_starting_or_serving_a_request() {
+        let sup = Arc::new(EngineSupervisor::new());
+        assert!(!sup.in_use().await, "没在跑");
+
+        sup.inner.lock().await.state.state = EngineState::Starting;
+        assert!(sup.in_use().await, "正在启动");
+
+        sup.inner.lock().await.state.state = EngineState::Running;
+        assert!(!sup.in_use().await, "跑着但空闲");
+
+        let guard = sup.acquire_inference();
+        assert!(sup.in_use().await, "有请求在用");
+        drop(guard);
+        assert!(!sup.in_use().await, "请求结束");
+    }
 }

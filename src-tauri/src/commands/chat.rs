@@ -3,10 +3,10 @@
 //! 问答:前端一问,后端跑完整个 agent 循环再一次性返回;历史落 memory.sqlite,
 //! LLM 的多轮上下文由后端从库里读(库是唯一真源,前端不再维护历史镜像)。
 //!
-//! 路由(设计定稿:云端 first-class):
-//! - 设置里启用了云端 API(`external_enabled` + endpoint/model 非空)→ 云端原生 tools;
-//! - 否则走本地 llama-server(grammar 约束解码),按 step 2 文本模型 lazy 启动;
-//! - 两边都不可用 → 明确报错引导用户去配置。
+//! 路由按设置里聊天选的模型(`picks.chat`):
+//! - 云端连接 → 云端原生 tools;
+//! - 本机模型 → 本地 llama-server(grammar 约束解码),用到时才启动;
+//! - 没选,或选的连接不能用 → 报错,前端按错误码引导用户去配置。
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -15,6 +15,7 @@ use serde::Serialize;
 use tauri::{Emitter, State};
 
 use super::screen_memory::MemoryState;
+use crate::ai::config::{ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
 use crate::ai::policy::ProfileChoice;
 use crate::ai::server::EngineSupervisor;
 use crate::ai::tools::Tools;
@@ -40,7 +41,7 @@ fn chat_engine_overrides(
     crate::ai::server::EngineStartOverrides {
         batch_size: None,
         parallel_slots: None,
-        ctx_size: ai.chat_ctx_size_effective(),
+        ctx_size: ai.chat_ctx_size(),
     }
 }
 
@@ -310,76 +311,62 @@ async fn run_ask(
     let cfg = settings::load(pool).await.map_err(String::from)?;
     let ai = &cfg.ai;
 
-    // 路由走独立的 chat 槽位:chat_main 空 = 自动(云端配好走云端,否则同 step 2);
-    // sentinel = 明确云端;文件名 = 明确该本地模型
-    let thinking = crate::chat::llm::reasoning_from_setting(&ai.chat_thinking);
-    let (llm, _inflight) = if ai.chat_use_cloud() {
-        (
-            ChatLlm::cloud(
-                &ai.endpoint,
-                &ai.model,
-                &ai.api_key,
-                &ai.external_provider,
-                thinking,
+    let thinking = ai.reasoning_for(Task::Chat);
+    let (llm, _inflight) = match ai.model_for(Task::Chat) {
+        Some(ModelRef::Cloud { connection }) => {
+            let conn = ai
+                .cloud_connection(&connection)
+                .filter(|c| c.is_ready())
+                .ok_or_else(|| CLOUD_UNAVAILABLE_ERROR.to_string())?;
+            (
+                ChatLlm::cloud(
+                    &conn.endpoint,
+                    &conn.model,
+                    &conn.api_key,
+                    &conn.dialect,
+                    thinking,
+                )
+                .map_err(String::from)?,
+                None,
             )
-            .map_err(String::from)?,
-            None,
-        )
-    } else {
-        let main_name = ai.effective_chat_main();
-        if main_name.trim().is_empty() {
-            return Err(
-                "Chat 需要一个语言模型:请在设置里启用云端 API,或在「模型」里选一个本地模型"
-                    .to_string(),
-            );
         }
-        let models_dir = crate::ai::models::root_dir(ai);
-        let main_path = models_dir.join(main_name);
-        if !main_path.exists() {
-            return Err(format!("选中的本地模型不存在:{main_name}"));
+        Some(ModelRef::Local { file }) => {
+            let models_dir = crate::ai::models::root_dir(ai);
+            let main_path = models_dir.join(&file);
+            if !main_path.exists() {
+                return Err(format!(
+                    "[AI_MODEL_MISSING] Selected local model file not found: {file}"
+                ));
+            }
+            // 复用条件是模型一致、引擎每槽上下文够聊天用，不要求参数完全相等。
+            // 要求完全相等的话，「没设」和「设成 8192」、日报留下的更大上下文这些
+            // 本可以复用的情况都会重启，聊天和日报来回切就来回重启，还会在日报
+            // 两段之间把引擎杀掉。上下文不够时必须重启，否则会溢出报 400。
+            let overrides = chat_engine_overrides(ai);
+            let needs_restart = supervisor
+                .loaded_main()
+                .map(|p| p != main_path)
+                .unwrap_or(false)
+                || !engine_ctx_sufficient(&supervisor.loaded_overrides(), &overrides);
+            let port = if needs_restart {
+                supervisor
+                    .restart_with_overrides(Some(main_path), None, overrides)
+                    .await
+                    .map_err(String::from)?
+            } else {
+                supervisor
+                    .start_with_overrides(Some(main_path), None, overrides)
+                    .await
+                    .map_err(String::from)?
+            };
+            // 整个问答循环都拿着它，空闲回收不会中途关掉引擎
+            let guard = supervisor.acquire_inference();
+            (
+                ChatLlm::local(port, &file, thinking).map_err(String::from)?,
+                Some(guard),
+            )
         }
-        // 显式选了 chat 专用模型 → 纯文本推理不带 mmproj;
-        // 跟随 step 2 时沿用其 mmproj 配套(模型可能是 vision 权重)
-        let follows_summary = {
-            let c = ai.chat_main.trim();
-            c.is_empty() || c == crate::ai::config::SUMMARY_CLOUD_SENTINEL
-        };
-        let mmproj_name = if follows_summary {
-            ai.effective_summary_mmproj()
-        } else {
-            ""
-        };
-        let mmproj_path = (!mmproj_name.trim().is_empty())
-            .then(|| models_dir.join(mmproj_name))
-            .filter(|p| p.exists());
-        // 复用判定:模型一致 **且** 引擎每槽 ctx 够聊天用(≥ 语义,不做参数
-        // 严格相等)。严格相等会把 None≡Some(8192)、"总结留下的更大 ctx"这些
-        // 本可安全复用的场景全变成 chat↔summary 重启震荡,还会在日报段间隙
-        // 杀掉引擎;而 ctx 不够(手动启动的默认 8K 配大 ctx 用户、总结留下的
-        // 小 ctx 多槽)时必须重启,否则"窗口不够溢出 400"原样回归。
-        let overrides = chat_engine_overrides(ai);
-        let needs_restart = supervisor
-            .loaded_main()
-            .map(|p| p != main_path)
-            .unwrap_or(false)
-            || !engine_ctx_sufficient(&supervisor.loaded_overrides(), &overrides);
-        let port = if needs_restart {
-            supervisor
-                .restart_with_overrides(Some(main_path), mmproj_path, overrides)
-                .await
-                .map_err(String::from)?
-        } else {
-            supervisor
-                .start_with_overrides(Some(main_path), mmproj_path, overrides)
-                .await
-                .map_err(String::from)?
-        };
-        // 循环期间持 inference guard,防 idle watcher 中途杀掉 server
-        let guard = supervisor.acquire_inference();
-        (
-            ChatLlm::local(port, main_name, thinking).map_err(String::from)?,
-            Some(guard),
-        )
+        None => return Err(NO_MODEL_ERROR.to_string()),
     };
 
     // 生成可被"停止"打断:cancel 分支丢弃生成 future——reqwest 连接随之断开,
@@ -508,31 +495,35 @@ pub async fn chat_delete_conversation(
 #[cfg(test)]
 mod overrides_tests {
     use super::chat_engine_overrides;
-    use crate::ai::config::AiConfig;
+    use crate::ai::config::{Advanced, AiConfig, ModelRef, Task};
 
-    /// 回归(code review 实锤):chat 两条启动路径曾传 default() 把 ctx 钉死 8K,
-    /// 用户配置的 ctx_size 对聊天从不生效。现在必须透传。
+    /// 回归:chat 两条启动路径曾传 default() 把 ctx 钉死 8K,用户配置的 ctx 对聊天从不生效。
     #[test]
     fn chat_overrides_pass_user_ctx_through() {
-        let ai = AiConfig {
-            ctx_size: Some(16384),
-            batch_size: Some(4096),
-            ..Default::default()
+        let model = ModelRef::Local {
+            file: "chat.gguf".into(),
         };
+        let mut ai = AiConfig::default();
+        ai.picks.chat = Some(model.clone());
+        ai.advanced.push(Advanced {
+            task: Task::Chat,
+            model: model.clone(),
+            reasoning: None,
+            ctx_size: Some(16384),
+            parallel_slots: Some(4),
+            batch_size: Some(4096),
+        });
         let o = chat_engine_overrides(&ai);
         assert_eq!(o.ctx_size, Some(16384), "用户 ctx_size 必须透传");
         assert_eq!(
             o.batch_size, None,
-            "聊天不继承总结用的大 batch(--ubatch-size 同步顶大,compute buffer 吃显存)"
+            "聊天不用大 batch(--ubatch-size 同步顶大,compute buffer 吃显存)"
         );
         assert_eq!(o.parallel_slots, None, "聊天单流,不开并行槽");
 
-        // 8K 下限:老配置为多槽总结调的小 ctx,不能让单槽聊天窗口反而缩水
-        let small = AiConfig {
-            ctx_size: Some(2048),
-            ..Default::default()
-        };
-        assert_eq!(chat_engine_overrides(&small).ctx_size, Some(8192));
+        // 8K 下限:设得太小,单槽聊天的窗口装不下工具结果
+        ai.advanced[0].ctx_size = Some(2048);
+        assert_eq!(chat_engine_overrides(&ai).ctx_size, Some(8192));
 
         let d = chat_engine_overrides(&AiConfig::default());
         assert_eq!(d.ctx_size, None, "未配置时维持引擎默认(8K)");

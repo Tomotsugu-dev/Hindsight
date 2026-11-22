@@ -91,18 +91,6 @@ impl Turn {
     }
 }
 
-/// 把设置 `ai.chat_thinking` 读成思考档位。认不出的值是 `Default`。
-pub fn reasoning_from_setting(s: &str) -> Reasoning {
-    match s {
-        "on" | "high" => Reasoning::High,
-        "max" => Reasoning::Max,
-        "medium" => Reasoning::Medium,
-        "low" => Reasoning::Low,
-        "off" => Reasoning::Off,
-        _ => Reasoning::Default,
-    }
-}
-
 /// 一步作答的 token 上限，见 [`Request::max_output_tokens`]。
 const MAX_ANSWER_TOKENS: u32 = 1024;
 
@@ -185,20 +173,6 @@ impl ChatLlm {
             None => StepOut::Final(r.text),
         };
         Ok((out, r.usage.into()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 分档以前的旧值 "on" 当高档；认不出的值回 Default。
-    #[test]
-    fn reasoning_from_setting_reads_old_and_unknown_values() {
-        assert_eq!(reasoning_from_setting("on"), Reasoning::High);
-        assert_eq!(reasoning_from_setting("max"), Reasoning::Max);
-        assert_eq!(reasoning_from_setting("off"), Reasoning::Off);
-        assert_eq!(reasoning_from_setting("怪值"), Reasoning::Default);
     }
 }
 

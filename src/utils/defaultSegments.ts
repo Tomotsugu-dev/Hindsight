@@ -20,15 +20,19 @@ const DEFAULT_RANGES: ReadonlyArray<readonly [number, number]> = [
  *  两边改一处就得同步另一处，否则"是否默认"会判失准。 */
 const DEFAULT_SEGMENT_LABELS: Record<string, readonly string[]> = {
   "zh-CN": ["深夜", "早上", "上午", "下午", "晚上"],
+  "zh-TW": ["凌晨", "清晨", "上午", "下午", "晚上"],
   en: ["Late Night", "Early Morning", "Morning", "Afternoon", "Evening"],
   ja: ["深夜", "早朝", "午前", "午後", "夜"],
   "pt-BR": ["Madrugada", "Manhã cedo", "Manhã", "Tarde", "Noite"],
   es: ["Madrugada", "Amanecer", "Mañana", "Tarde", "Noche"],
 };
 
-/** i18n locale → 默认标签表 key（zh*→zh-CN, ja*→ja, pt*→pt-BR, es*→es, 其余→en）。 */
+/** i18n locale → 默认标签表 key（zh-TW/HK/Hant→zh-TW, 其余 zh*→zh-CN, ja*→ja, pt*→pt-BR, es*→es, 其余→en）。 */
 function localeKey(lang: string): string {
   const l = lang.toLowerCase();
+  if (l === "tw" || l.startsWith("zh-tw") || l.startsWith("zh-hk") || l.startsWith("zh-hant")) {
+    return "zh-TW";
+  }
   if (l.startsWith("zh")) return "zh-CN";
   if (l.startsWith("ja")) return "ja";
   if (l.startsWith("pt")) return "pt-BR";

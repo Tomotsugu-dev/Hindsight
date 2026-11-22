@@ -38,8 +38,7 @@ import { Button } from "../../components/Button/Button";
 import { IconButton } from "../../components/Button/IconButton";
 import styles from "./ChatView.module.css";
 import ThinkingToggle from "./ThinkingToggle";
-import ChatProfileToggle from "./ChatProfileToggle";
-import { useAiProfiles } from "../../state/aiProfiles";
+import type { AiProfilesState } from "../../state/aiProfiles";
 import { localizeAiError } from "../../lib/aiErrors";
 import { buildThread, type Message } from "./thread";
 
@@ -127,6 +126,8 @@ interface ChatViewProps {
   onConversationTouched: () => void;
   /** 发送前的隐私门：false = 用户取消，本次不发送 */
   ensurePrivacyAck: () => Promise<boolean>;
+  /** AI 能看到哪些数据。左栏的下拉和这里的发送共用一份 */
+  profiles: AiProfilesState;
 }
 
 /**
@@ -139,10 +140,9 @@ export default function ChatView({
   onConversationCreated,
   onConversationTouched,
   ensurePrivacyAck,
+  profiles,
 }: ChatViewProps) {
   const { t, i18n } = useTranslation();
-  // AI 能看到哪些数据;不存,进页面回到默认分类。换了只影响后面的提问
-  const profiles = useAiProfiles("chat");
   // 库真源(消息树全量)+ 分支选择 → 当前路径;瞬态气泡(乐观提问/错误)单放
   const [rows, setRows] = useState<ChatStoredMessage[]>([]);
   const [transient, setTransient] = useState<TransientMsg[]>([]);
@@ -474,7 +474,6 @@ export default function ChatView({
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
-        <ChatProfileToggle state={profiles} />
         <ThinkingToggle />
         {busy ? (
           <button

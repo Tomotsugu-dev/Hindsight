@@ -45,7 +45,7 @@ impl Default for SummaryCancel {
 pub struct RunLock(pub tokio::sync::Mutex<()>);
 
 /// try_lock 失败时的稳定错误码；`[]` 前缀供前端识别本地化，正文是英文兜底。
-const AI_RUN_BUSY: &str = "[AI_RUN_BUSY] another AI generation task is already running";
+pub(crate) const AI_RUN_BUSY: &str = "[AI_RUN_BUSY] another AI generation task is already running";
 
 /// 跑某天的全部段总结。
 ///

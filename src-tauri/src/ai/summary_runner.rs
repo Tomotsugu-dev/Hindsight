@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter};
 
-use crate::ai::config::{AiConfig, Task};
+use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
@@ -137,11 +137,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     ) -> Result<()> {
         let ai = settings_repo::load(&self.pool).await?.ai;
 
-        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
-            ));
-        }
+        ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
         // 在启动引擎之前读：配置被删了就不白等模型加载
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
             .await?
@@ -157,11 +153,11 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
         let total_segments = ai.segments.len() as u32;
 
-        // 单一引擎全程复用：云端不起本地引擎（0 为占位端口，External 分支不使用）
+        // 单一引擎全程复用：云端不起本地引擎（0 为占位端口，云端分支不使用）
         let summary_overrides = EngineStartOverrides {
-            batch_size: ai.summary_batch_size_effective(),
-            parallel_slots: ai.summary_parallel_slots_effective(),
-            ctx_size: ai.summary_ctx_size_effective(),
+            batch_size: ai.batch_size_for(Task::Daily),
+            parallel_slots: ai.parallel_slots_for(Task::Daily),
+            ctx_size: ai.ctx_size_for(Task::Daily),
         };
         let port = self
             .ensure_summary_engine(source, &date_str, &ai, summary_overrides, total_segments)
@@ -249,10 +245,14 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         engine_overrides: EngineStartOverrides,
         total_segments: u32,
     ) -> Result<u16> {
-        if ai.summary_use_cloud() {
-            log::info!("日报：段总结走云端，跳过本地引擎启动");
-            return Ok(0);
-        }
+        let main_name = match ai.model_for(Task::Daily) {
+            Some(ModelRef::Cloud { .. }) => {
+                log::info!("日报：段总结走云端，跳过本地引擎启动");
+                return Ok(0);
+            }
+            Some(ModelRef::Local { file }) => file,
+            None => return Err(Error::InvalidInput(NO_MODEL_ERROR)),
+        };
         let st = self.supervisor.status().await;
         if st.state != EngineState::Running {
             let mut p = SummaryProgress::base(
@@ -261,18 +261,18 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 "engine_starting",
                 total_segments,
             );
-            // message 留空：前端按 phase 显示本地化的"加载模型中…"（dailySummary.ts）
+            // message 留空：前端按 phase 显示本地化的「加载模型中…」（dailySummary.ts）
             p.message = None;
             self.emit(p);
         }
+        let main_path = self.resolve_local_model_path(ai, &main_name)?;
         if st.state == EngineState::Running {
             if let Some(p) = st.port {
-                let (main_path, _) = self.resolve_summary_model_paths(ai)?;
-                // 模型 **和启动参数** 都匹配才复用；不匹配则重启换参
+                // 模型和启动参数都一致才复用，不一致就重启换参数
                 if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
                     && self.supervisor.loaded_overrides() == engine_overrides
                 {
-                    // 复用前"续命"：避免 idle watcher 在准备材料的几秒里杀掉 server
+                    // 准备材料要几秒，先续上空闲计时，免得空闲回收在这期间关掉引擎
                     self.supervisor.touch();
                     return Ok(p);
                 }
@@ -282,19 +282,15 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 }
             }
         }
-        let (main_path, mmproj_path) = self.resolve_summary_model_paths(ai)?;
         self.engine_start_cancellable(self.supervisor.start_with_overrides(
             Some(main_path),
-            mmproj_path,
+            None,
             engine_overrides,
         ))
         .await
     }
 
-    /// summary 模型的 GGUF 路径。文件不存在抛 `ModelFileMissing`。
-    fn resolve_summary_model_paths(&self, ai: &AiConfig) -> Result<(PathBuf, Option<PathBuf>)> {
-        let main_name = ai.effective_summary_main();
-        let mmproj_name = ai.effective_summary_mmproj();
+    fn resolve_local_model_path(&self, ai: &AiConfig, main_name: &str) -> Result<PathBuf> {
         let models_dir = models::root_dir(ai);
         let main_path: PathBuf = models_dir.join(main_name);
         if !main_path.exists() {
@@ -303,19 +299,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 main_name
             )));
         }
-        let mmproj_path = if mmproj_name.trim().is_empty() {
-            None
-        } else {
-            let p = models_dir.join(mmproj_name);
-            if !p.exists() {
-                return Err(Error::ModelFileMissing(format!(
-                    "vision 投影 {}",
-                    mmproj_name
-                )));
-            }
-            Some(p)
-        };
-        Ok((main_path, mmproj_path))
+        Ok(main_path)
     }
 
     /// 跑单段：活动时间线 + top_apps → LLM → 落 ai_summaries。
@@ -447,11 +431,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     ) -> Result<()> {
         let ai = settings_repo::load(&self.pool).await?.ai;
 
-        if !ai.summary_use_cloud() && ai.effective_summary_main().trim().is_empty() {
-            return Err(Error::InvalidInput(
-                "请先在「模型」给段总结选一个模型，或选定云端 API 跑总结",
-            ));
-        }
+        ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
 
         let seg = ai
             .segments
@@ -468,9 +448,9 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let date_str = local_date.format("%Y-%m-%d").to_string();
 
         let summary_overrides = EngineStartOverrides {
-            batch_size: ai.summary_batch_size_effective(),
-            parallel_slots: ai.summary_parallel_slots_effective(),
-            ctx_size: ai.summary_ctx_size_effective(),
+            batch_size: ai.batch_size_for(Task::Daily),
+            parallel_slots: ai.parallel_slots_for(Task::Daily),
+            ctx_size: ai.ctx_size_for(Task::Daily),
         };
         let port = self
             .ensure_summary_engine(
@@ -506,7 +486,7 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::Mutex;
 
-    use crate::ai::config::{AiSegment, SUMMARY_CLOUD_SENTINEL};
+    use crate::ai::config::{CloudConnection, DaySegment};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use crate::storage::SqliteResultExt;
 
@@ -634,8 +614,8 @@ mod tests {
         port
     }
 
-    fn seg(label: &str, start_hour: u8, end_hour: u8) -> AiSegment {
-        AiSegment {
+    fn seg(label: &str, start_hour: u8, end_hour: u8) -> DaySegment {
+        DaySegment {
             label: label.to_string(),
             start_hour,
             end_hour,
@@ -645,17 +625,25 @@ mod tests {
 
     /// 把「云端段总结 + 指定段划分 + 排除分类」写进 settings_store。
     /// runner 的 run_inner 每次都从 DB 现读 settings——这是唯一的注入口。
-    async fn seed_cloud_settings(pool: &DbPool, port: u16, segments: Vec<AiSegment>) {
+    async fn seed_cloud_settings(pool: &DbPool, port: u16, segments: Vec<DaySegment>) {
         // 两个路径设非空：避免 load() 的「空路径补默认值」dirty 回写干扰测试
         let mut s = settings_repo::Settings {
             screenshot_path: "/tmp/hindsight-test-shots".to_string(),
             ..Default::default()
         };
         s.ai.models_path = "/tmp/hindsight-test-models".to_string();
-        s.ai.external_enabled = true;
-        s.ai.summary_main = SUMMARY_CLOUD_SENTINEL.to_string();
-        s.ai.endpoint = format!("http://127.0.0.1:{port}/v1");
-        s.ai.model = "canned-model".to_string();
+        s.ai.cloud = vec![CloudConnection {
+            id: "c1".to_string(),
+            name: "test".to_string(),
+            dialect: "openai".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}/v1"),
+            model: "canned-model".to_string(),
+            api_key: String::new(),
+            context_length: None,
+        }];
+        s.ai.picks.daily = Some(ModelRef::Cloud {
+            connection: "c1".to_string(),
+        });
         s.ai.segments = segments;
         settings_repo::save(pool, &s).await.unwrap();
     }
@@ -1185,7 +1173,7 @@ mod tests {
     async fn run_without_model_or_cloud_errors_before_any_work() {
         let pool = fresh_test_pool().await;
         insert_act(&pool, "2026-05-15", 9, "VSCode", "a.rs", 300).await;
-        // 默认 settings：external_enabled=false 且 summary/active main 全空
+        // 默认 settings：没有云端连接，日报也没选模型
         let mut s = settings_repo::Settings {
             screenshot_path: "/tmp/hindsight-test-shots".to_string(),
             ..Default::default()
@@ -1406,7 +1394,9 @@ mod tests {
         };
         // models_path 指向必然不存在 GGUF 的空目录路径；选了本地模型名 → 走本地引擎分支
         s.ai.models_path = "/tmp/hindsight-test-models-nonexistent".to_string();
-        s.ai.summary_main = "ghost.gguf".to_string();
+        s.ai.picks.daily = Some(ModelRef::Local {
+            file: "ghost.gguf".to_string(),
+        });
         s.ai.segments = vec![seg("早", 9, 12)];
         settings_repo::save(&pool, &s).await.unwrap();
 

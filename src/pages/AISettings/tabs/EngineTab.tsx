@@ -25,7 +25,10 @@ import {
   ENGINE_DOWNLOAD_EVENT,
   type EngineDownloadProgress,
   type EngineStatus,
+  type ModelRef,
+  type TaskConnectionTest,
 } from "../../../api/hindsight";
+import { findAdvanced, patchAdvanced, type AiTask } from "../../../state/reportModel";
 import { useAiSettings } from "../shared/useAiSettings";
 import { DownloadSourcesSection } from "../shared/DownloadSourcesSection";
 import {
@@ -46,13 +49,14 @@ import {
   recommendEngineParams,
 } from "../shared/engineParams";
 import { VramEstimateLine } from "../shared/VramEstimate";
+import { localizeAiError } from "../../../lib/aiErrors";
 import { logError, logWarn } from "../../../lib/logger";
 import styles from "../AISettings.module.css";
 
 type TestResult =
   | { kind: "idle" }
   | { kind: "running" }
-  | { kind: "ok"; models: string[] }
+  | { kind: "done"; items: TaskConnectionTest[] }
   | { kind: "fail"; message: string };
 
 export default function EngineTab() {
@@ -71,48 +75,74 @@ export default function EngineTab() {
       .catch((e) => logError("engine.getStatus.hwSnapshot", e));
   }, []);
 
-  // 段总结推荐参数（ctx 优先）。模型名走 summary 专用字段，fallback 到旧 activeMain。
-  // 否则用户只设了 step-specific 模型时 activeMain 为空，recommendEngineParams 找不到
-  // 模型 spec 返回 null，「应用推荐」按钮不渲染。
-  const recommendSummary = useMemo(() => {
+  // 找一个选中的本地模型来显示/调整高级引擎参数（优先 daily，再看 chat / weekly）
+  const localTarget = useMemo<{
+    task: AiTask;
+    model: Extract<ModelRef, { kind: "local" }>;
+  } | null>(() => {
     if (!ai) return null;
+    if (ai.picks.daily?.kind === "local" && ai.picks.daily.file.trim()) {
+      return { task: "daily", model: { kind: "local", file: ai.picks.daily.file.trim() } };
+    }
+    if (ai.picks.chat?.kind === "local" && ai.picks.chat.file.trim()) {
+      return { task: "chat", model: { kind: "local", file: ai.picks.chat.file.trim() } };
+    }
+    if (ai.picks.weekly.kind === "local" && ai.picks.weekly.file.trim()) {
+      return { task: "weekly", model: { kind: "local", file: ai.picks.weekly.file.trim() } };
+    }
+    return null;
+  }, [ai]);
+
+  const adv = ai && localTarget ? findAdvanced(ai, localTarget.task, localTarget.model) : undefined;
+  const summaryBatch = adv?.batchSize ?? null;
+  const summarySlots = adv?.parallelSlots ?? null;
+  const summaryCtx = adv?.ctxSize ?? null;
+
+  const recommendSummary = useMemo(() => {
+    if (!localTarget) return null;
     return recommendEngineParams(
       hwSnapshot.systemVram,
-      ai.summaryMain || ai.activeMain,
+      localTarget.model.file,
       hwSnapshot.platformId,
     );
-  }, [ai, hwSnapshot]);
+  }, [localTarget, hwSnapshot]);
 
-  // 「已是推荐值」判断——picker 显示的是 effective 值
-  // （new 字段 ?? old 字段），所以比较时也用同一逻辑
+  // 聊天起引擎只用上下文；批大小和并发路数后端保存时会清掉，这里也不显示
+  const ctxOnly = localTarget?.task === "chat";
+
   const summaryApplied =
     recommendSummary != null &&
-    ai != null &&
     isRecommendedApplied(recommendSummary, {
-      batchSize: ai.summaryBatchSize ?? ai.batchSize,
-      parallelSlots: ai.summaryParallelSlots ?? ai.parallelSlots,
-      ctxSize: ai.summaryCtxSize ?? ai.ctxSize,
+      batchSize: ctxOnly ? recommendSummary.batchSize : summaryBatch,
+      parallelSlots: ctxOnly ? recommendSummary.parallelSlots : summarySlots,
+      ctxSize: summaryCtx,
     });
 
-  // 推荐里的 null 表示"用 llama.cpp 默认值"（batch=512 / ctx=8192）。
-  // 但 effective getter 是 `summaryBatchSize ?? batchSize`——summaryBatchSize=null
-  // 会 fallback 到旧的全局 ai.batchSize（用户之前手设的值）。结果就是按了推荐没生效。
-  // 这里把 null 转显式默认值，让 effective 直接读 step-specific 字段，不再 fallback。
-  const handleApplySummary = () => {
-    if (!recommendSummary) return;
+  const updateEngineParam = (patch: {
+    batchSize?: number | null;
+    parallelSlots?: number | null;
+    ctxSize?: number | null;
+  }) => {
+    if (!ai || !localTarget) return;
     updateAi({
-      summaryBatchSize: recommendSummary.batchSize ?? 512,
-      summaryParallelSlots: recommendSummary.parallelSlots,
-      summaryCtxSize: recommendSummary.ctxSize ?? 8192,
+      advanced: patchAdvanced(ai, localTarget.task, localTarget.model, patch),
     });
   };
 
-  if (!ai) return null;
+  const handleApplySummary = () => {
+    if (!recommendSummary) return;
+    updateEngineParam(
+      ctxOnly
+        ? { ctxSize: recommendSummary.ctxSize }
+        : {
+            batchSize: recommendSummary.batchSize,
+            parallelSlots: recommendSummary.parallelSlots,
+            ctxSize: recommendSummary.ctxSize,
+          },
+    );
+  };
 
-  // picker 显示用 effective 值（summary 未填的字段降级到旧全局字段）
-  const summaryBatch = ai.summaryBatchSize ?? ai.batchSize;
-  const summarySlots = ai.summaryParallelSlots ?? ai.parallelSlots;
-  const summaryCtx = ai.summaryCtxSize ?? ai.ctxSize;
+  if (!ai) return null;
 
   return (
     <div className={styles.content}>
@@ -126,40 +156,46 @@ export default function EngineTab() {
         <OcrRuntimeSection />
       </Section>
 
-      {/* 段总结引擎参数（ctx 优先）。新字段 null 时降级到旧全局 batchSize/
-          parallelSlots/ctxSize（兼容老 settings JSON）。 */}
-      <Section title={t("aiSettings.summaryParams.sectionTitle")} icon={Pilcrow}>
-        <Row label={t("aiSettings.engineParams.batch")}>
-          <SimplePicker<EngineBatchKey>
-            value={engineBatchToOption(summaryBatch)}
-            options={ENGINE_BATCH_OPTIONS}
-            onChange={(next) => updateAi({ summaryBatchSize: engineOptionToBatch(next) ?? 512 })}
+      {localTarget && (
+        <Section title={t("aiSettings.summaryParams.sectionTitle")} icon={Pilcrow}>
+          {!ctxOnly && (
+            <>
+              <Row label={t("aiSettings.engineParams.batch")}>
+                <SimplePicker<EngineBatchKey>
+                  value={engineBatchToOption(summaryBatch)}
+                  options={ENGINE_BATCH_OPTIONS}
+                  onChange={(next) => updateEngineParam({ batchSize: engineOptionToBatch(next) })}
+                />
+              </Row>
+              <Row label={t("aiSettings.engineParams.slots")}>
+                <SimplePicker<EngineSlotsKey>
+                  value={engineSlotsToOption(summarySlots)}
+                  options={ENGINE_SLOTS_OPTIONS}
+                  onChange={(next) =>
+                    updateEngineParam({ parallelSlots: engineOptionToSlots(next) })
+                  }
+                />
+              </Row>
+            </>
+          )}
+          <Row label={t("aiSettings.engineParams.ctx")}>
+            <SimplePicker<EngineCtxKey>
+              value={engineCtxToOption(summaryCtx)}
+              options={ENGINE_CTX_OPTIONS}
+              onChange={(next) => updateEngineParam({ ctxSize: engineOptionToCtx(next) })}
+            />
+          </Row>
+          <VramEstimateLine
+            modelName={localTarget.model.file}
+            parallelSlots={summarySlots ?? 1}
+            ctxSize={summaryCtx ?? 8192}
+            systemVram={hwSnapshot.systemVram}
+            recommended={recommendSummary}
+            recommendedApplied={summaryApplied}
+            onApplyRecommended={handleApplySummary}
           />
-        </Row>
-        <Row label={t("aiSettings.engineParams.slots")}>
-          <SimplePicker<EngineSlotsKey>
-            value={engineSlotsToOption(summarySlots)}
-            options={ENGINE_SLOTS_OPTIONS}
-            onChange={(next) => updateAi({ summaryParallelSlots: engineOptionToSlots(next) ?? 1 })}
-          />
-        </Row>
-        <Row label={t("aiSettings.engineParams.ctx")}>
-          <SimplePicker<EngineCtxKey>
-            value={engineCtxToOption(summaryCtx)}
-            options={ENGINE_CTX_OPTIONS}
-            onChange={(next) => updateAi({ summaryCtxSize: engineOptionToCtx(next) ?? 8192 })}
-          />
-        </Row>
-        <VramEstimateLine
-          modelName={ai.summaryMain || ai.activeMain}
-          parallelSlots={summarySlots ?? 1}
-          ctxSize={summaryCtx ?? 8192}
-          systemVram={hwSnapshot.systemVram}
-          recommended={recommendSummary}
-          recommendedApplied={summaryApplied}
-          onApplyRecommended={handleApplySummary}
-        />
-      </Section>
+        </Section>
+      )}
     </div>
   );
 }
@@ -262,33 +298,19 @@ function EngineSection() {
     }
   };
 
-  /** 「测试连接」合并按钮：start_engine → test_ai_endpoint → stop_engine。
-   *
-   *  无论之前引擎是否在跑，测完都 stop 释放 VRAM——纯诊断流程，不留下资源占用。
-   *  实际跑总结时 summary.rs 会 lazy spawn，不依赖这里启动的实例。
-   *
-   *  start 是异步等 90s health；中间过程 testResult.kind="running" 给 UI 反馈。 */
+  /** 测试日报、周报、聊天三条当前配置的模型连接（后端测完自动停本地引擎释放显存）。 */
   const onTestLocal = async () => {
     setEngineBusy(true);
     setTestResult({ kind: "running" });
     try {
-      const port = await api.startEngine();
-      await refresh();
-      const r = await api.testAiEndpoint(`http://127.0.0.1:${port}/v1`);
-      if (r.ok) setTestResult({ kind: "ok", models: r.models });
-      else setTestResult({ kind: "fail", message: r.message });
+      const items = await api.testAiConnections();
+      setTestResult({ kind: "done", items });
     } catch (e) {
       setTestResult({
         kind: "fail",
         message: e instanceof Error ? e.message : String(e),
       });
     } finally {
-      // 测完无脑 stop，释放 VRAM；stop 失败仅 log 不影响 testResult
-      try {
-        await api.stopEngine();
-      } catch (e) {
-        logWarn("engine.testStopFailed", e);
-      }
       await refresh();
       setEngineBusy(false);
     }
@@ -413,12 +435,8 @@ function EngineSection() {
             icon={Cable}
             onClick={() => void onTestLocal()}
             loading={engineBusy}
-            disabled={busy || !installed}
-            title={
-              installed
-                ? t("aiSettings.engine.actions.testTooltipReady")
-                : t("aiSettings.engine.actions.testTooltipNotInstalled")
-            }
+            disabled={busy}
+            title={t("aiSettings.engine.actions.testTooltipReady")}
           >
             {t("aiSettings.engine.actions.testConnection")}
           </Button>
@@ -472,7 +490,9 @@ function EngineSection() {
           </Button>
         </div>
 
-        {installed ? <EngineRuntimeRow status={status} testResult={testResult} /> : null}
+        {installed || testResult.kind !== "idle" ? (
+          <EngineRuntimeRow status={status} testResult={testResult} />
+        ) : null}
       </div>
       <ConfirmDialog
         open={confirmingDelete}
@@ -744,15 +764,34 @@ function EngineRuntimeRow({
   return (
     <div className={styles.engineRuntime}>
       <div className={styles.engineRuntimeRow}>
-        {testResult.kind === "ok" ? (
-          <span className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusOk}`}>
-            <Check size={14} strokeWidth={2.2} />
-            {testResult.models.length === 0
-              ? t("aiSettings.engine.runtime.connectedNoModels")
-              : t("aiSettings.engine.runtime.connectedWithModels", {
-                  count: testResult.models.length,
-                })}
-          </span>
+        {testResult.kind === "done" ? (
+          <div className={styles.externalTestSteps}>
+            {testResult.items.map((item) => {
+              const taskLabel = t(
+                item.task === "daily"
+                  ? "aiSummary.tabs.daily"
+                  : item.task === "weekly"
+                    ? "aiSummary.tabs.week"
+                    : "nav.items.chat",
+              );
+              const detail = item.model ? `${taskLabel}（${item.model}）` : taskLabel;
+              return (
+                <span
+                  key={item.task}
+                  className={`${styles.engineRuntimeStatus} ${
+                    item.ok ? styles.engineRuntimeStatusOk : styles.engineRuntimeStatusFail
+                  }`}
+                >
+                  {item.ok ? (
+                    <Check size={14} strokeWidth={2.2} />
+                  ) : (
+                    <XCircle size={14} strokeWidth={2.2} />
+                  )}
+                  {item.ok ? detail : `${detail}：${localizeAiError(item.message)}`}
+                </span>
+              );
+            })}
+          </div>
         ) : null}
         {testResult.kind === "fail" ? (
           <span className={`${styles.engineRuntimeStatus} ${styles.engineRuntimeStatusFail}`}>
