@@ -1,4 +1,4 @@
-//! `llama-server` 启动命令行参数拼装。
+//! Command line arguments for starting `llama-server`.
 
 use std::path::Path;
 
@@ -6,25 +6,30 @@ use tokio::process::Command;
 
 use crate::ai::platform;
 
-/// `llama-server` 默认单槽上下文窗口大小（8K tokens）。
-/// 兼顾日报/对话较长输入与本机显存/内存占用。
+/// Default context size per slot, in tokens.
+///
+/// Large enough for long daily report and chat input, without using too much memory.
 pub const DEFAULT_CTX_SIZE: u32 = 8192;
 
-/// 启动 `llama-server` 时的可选性能与上下文覆盖参数。
+/// Optional settings for starting `llama-server`. `None` keeps the default.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EngineStartOverrides {
-    /// 同时设置 `--batch-size` 与 `--ubatch-size`；`None` 时沿用 `llama.cpp` 默认值。
-    /// 调大可加快 prompt 评估速度，但会提高显存峰值。
+    /// Sets both `--batch-size` and `--ubatch-size`. `None` keeps the llama.cpp default.
+    ///
+    /// A larger value reads the prompt faster, but uses more video memory at peak.
     pub batch_size: Option<u32>,
-    /// `-np` 并行槽位数；`None` 时固定为 1（单槽），需配合 `summary_runner` 并发请求生效。
+    /// `-np`: how many requests the engine serves at the same time. `None` means 1.
+    ///
+    /// More slots help only when requests arrive at the same time.
     pub parallel_slots: Option<u32>,
-    /// **单个槽位**的上下文上限；`None` 时采用 [`DEFAULT_CTX_SIZE`]（8K）。
-    /// 传给 `llama-server` 的 `--ctx-size` 为 `ctx_size × parallel_slots`，
-    /// 以确保每个槽位都能拿到完整预算（KV cache 启动时按总量一次性分配）。
+    /// Context limit **per slot**. `None` means [`DEFAULT_CTX_SIZE`].
+    ///
+    /// `llama-server` gets `--ctx-size` = `ctx_size × parallel_slots`, so every slot gets the
+    /// full amount. The KV cache for all slots is allocated once, at start.
     pub ctx_size: Option<u32>,
 }
 
-/// 组装在本地 `port` 上加载 `model` 的 `llama-server` 启动命令。
+/// Builds the command that starts `llama-server` with `model` on the local `port`.
 pub(super) fn build_command(
     binary_path: &Path,
     port: u16,
@@ -38,29 +43,33 @@ pub(super) fn build_command(
     if platform::has_gpu_backend(platform::detect()) {
         cmd.arg("-ngl").arg("all");
     }
-    // 同时设置 logical / physical batch 保持一致，避免默认 batch=2048、ubatch=512 拉大显存波动。
+    // Use one value for both. The defaults (2048 and 512) differ, which makes memory use
+    // harder to predict.
     if let Some(batch_size) = overrides.batch_size {
-        let batch_size = batch_size.max(32); // llama-server 不接受过小的 batch，32 为安全下限
+        let batch_size = batch_size.max(32); // llama-server rejects very small batches
         cmd.arg("--batch-size").arg(batch_size.to_string());
         cmd.arg("--ubatch-size").arg(batch_size.to_string());
     }
-    // llama-server 会将 `--ctx-size` 均分给 `-np` 个槽位，因此必须传入 `单槽预算 × 槽位数`，
-    // 否则多槽模式下每个槽位的有效上下文会被缩小导致长 prompt 报错 400。
+    // llama-server splits `--ctx-size` evenly across the `-np` slots, so pass
+    // "per-slot size × slots". Otherwise each slot gets less, and long prompts fail with 400.
     let parallel_slots = overrides.parallel_slots.unwrap_or(1).max(1);
     let per_slot_ctx = overrides.ctx_size.unwrap_or(DEFAULT_CTX_SIZE);
     cmd.arg("--ctx-size")
         .arg(per_slot_ctx.saturating_mul(parallel_slots).to_string());
-    // 即使为单槽也显式传入 `-np 1`，防止 llama-server 自动回退到 4 槽浪费 KV cache。
+    // Always pass -np, even 1. Without it, llama-server picks the slot count itself and
+    // uses more KV cache.
     cmd.arg("-np").arg(parallel_slots.to_string());
-    // 关闭新版默认开启的 prompt cache（上限 8 GB），日报各段输入差异大、命中率极低。
+    // Turn off the prompt cache (up to 8 GB by default). Report segments differ a lot, so it
+    // almost never hits.
     cmd.arg("--cache-ram").arg("0");
-    // 关闭 context checkpoints，避免多槽长会话累积 GB 级内存并在生成途中导致服务崩溃。
+    // Turn off context checkpoints. With several slots and long sessions they can grow to
+    // several GB and crash the server in the middle of a reply.
     cmd.arg("--ctx-checkpoints").arg("0");
-    // 接管子进程 stdout/stderr 供失败诊断回放，避免污染主进程终端。
+    // Capture the output to explain a failed start, and keep it out of the app's terminal.
     cmd.stderr(std::process::Stdio::piped());
     cmd.stdout(std::process::Stdio::piped());
 
-    // Windows 下隐藏控制台黑框（tokio::process::Command 自带 creation_flags）。
+    // Do not open a console window on Windows. tokio's `Command` has `creation_flags` built in.
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
 
