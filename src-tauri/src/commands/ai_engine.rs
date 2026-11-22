@@ -242,6 +242,7 @@ pub async fn set_task_model(
     }
     cfg.ai = sanitize_ai(cfg.ai, &old_ai);
     settings::save(&pool, &cfg).await.map_err(String::from)?;
+    // TODO: 聊天或日报正拿着引擎时也会关掉它，正在回答的会断。可以改用 stop_if_unused
     let _ = supervisor.stop().await;
     Ok(())
 }
