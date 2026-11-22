@@ -175,8 +175,8 @@ pub enum Error {
     #[error("embedding runtime missing")]
     EmbeddingRuntimeMissing,
 
-    /// llama-server 已经在 Starting 状态，不允许并发启动
-    #[error("engine already starting")]
+    /// 本机引擎被别的任务占着，这次要的模型或参数又不一样。
+    #[error("[AI_RUN_BUSY] the local engine is in use by another task")]
     EngineBusy,
 
     /// LLM HTTP 响应解析失败 / 状态码非 2xx / 内容为空。caller 一般标 status='error'

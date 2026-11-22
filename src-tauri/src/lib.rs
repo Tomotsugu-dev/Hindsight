@@ -21,7 +21,7 @@ mod themes;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use ai::server::EngineSupervisor;
+use ai::engine::EngineSupervisor;
 use repo::{activities, settings};
 use storage::DbPool;
 use tauri::Manager;

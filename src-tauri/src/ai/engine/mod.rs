@@ -13,16 +13,16 @@
 //!
 //! ## 锁顺序约定
 //!
-//! 本模块持有两把锁：
+//! 本模块持有三把锁：
+//! - `guards.turn`：`tokio::sync::Mutex<()>` —— 来要引擎的排队
 //! - `inner`：`tokio::sync::Mutex<Inner>` —— 守 state + child handle
-//! - `inflight_state`：`std::sync::Mutex<InflightState>` —— 守 in-flight 计数 + last_used_at
+//! - `guards.holders`：`std::sync::Mutex<InflightState>` —— 守 guard 个数 + last_used_at
 //!
-//! **锁顺序：`inner` → `inflight_state`，禁止反向**。`maybe_idle_stop` 在持
-//! `inner` 时短暂取 `inflight_state`，符合此顺序；任何 acquire / release inflight
-//! 的调用点都必须在 `inner` 锁外完成（或确保不会回头取 `inner`）。
+//! **锁顺序：`turn` → `inner` → `holders`，禁止反向**。`maybe_idle_stop` 在持
+//! `inner` 时短暂取 `holders`，符合此顺序；发放、归还 guard 都在 `inner` 锁外完成。
 //!
-//! `inflight_state` 用 `std::sync::Mutex` 而非 `tokio::sync::Mutex` 是为了让
-//! [`InferenceGuard::drop`] 能同步访问（drop 不能 await）；临界区只是 usize +
+//! `holders` 用 `std::sync::Mutex` 而非 `tokio::sync::Mutex` 是为了让
+//! [`EngineGuard`] 的 drop 能同步访问（drop 不能 await）；临界区只是 usize +
 //! Instant 赋值，几纳秒级别，不会因同步锁阻塞 runtime。
 
 use std::collections::VecDeque;
@@ -46,6 +46,9 @@ const IDLE_TICK: Duration = Duration::from_secs(10);
 use crate::ai::binary;
 use crate::ai::platform::{self, Platform};
 use crate::error::{Error, Result};
+
+mod guard;
+pub use guard::EngineGuard;
 
 /// 启动后等 `/health` 返回 200 的最大时长。
 /// vision LLM 加载耗时随模型大小，9B 量级模型 CPU 上加载 30-60s 是常态。
@@ -110,10 +113,8 @@ pub struct EngineSupervisor {
     /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout。
     /// Arc 让 spawn 出来的 reader task 能持有它而不锁 inner。
     logs: Arc<Mutex<VecDeque<String>>>,
-    /// 推理请求计数 + 最后一次使用时间——给 idle watcher 自动 stop 用。
-    /// 用 std sync mutex 而不是 tokio mutex：临界区只是 usize+Instant 赋值，几纳秒，
-    /// 同时让 [`InferenceGuard::drop`] 能同步访问（drop 不能 await tokio mutex）。
-    inflight_state: std::sync::Mutex<InflightState>,
+    /// 发出去的 guard。空闲回收看它。
+    guards: guard::Guards,
     /// 当前（或最近一次启动时）加载的 main GGUF 路径。调用方在"复用 Running 引擎"
     /// 之前用 [`Self::loaded_main`] 校验装的是不是自己需要的模型——否则周报可能
     /// 被 2 分钟前日报留下的 vision 模型+小上下文生成（截断/低质/报错）。
@@ -137,9 +138,9 @@ struct Inner {
     generation: u64,
 }
 
-/// in-flight 推理请求计数器 + 最后一次活跃时间戳。
+/// 发出去的 guard 个数 + 最后一次活跃时间戳。
 struct InflightState {
-    /// 当前持有 [`InferenceGuard`] 的请求数；> 0 时 watcher 不 stop 引擎。
+    /// 还没归还的 [`EngineGuard`] 个数；> 0 时 watcher 不 stop 引擎。
     count: usize,
     /// 最后一次 acquire / release 的时刻。watcher 用 `elapsed()` 判断是否 idle 超阈。
     last_used_at: Instant,
@@ -150,30 +151,6 @@ impl Default for InflightState {
         Self {
             count: 0,
             last_used_at: Instant::now(),
-        }
-    }
-}
-
-/// 一次推理请求的 RAII 守护：在 `drop()` 时把 in-flight 计数减 1，并把
-/// `last_used_at` 推到当前时刻。配合 idle watcher 实现"跑完任务 N 秒无新请求
-/// → 自动 stop 引擎释放显存"。
-///
-/// 用法（必须在向本机引擎发推理请求**之前** acquire，跨 await 持有到请求返回）：
-/// ```ignore
-/// let _g = supervisor.acquire_inference();  // in-flight++
-/// step2.chat(...).await?;                   // 真正发请求
-/// // _g 在此处 drop → in-flight--
-/// ```
-pub struct InferenceGuard {
-    sup: Arc<EngineSupervisor>,
-}
-
-impl Drop for InferenceGuard {
-    fn drop(&mut self) {
-        // std::sync::Mutex 的 lock 在毒化时也能恢复；poison 时仅记录不 panic
-        if let Ok(mut s) = self.sup.inflight_state.lock() {
-            s.count = s.count.saturating_sub(1);
-            s.last_used_at = Instant::now();
         }
     }
 }
@@ -190,18 +167,9 @@ impl EngineSupervisor {
         Self {
             inner: Mutex::new(Inner::default()),
             logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
-            inflight_state: std::sync::Mutex::new(InflightState::default()),
+            guards: guard::Guards::default(),
             loaded_main: std::sync::Mutex::new(None),
             loaded_overrides: std::sync::Mutex::new(EngineStartOverrides::default()),
-        }
-    }
-
-    /// 手动把 idle 计时推到现在。复用已在 Running 的引擎（不经 acquire_inference）
-    /// 之前必须调一次：否则"拿到端口 → 准备图片/拼 prompt 的几秒"落在 idle 阈值边缘
-    /// 时，watcher 会把 server 杀掉，第一个请求打到已死端口。
-    pub fn touch(&self) {
-        if let Ok(mut s) = self.inflight_state.lock() {
-            s.last_used_at = Instant::now();
         }
     }
 
@@ -217,21 +185,6 @@ impl EngineSupervisor {
             .lock()
             .map(|g| g.clone())
             .unwrap_or_default()
-    }
-
-    /// 注册一次推理请求：in-flight +1 + last_used_at 推到现在。
-    /// 调用方应把返回的 guard 持有到请求结束（drop 时自动 -1）。
-    ///
-    /// `Arc<Self>` 的方法签名让 guard 持有 supervisor 的强引用，
-    /// 保证 guard 还在期间 supervisor 不会被释放。
-    pub fn acquire_inference(self: &Arc<Self>) -> InferenceGuard {
-        if let Ok(mut s) = self.inflight_state.lock() {
-            s.count += 1;
-            s.last_used_at = Instant::now();
-        }
-        InferenceGuard {
-            sup: Arc::clone(self),
-        }
     }
 
     /// 启动 idle watcher：每 [`IDLE_TICK`] 检查一次，引擎 Running + in-flight==0
@@ -256,7 +209,7 @@ impl EngineSupervisor {
     /// 返回距离下次 idle 触发还有多久（用户可观测）。
     /// 引擎不在 Running / 还有 in-flight 时返回 None。
     pub fn idle_eta(&self) -> Option<Duration> {
-        let s = self.inflight_state.lock().ok()?;
+        let s = self.guards.holders.lock().ok()?;
         if s.count > 0 {
             return None;
         }
@@ -280,7 +233,7 @@ impl EngineSupervisor {
             // inflight 锁的临界区极短（usize 比较 + Instant.elapsed），不会因为
             // 持着 inner 锁阻塞而拉长——nested lock 顺序：inner → inflight，
             // 全程不反向，无死锁风险
-            let s = match self.inflight_state.lock() {
+            let s = match self.guards.holders.lock() {
                 Ok(g) => g,
                 Err(_) => return false,
             };
@@ -314,19 +267,10 @@ impl EngineSupervisor {
         s
     }
 
-    /// 引擎正在启动，或者有请求正在用它时返回 `true`。
-    pub async fn in_use(&self) -> bool {
-        match self.inner.lock().await.state.state {
-            EngineState::Starting => true,
-            EngineState::Running => self.idle_eta().is_none(),
-            EngineState::Stopped | EngineState::Error => false,
-        }
-    }
-
     /// Starts llama-server with explicit engine parameter overrides.
     ///
     /// Returns the running port without respawning if already `Running`, or errors if `Starting`.
-    pub async fn start_with_overrides(
+    async fn start_with_overrides(
         &self,
         model_path: Option<PathBuf>,
         mmproj_path: Option<PathBuf>,
@@ -463,10 +407,9 @@ impl EngineSupervisor {
                 error: None,
                 ..Default::default()
             };
-            // 新一轮启动：把 inflight 计数清零 + last_used_at 推到现在。
-            // 不重置的话上一轮残留的旧 last_used 会让新启动立刻被 watcher 当成 idle 干掉。
-            if let Ok(mut s) = self.inflight_state.lock() {
-                *s = InflightState::default();
+            // 空闲计时从启动完成算起。guard 的个数不动：来要引擎的那一方已经拿着一个
+            if let Ok(mut s) = self.guards.holders.lock() {
+                s.last_used_at = Instant::now();
             }
             Ok(port)
         } else {
@@ -486,20 +429,6 @@ impl EngineSupervisor {
             inner.child = None;
             Err(Error::EngineStart(err_msg))
         }
-    }
-
-    /// 停止当前引擎，再用新 overrides 启动一个——给"两阶段不同参数"的 runner 用。
-    /// 内部串行：`stop()` → `start_with_overrides()`。
-    /// 失败语义：stop 失败立刻返回错误（不再启动）；start 失败时引擎已是 Stopped 状态。
-    pub async fn restart_with_overrides(
-        &self,
-        model_path: Option<PathBuf>,
-        mmproj_path: Option<PathBuf>,
-        overrides: EngineStartOverrides,
-    ) -> Result<u16> {
-        self.stop().await?;
-        self.start_with_overrides(model_path, mmproj_path, overrides)
-            .await
     }
 
     /// 停止子进程。kill + wait 收尸，状态切回 Stopped。
@@ -753,28 +682,4 @@ where
             }
         }
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 正在启动、或者有请求正在用，都算在用；跑着但空闲、或者没在跑，都不算。
-    /// 测试连接收尾停引擎前靠它判断，算错了会打断正在回答的聊天。
-    #[tokio::test]
-    async fn in_use_while_starting_or_serving_a_request() {
-        let sup = Arc::new(EngineSupervisor::new());
-        assert!(!sup.in_use().await, "没在跑");
-
-        sup.inner.lock().await.state.state = EngineState::Starting;
-        assert!(sup.in_use().await, "正在启动");
-
-        sup.inner.lock().await.state.state = EngineState::Running;
-        assert!(!sup.in_use().await, "跑着但空闲");
-
-        let guard = sup.acquire_inference();
-        assert!(sup.in_use().await, "有请求在用");
-        drop(guard);
-        assert!(!sup.in_use().await, "请求结束");
-    }
 }

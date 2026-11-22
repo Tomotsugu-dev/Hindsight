@@ -7,8 +7,8 @@
 //! - 只补"从未生成过"的目标:跑过但失败的不自动重试——失败通常是配置问题
 //!   (坏 key / 模型缺失),半小时一次的盲目重试只会烧钱刷日志,留给用户手动;
 //! - 每个目标在本次进程运行期至多尝试一次(attempted 集合);
-//! - 与手动运行共用 [`RunLock`]:抢不到锁(用户正在手动跑)本轮让路,
-//!   不标记已尝试,下轮再来;
+//! - 与手动运行共用 [`RunLock`]:抢不到锁(用户正在手动跑)、或本机引擎被聊天占着时
+//!   本轮让路,不标记已尝试,下轮再来;
 //! - 月报:生成器尚未实现(MonthlyTab 为占位页),落地后在此接入。
 
 use std::collections::HashSet;
@@ -21,7 +21,7 @@ use tauri::{AppHandle, Manager};
 use crate::ai::policy::ProfileChoice;
 use crate::ai::summary::{precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE};
 use crate::commands::ai_summary::{RunLock, SummaryCancel};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::{ai_summaries, settings};
 use crate::storage::{DbPool, SqliteResultExt};
@@ -121,7 +121,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
             RunOutcome::Ran => {
                 attempted.insert(d_key);
             }
-            RunOutcome::Busy => log::debug!("自动总结:手动任务进行中,日报让路"),
+            RunOutcome::Busy => log::debug!("自动总结:别的 AI 任务进行中,日报让路"),
         }
     }
 
@@ -152,7 +152,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
                     attempted.insert(key);
                 }
                 RunOutcome::Busy => {
-                    log::debug!("自动总结:手动任务进行中,日报让路");
+                    log::debug!("自动总结:别的 AI 任务进行中,日报让路");
                     break;
                 }
             }
@@ -173,7 +173,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
                 RunOutcome::Ran => {
                     attempted.insert(w_key);
                 }
-                RunOutcome::Busy => log::debug!("自动总结:手动任务进行中,周报让路"),
+                RunOutcome::Busy => log::debug!("自动总结:别的 AI 任务进行中,周报让路"),
             }
         }
     }
@@ -183,8 +183,21 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
 enum RunOutcome {
     /// 实际启动过(无论成败——失败也不再自动重试)
     Ran,
-    /// RunLock 被手动任务占用,本轮未启动
+    /// RunLock 被手动任务占用，或本机引擎被别的任务占着，本轮没跑成
     Busy,
+}
+
+/// 跑完的结果算不算「这轮跑过」。`what` 是写进日志的「某天的日报」这类说明。
+fn outcome_of(result: Result<()>, what: &str) -> RunOutcome {
+    match result {
+        Ok(()) => RunOutcome::Ran,
+        // 本机引擎被别的任务占着：这轮让路，下轮再试
+        Err(Error::EngineBusy) => RunOutcome::Busy,
+        Err(e) => {
+            log::warn!("自动总结:{what}失败(本次运行期不再自动重试): {e}");
+            RunOutcome::Ran
+        }
+    }
 }
 
 async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) -> RunOutcome {
@@ -209,19 +222,16 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
     let runner = DaySummaryRunner::new(
         app.state::<DbPool>().inner().clone(),
         Arc::clone(
-            app.state::<Arc<crate::ai::server::EngineSupervisor>>()
+            app.state::<Arc<crate::ai::engine::EngineSupervisor>>()
                 .inner(),
         ),
         app.clone(),
         Arc::clone(&cancel.0),
     );
-    if let Err(e) = runner
+    let result = runner
         .run(date, DeviceFilter::All, force_refresh, &ProfileChoice::Auto)
-        .await
-    {
-        log::warn!("自动总结:{date} 日报失败(本次运行期不再自动重试): {e}");
-    }
-    RunOutcome::Ran
+        .await;
+    outcome_of(result, &format!("{date} 日报"))
 }
 
 async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool) -> RunOutcome {
@@ -245,19 +255,16 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
     let runner = WeekSummaryRunner::new(
         app.state::<DbPool>().inner().clone(),
         Arc::clone(
-            app.state::<Arc<crate::ai::server::EngineSupervisor>>()
+            app.state::<Arc<crate::ai::engine::EngineSupervisor>>()
                 .inner(),
         ),
         app.clone(),
         Arc::clone(&cancel.0),
     );
-    if let Err(e) = runner
+    let result = runner
         .run(monday, false, allow_missing, &ProfileChoice::Auto)
-        .await
-    {
-        log::warn!("自动总结:{monday} 周报失败(本次运行期不再自动重试): {e}");
-    }
-    RunOutcome::Ran
+        .await;
+    outcome_of(result, &format!("{monday} 周报"))
 }
 
 /// 该日是否**从未**生成过日报(任何状态的行都算"生成过",失败行留给用户处置)。
@@ -341,6 +348,20 @@ fn align_to_monday(d: NaiveDate) -> NaiveDate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 本机引擎被别的任务占着时不算跑过，下轮再试；别的失败算跑过，不再重试。
+    #[test]
+    fn a_busy_engine_does_not_count_as_a_run() {
+        assert!(matches!(
+            outcome_of(Err(Error::EngineBusy), "日报"),
+            RunOutcome::Busy
+        ));
+        assert!(matches!(
+            outcome_of(Err(Error::InvalidInput("坏配置")), "日报"),
+            RunOutcome::Ran
+        ));
+        assert!(matches!(outcome_of(Ok(()), "日报"), RunOutcome::Ran));
+    }
 
     /// any_point_due:任一到点即放行;坏格式跳过;空表不放行(尽快模式走别的分支)。
     #[test]

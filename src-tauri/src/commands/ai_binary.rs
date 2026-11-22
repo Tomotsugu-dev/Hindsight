@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::ai::binary::{self, DownloadPhase};
 use crate::ai::embedding_runtime;
-use crate::ai::server::EngineSupervisor;
+use crate::ai::engine::EngineSupervisor;
 
 /// 进度事件 payload。前端 listen 这条事件名拿到。
 #[derive(Debug, Clone, Serialize)]

@@ -62,6 +62,8 @@ impl Step2Chat {
         Ok(self.model.generate(req).await?.text)
     }
 
+    // 只有测试在用：检查选到的是本机还是云端
+    #[allow(dead_code)]
     pub fn is_local(&self) -> bool {
         self.model.capabilities().on_device
     }

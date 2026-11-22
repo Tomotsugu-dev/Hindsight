@@ -11,8 +11,8 @@ use chrono::{Datelike, Duration, NaiveDate};
 use tauri::{AppHandle, Emitter, State};
 
 use super::screen_memory::MemoryState;
+use crate::ai::engine::EngineSupervisor;
 use crate::ai::policy::ProfileChoice;
-use crate::ai::server::EngineSupervisor;
 use crate::ai::summary::{
     precheck_week, DaySummaryRunner, SummaryProgress, WeekPrecheckResp, WeekSummaryRunner,
     DAILY_SOURCE, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,

@@ -238,7 +238,7 @@ impl AiConfig {
     }
 
     /// Returns the per-slot context size override for chat, floored to 8192 tokens so tool
-    /// results fit. `None` keeps the engine default ([`crate::ai::server::DEFAULT_CTX_SIZE`]).
+    /// results fit. `None` keeps the engine default ([`crate::ai::engine::DEFAULT_CTX_SIZE`]).
     pub fn chat_ctx_size(&self) -> Option<u32> {
         self.ctx_size_for(Task::Chat)
             .map(|c| c.max(CHAT_MIN_CTX_SIZE))

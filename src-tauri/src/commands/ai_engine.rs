@@ -3,7 +3,6 @@
 //! 引擎的 binary 安装由 [`crate::commands::ai_binary`] 管，这里仅管运行时进程；
 //! [`get_engine_status`] 把两者合并一次返回方便前端拉取。
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -15,11 +14,10 @@ use crate::ai::config::{
     NO_MODEL_ERROR,
 };
 use crate::ai::embedding_runtime::{self, RuntimeStatus};
+use crate::ai::engine::{EngineRuntimeStatus, EngineStartOverrides, EngineSupervisor};
 use crate::ai::job_guard::{self, JobInitState};
 use crate::ai::platform::{self, VramInfo};
-use crate::ai::server::{EngineRuntimeStatus, EngineStartOverrides, EngineSupervisor};
 use crate::commands::ai_endpoint::{self, test_ai_chat, test_ai_endpoint};
-use crate::commands::ai_summary::{RunLock, AI_RUN_BUSY};
 use crate::repo::settings;
 use crate::storage::DbPool;
 
@@ -100,24 +98,19 @@ fn overrides_for_task(ai: &AiConfig, task: Task) -> EngineStartOverrides {
 
 /// 探测日报、周报、对话三个任务当前配置的 AI 连接。
 ///
-/// 本地模型会按各自任务的高级参数启动，测试完成后没人在用就停止，释放显存；
-/// 若相邻任务共用相同的本地模型与启动参数，则复用同一次启动。
-/// 日报、周报或聊天正在用引擎时，本地模型那一项不测，报忙。
+/// 本机模型那一项按各自任务的参数向引擎要一个 guard 再测，规则和真用时一样：
+/// 能复用就复用；别的任务占着、要的又不一样，就报忙。测完没人在用就停掉引擎，释放显存。
 #[tauri::command]
 pub async fn test_ai_connections(
     pool: State<'_, DbPool>,
     supervisor: State<'_, Arc<EngineSupervisor>>,
-    run_lock: State<'_, RunLock>,
 ) -> Result<Vec<TaskConnectionTest>, String> {
     let cfg = settings::load(&pool).await.map_err(String::from)?;
     let ai = &cfg.ai;
     let models_dir = crate::ai::models::root_dir(ai);
-    // 拿不到锁 = 日报或周报正在跑。拿到了就一直拿着，测试期间它们不会启动
-    let run_guard = run_lock.0.try_lock().ok();
 
     let mut results = Vec::with_capacity(3);
-    let mut started_local = false;
-    let mut last_local: Option<(PathBuf, EngineStartOverrides, u16)> = None;
+    let mut used_local = false;
 
     for task in [Task::Daily, Task::Weekly, Task::Chat] {
         match ai.model_for(task) {
@@ -180,75 +173,33 @@ pub async fn test_ai_connections(
                     });
                     continue;
                 }
-                let overrides = overrides_for_task(ai, task);
-                let port = match &last_local {
-                    Some((prev_path, prev_ov, prev_port))
-                        if *prev_path == main_path && *prev_ov == overrides =>
-                    {
-                        Ok(*prev_port)
-                    }
-                    _ => {
-                        // 要重启引擎时，别的任务正在用就不动它，这一项报忙
-                        if run_guard.is_none() || supervisor.in_use().await {
-                            results.push(TaskConnectionTest {
-                                task,
-                                kind: "local",
-                                model: file,
-                                ok: false,
-                                message: AI_RUN_BUSY.to_string(),
-                            });
-                            continue;
-                        }
-                        started_local = true;
-                        match supervisor
-                            .restart_with_overrides(
-                                Some(main_path.clone()),
-                                None,
-                                overrides.clone(),
-                            )
+                used_local = true;
+                // 测完这一项就还：下一项模型相同、上下文够，就接着用
+                let resp = match supervisor
+                    .acquire(main_path, overrides_for_task(ai, task))
+                    .await
+                {
+                    Ok(engine) => {
+                        let url = format!("http://127.0.0.1:{}/v1", engine.port());
+                        test_ai_endpoint(url, None)
                             .await
-                        {
-                            Ok(p) => {
-                                last_local = Some((main_path, overrides, p));
-                                Ok(p)
-                            }
-                            Err(e) => {
-                                last_local = None;
-                                Err(e.to_string())
-                            }
-                        }
+                            .unwrap_or_else(|e| ai_endpoint::fail(&e))
                     }
+                    Err(e) => ai_endpoint::fail(&e.to_string()),
                 };
-                match port {
-                    Ok(p) => {
-                        let resp = test_ai_endpoint(format!("http://127.0.0.1:{p}/v1"), None)
-                            .await
-                            .unwrap_or_else(|e| ai_endpoint::fail(&e));
-                        results.push(TaskConnectionTest {
-                            task,
-                            kind: "local",
-                            model: file,
-                            ok: resp.ok,
-                            message: resp.message,
-                        });
-                    }
-                    Err(msg) => {
-                        results.push(TaskConnectionTest {
-                            task,
-                            kind: "local",
-                            model: file,
-                            ok: false,
-                            message: msg,
-                        });
-                    }
-                }
+                results.push(TaskConnectionTest {
+                    task,
+                    kind: "local",
+                    model: file,
+                    ok: resp.ok,
+                    message: resp.message,
+                });
             }
         }
     }
 
-    // 测试期间聊天可能已经用上这个引擎。有人在用就不停，交给空闲回收
-    if started_local && !supervisor.in_use().await {
-        let _ = supervisor.stop().await;
+    if used_local {
+        let _ = supervisor.stop_if_unused().await;
     }
 
     Ok(results)
@@ -291,6 +242,7 @@ pub async fn set_task_model(
     }
     cfg.ai = sanitize_ai(cfg.ai, &old_ai);
     settings::save(&pool, &cfg).await.map_err(String::from)?;
+    // TODO: 聊天或日报正拿着引擎时也会关掉它，正在回答的会断。可以改用 stop_if_unused
     let _ = supervisor.stop().await;
     Ok(())
 }

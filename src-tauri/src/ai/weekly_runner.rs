@@ -27,12 +27,12 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
+use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
 };
-use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::build_step2;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::{Error, Result};
@@ -249,17 +249,19 @@ impl WeekSummaryRunner {
 
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
         // 让前端显示"加载模型中…"。走云端时跳过，不动 supervisor。
-        let port = if let ModelRef::Local { file } = &model {
+        // 整轮都拿着引擎：别的任务换不掉它
+        let engine = if let ModelRef::Local { file } = &model {
             let st = self.supervisor.status().await;
             if st.state != EngineState::Running {
                 // message 留空：前端按 phase 显示本地化的"加载模型中…"（weeklySummary.ts）
                 self.emit_phase("engine_starting", &week_key, None, None);
             }
-            self.ensure_engine_running(&ai, file).await?
+            Some(self.acquire_engine(&ai, file).await?)
         } else {
-            // 云端路径用不到端口；step2 客户端会忽略它。占位 0。
-            0
+            None
         };
+        // 云端路径用不到端口；step2 客户端会忽略它。占位 0。
+        let port = engine.as_ref().map_or(0, EngineGuard::port);
 
         // 取消检查：chat 之前
         if self.cancel.load(Ordering::Relaxed) {
@@ -292,9 +294,6 @@ impl WeekSummaryRunner {
             self.emit(p);
         }
 
-        let _inflight = step2
-            .is_local()
-            .then(|| self.supervisor.acquire_inference());
         let (row, status_str): (SegmentSummaryRow, &'static str) =
             match step2.chat(&system, &user_text).await {
                 Ok(content) => (
@@ -370,18 +369,12 @@ impl WeekSummaryRunner {
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 启动引擎（如果还没起），返回端口。
-    ///
-    /// 跟 `DaySummaryRunner::ensure_engine_running` 同语义——但只关心 Step::Summary
-    /// 因为周报全程纯文本，不需要 vision describe 的 mmproj。
-    ///
-    /// `main_name` 是周报用的本机模型文件。跟日报用同一个模型时，也带上日报的 mmproj，
-    /// 这样引擎可以两边共用。
-    async fn ensure_engine_running(
+    /// 按周报的模型和参数拿一个本机引擎。`main_name` 是周报用的本机模型文件。
+    async fn acquire_engine(
         &self,
         ai: &crate::ai::config::AiConfig,
         main_name: &str,
-    ) -> Result<u16> {
+    ) -> Result<EngineGuard> {
         let models_dir = models::root_dir(ai);
         let main_path = models_dir.join(main_name);
         if !main_path.exists() {
@@ -395,30 +388,7 @@ impl WeekSummaryRunner {
             parallel_slots: ai.parallel_slots_for(Task::Weekly),
             ctx_size: ai.ctx_size_for(Task::Weekly),
         };
-        let st = self.supervisor.status().await;
-        if st.state == EngineState::Running {
-            if let Some(p) = st.port {
-                // 模型和启动参数都一致才复用。不查的话，日报留下的小上下文引擎，
-                // 或者同一模型按默认 8K 手动启动的引擎，会被拿来生成周报：
-                // 整周日报塞不下，输出被截断或直接报错。复用前 touch，免得空闲回收关掉它。
-                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
-                    && self.supervisor.loaded_overrides() == wanted_overrides
-                {
-                    self.supervisor.touch();
-                    return Ok(p);
-                }
-                log::info!(
-                    "weekly ensure_engine_running: 已加载模型/参数与周报需求不符，重启换模 (want={})",
-                    main_path.display()
-                );
-                if let Err(e) = self.supervisor.stop().await {
-                    log::warn!("换模前 stop 引擎失败（继续尝试启动）: {e}");
-                }
-            }
-        }
-        self.supervisor
-            .start_with_overrides(Some(main_path), None, wanted_overrides)
-            .await
+        self.supervisor.acquire(main_path, wanted_overrides).await
     }
 
     fn emit(&self, payload: SummaryProgress) {
