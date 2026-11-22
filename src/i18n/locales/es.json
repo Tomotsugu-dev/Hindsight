@@ -1568,6 +1568,7 @@
       "noModel": "No hay ningún modelo de lenguaje configurado. Añade una conexión en la nube o elige un modelo local en los Ajustes de IA.",
       "cloudUnavailable": "La conexión en la nube seleccionada está incompleta o no está disponible. Comprueba el endpoint y el modelo en los Ajustes de IA.",
       "modelMissing": "No se encontró el archivo del modelo local seleccionado. Puede haberse eliminado o movido.",
+      "engineMissing": "El motor de IA aún no está descargado. Descárgalo en Ajustes → Motor de IA y vuelve a intentarlo.",
       "llmEmptyReasoning": "El modelo gastó todo el presupuesto pensando y no llegó a escribir la respuesta. Actualiza la aplicación e inténtalo de nuevo (las versiones nuevas desactivan el razonamiento local de forma predeterminada); si persiste, cambia a un modelo sin razonamiento (instruct) o amplía el contexto de este paso.",
       "llmEmptyEos": "El modelo se detuvo sin generar nada: normalmente el modelo elegido o el proyector de visión (mmproj) no encajan. Elige otro modelo en los Ajustes de IA.",
       "llmEmptyTruncated": "La respuesta del modelo se cortó antes de producir texto útil (probablemente un modelo de razonamiento). Usa un modelo de texto normal, como Gemma o Qwen3, o amplía el contexto en los Ajustes de IA.",

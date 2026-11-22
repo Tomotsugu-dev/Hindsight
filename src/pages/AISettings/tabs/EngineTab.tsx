@@ -809,7 +809,9 @@ function EngineRuntimeRow({
         ) : null}
       </div>
 
-      {isError && rt.error ? <div className={styles.engineRuntimeError}>{rt.error}</div> : null}
+      {isError && rt.error ? (
+        <div className={styles.engineRuntimeError}>{localizeAiError(rt.error)}</div>
+      ) : null}
     </div>
   );
 }
