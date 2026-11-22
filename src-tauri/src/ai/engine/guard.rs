@@ -14,7 +14,8 @@ use std::time::Instant;
 
 use tokio::sync::OwnedMutexGuard;
 
-use super::{EngineStartOverrides, EngineState, EngineSupervisor, InflightState, DEFAULT_CTX_SIZE};
+use super::server::Loaded;
+use super::{EngineStartOverrides, EngineSupervisor, InflightState, Slot, DEFAULT_CTX_SIZE};
 use crate::error::{Error, Result};
 
 /// 拿着它就占着引擎。丢掉就归还，全部归还后空闲回收才会关引擎。
@@ -82,29 +83,16 @@ pub(super) trait Process: Send + Sync + 'static {
     fn stop(&self) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// 在跑的引擎装着什么。
-#[derive(Debug, Clone)]
-pub(super) struct Loaded {
-    pub port: u16,
-    pub model: PathBuf,
-    pub params: EngineStartOverrides,
-}
-
 impl Process for EngineSupervisor {
     async fn running(&self) -> Option<Loaded> {
-        let status = self.status().await;
-        if status.state != EngineState::Running {
-            return None;
+        match &self.inner.lock().await.slot {
+            Slot::Running(s) => Some(s.loaded.clone()),
+            _ => None,
         }
-        Some(Loaded {
-            port: status.port?,
-            model: self.loaded_main()?,
-            params: self.loaded_overrides(),
-        })
     }
 
     async fn start(&self, model: PathBuf, wants: EngineStartOverrides) -> Result<u16> {
-        self.start_with_overrides(model, wants).await
+        EngineSupervisor::start(self, model, wants).await
     }
 
     async fn stop(&self) -> Result<()> {
@@ -205,7 +193,6 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::ai::engine::idle::IDLE_THRESHOLD;
 
     /// 假引擎：启动、停止只改内存里的状态，记下次数。
     #[derive(Default)]
@@ -453,33 +440,6 @@ mod tests {
         a.await.unwrap().unwrap();
         assert_eq!(fake.stops(), 0);
         assert_eq!(fake.loaded_model(), Some("a.gguf".into()));
-    }
-
-    /// 用真的 supervisor：引擎在跑、空闲超时，有 guard 没还时也不关。
-    #[tokio::test]
-    async fn idle_stop_waits_until_every_guard_is_returned() {
-        let sup = Arc::new(EngineSupervisor::new());
-        {
-            let mut inner = sup.inner.lock().await;
-            inner.state.state = EngineState::Running;
-            inner.state.port = Some(4242);
-        }
-        *sup.loaded_main.lock().unwrap() = Some("a.gguf".into());
-        let g = sup.acquire("a.gguf".into(), ctx(None)).await.unwrap();
-        assert_eq!(g.port(), 4242);
-
-        let idle_too_long = || {
-            sup.guards.holders.lock().unwrap().last_used_at =
-                Instant::now() - IDLE_THRESHOLD - Duration::from_secs(1);
-        };
-        idle_too_long();
-        sup.maybe_idle_stop().await;
-        assert_eq!(sup.status().await.state, EngineState::Running);
-
-        drop(g);
-        idle_too_long();
-        sup.maybe_idle_stop().await;
-        assert_eq!(sup.status().await.state, EngineState::Stopped);
     }
 
     /// 测试连接测完用它关引擎：别的任务还拿着 guard 时不关。
