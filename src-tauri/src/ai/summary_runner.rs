@@ -19,7 +19,7 @@ use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
-use crate::ai::engine::{EngineStartOverrides, EngineState, EngineSupervisor};
+use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::summary_operations::{
@@ -112,21 +112,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         result
     }
 
-    /// 给引擎启动 / 换模的 future 包一层取消轮询：停止按钮在 30-90s 模型加载
-    /// 期间也能生效。中断后 stop() 收掉半启动的子进程。
-    async fn engine_start_cancellable(
-        &self,
-        fut: impl std::future::Future<Output = Result<u16>>,
-    ) -> Result<u16> {
-        match crate::ai::summary_operations::cancellable(&self.cancel, fut).await {
-            Err(Error::SummaryCancelled) => {
-                let _ = self.supervisor.stop().await;
-                Err(Error::SummaryCancelled)
-            }
-            r => r,
-        }
-    }
-
     async fn run_inner(
         &self,
         source: &str,
@@ -159,9 +144,11 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             parallel_slots: ai.parallel_slots_for(Task::Daily),
             ctx_size: ai.ctx_size_for(Task::Daily),
         };
-        let port = self
-            .ensure_summary_engine(source, &date_str, &ai, summary_overrides, total_segments)
+        // 整轮都拿着：别的任务换不掉这个引擎
+        let engine = self
+            .acquire_engine(source, &date_str, &ai, summary_overrides, total_segments)
             .await?;
+        let port = engine.as_ref().map_or(0, EngineGuard::port);
         let step2 = build_step2(&ai, Task::Daily, port)?;
 
         // 本轮实际有效的段下标——循环结束后用它收敛掉孤儿行
@@ -236,19 +223,21 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 云端总结跳过本地引擎；本地则确保引擎按 summary 模型 + 参数在跑，返回端口。
-    async fn ensure_summary_engine(
+    /// 按日报的模型和参数拿一个本机引擎。走云端时返回 `None`。
+    ///
+    /// 加载模型期间按停止也能中断。
+    async fn acquire_engine(
         &self,
         source: &str,
         date_str: &str,
         ai: &AiConfig,
         engine_overrides: EngineStartOverrides,
         total_segments: u32,
-    ) -> Result<u16> {
+    ) -> Result<Option<EngineGuard>> {
         let main_name = match ai.model_for(Task::Daily) {
             Some(ModelRef::Cloud { .. }) => {
                 log::info!("日报：段总结走云端，跳过本地引擎启动");
-                return Ok(0);
+                return Ok(None);
             }
             Some(ModelRef::Local { file }) => file,
             None => return Err(Error::InvalidInput(NO_MODEL_ERROR)),
@@ -266,28 +255,12 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             self.emit(p);
         }
         let main_path = self.resolve_local_model_path(ai, &main_name)?;
-        if st.state == EngineState::Running {
-            if let Some(p) = st.port {
-                // 模型和启动参数都一致才复用，不一致就重启换参数
-                if self.supervisor.loaded_main().as_deref() == Some(main_path.as_path())
-                    && self.supervisor.loaded_overrides() == engine_overrides
-                {
-                    // 准备材料要几秒，先续上空闲计时，免得空闲回收在这期间关掉引擎
-                    self.supervisor.touch();
-                    return Ok(p);
-                }
-                log::info!("日报：已加载模型/参数与需求不符，重启换模");
-                if let Err(e) = self.supervisor.stop().await {
-                    log::warn!("换模前 stop 引擎失败（继续尝试启动）: {e}");
-                }
-            }
-        }
-        self.engine_start_cancellable(self.supervisor.start_with_overrides(
-            Some(main_path),
-            None,
-            engine_overrides,
-        ))
-        .await
+        let engine = crate::ai::summary_operations::cancellable(
+            &self.cancel,
+            self.supervisor.acquire(main_path, engine_overrides),
+        )
+        .await?;
+        Ok(Some(engine))
     }
 
     fn resolve_local_model_path(&self, ai: &AiConfig, main_name: &str) -> Result<PathBuf> {
@@ -391,7 +364,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let (row, status_str) = summarize_segment(
             &self.pool,
             step2,
-            &self.supervisor,
             ai,
             source,
             date_str,
@@ -452,8 +424,8 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             parallel_slots: ai.parallel_slots_for(Task::Daily),
             ctx_size: ai.ctx_size_for(Task::Daily),
         };
-        let port = self
-            .ensure_summary_engine(
+        let engine = self
+            .acquire_engine(
                 DAILY_SOURCE,
                 &date_str,
                 &ai,
@@ -461,6 +433,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 ai.segments.len() as u32,
             )
             .await?;
+        let port = engine.as_ref().map_or(0, EngineGuard::port);
         let step2 = build_step2(&ai, Task::Daily, port)?;
 
         self.run_one_segment(
@@ -742,8 +715,7 @@ mod tests {
         sink: RecordingSink,
         cancel: Arc<AtomicBool>,
     ) -> DaySummaryRunner<RecordingSink> {
-        // 云端路由下 supervisor 只是占位——ensure_summary_engine 直接短路返回，
-        // summarize_segment 的 External 分支也不 acquire 它
+        // 云端路由下 supervisor 只是占位：acquire_engine 直接返回 None
         DaySummaryRunner::new(
             pool.clone(),
             Arc::new(EngineSupervisor::new()),

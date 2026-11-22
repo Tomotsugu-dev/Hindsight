@@ -5,13 +5,12 @@
 //! - [`build_step2`]：按设置打开日报和周报用的模型（本地 / 云端）
 //!
 //! 这些函数从 `DaySummaryRunner` 拎出来便于单测与代码审查；调用方传 owned
-//! 数据 + Arc 的 supervisor / cancel / pool，避免持引用跨 await。
+//! 数据 + Arc 的 cancel / pool，避免持引用跨 await。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::ai::config::{AiConfig, ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
-use crate::ai::engine::EngineSupervisor;
 use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::error::{Error, Result};
@@ -56,7 +55,6 @@ pub(crate) async fn cancellable<T>(
 pub(crate) async fn summarize_segment(
     pool: &DbPool,
     step2: &Step2Chat,
-    supervisor: &Arc<EngineSupervisor>,
     ai: &AiConfig,
     source: &str,
     date_str: &str,
@@ -81,9 +79,6 @@ pub(crate) async fn summarize_segment(
     let system = build_system_prompt(ai);
     let user_text = build_user_prompt(ai, &ctx);
 
-    // 本地走自家引擎，需要 acquire 防止 watcher 在请求中途 stop；
-    // 云端不动 supervisor，不 acquire。
-    let _inflight = step2.is_local().then(|| supervisor.acquire_inference());
     let chat_result = cancellable(cancel, step2.chat(&system, &user_text)).await;
     if matches!(chat_result, Err(Error::SummaryCancelled)) {
         return Err(Error::SummaryCancelled);
@@ -407,7 +402,6 @@ mod tests {
             .await
             .unwrap();
 
-        let supervisor = Arc::new(EngineSupervisor::new());
         let cancel = Arc::new(AtomicBool::new(false));
         let step2 = build_step2(&ai, Task::Daily, 0).unwrap();
         let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
@@ -466,7 +460,6 @@ mod tests {
             let (row, status) = summarize_segment(
                 &pool,
                 &step2,
-                &supervisor,
                 &ai,
                 "daily",
                 &date,
@@ -1165,7 +1158,6 @@ mod tests {
         let pool = fresh_test_pool().await;
         let port = free_local_port();
         let step2 = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
-        let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
@@ -1173,7 +1165,6 @@ mod tests {
         let (row, status) = summarize_segment(
             &pool,
             &step2,
-            &supervisor,
             &ai,
             "daily",
             "2026-05-15",
@@ -1217,7 +1208,6 @@ mod tests {
 
         let port = free_local_port();
         let step2 = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
-        let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
@@ -1226,7 +1216,6 @@ mod tests {
             summarize_segment(
                 &pool,
                 &step2,
-                &supervisor,
                 &ai,
                 "daily",
                 "2026-05-15",
@@ -1259,7 +1248,6 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let step2 = Step2Chat::local(port, "m.gguf", 1024, Reasoning::Default).unwrap();
-        let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(true)); // 预先按下停止
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
@@ -1267,7 +1255,6 @@ mod tests {
         let r = summarize_segment(
             &pool,
             &step2,
-            &supervisor,
             &ai,
             "daily",
             "2026-05-15",
@@ -1302,7 +1289,6 @@ mod tests {
         let pool = fresh_test_pool().await;
         let port = spawn_canned_openai_server("  上午主要在写 Hindsight 的单元测试。  ").await;
         let step2 = Step2Chat::local(port, "qwen.gguf", 1024, Reasoning::Default).unwrap();
-        let supervisor = Arc::new(EngineSupervisor::new());
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
@@ -1311,7 +1297,6 @@ mod tests {
         let (row, status) = summarize_segment(
             &pool,
             &step2,
-            &supervisor,
             &ai,
             "daily",
             "2026-05-15",

@@ -13,16 +13,16 @@
 //!
 //! ## 锁顺序约定
 //!
-//! 本模块持有两把锁：
+//! 本模块持有三把锁：
+//! - `guards.turn`：`tokio::sync::Mutex<()>` —— 来要引擎的排队
 //! - `inner`：`tokio::sync::Mutex<Inner>` —— 守 state + child handle
-//! - `inflight_state`：`std::sync::Mutex<InflightState>` —— 守 in-flight 计数 + last_used_at
+//! - `guards.holders`：`std::sync::Mutex<InflightState>` —— 守 guard 个数 + last_used_at
 //!
-//! **锁顺序：`inner` → `inflight_state`，禁止反向**。`maybe_idle_stop` 在持
-//! `inner` 时短暂取 `inflight_state`，符合此顺序；任何 acquire / release inflight
-//! 的调用点都必须在 `inner` 锁外完成（或确保不会回头取 `inner`）。
+//! **锁顺序：`turn` → `inner` → `holders`，禁止反向**。`maybe_idle_stop` 在持
+//! `inner` 时短暂取 `holders`，符合此顺序；发放、归还 guard 都在 `inner` 锁外完成。
 //!
-//! `inflight_state` 用 `std::sync::Mutex` 而非 `tokio::sync::Mutex` 是为了让
-//! [`InferenceGuard::drop`] 能同步访问（drop 不能 await）；临界区只是 usize +
+//! `holders` 用 `std::sync::Mutex` 而非 `tokio::sync::Mutex` 是为了让
+//! [`EngineGuard`] 的 drop 能同步访问（drop 不能 await）；临界区只是 usize +
 //! Instant 赋值，几纳秒级别，不会因同步锁阻塞 runtime。
 
 use std::collections::VecDeque;
@@ -48,6 +48,7 @@ use crate::ai::platform::{self, Platform};
 use crate::error::{Error, Result};
 
 mod guard;
+pub use guard::EngineGuard;
 
 /// 启动后等 `/health` 返回 200 的最大时长。
 /// vision LLM 加载耗时随模型大小，9B 量级模型 CPU 上加载 30-60s 是常态。
@@ -137,9 +138,9 @@ struct Inner {
     generation: u64,
 }
 
-/// in-flight 推理请求计数器 + 最后一次活跃时间戳。
+/// 发出去的 guard 个数 + 最后一次活跃时间戳。
 struct InflightState {
-    /// 当前持有 [`InferenceGuard`] 的请求数；> 0 时 watcher 不 stop 引擎。
+    /// 还没归还的 [`EngineGuard`] 个数；> 0 时 watcher 不 stop 引擎。
     count: usize,
     /// 最后一次 acquire / release 的时刻。watcher 用 `elapsed()` 判断是否 idle 超阈。
     last_used_at: Instant,
@@ -150,30 +151,6 @@ impl Default for InflightState {
         Self {
             count: 0,
             last_used_at: Instant::now(),
-        }
-    }
-}
-
-/// 一次推理请求的 RAII 守护：在 `drop()` 时把 in-flight 计数减 1，并把
-/// `last_used_at` 推到当前时刻。配合 idle watcher 实现"跑完任务 N 秒无新请求
-/// → 自动 stop 引擎释放显存"。
-///
-/// 用法（必须在向本机引擎发推理请求**之前** acquire，跨 await 持有到请求返回）：
-/// ```ignore
-/// let _g = supervisor.acquire_inference();  // in-flight++
-/// step2.chat(...).await?;                   // 真正发请求
-/// // _g 在此处 drop → in-flight--
-/// ```
-pub struct InferenceGuard {
-    sup: Arc<EngineSupervisor>,
-}
-
-impl Drop for InferenceGuard {
-    fn drop(&mut self) {
-        // std::sync::Mutex 的 lock 在毒化时也能恢复；poison 时仅记录不 panic
-        if let Ok(mut s) = self.sup.guards.holders.lock() {
-            s.count = s.count.saturating_sub(1);
-            s.last_used_at = Instant::now();
         }
     }
 }
@@ -196,15 +173,6 @@ impl EngineSupervisor {
         }
     }
 
-    /// 手动把 idle 计时推到现在。复用已在 Running 的引擎（不经 acquire_inference）
-    /// 之前必须调一次：否则"拿到端口 → 准备图片/拼 prompt 的几秒"落在 idle 阈值边缘
-    /// 时，watcher 会把 server 杀掉，第一个请求打到已死端口。
-    pub fn touch(&self) {
-        if let Ok(mut s) = self.guards.holders.lock() {
-            s.last_used_at = Instant::now();
-        }
-    }
-
     /// 当前（或最近一次启动加载）的 main GGUF 路径；从未启动过为 None。
     pub fn loaded_main(&self) -> Option<PathBuf> {
         self.loaded_main.lock().ok().and_then(|g| g.clone())
@@ -217,21 +185,6 @@ impl EngineSupervisor {
             .lock()
             .map(|g| g.clone())
             .unwrap_or_default()
-    }
-
-    /// 注册一次推理请求：in-flight +1 + last_used_at 推到现在。
-    /// 调用方应把返回的 guard 持有到请求结束（drop 时自动 -1）。
-    ///
-    /// `Arc<Self>` 的方法签名让 guard 持有 supervisor 的强引用，
-    /// 保证 guard 还在期间 supervisor 不会被释放。
-    pub fn acquire_inference(self: &Arc<Self>) -> InferenceGuard {
-        if let Ok(mut s) = self.guards.holders.lock() {
-            s.count += 1;
-            s.last_used_at = Instant::now();
-        }
-        InferenceGuard {
-            sup: Arc::clone(self),
-        }
     }
 
     /// 启动 idle watcher：每 [`IDLE_TICK`] 检查一次，引擎 Running + in-flight==0
@@ -768,10 +721,18 @@ mod tests {
         sup.inner.lock().await.state.state = EngineState::Starting;
         assert!(sup.in_use().await, "正在启动");
 
-        sup.inner.lock().await.state.state = EngineState::Running;
+        {
+            let mut inner = sup.inner.lock().await;
+            inner.state.state = EngineState::Running;
+            inner.state.port = Some(4242);
+        }
+        *sup.loaded_main.lock().unwrap() = Some("a.gguf".into());
         assert!(!sup.in_use().await, "跑着但空闲");
 
-        let guard = sup.acquire_inference();
+        let guard = sup
+            .acquire("a.gguf".into(), EngineStartOverrides::default())
+            .await
+            .unwrap();
         assert!(sup.in_use().await, "有请求在用");
         drop(guard);
         assert!(!sup.in_use().await, "请求结束");
