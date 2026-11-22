@@ -11,9 +11,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::ai::config::{AiConfig, ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
+use crate::ai::engine::EngineSupervisor;
 use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
-use crate::ai::server::EngineSupervisor;
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;

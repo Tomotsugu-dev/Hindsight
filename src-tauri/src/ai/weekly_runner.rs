@@ -27,12 +27,12 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
+use crate::ai::engine::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
 };
-use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::build_step2;
 use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::{Error, Result};

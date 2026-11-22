@@ -16,8 +16,8 @@ use tauri::{Emitter, State};
 
 use super::screen_memory::MemoryState;
 use crate::ai::config::{ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
+use crate::ai::engine::EngineSupervisor;
 use crate::ai::policy::ProfileChoice;
-use crate::ai::server::EngineSupervisor;
 use crate::ai::tools::Tools;
 use crate::chat::engine::{self, ChatAnswer};
 use crate::chat::llm::ChatLlm;
@@ -37,8 +37,8 @@ const HISTORY_TURNS: usize = 6;
 /// compute buffer 跟着翻几倍,小显存机器直接 OOM。
 fn chat_engine_overrides(
     ai: &crate::ai::config::AiConfig,
-) -> crate::ai::server::EngineStartOverrides {
-    crate::ai::server::EngineStartOverrides {
+) -> crate::ai::engine::EngineStartOverrides {
+    crate::ai::engine::EngineStartOverrides {
         batch_size: None,
         parallel_slots: None,
         ctx_size: ai.chat_ctx_size(),
@@ -49,10 +49,10 @@ fn chat_engine_overrides(
 /// 需求就复用。只看 ctx——batch/slots 只影响启动期性能与显存,不影响已跑
 /// 引擎对聊天的可用性。
 fn engine_ctx_sufficient(
-    loaded: &crate::ai::server::EngineStartOverrides,
-    wanted: &crate::ai::server::EngineStartOverrides,
+    loaded: &crate::ai::engine::EngineStartOverrides,
+    wanted: &crate::ai::engine::EngineStartOverrides,
 ) -> bool {
-    use crate::ai::server::DEFAULT_CTX_SIZE;
+    use crate::ai::engine::DEFAULT_CTX_SIZE;
     loaded.ctx_size.unwrap_or(DEFAULT_CTX_SIZE) >= wanted.ctx_size.unwrap_or(DEFAULT_CTX_SIZE)
 }
 
@@ -535,7 +535,7 @@ mod overrides_tests {
     #[test]
     fn engine_reuse_is_by_ctx_sufficiency_not_strict_equality() {
         use super::engine_ctx_sufficient;
-        use crate::ai::server::EngineStartOverrides;
+        use crate::ai::engine::EngineStartOverrides;
         let ov = |ctx: Option<u32>| EngineStartOverrides {
             batch_size: None,
             parallel_slots: None,

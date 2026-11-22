@@ -19,9 +19,9 @@ use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
+use crate::ai::engine::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
-use crate::ai::server::{EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::summary_operations::{
     build_activity_timeline, build_step2, summarize_segment, upsert_skipped_no_activity,
 };

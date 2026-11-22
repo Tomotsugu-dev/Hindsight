@@ -15,9 +15,9 @@ use crate::ai::config::{
     NO_MODEL_ERROR,
 };
 use crate::ai::embedding_runtime::{self, RuntimeStatus};
+use crate::ai::engine::{EngineRuntimeStatus, EngineStartOverrides, EngineSupervisor};
 use crate::ai::job_guard::{self, JobInitState};
 use crate::ai::platform::{self, VramInfo};
-use crate::ai::server::{EngineRuntimeStatus, EngineStartOverrides, EngineSupervisor};
 use crate::commands::ai_endpoint::{self, test_ai_chat, test_ai_endpoint};
 use crate::commands::ai_summary::{RunLock, AI_RUN_BUSY};
 use crate::repo::settings;

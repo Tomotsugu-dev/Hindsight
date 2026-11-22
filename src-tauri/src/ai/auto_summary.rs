@@ -209,7 +209,7 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
     let runner = DaySummaryRunner::new(
         app.state::<DbPool>().inner().clone(),
         Arc::clone(
-            app.state::<Arc<crate::ai::server::EngineSupervisor>>()
+            app.state::<Arc<crate::ai::engine::EngineSupervisor>>()
                 .inner(),
         ),
         app.clone(),
@@ -245,7 +245,7 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
     let runner = WeekSummaryRunner::new(
         app.state::<DbPool>().inner().clone(),
         Arc::clone(
-            app.state::<Arc<crate::ai::server::EngineSupervisor>>()
+            app.state::<Arc<crate::ai::engine::EngineSupervisor>>()
                 .inner(),
         ),
         app.clone(),
