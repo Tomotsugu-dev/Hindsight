@@ -45,17 +45,6 @@ fn chat_engine_overrides(
     }
 }
 
-/// 复用已跑引擎的 ctx 够用判定:每槽 ctx(None = 引擎默认 8K)达到聊天
-/// 需求就复用。只看 ctx——batch/slots 只影响启动期性能与显存,不影响已跑
-/// 引擎对聊天的可用性。
-fn engine_ctx_sufficient(
-    loaded: &crate::ai::engine::EngineStartOverrides,
-    wanted: &crate::ai::engine::EngineStartOverrides,
-) -> bool {
-    use crate::ai::engine::DEFAULT_CTX_SIZE;
-    loaded.ctx_size.unwrap_or(DEFAULT_CTX_SIZE) >= wanted.ctx_size.unwrap_or(DEFAULT_CTX_SIZE)
-}
-
 /// 一次问答落库完成(或失败/被停止)时的广播事件。前端不论组件死活都靠它
 /// 得知"答案已就绪,去库里刷新"——一次性返回模式下,promise 的宿主(组件)
 /// 跳页/关窗就没了,这个事件是唯一可靠的送达通道。
@@ -312,7 +301,7 @@ async fn run_ask(
     let ai = &cfg.ai;
 
     let thinking = ai.reasoning_for(Task::Chat);
-    let (llm, _inflight) = match ai.model_for(Task::Chat) {
+    let (llm, _engine) = match ai.model_for(Task::Chat) {
         Some(ModelRef::Cloud { connection }) => {
             let conn = ai
                 .cloud_connection(&connection)
@@ -338,32 +327,14 @@ async fn run_ask(
                     "[AI_MODEL_MISSING] Selected local model file not found: {file}"
                 ));
             }
-            // 复用条件是模型一致、引擎每槽上下文够聊天用，不要求参数完全相等。
-            // 要求完全相等的话，「没设」和「设成 8192」、日报留下的更大上下文这些
-            // 本可以复用的情况都会重启，聊天和日报来回切就来回重启，还会在日报
-            // 两段之间把引擎杀掉。上下文不够时必须重启，否则会溢出报 400。
-            let overrides = chat_engine_overrides(ai);
-            let needs_restart = supervisor
-                .loaded_main()
-                .map(|p| p != main_path)
-                .unwrap_or(false)
-                || !engine_ctx_sufficient(&supervisor.loaded_overrides(), &overrides);
-            let port = if needs_restart {
-                supervisor
-                    .restart_with_overrides(Some(main_path), None, overrides)
-                    .await
-                    .map_err(String::from)?
-            } else {
-                supervisor
-                    .start_with_overrides(Some(main_path), None, overrides)
-                    .await
-                    .map_err(String::from)?
-            };
-            // 整个问答循环都拿着它，空闲回收不会中途关掉引擎
-            let guard = supervisor.acquire_inference();
+            // 整个问答都拿着它：别的任务换不掉这个引擎，空闲回收也不会关掉它
+            let engine = supervisor
+                .acquire(main_path, chat_engine_overrides(ai))
+                .await
+                .map_err(String::from)?;
             (
-                ChatLlm::local(port, &file, thinking).map_err(String::from)?,
-                Some(guard),
+                ChatLlm::local(engine.port(), &file, thinking).map_err(String::from)?,
+                Some(engine),
             )
         }
         None => return Err(NO_MODEL_ERROR.to_string()),
@@ -528,32 +499,5 @@ mod overrides_tests {
         let d = chat_engine_overrides(&AiConfig::default());
         assert_eq!(d.ctx_size, None, "未配置时维持引擎默认(8K)");
         assert_eq!(d.batch_size, None);
-    }
-
-    /// 复用判定回归:≥ 语义,None≡8192;更大的留驻引擎可复用(不震荡),
-    /// 更小的必须重启(否则溢出 400 回归)。
-    #[test]
-    fn engine_reuse_is_by_ctx_sufficiency_not_strict_equality() {
-        use super::engine_ctx_sufficient;
-        use crate::ai::engine::EngineStartOverrides;
-        let ov = |ctx: Option<u32>| EngineStartOverrides {
-            batch_size: None,
-            parallel_slots: None,
-            ctx_size: ctx,
-        };
-        // None ≡ Some(8192):语义相同不得重启
-        assert!(engine_ctx_sufficient(&ov(None), &ov(Some(8192))));
-        assert!(engine_ctx_sufficient(&ov(Some(8192)), &ov(None)));
-        // 总结留下的更大 ctx:够用,复用
-        assert!(engine_ctx_sufficient(&ov(Some(16384)), &ov(Some(8192))));
-        // 手动启动默认 8K,用户要 32K:不够,重启
-        assert!(!engine_ctx_sufficient(&ov(None), &ov(Some(32768))));
-        // 总结留下的小 ctx:不够,重启
-        assert!(!engine_ctx_sufficient(&ov(Some(4096)), &ov(None)));
-        // batch/slots 差异不影响判定
-        let mut summary_left = ov(Some(16384));
-        summary_left.batch_size = Some(4096);
-        summary_left.parallel_slots = Some(4);
-        assert!(engine_ctx_sufficient(&summary_left, &ov(None)));
     }
 }

@@ -47,6 +47,8 @@ use crate::ai::binary;
 use crate::ai::platform::{self, Platform};
 use crate::error::{Error, Result};
 
+mod guard;
+
 /// 启动后等 `/health` 返回 200 的最大时长。
 /// vision LLM 加载耗时随模型大小，9B 量级模型 CPU 上加载 30-60s 是常态。
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(90);
@@ -110,10 +112,8 @@ pub struct EngineSupervisor {
     /// 持续滚动的 ring，最近 LOGS_RING_SIZE 行 stderr / stdout。
     /// Arc 让 spawn 出来的 reader task 能持有它而不锁 inner。
     logs: Arc<Mutex<VecDeque<String>>>,
-    /// 推理请求计数 + 最后一次使用时间——给 idle watcher 自动 stop 用。
-    /// 用 std sync mutex 而不是 tokio mutex：临界区只是 usize+Instant 赋值，几纳秒，
-    /// 同时让 [`InferenceGuard::drop`] 能同步访问（drop 不能 await tokio mutex）。
-    inflight_state: std::sync::Mutex<InflightState>,
+    /// 发出去的 guard。空闲回收看它。
+    guards: guard::Guards,
     /// 当前（或最近一次启动时）加载的 main GGUF 路径。调用方在"复用 Running 引擎"
     /// 之前用 [`Self::loaded_main`] 校验装的是不是自己需要的模型——否则周报可能
     /// 被 2 分钟前日报留下的 vision 模型+小上下文生成（截断/低质/报错）。
@@ -171,7 +171,7 @@ pub struct InferenceGuard {
 impl Drop for InferenceGuard {
     fn drop(&mut self) {
         // std::sync::Mutex 的 lock 在毒化时也能恢复；poison 时仅记录不 panic
-        if let Ok(mut s) = self.sup.inflight_state.lock() {
+        if let Ok(mut s) = self.sup.guards.holders.lock() {
             s.count = s.count.saturating_sub(1);
             s.last_used_at = Instant::now();
         }
@@ -190,7 +190,7 @@ impl EngineSupervisor {
         Self {
             inner: Mutex::new(Inner::default()),
             logs: Arc::new(Mutex::new(VecDeque::with_capacity(LOGS_RING_SIZE))),
-            inflight_state: std::sync::Mutex::new(InflightState::default()),
+            guards: guard::Guards::default(),
             loaded_main: std::sync::Mutex::new(None),
             loaded_overrides: std::sync::Mutex::new(EngineStartOverrides::default()),
         }
@@ -200,7 +200,7 @@ impl EngineSupervisor {
     /// 之前必须调一次：否则"拿到端口 → 准备图片/拼 prompt 的几秒"落在 idle 阈值边缘
     /// 时，watcher 会把 server 杀掉，第一个请求打到已死端口。
     pub fn touch(&self) {
-        if let Ok(mut s) = self.inflight_state.lock() {
+        if let Ok(mut s) = self.guards.holders.lock() {
             s.last_used_at = Instant::now();
         }
     }
@@ -225,7 +225,7 @@ impl EngineSupervisor {
     /// `Arc<Self>` 的方法签名让 guard 持有 supervisor 的强引用，
     /// 保证 guard 还在期间 supervisor 不会被释放。
     pub fn acquire_inference(self: &Arc<Self>) -> InferenceGuard {
-        if let Ok(mut s) = self.inflight_state.lock() {
+        if let Ok(mut s) = self.guards.holders.lock() {
             s.count += 1;
             s.last_used_at = Instant::now();
         }
@@ -256,7 +256,7 @@ impl EngineSupervisor {
     /// 返回距离下次 idle 触发还有多久（用户可观测）。
     /// 引擎不在 Running / 还有 in-flight 时返回 None。
     pub fn idle_eta(&self) -> Option<Duration> {
-        let s = self.inflight_state.lock().ok()?;
+        let s = self.guards.holders.lock().ok()?;
         if s.count > 0 {
             return None;
         }
@@ -280,7 +280,7 @@ impl EngineSupervisor {
             // inflight 锁的临界区极短（usize 比较 + Instant.elapsed），不会因为
             // 持着 inner 锁阻塞而拉长——nested lock 顺序：inner → inflight，
             // 全程不反向，无死锁风险
-            let s = match self.inflight_state.lock() {
+            let s = match self.guards.holders.lock() {
                 Ok(g) => g,
                 Err(_) => return false,
             };
@@ -463,10 +463,9 @@ impl EngineSupervisor {
                 error: None,
                 ..Default::default()
             };
-            // 新一轮启动：把 inflight 计数清零 + last_used_at 推到现在。
-            // 不重置的话上一轮残留的旧 last_used 会让新启动立刻被 watcher 当成 idle 干掉。
-            if let Ok(mut s) = self.inflight_state.lock() {
-                *s = InflightState::default();
+            // 空闲计时从启动完成算起。guard 的个数不动：来要引擎的那一方已经拿着一个
+            if let Ok(mut s) = self.guards.holders.lock() {
+                s.last_used_at = Instant::now();
             }
             Ok(port)
         } else {
