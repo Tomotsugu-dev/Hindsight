@@ -63,6 +63,11 @@ impl EngineSupervisor {
     ) -> Result<EngineGuard> {
         self.guards.acquire(self, model, wants).await
     }
+
+    /// 没人拿着 guard 就关掉引擎。
+    pub async fn stop_if_unused(self: &Arc<Self>) -> Result<()> {
+        self.guards.stop_if_unused(self).await
+    }
 }
 
 /// guard 通过它看引擎、启动、停止。测试里换成假的。
@@ -149,6 +154,15 @@ impl Guards {
             }
         }
         Ok(guard)
+    }
+
+    async fn stop_if_unused<P: Process>(&self, process: &Arc<P>) -> Result<()> {
+        // 排在来要引擎的后面：判断完到关掉之间，没人能拿到 guard
+        let _turn = self.turn.lock().await;
+        if self.count() == 0 {
+            process.stop().await?;
+        }
+        Ok(())
     }
 }
 
@@ -466,5 +480,41 @@ mod tests {
         idle_too_long();
         sup.maybe_idle_stop().await;
         assert_eq!(sup.status().await.state, EngineState::Stopped);
+    }
+
+    /// 测试连接测完用它关引擎：别的任务还拿着 guard 时不关。
+    #[tokio::test]
+    async fn stop_if_unused_keeps_an_engine_someone_holds() {
+        let (guards, fake) = setup();
+        fake.run("a.gguf", ctx(None));
+        let g = guards
+            .acquire(&fake, "a.gguf".into(), ctx(None))
+            .await
+            .unwrap();
+
+        guards.stop_if_unused(&fake).await.unwrap();
+        assert_eq!(fake.stops(), 0);
+
+        drop(g);
+        guards.stop_if_unused(&fake).await.unwrap();
+        assert_eq!(fake.stops(), 1);
+    }
+
+    /// 别的任务正在启动引擎时，不会把它关掉。
+    #[tokio::test]
+    async fn stop_if_unused_waits_for_a_start_in_progress() {
+        let (guards, fake) = setup();
+        let hold = fake.gate.lock().await;
+        let a = spawn_acquire(&guards, &fake, "a.gguf");
+        until(|| fake.starts() == 1).await;
+        let stopper = {
+            let (guards, fake) = (Arc::clone(&guards), Arc::clone(&fake));
+            tokio::spawn(async move { guards.stop_if_unused(&fake).await })
+        };
+
+        drop(hold);
+        let _a = a.await.unwrap().unwrap();
+        stopper.await.unwrap().unwrap();
+        assert_eq!(fake.stops(), 0);
     }
 }
