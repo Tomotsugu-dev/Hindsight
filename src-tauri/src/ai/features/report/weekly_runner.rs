@@ -146,36 +146,13 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         // 严格模式（前端没确认 allow）下：整周无日报 = 老行为，写 error 行让前端引导
         // 用户先补日报。宽松模式继续往下走——通过补缺失日 fallback / 简化分析兜底。
         if days.is_empty() && !allow_missing_days {
-            let row = SegmentSummaryRow {
-                source: WEEKLY_SOURCE.to_string(),
-                local_date: week_key.clone(),
-                segment_idx: WEEKLY_SEGMENT_IDX,
-                label: weekly_label(&week_key, &end_key),
-                start_hour: 0,
-                end_hour: 0,
-                content: String::new(),
-                model: String::new(),
-                status: "error".to_string(),
-                error: Some(
-                    "本周还没有任何已生成的日报。请先到「日报」页生成几天后再试。".to_string(),
-                ),
-                generated_at: utc_now_rfc3339(),
-            };
-            ai_summaries::upsert_segment(&self.pool, &row).await?;
-            // emit 一条 segment_done 让前端 store 写入这一行（status=error），
-            // 紧接着 all_done 收尾——避免前端按钮一直转
-            let mut p = SummaryProgress::base(
-                WEEKLY_SOURCE.to_string(),
-                week_key.clone(),
-                "segment_done",
-                1,
-            );
-            p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
-            p.status = Some("error");
-            p.message = row.error.clone();
-            self.emit(p);
-            self.emit_phase("all_done", &week_key, None, None);
-            return Ok(());
+            return self
+                .write_no_data_error(
+                    &week_key,
+                    &end_key,
+                    "本周还没有任何已生成的日报。请先到「日报」页生成几天后再试。",
+                )
+                .await;
         }
 
         // 宽松模式：缺日报的天用当日 top apps 文本顶替——还是缺数据的天（既没日报
@@ -230,35 +207,13 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
 
         // 宽松模式终极兜底：日报也空 + 整周 top_apps 也空 = 本周根本没用电脑，没东西可写
         if allow_missing_days && days.is_empty() && top_apps.is_empty() {
-            let row = SegmentSummaryRow {
-                source: WEEKLY_SOURCE.to_string(),
-                local_date: week_key.clone(),
-                segment_idx: WEEKLY_SEGMENT_IDX,
-                label: weekly_label(&week_key, &end_key),
-                start_hour: 0,
-                end_hour: 0,
-                content: String::new(),
-                model: String::new(),
-                status: "error".to_string(),
-                error: Some(
-                    "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。"
-                        .to_string(),
-                ),
-                generated_at: utc_now_rfc3339(),
-            };
-            ai_summaries::upsert_segment(&self.pool, &row).await?;
-            let mut p = SummaryProgress::base(
-                WEEKLY_SOURCE.to_string(),
-                week_key.clone(),
-                "segment_done",
-                1,
-            );
-            p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
-            p.status = Some("error");
-            p.message = row.error.clone();
-            self.emit(p);
-            self.emit_phase("all_done", &week_key, None, None);
-            return Ok(());
+            return self
+                .write_no_data_error(
+                    &week_key,
+                    &end_key,
+                    "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。",
+                )
+                .await;
         }
 
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
@@ -386,6 +341,42 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         )
         .await?;
         Ok(status.as_deref() == Some("ok"))
+    }
+
+    /// 这一周没有材料可写：写一行错误，盖掉已有的周报，再发 segment_done 和 all_done。
+    async fn write_no_data_error(
+        &self,
+        week_key: &str,
+        end_key: &str,
+        message: &str,
+    ) -> Result<()> {
+        let row = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            local_date: week_key.to_string(),
+            segment_idx: WEEKLY_SEGMENT_IDX,
+            label: weekly_label(week_key, end_key),
+            start_hour: 0,
+            end_hour: 0,
+            content: String::new(),
+            model: String::new(),
+            status: "error".to_string(),
+            error: Some(message.to_string()),
+            generated_at: utc_now_rfc3339(),
+        };
+        ai_summaries::upsert_segment(&self.pool, &row).await?;
+        // segment_done 让前端写入这一行，all_done 让按钮停止转圈
+        let mut p = SummaryProgress::base(
+            WEEKLY_SOURCE.to_string(),
+            week_key.to_string(),
+            "segment_done",
+            1,
+        );
+        p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
+        p.status = Some("error");
+        p.message = row.error;
+        self.emit(p);
+        self.emit_phase("all_done", week_key, None, None);
+        Ok(())
     }
 
     /// 按周报的模型和参数拿一个本机引擎。`main_name` 是周报用的本机模型文件。
