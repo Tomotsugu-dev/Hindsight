@@ -121,7 +121,7 @@ mod tests {
     /// 坏 base64 只跳那一行,同文件后续好行照常落库。
     // 好行应用成功后会写 icon 文件 cache(路径读 HINDSIGHT_DATA_DIR),必须借
     // env 锁把数据根指到唯一临时目录,不污染真实用户目录。锁横跨 merge 的 await:
-    // #[tokio::test] 单线程 runtime,不自死锁(同 chat/engine.rs 夹具的先例)。
+    // #[tokio::test] 单线程 runtime,不自死锁(同 ai/features/chat/engine.rs 夹具的先例)。
     #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn merge_app_icons_bad_base64_skips_row_keeps_rest() {

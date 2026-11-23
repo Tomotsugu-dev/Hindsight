@@ -1,6 +1,6 @@
 # 屏幕记忆(Screen Memory)架构设计
 
-状态(2026-07-05):L2/L3 已落地(存档规格切换 + memory.sqlite + PP-OCRv5 消化管线 + 行级折叠 + FTS,真实档案 e2e 通过);Chat 已落地(guarded agent loop + 三工具 + 证据卡 + 会话历史落库,`src-tauri/src/chat/`);旧日报管线(step1 VLM + MobileNet 去重)**已删除**,日报改为活动时间线单步生成(见 §7);可选上云三挡已落地(§8)。L1 静止门参数已定稿、待实施;VLM(含原规划 L5)已整体移除(§2)。
+状态(2026-07-05):L2/L3 已落地(存档规格切换 + memory.sqlite + PP-OCRv5 消化管线 + 行级折叠 + FTS,真实档案 e2e 通过);Chat 已落地(guarded agent loop + 三工具 + 证据卡 + 会话历史落库,`src-tauri/src/ai/features/chat/`);旧日报管线(step1 VLM + MobileNet 去重)**已删除**,日报改为活动时间线单步生成(见 §7);可选上云三挡已落地(§8)。L1 静止门参数已定稿、待实施;VLM(含原规划 L5)已整体移除(§2)。
 关联:AI 日报管线(`src-tauri/src/ai/features/report/`)、Chat(`src-tauri/src/ai/features/chat/`)、可选上云(`src-tauri/src/sync/engine/datasets.rs`)
 
 ---
