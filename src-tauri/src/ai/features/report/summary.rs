@@ -3,11 +3,10 @@
 //!
 //! 实际实现拆在：
 //! - [`crate::ai::features::report::progress`]：进度事件 payload `SummaryProgress` + 事件名
-//! - [`crate::ai::features::report::summary_operations`]：活动时间线合成 + 段总结业务函数
-//! - [`crate::ai::features::report::summary_runner`]：编排核心 `DaySummaryRunner`
+//! - [`crate::ai::features::report::daily`]：编排核心 `DaySummaryRunner`、活动时间线合成、段总结
 
+pub use crate::ai::features::report::daily::{DaySummaryRunner, DAILY_SOURCE};
 pub use crate::ai::features::report::progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
-pub use crate::ai::features::report::summary_runner::{DaySummaryRunner, DAILY_SOURCE};
 pub use crate::ai::features::report::weekly::{
     precheck_week, WeekPrecheckResp, WeekSummaryRunner, WEEKLY_SOURCE,
 };

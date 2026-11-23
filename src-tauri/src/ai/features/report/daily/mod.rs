@@ -11,6 +11,9 @@
 //! 不再有 step 1（VLM 逐图描述）与 MobileNet 去重——窗口标题时间线是唯一材料源。
 //! 串行而非并发：本地 llama-server 是单实例，并发请求只会让 llama.cpp 内部排队。
 
+pub mod segment;
+pub mod timeline;
+
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -22,9 +25,6 @@ use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::features::report::model::build_step2;
 use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
-use crate::ai::features::report::summary_operations::{
-    build_activity_timeline, summarize_segment, upsert_skipped_no_activity,
-};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::error::{Error, Result};
@@ -32,6 +32,8 @@ use crate::repo::ai_summaries::{self, list_segment_top_apps};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
+use segment::{summarize_segment, upsert_skipped_no_activity};
+use timeline::build_activity_timeline;
 
 /// 日报在 ai_summaries 里的 `source`。
 pub const DAILY_SOURCE: &str = "daily";
