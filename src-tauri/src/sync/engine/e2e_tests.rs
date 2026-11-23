@@ -520,10 +520,10 @@ async fn clear_data_clears_memory_db() {
         .await
         .unwrap();
     // 一段聊天
-    let conv = crate::chat::store::create_conversation(&a.mem, "测试会话")
+    let conv = crate::ai::features::chat::store::create_conversation(&a.mem, "测试会话")
         .await
         .unwrap();
-    crate::chat::store::append_user(&a.mem, conv, "上周看了什么?", None)
+    crate::ai::features::chat::store::append_user(&a.mem, conv, "上周看了什么?", None)
         .await
         .unwrap();
 
@@ -816,19 +816,19 @@ async fn optional_datasets_cross_device_roundtrip() {
     enable_optional_sync(&b).await;
 
     // — A: 聊天一问一答 —
-    let conv = crate::chat::store::create_conversation(&a.mem, "测试会话")
+    let conv = crate::ai::features::chat::store::create_conversation(&a.mem, "测试会话")
         .await
         .unwrap();
-    crate::chat::store::append_user(&a.mem, conv, "上周看了什么?", None)
+    crate::ai::features::chat::store::append_user(&a.mem, conv, "上周看了什么?", None)
         .await
         .unwrap();
-    crate::chat::store::append_assistant(
+    crate::ai::features::chat::store::append_assistant(
         &a.mem,
         conv,
         "看了三个视频 [1]",
         &[],
         false,
-        crate::chat::store::MsgUsage {
+        crate::ai::features::chat::store::MsgUsage {
             prompt: 200,
             completion: 80,
             ..Default::default()
@@ -875,12 +875,12 @@ async fn optional_datasets_cross_device_roundtrip() {
     b.engine.sync_now().await.unwrap();
 
     // B: 聊天可见
-    let convs = crate::chat::store::list_conversations(&b.mem)
+    let convs = crate::ai::features::chat::store::list_conversations(&b.mem)
         .await
         .unwrap();
     assert_eq!(convs.len(), 1, "B 应看到 A 的会话");
     assert_eq!(convs[0].title, "测试会话");
-    let msgs = crate::chat::store::get_messages(&b.mem, convs[0].id)
+    let msgs = crate::ai::features::chat::store::get_messages(&b.mem, convs[0].id)
         .await
         .unwrap();
     assert_eq!(msgs.len(), 2, "两条消息都应到位");
@@ -922,12 +922,12 @@ async fn optional_datasets_cross_device_roundtrip() {
     assert_eq!(n, 1, "B 应看到 A 的日报行");
 
     // — A 删会话 → 墓碑传播 —
-    crate::chat::store::delete_conversation(&a.mem, conv)
+    crate::ai::features::chat::store::delete_conversation(&a.mem, conv)
         .await
         .unwrap();
     a.engine.sync_now().await.unwrap();
     b.engine.sync_now().await.unwrap();
-    let convs = crate::chat::store::list_conversations(&b.mem)
+    let convs = crate::ai::features::chat::store::list_conversations(&b.mem)
         .await
         .unwrap();
     assert!(convs.is_empty(), "删除应传播到 B");

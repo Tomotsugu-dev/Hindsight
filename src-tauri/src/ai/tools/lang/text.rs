@@ -1,4 +1,4 @@
-//! This module reads the JSON files of tool text into structs. It also gets a sentence in one
+//! This module reads the JSON files of tool and chat text into structs. It also gets a sentence in one
 //! language and fills in its placeholders.
 //!
 //! In the JSON, each sentence has one key, and the key holds the sentence in 6 languages. Each
@@ -17,7 +17,7 @@ use super::ChatLang;
 /// or too many.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(in crate::ai::tools) struct Text {
+pub(in crate::ai) struct Text {
     #[serde(rename = "zh-Hans")]
     zh_hans: String,
     #[serde(rename = "zh-Hant")]
@@ -30,7 +30,7 @@ pub(in crate::ai::tools) struct Text {
 
 impl Text {
     /// Returns the sentence for `lang`.
-    pub(in crate::ai::tools) fn get(&self, lang: ChatLang) -> &str {
+    pub(in crate::ai) fn get(&self, lang: ChatLang) -> &str {
         match lang {
             ChatLang::ZhHans => &self.zh_hans,
             ChatLang::ZhHant => &self.zh_hant,
@@ -45,11 +45,7 @@ impl Text {
     /// `args`, and returns the result.
     ///
     /// It scans the sentence once, so a `{name}` inside a value is not replaced.
-    pub(in crate::ai::tools) fn fill(
-        &self,
-        lang: ChatLang,
-        args: &[(&str, &dyn Display)],
-    ) -> String {
+    pub(in crate::ai) fn fill(&self, lang: ChatLang, args: &[(&str, &dyn Display)]) -> String {
         let mut out = String::new();
         let mut rest = self.get(lang);
         while let Some(open) = rest.find('{') {
@@ -80,15 +76,15 @@ impl Text {
 ///
 /// The JSON is built into the program, and a test reads each file, so this does not panic at
 /// run time.
-pub(in crate::ai::tools) fn load<T: DeserializeOwned>(json: &str) -> T {
-    serde_json::from_str(json).expect("built-in tool text JSON should match its struct")
+pub(in crate::ai) fn load<T: DeserializeOwned>(json: &str) -> T {
+    serde_json::from_str(json).expect("built-in text JSON should match its struct")
 }
 
 /// 检查每句话的 6 种语言用的占位符一样，以 zh-Hans 为准。每个 JSON 的测试都调它。
 ///
 /// 只有 `{}` 里全是小写字母和下划线的才算占位符。
 #[cfg(test)]
-pub(in crate::ai::tools) fn assert_same_placeholders(json: &str) {
+pub(in crate::ai) fn assert_same_placeholders(json: &str) {
     use std::collections::{BTreeMap, BTreeSet};
 
     fn placeholders(s: &str) -> BTreeSet<&str> {

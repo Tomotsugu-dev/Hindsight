@@ -1019,7 +1019,7 @@ mod tests {
         bad.error = Some("boom".to_string());
         upsert_segment(&pool, &bad).await.unwrap();
 
-        crate::ai::summary_operations::upsert_skipped_no_activity(
+        crate::ai::features::report::summary_operations::upsert_skipped_no_activity(
             &pool,
             "daily",
             date,

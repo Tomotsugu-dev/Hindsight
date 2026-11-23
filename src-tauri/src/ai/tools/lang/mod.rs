@@ -1,11 +1,11 @@
 //! This module defines `ChatLang`, the language that chat and the tools share. It also reads how
 //! to write durations and weekdays from `time.json`. Tool text is in JSON files next to each
-//! tool, and [`text`] reads it. Chat's own text is in [`crate::chat::lang`].
+//! tool, and [`text`] reads it. Chat's own text is in [`crate::ai::features::chat::lang`].
 //!
 //! All text the model reads is in the prompt language. If tool results were always in Chinese,
 //! the model would drift back to Chinese even when the user asks in English.
 
-pub(super) mod text;
+pub(in crate::ai) mod text;
 
 use std::sync::LazyLock;
 

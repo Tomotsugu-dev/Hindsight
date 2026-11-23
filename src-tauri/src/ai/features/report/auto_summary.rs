@@ -18,8 +18,10 @@ use std::sync::Arc;
 use chrono::{Duration as ChronoDuration, Local, NaiveDate};
 use tauri::{AppHandle, Manager};
 
+use crate::ai::features::report::summary::{
+    precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE,
+};
 use crate::ai::policy::ProfileChoice;
-use crate::ai::summary::{precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE};
 use crate::commands::ai_summary::{RunLock, SummaryCancel};
 use crate::error::{Error, Result};
 use crate::repo::reports::DeviceFilter;

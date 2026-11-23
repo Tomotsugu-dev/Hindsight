@@ -1,6 +1,6 @@
 //! 周报编排（单步纯文本）。
 //!
-//! 跟 [`crate::ai::summary_runner::DaySummaryRunner`] 的关键差异：
+//! 跟 [`crate::ai::features::report::summary_runner::DaySummaryRunner`] 的关键差异：
 //! - **不过 step 1**：原料是 `ai_summaries` 表里 `source='daily'` 的段总结文本，
 //!   不再过 vision LLM 看图；一次纯文本 chat 就够。
 //! - **没有"段"概念**：一周 = 一行 `ai_summaries`（`source='weekly'`，
@@ -28,13 +28,13 @@ use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
+use crate::ai::features::report::summary_operations::build_step2;
+use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
 };
-use crate::ai::summary_operations::build_step2;
-use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;

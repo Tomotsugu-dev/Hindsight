@@ -1,5 +1,5 @@
 mod kinds;
-mod lang;
+pub(in crate::ai) mod lang;
 #[cfg(test)]
 mod test_util;
 

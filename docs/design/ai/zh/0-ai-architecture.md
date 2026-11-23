@@ -124,7 +124,7 @@ flowchart TB
 
 ```
 src-tauri/src/ai/
-├── features/     ① daily.rs  weekly.rs  chat.rs
+├── features/     ① report/（日报、周报）  chat/
 ├── mcp/          ① MCP server：查数据、拿材料、写回日报
 ├── methods/      ② single_pass.rs  tool_loop.rs  pipeline.rs
 ├── model/        ③ LanguageModel、LanguageModelProvider、请求和结果类型
