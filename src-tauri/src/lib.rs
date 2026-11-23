@@ -269,7 +269,7 @@ pub fn run() {
                 ));
                 // 自动总结调度:按 ai.auto_summary 开关自动补昨日日报/上周周报。
                 // 必须在上面全部 manage 之后 spawn——任务内按需取 managed state。
-                ai::features::report::schedule::spawn(handle.clone());
+                ai::features::report::spawn_schedule(handle.clone());
                 // 定时补识别:settings.memory_ocr_daily_at 设了时刻才实际工作
                 memory::scheduled::spawn(handle.clone());
             });

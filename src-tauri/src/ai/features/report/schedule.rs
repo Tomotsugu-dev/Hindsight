@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chrono::{Duration as ChronoDuration, Local, NaiveDate};
 use tauri::{AppHandle, Manager};
 
-use crate::ai::features::report::summary::{
+use crate::ai::features::report::{
     precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE,
 };
 use crate::ai::policy::ProfileChoice;

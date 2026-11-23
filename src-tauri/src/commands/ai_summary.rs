@@ -1,7 +1,7 @@
 //! AI 总结的 Tauri 命令层（Phase 1B-γ）。
 //!
 //! 命令体本身只做参数校验 + 错误归类 + emit 顶层 error；真正的编排在
-//! [`crate::ai::features::report::summary_runner::DaySummaryRunner`]。
+//! [`crate::ai::features::report::DaySummaryRunner`]。
 //! `SummaryCancel` 是 lib.rs 里 manage 的全局单例，给 `cancel_day_summary` 调。
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::screen_memory::MemoryState;
 use crate::ai::engine::EngineSupervisor;
-use crate::ai::features::report::summary::{
+use crate::ai::features::report::{
     precheck_week, DaySummaryRunner, SummaryProgress, WeekPrecheckResp, WeekSummaryRunner,
     DAILY_SOURCE, SUMMARY_PROGRESS_EVENT, WEEKLY_SOURCE,
 };

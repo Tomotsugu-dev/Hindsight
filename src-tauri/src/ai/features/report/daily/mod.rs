@@ -11,8 +11,8 @@
 //! 不再有 step 1（VLM 逐图描述）与 MobileNet 去重——窗口标题时间线是唯一材料源。
 //! 串行而非并发：本地 llama-server 是单实例，并发请求只会让 llama.cpp 内部排队。
 
-pub mod segment;
-pub mod timeline;
+mod segment;
+mod timeline;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
