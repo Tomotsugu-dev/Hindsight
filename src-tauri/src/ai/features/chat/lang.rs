@@ -105,6 +105,20 @@ mod tests {
         assert_same_placeholders(TEXT_JSON);
     }
 
+    // 文字里不能有连续空格，它们会原样发给模型。
+    #[test]
+    fn chat_text_has_no_runs_of_spaces() {
+        use std::collections::BTreeMap;
+
+        let all: BTreeMap<String, BTreeMap<String, String>> =
+            serde_json::from_str(TEXT_JSON).unwrap();
+        for (key, langs) in &all {
+            for (lang, s) in langs {
+                assert!(!s.contains("  "), "{key} 的 {lang} 有连续空格");
+            }
+        }
+    }
+
     /// 六语 × 全部格式化方法的批量烟测:每个变体都产出非空文案,
     /// 且插值参数(日期/数字/工具名)确实出现在结果里——防"漏改某语言"和
     /// "占位符没插进去"两类低级错误,一次覆盖全部 match 臂。
