@@ -329,6 +329,8 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                 },
                 "ok",
             ),
+            // TODO: 这行错误会盖掉旧周报。开了同步时，它还会盖掉别的设备上正常的周报：
+            // 合并按 generated_at 新的赢，推送也不过滤错误行。日报一样，要改两个一起改。
             Err(e) => (
                 SegmentSummaryRow {
                     source: WEEKLY_SOURCE.to_string(),
