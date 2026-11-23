@@ -1,5 +1,6 @@
 //! 日报和周报。
 
+pub mod model;
 pub mod progress;
 pub mod schedule;
 pub mod summary;
