@@ -24,12 +24,13 @@ use std::sync::Arc;
 
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
 use crate::ai::features::report::summary_operations::build_step2;
-use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::ai::features::report::summary_progress::SummaryProgress;
+use crate::ai::features::report::summary_runner::ProgressSink;
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
@@ -49,21 +50,21 @@ pub const WEEKLY_SOURCE: &str = "weekly";
 const WEEKLY_SEGMENT_IDX: u32 = 0;
 
 /// 单点入口：跑某一周的周报。lib.rs 通过命令体临时构造，每次 invoke 新建一份。
-pub struct WeekSummaryRunner {
+pub struct WeekSummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
-    app: AppHandle,
+    app: S,
     /// 取消信号——跟 daily 共用全局 [`crate::commands::ai_summary::SummaryCancel`]。
     /// 单次 chat 跑起来后没法中途中断，所以 cancel 实际只在"启动引擎前 / chat 调用前"
     /// 检查到时早 return。
     cancel: Arc<AtomicBool>,
 }
 
-impl WeekSummaryRunner {
+impl<S: ProgressSink> WeekSummaryRunner<S> {
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
-        app: AppHandle,
+        app: S,
         cancel: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -392,9 +393,7 @@ impl WeekSummaryRunner {
     }
 
     fn emit(&self, payload: SummaryProgress) {
-        if let Err(e) = self.app.emit(SUMMARY_PROGRESS_EVENT, &payload) {
-            log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
-        }
+        self.app.emit_progress(payload);
     }
 
     /// 简化版 emit——大多数 phase 字段都为 None，统一用 base 兜底。
