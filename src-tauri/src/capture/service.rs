@@ -126,6 +126,11 @@ struct CurrentSession {
 /// 媒体防睡断言状态——挂机判定的第二信号（见 [`keepawake_active`]）。
 /// 取代旧的屏幕帧差探测:断言与截图开关无关(没开截图的用户同样生效),
 /// 且监控类软件(AIDA64 仪表盘)刷屏但不申请断言,误判源随之消除。
+///
+/// When the assertion is set, a screen thumbnail diff is used to confirm that
+/// the screen is actually changing. After [`STATIC_FRAME_LIMIT`] consecutive
+/// static probes (e.g. paused video or a browser tab stuck on a login page)
+/// the exemption is revoked and plain keyboard/mouse idle logic takes over.
 #[derive(Default)]
 struct KeepawakeProbe {
     /// 上次真实查询的时刻（限频窗口起点）
@@ -134,11 +139,36 @@ struct KeepawakeProbe {
     cached_active: bool,
     /// 最近一次确认断言活跃的墙钟时刻；挂机封口用它修正 ended_at
     last_active_at: Option<DateTime<Local>>,
+    /// Greyscale 64×36 thumbnail from the previous probe; None until the first capture.
+    last_thumb: Option<Vec<u8>>,
+    /// Number of consecutive static probes so far; exemption ends when this reaches [].
+    static_count: u32,
 }
 
 /// 防睡断言两次真实查询的最小间隔（秒）。系统调用本身微秒级,
 /// 限频只是避免每个 tick 都打一次 syscall 的噪音。
 const PROBE_MIN_GAP_SECS: u64 = 20;
+
+/// Width and height of the in-memory greyscale thumbnail used for screen-diff probes.
+const THUMB_W: u32 = 64;
+const THUMB_H: u32 = 36;
+
+/// Mean absolute difference threshold (0–255 greyscale) below which a probe is
+/// considered static. 2.0 filters out JPEG compression noise and cursor blinks
+/// while reliably passing typical video inter-frame differences (usually > 5).
+const STATIC_MAD_THRESHOLD: f32 = 2.0;
+
+/// Number of consecutive static probes required to revoke the passive-viewing
+/// exemption. At [`PROBE_MIN_GAP_SECS`] = 20 s per probe, 3 probes = at least
+/// 40 s of no visible change.
+const STATIC_FRAME_LIMIT: u32 = 3;
+
+/// Hard ceiling on keyboard/mouse idle time (seconds).
+/// Once this limit is exceeded, the current session is sealed regardless of
+/// any media keep-awake assertion or screen-change state.
+/// 45 minutes is intentionally looser than Work-Review's 10-minute cap
+/// to allow passive viewing (e.g. a full TV episode) without false cuts.
+const IDLE_HARD_CAP_SECS: u64 = 45 * 60;
 
 /// CaptureService 的内部状态。
 ///
@@ -520,8 +550,21 @@ async fn tick(inner: &Inner) -> Result<()> {
         if inner.current.lock().await.is_none() {
             return Ok(());
         }
-        if !crate::platform::is_desktop_foreground() && keepawake_active(inner).await {
-            log::debug!("键鼠空闲 {idle_now}s 但有显示防睡断言（媒体播放中），会话延续");
+        // Hard cap: seal unconditionally once the ceiling is hit, overriding
+        // any keep-awake or screen-change exemption. Prevents an indefinitely
+        // held keep-awake assertion from recording an entire night as active use.
+        let hard_cap_hit = idle_now >= IDLE_HARD_CAP_SECS;
+        if hard_cap_hit {
+            log::info!(
+                "idle {idle_now}s exceeds hard cap {}s, sealing session",
+                IDLE_HARD_CAP_SECS
+            );
+        }
+        if !hard_cap_hit
+            && !crate::platform::is_desktop_foreground()
+            && keepawake_active(inner).await
+        {
+            log::debug!("idle {idle_now}s but keep-awake assertion is set (media playing), session continues");
         } else {
             let mut cur_lock = inner.current.lock().await;
             if let Some(prev) = cur_lock.take() {
@@ -829,17 +872,22 @@ impl FocusSender {
     }
 }
 
-/// 屏幕是否仍在变化——挂机判定的第二信号。
+/// Media keep-awake assertion + screen-change double-check: second idle signal.
 ///
-/// 键鼠空闲只能证明"手不在"，不能证明"人不在"：全屏视频/盯编译时零输入但屏幕
-/// 持续变化。这里抓焦点窗口缩成 256×144 灰度，与上次探测的缩略图逐像素比较，
-/// 纯内存、不编码、不落盘。规则：
+/// `ES_DISPLAY_REQUIRED` alone produces false positives: Wallpaper Engine,
+/// a browser tab that finished playing, and similar processes hold the assertion
+/// while the screen is actually static. When the assertion is set, an extra
+/// screen-diff pass is performed:
 ///
-/// 媒体防睡断言探测（被动观看豁免的唯一信号）：
-/// - 限频 [`PROBE_MIN_GAP_SECS`]，窗口内直接复用上次判定；
-/// - 信号 = [`IdleSource::display_keepawake_active`]：播放器/浏览器播放时
-///   向 OS 申请"别让屏幕睡"，与截图开关无关、静音播放也成立；
-/// - 平台 API 失败视为无断言（fail-closed），放行挂机封口——回到纯键鼠语义。
+/// - On each real probe (rate-limited to [`PROBE_MIN_GAP_SECS`]) xcap captures
+///   the focused window, downscales it to [`THUMB_W`]×[`THUMB_H`] greyscale,
+///   and computes the mean absolute difference (MAD) against the previous frame.
+/// - MAD < [`STATIC_MAD_THRESHOLD`]: this probe counts as static, counter +1.
+/// - After [`STATIC_FRAME_LIMIT`] consecutive static probes the exemption is
+///   revoked and the session is handled as a plain keyboard/mouse idle.
+/// - xcap failure is fail-open: the static counter is not incremented and the
+///   previous result is reused.
+/// - When the assertion is false, return false immediately and reset counters.
 async fn keepawake_active(inner: &Inner) -> bool {
     let mut probe = inner.keepawake.lock().await;
     if let Some(at) = probe.last_probe_at {
@@ -848,12 +896,88 @@ async fn keepawake_active(inner: &Inner) -> bool {
         }
     }
     probe.last_probe_at = Some(Instant::now());
-    let active = inner.idle.display_keepawake_active();
-    probe.cached_active = active;
-    if active {
-        probe.last_active_at = Some(Local::now());
+
+    // Assertion is clear: immediately inactive, reset the static counter.
+    if !inner.idle.display_keepawake_active() {
+        probe.cached_active = false;
+        probe.static_count = 0;
+        probe.last_thumb = None;
+        return false;
     }
-    active
+
+    // Assertion is set: validate with a screen-diff check.
+    let is_changing = screen_is_changing(&mut probe.last_thumb);
+    if is_changing {
+        probe.static_count = 0;
+        probe.last_active_at = Some(Local::now());
+        probe.cached_active = true;
+    } else {
+        probe.static_count = probe.static_count.saturating_add(1);
+        log::debug!(
+            "keepawake: assertion set but screen static ({} consecutive probe(s) of {})",
+            probe.static_count,
+            STATIC_FRAME_LIMIT
+        );
+        if probe.static_count >= STATIC_FRAME_LIMIT {
+            log::info!(
+                "keepawake: screen static for {} consecutive probe(s), revoking exemption",
+                probe.static_count
+            );
+            probe.cached_active = false;
+        }
+        // Below the limit: keep cached_active as-is (tolerates a single black
+        // frame during a video scene transition).
+    }
+    probe.cached_active
+}
+
+/// Capture a thumbnail of the focused window and compare it to the previous frame.
+/// Returns `true` when the screen is changing (or when xcap fails: fail-open).
+/// On the first call there is no previous frame to compare; stores the frame and returns `true`.
+fn screen_is_changing(last_thumb: &mut Option<Vec<u8>>) -> bool {
+    let windows = match xcap::Window::all() {
+        Ok(w) => w,
+        Err(e) => {
+            log::debug!("keepawake thumb: xcap::Window::all failed: {e}");
+            return true;
+        }
+    };
+    let focused = match windows.iter().find(|w| w.is_focused().unwrap_or(false)) {
+        Some(w) => w,
+        None => {
+            log::debug!("keepawake thumb: no focused window found");
+            return true;
+        }
+    };
+    let rgba = match focused.capture_image() {
+        Ok(img) => img,
+        Err(e) => {
+            log::debug!("keepawake thumb: capture_image failed: {e}");
+            return true;
+        }
+    };
+
+    // Downscale to THUMB_W×THUMB_H greyscale in memory; nothing is written to disk.
+    let small = image::DynamicImage::ImageRgba8(rgba)
+        .resize_exact(THUMB_W, THUMB_H, image::imageops::FilterType::Triangle)
+        .to_luma8();
+    let pixels: Vec<u8> = small.into_raw();
+
+    let result = match last_thumb.as_ref() {
+        None => true, // first frame; no baseline yet, treat as changing
+        Some(prev) => {
+            let mad: f32 = prev
+                .iter()
+                .zip(pixels.iter())
+                .map(|(&a, &b)| (a as i32 - b as i32).unsigned_abs() as f32)
+                .sum::<f32>()
+                / pixels.len() as f32;
+            log::debug!("keepawake thumb MAD = {mad:.2}");
+            mad >= STATIC_MAD_THRESHOLD
+        }
+    };
+    *last_thumb = Some(pixels);
+    result
 }
 
 fn parse_hm(s: &str) -> i32 {
