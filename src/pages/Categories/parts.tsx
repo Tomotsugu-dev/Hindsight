@@ -64,6 +64,12 @@ export function AppList({ category }: { category: Category }) {
     };
   }, [adding, groups]);
 
+  useEffect(() => {
+    if (!adding) return;
+    const r = inputRef.current?.getBoundingClientRect();
+    if (r) setMenuRect({ top: r.bottom + 4, left: r.left });
+  }, [adding, category.apps]);
+
   // 候选池 / 输入过滤走共用模块(与设置→隐私的应用关键词同一套规则)
   const pool = useMemo<AppSuggestion[]>(
     () => (groups ? buildAppSuggestions(groups, category.apps) : []),
@@ -79,9 +85,20 @@ export function AppList({ category }: { category: Category }) {
 
   const catOf = (id: string | null) => (id ? (categories.find((x) => x.id === id) ?? null) : null);
 
-  const commitName = async (name: string) => {
+  const cancel = () => {
+    setDraft("");
+    setAdding(false);
+    setHi(-1);
+  };
+
+  const commitName = async (name: string, keepAdding = false) => {
     const trimmed = name.trim();
-    if (trimmed && category.id === PRIVATE_CATEGORY_ID) {
+    if (!trimmed) {
+      cancel();
+      return;
+    }
+
+    if (category.id === PRIVATE_CATEGORY_ID) {
       // 设置作用在整个应用分组上，统计也按分组。找不到分组说明没有记录过它
       const group = groups?.find((g) => g.members.some((m) => m.processName === trimmed));
       privacy.confirm({
@@ -90,21 +107,19 @@ export function AppList({ category }: { category: Category }) {
         target: { kind: "appGroup", groupId: group?.id ?? trimmed },
         save: () => api.assignApp(trimmed, PRIVATE_CATEGORY_ID),
       });
-    } else if (trimmed) {
-      await assignApp(trimmed, category.id);
+      cancel();
+      return;
     }
-    setDraft("");
-    setAdding(false);
-    setHi(-1);
+
+    if (keepAdding) {
+      setDraft("");
+      setHi(-1);
+    }
+    await assignApp(trimmed, category.id);
+    if (!keepAdding) cancel();
   };
 
-  const commit = () => commitName(hi >= 0 && matches[hi] ? matches[hi].process : draft);
-
-  const cancel = () => {
-    setDraft("");
-    setAdding(false);
-    setHi(-1);
-  };
+  const commit = () => commitName(hi >= 0 && matches[hi] ? matches[hi].process : draft, true);
 
   return (
     <div className={styles.appList}>
@@ -182,7 +197,7 @@ export function AppList({ category }: { category: Category }) {
                       // 避免 blur 把半截输入原文提交出去
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        void commitName(s.process);
+                        void commitName(s.process, true);
                       }}
                       onMouseEnter={() => setHi(i)}
                     >
