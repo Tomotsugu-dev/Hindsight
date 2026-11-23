@@ -791,16 +791,21 @@ mod tests {
         seed_old_report(&pool).await;
         let (port, _) = spawn_scripted_openai_server(vec![Canned::Ok("新周报")]).await;
         seed_cloud_settings(&pool, port, Vec::new()).await;
+        let sink = RecordingSink::default();
 
-        make_runner(
-            &pool,
-            RecordingSink::default(),
-            Arc::new(AtomicBool::new(false)),
-        )
-        .run(old_week_start(), true, false, &ProfileChoice::Main)
-        .await
-        .unwrap();
+        make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(false)))
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await
+            .unwrap();
 
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![
+                ("summarizing", Some(0)),
+                ("segment_done", Some(0)),
+                ("all_done", None)
+            ]
+        );
         // 一周只有一行，新结果原地覆盖
         assert_eq!(
             weekly_rows(&pool).await,
@@ -903,16 +908,17 @@ mod tests {
     async fn cancel_during_generation_keeps_old_weekly_report() {
         let pool = crate::repo::test_util::fresh_test_pool().await;
         seed_old_report(&pool).await;
-        // 假服务只完成 TCP 握手，永不回包：请求一直在途
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         seed_cloud_settings(&pool, port, Vec::new()).await;
 
+        // 假服务收到连接时按停止，之后永不回包：停止时请求一定已经发出去了
         let cancel = Arc::new(AtomicBool::new(false));
         let cancel_bg = cancel.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            let (_sock, _) = listener.accept().await.unwrap();
             cancel_bg.store(true, Ordering::Relaxed);
+            std::future::pending::<()>().await;
         });
 
         let sink = RecordingSink::default();
@@ -930,6 +936,5 @@ mod tests {
             vec![("summarizing", Some(0)), ("cancelled", None)]
         );
         assert_eq!(weekly_rows(&pool).await, old_report_only());
-        drop(listener);
     }
 }
