@@ -113,10 +113,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         allow_missing_days: bool,
         profile: &ProfileChoice,
     ) -> Result<()> {
-        // 在写任何一行之前查：停止可能在清 OCR 积压时就按了
-        if self.cancel.load(Ordering::Relaxed) {
-            return Err(Error::SummaryCancelled);
-        }
         let week_end = week_start + Duration::days(6);
         let week_key = week_start.format("%Y-%m-%d").to_string();
         let end_key = week_end.format("%Y-%m-%d").to_string();
@@ -214,6 +210,11 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                     "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。",
                 )
                 .await;
+        }
+
+        // 取消检查：启动引擎前
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(Error::SummaryCancelled);
         }
 
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
@@ -350,6 +351,10 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         end_key: &str,
         message: &str,
     ) -> Result<()> {
+        // 停止可能在清 OCR 积压或前面查库时就按了
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(Error::SummaryCancelled);
+        }
         let row = SegmentSummaryRow {
             source: WEEKLY_SOURCE.to_string(),
             local_date: week_key.to_string(),
@@ -858,6 +863,32 @@ mod tests {
 
         make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(true)))
             .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![("cancelled", None)]
+        );
+        assert_eq!(weekly_rows(&pool).await, old_report_only());
+    }
+
+    /// 宽松模式：没有日报也没有活动时会写一行错误。
+    #[tokio::test]
+    async fn cancel_before_run_keeps_old_weekly_report_without_activity() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let old_weekly = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            ..row(OLD_WEEK, 0, "", (0, 0), "旧周报", "ok")
+        };
+        ai_summaries::upsert_segment(&pool, &old_weekly)
+            .await
+            .unwrap();
+        seed_missing_local_model(&pool).await;
+        let sink = RecordingSink::default();
+
+        make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(true)))
+            .run(old_week_start(), true, true, &ProfileChoice::Main)
             .await
             .unwrap();
 
