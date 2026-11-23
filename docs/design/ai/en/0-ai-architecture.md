@@ -124,7 +124,7 @@ Module layout (all names are proposals):
 
 ```
 src-tauri/src/ai/
-├── features/     ① daily.rs  weekly.rs  chat.rs
+├── features/     ① report/ (daily and weekly reports)  chat/
 ├── mcp/          ① MCP server: search titles, get material, write a daily report back
 ├── methods/      ② single_pass.rs  tool_loop.rs  pipeline.rs
 ├── model/        ③ LanguageModel, LanguageModelProvider, request and result types
