@@ -7,10 +7,11 @@
 //! 这些函数从 `DaySummaryRunner` 拎出来便于单测与代码审查；调用方传 owned
 //! 数据 + Arc 的 cancel / pool，避免持引用跨 await。
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::ai::config::{AiConfig, ModelRef, Task, CLOUD_UNAVAILABLE_ERROR, NO_MODEL_ERROR};
+use crate::ai::features::report::progress::cancellable;
 use crate::ai::llm::Step2Chat;
 use crate::ai::prompt::{build_system_prompt, build_user_prompt, SegmentContext};
 use crate::error::{Error, Result};
@@ -18,28 +19,6 @@ use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
-
-/// 把一个 future 变成"可被停止按钮中断的"：每 250ms 轮询一次 cancel 标志，
-/// 置位则**丢弃 future**（reqwest 请求随之断开连接）并返回 [`Error::SummaryCancelled`]。
-///
-/// 正在路上的 LLM 请求（本地超时 600s）和引擎加载（最长 90s）都能被中断；
-/// llama-server 检测到客户端断开会停掉该 slot 的生成，云端 API 同理，中断是安全的。
-pub(crate) async fn cancellable<T>(
-    cancel: &Arc<AtomicBool>,
-    fut: impl std::future::Future<Output = Result<T>>,
-) -> Result<T> {
-    tokio::pin!(fut);
-    loop {
-        tokio::select! {
-            r = &mut fut => return r,
-            _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {
-                if cancel.load(Ordering::Relaxed) {
-                    return Err(Error::SummaryCancelled);
-                }
-            }
-        }
-    }
-}
 
 // ───────────────────────────── 段总结 ─────────────────────────────
 
@@ -759,36 +738,6 @@ mod tests {
             let _ = sock.shutdown().await;
         });
         port
-    }
-
-    /// 停止按钮按下的同一瞬间 LLM 恰好返回：已完成的结果（包括真实错误）不能被
-    /// 吞成 SummaryCancelled——否则用户点了停止就永远看不到真正的失败原因。
-    #[tokio::test]
-    async fn cancellable_ready_result_beats_cancel_flag() {
-        let cancel = Arc::new(AtomicBool::new(true));
-        let ok = cancellable(&cancel, async { Ok::<_, Error>(42u32) }).await;
-        assert_eq!(ok.unwrap(), 42, "已就绪的 Ok 结果应原样返回");
-
-        let err = cancellable(&cancel, async {
-            Err::<u32, _>(Error::InvalidInput("boom"))
-        })
-        .await;
-        assert!(
-            matches!(err, Err(Error::InvalidInput("boom"))),
-            "已就绪的 Err 应透传原错误而非 SummaryCancelled: {err:?}"
-        );
-    }
-
-    /// 引擎挂死不回包时按停止：250ms 轮询必须能打断永远 pending 的 future。
-    /// 这是停止按钮的核心保证——没有它用户只能干等 600s 超时。
-    #[tokio::test]
-    async fn cancellable_pending_future_returns_cancelled() {
-        let cancel = Arc::new(AtomicBool::new(true));
-        let r: Result<u32> = cancellable(&cancel, std::future::pending::<Result<u32>>()).await;
-        assert!(
-            matches!(r, Err(Error::SummaryCancelled)),
-            "挂死 future + cancel 置位应返回 SummaryCancelled: {r:?}"
-        );
     }
 
     /// 60s 阈值 off-by-one 会把 59s 显示成"0 分钟"或把 60s 显示成"60s"，

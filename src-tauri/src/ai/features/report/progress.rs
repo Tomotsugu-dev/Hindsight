@@ -1,10 +1,16 @@
-//! AI 总结流程的进度事件 payload。
+//! 日报、周报跑起来时和前端的来往：往外报进度，往里收停止。
 //!
 //! 前端 `listen("ai://summary-progress", …)` 拿进度，按 `phase` 字段分发渲染。
-//! 该结构体 / 常量从原 `summary.rs` 拎出，与 [`crate::commands::ai_binary::ENGINE_DOWNLOAD_PROGRESS_EVENT`]
+//! 事件名与 [`crate::commands::ai_binary::ENGINE_DOWNLOAD_PROGRESS_EVENT`]
 //! 平级，统一在 `ai://` 命名空间。
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use serde::Serialize;
+use tauri::{AppHandle, Emitter};
+
+use crate::error::{Error, Result};
 
 /// 前端 listen 这个事件名拿进度。
 pub const SUMMARY_PROGRESS_EVENT: &str = "ai://summary-progress";
@@ -70,5 +76,78 @@ impl SummaryProgress {
             status: None,
             message: None,
         }
+    }
+}
+
+/// 进度事件出口的最小抽象。生产代码里就是 [`AppHandle`]（emit 给前端）；
+/// 抽成 trait 是为了让编排逻辑能脱离 Tauri 运行时做单元测试——`tauri` 依赖
+/// 没开 `test` feature，测试进程里根本构造不出 AppHandle，这是 runner
+/// 对 Tauri 的唯一硬依赖，砍断它其余全部编排都可测。
+pub trait ProgressSink {
+    fn emit_progress(&self, payload: SummaryProgress);
+}
+
+impl ProgressSink for AppHandle {
+    fn emit_progress(&self, payload: SummaryProgress) {
+        if let Err(e) = self.emit(SUMMARY_PROGRESS_EVENT, &payload) {
+            log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
+        }
+    }
+}
+
+/// 把一个 future 变成"可被停止按钮中断的"：每 250ms 轮询一次 cancel 标志，
+/// 置位则**丢弃 future**（reqwest 请求随之断开连接）并返回 [`Error::SummaryCancelled`]。
+///
+/// 正在路上的 LLM 请求（本地超时 600s）和引擎加载（最长 90s）都能被中断；
+/// llama-server 检测到客户端断开会停掉该 slot 的生成，云端 API 同理，中断是安全的。
+pub(crate) async fn cancellable<T>(
+    cancel: &Arc<AtomicBool>,
+    fut: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    tokio::pin!(fut);
+    loop {
+        tokio::select! {
+            r = &mut fut => return r,
+            _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(Error::SummaryCancelled);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 停止按钮按下的同一瞬间 LLM 恰好返回：已完成的结果（包括真实错误）不能被
+    /// 吞成 SummaryCancelled——否则用户点了停止就永远看不到真正的失败原因。
+    #[tokio::test]
+    async fn cancellable_ready_result_beats_cancel_flag() {
+        let cancel = Arc::new(AtomicBool::new(true));
+        let ok = cancellable(&cancel, async { Ok::<_, Error>(42u32) }).await;
+        assert_eq!(ok.unwrap(), 42, "已就绪的 Ok 结果应原样返回");
+
+        let err = cancellable(&cancel, async {
+            Err::<u32, _>(Error::InvalidInput("boom"))
+        })
+        .await;
+        assert!(
+            matches!(err, Err(Error::InvalidInput("boom"))),
+            "已就绪的 Err 应透传原错误而非 SummaryCancelled: {err:?}"
+        );
+    }
+
+    /// 引擎挂死不回包时按停止：250ms 轮询必须能打断永远 pending 的 future。
+    /// 这是停止按钮的核心保证——没有它用户只能干等 600s 超时。
+    #[tokio::test]
+    async fn cancellable_pending_future_returns_cancelled() {
+        let cancel = Arc::new(AtomicBool::new(true));
+        let r: Result<u32> = cancellable(&cancel, std::future::pending::<Result<u32>>()).await;
+        assert!(
+            matches!(r, Err(Error::SummaryCancelled)),
+            "挂死 future + cancel 置位应返回 SummaryCancelled: {r:?}"
+        );
     }
 }

@@ -2,11 +2,11 @@
 //! [`SUMMARY_PROGRESS_EVENT`] 重导出到一处方便外部 import。
 //!
 //! 实际实现拆在：
-//! - [`crate::ai::features::report::summary_progress`]：进度事件 payload `SummaryProgress` + 事件名
+//! - [`crate::ai::features::report::progress`]：进度事件 payload `SummaryProgress` + 事件名
 //! - [`crate::ai::features::report::summary_operations`]：活动时间线合成 + 段总结业务函数
 //! - [`crate::ai::features::report::summary_runner`]：编排核心 `DaySummaryRunner`
 
-pub use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
+pub use crate::ai::features::report::progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 pub use crate::ai::features::report::summary_runner::{DaySummaryRunner, DAILY_SOURCE};
 pub use crate::ai::features::report::weekly_runner::{
     precheck_week, WeekPrecheckResp, WeekSummaryRunner, WEEKLY_SOURCE,

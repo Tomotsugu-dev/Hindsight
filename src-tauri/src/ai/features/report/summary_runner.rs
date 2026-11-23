@@ -16,14 +16,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::NaiveDate;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
+use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
 use crate::ai::features::report::summary_operations::{
     build_activity_timeline, build_step2, summarize_segment, upsert_skipped_no_activity,
 };
-use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::error::{Error, Result};
@@ -35,22 +35,6 @@ use crate::storage::DbPool;
 /// 日报在 ai_summaries 里的 `source`。
 pub const DAILY_SOURCE: &str = "daily";
 
-/// 进度事件出口的最小抽象。生产代码里就是 [`AppHandle`]（emit 给前端）；
-/// 抽成 trait 是为了让编排逻辑能脱离 Tauri 运行时做单元测试——`tauri` 依赖
-/// 没开 `test` feature，测试进程里根本构造不出 AppHandle，这是 runner
-/// 对 Tauri 的唯一硬依赖，砍断它其余全部编排都可测。
-pub trait ProgressSink {
-    fn emit_progress(&self, payload: SummaryProgress);
-}
-
-impl ProgressSink for AppHandle {
-    fn emit_progress(&self, payload: SummaryProgress) {
-        if let Err(e) = self.emit(SUMMARY_PROGRESS_EVENT, &payload) {
-            log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
-        }
-    }
-}
-
 /// 单点入口：跑一天的 AI 总结。lib.rs 通过 `app.manage` 不直接管它，
 /// 而是命令体里临时构造（生命周期跟随单次调用）。
 ///
@@ -61,7 +45,7 @@ pub struct DaySummaryRunner<S: ProgressSink = AppHandle> {
     supervisor: Arc<EngineSupervisor>,
     app: S,
     /// 取消信号：段边界检查 + 在途 LLM 请求和引擎加载也会被
-    /// [`crate::ai::features::report::summary_operations::cancellable`] 每 250ms 轮询中断。
+    /// [`cancellable`] 每 250ms 轮询中断。
     cancel: Arc<AtomicBool>,
 }
 
@@ -255,7 +239,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             self.emit(p);
         }
         let main_path = self.resolve_local_model_path(ai, &main_name)?;
-        let engine = crate::ai::features::report::summary_operations::cancellable(
+        let engine = cancellable(
             &self.cancel,
             self.supervisor.acquire(main_path, engine_overrides),
         )

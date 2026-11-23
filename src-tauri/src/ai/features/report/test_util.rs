@@ -10,8 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::ai::config::{CloudConnection, DaySegment, ModelRef};
-use crate::ai::features::report::summary_progress::SummaryProgress;
-use crate::ai::features::report::summary_runner::ProgressSink;
+use crate::ai::features::report::progress::{ProgressSink, SummaryProgress};
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
 

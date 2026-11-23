@@ -28,9 +28,8 @@ use tauri::AppHandle;
 
 use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::features::report::summary_operations::{build_step2, cancellable};
-use crate::ai::features::report::summary_progress::SummaryProgress;
-use crate::ai::features::report::summary_runner::ProgressSink;
+use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
+use crate::ai::features::report::summary_operations::build_step2;
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
