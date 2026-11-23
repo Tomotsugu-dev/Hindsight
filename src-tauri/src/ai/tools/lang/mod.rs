@@ -5,7 +5,7 @@
 //! All text the model reads is in the prompt language. If tool results were always in Chinese,
 //! the model would drift back to Chinese even when the user asks in English.
 
-pub(super) mod text;
+pub(in crate::ai) mod text;
 
 use std::sync::LazyLock;
 
