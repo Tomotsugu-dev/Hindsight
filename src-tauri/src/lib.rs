@@ -2,7 +2,6 @@ mod account;
 mod ai;
 mod bootstrap;
 mod capture;
-mod chat;
 mod commands;
 mod device;
 mod error;

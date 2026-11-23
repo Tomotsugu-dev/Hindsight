@@ -159,7 +159,7 @@ async fn condense_question(
     question: &str,
     lang: ChatLang,
     today: NaiveDate,
-) -> (Option<String>, crate::chat::llm::TokenUsage) {
+) -> (Option<String>, crate::ai::features::chat::llm::TokenUsage) {
     let mut ctx = String::new();
     for h in history.iter().rev().take(6).rev() {
         match h.role.as_str() {
@@ -208,7 +208,7 @@ struct RunUsage {
 }
 
 impl RunUsage {
-    fn add(&mut self, u: crate::chat::llm::TokenUsage) {
+    fn add(&mut self, u: crate::ai::features::chat::llm::TokenUsage) {
         self.prompt += u.prompt;
         self.completion += u.completion;
         self.reasoning += u.reasoning;
