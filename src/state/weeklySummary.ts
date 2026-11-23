@@ -211,8 +211,8 @@ export async function startWeeklyGenerate(
   }
 }
 
-/** 停止当前 weekly run。复用 daily 的全局 cancel signal——后端 chat 已在路上时
- *  无法中断（一次 LLM 调用 30-180s），只能等它跑完。 */
+/** 停止当前 weekly run。复用 daily 的全局 cancel signal。后端每 250ms 轮询 cancel 标志，
+ *  会中断在途的 LLM 请求和引擎加载，随后 emit cancelled 事件复位状态。 */
 export async function cancelWeeklyGenerate(): Promise<void> {
   try {
     await api.cancelDaySummary();

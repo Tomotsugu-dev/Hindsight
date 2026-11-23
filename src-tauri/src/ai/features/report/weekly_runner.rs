@@ -24,12 +24,13 @@ use std::sync::Arc;
 
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::features::report::summary_operations::build_step2;
-use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::ai::features::report::summary_operations::{build_step2, cancellable};
+use crate::ai::features::report::summary_progress::SummaryProgress;
+use crate::ai::features::report::summary_runner::ProgressSink;
 use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
@@ -49,21 +50,20 @@ pub const WEEKLY_SOURCE: &str = "weekly";
 const WEEKLY_SEGMENT_IDX: u32 = 0;
 
 /// 单点入口：跑某一周的周报。lib.rs 通过命令体临时构造，每次 invoke 新建一份。
-pub struct WeekSummaryRunner {
+pub struct WeekSummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
-    app: AppHandle,
-    /// 取消信号——跟 daily 共用全局 [`crate::commands::ai_summary::SummaryCancel`]。
-    /// 单次 chat 跑起来后没法中途中断，所以 cancel 实际只在"启动引擎前 / chat 调用前"
-    /// 检查到时早 return。
+    app: S,
+    /// 停止标志，和日报共用 [`crate::commands::ai_summary::SummaryCancel`]。
+    /// 启动引擎和等模型回答时按停止，都会中断。
     cancel: Arc<AtomicBool>,
 }
 
-impl WeekSummaryRunner {
+impl<S: ProgressSink> WeekSummaryRunner<S> {
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
-        app: AppHandle,
+        app: S,
         cancel: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -78,6 +78,7 @@ impl WeekSummaryRunner {
     ///
     /// `week_start` 必须是周一（调用方负责传对——`commands` 层会把任意日期对齐到周一）。
     /// `force_refresh = true` 时无视已有行直接重跑；false 且已有 ok 行时直接 `Ok(())` 早返回。
+    /// 重跑时旧周报留到这一轮写下结果才被覆盖：取消或引擎起不来时，旧周报还在。
     /// `allow_missing_days = true` 时：
     ///   - 部分日缺日报：用当日 top apps 文本顶替进入 prompt
     ///   - 整周无日报但有 activity：仅基于整周 + 每日 top apps 做简化分析
@@ -87,6 +88,25 @@ impl WeekSummaryRunner {
     /// `profile` 决定 AI 能看到哪些活动。七天的日报照原文读，日报里已经写进去的，
     /// 这里拦不住。
     pub async fn run(
+        &self,
+        week_start: NaiveDate,
+        force_refresh: bool,
+        allow_missing_days: bool,
+        profile: &ProfileChoice,
+    ) -> Result<()> {
+        let result = self
+            .run_inner(week_start, force_refresh, allow_missing_days, profile)
+            .await;
+        // 按了停止不算失败：发 cancelled，返回 Ok
+        if matches!(result, Err(Error::SummaryCancelled)) {
+            let week_key = week_start.format("%Y-%m-%d").to_string();
+            self.emit_phase("cancelled", &week_key, None, None);
+            return Ok(());
+        }
+        result
+    }
+
+    async fn run_inner(
         &self,
         week_start: NaiveDate,
         force_refresh: bool,
@@ -114,10 +134,6 @@ impl WeekSummaryRunner {
             .await?
             .main_filter();
 
-        if force_refresh {
-            ai_summaries::clear_day_summaries_only(&self.pool, WEEKLY_SOURCE, &week_key).await?;
-        }
-
         // 拉一周内所有 daily 段总结，按日期 group
         let daily_rows = ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
         let lang = ai.prompt_language.as_str().to_string();
@@ -126,36 +142,13 @@ impl WeekSummaryRunner {
         // 严格模式（前端没确认 allow）下：整周无日报 = 老行为，写 error 行让前端引导
         // 用户先补日报。宽松模式继续往下走——通过补缺失日 fallback / 简化分析兜底。
         if days.is_empty() && !allow_missing_days {
-            let row = SegmentSummaryRow {
-                source: WEEKLY_SOURCE.to_string(),
-                local_date: week_key.clone(),
-                segment_idx: WEEKLY_SEGMENT_IDX,
-                label: weekly_label(&week_key, &end_key),
-                start_hour: 0,
-                end_hour: 0,
-                content: String::new(),
-                model: String::new(),
-                status: "error".to_string(),
-                error: Some(
-                    "本周还没有任何已生成的日报。请先到「日报」页生成几天后再试。".to_string(),
-                ),
-                generated_at: utc_now_rfc3339(),
-            };
-            ai_summaries::upsert_segment(&self.pool, &row).await?;
-            // emit 一条 segment_done 让前端 store 写入这一行（status=error），
-            // 紧接着 all_done 收尾——避免前端按钮一直转
-            let mut p = SummaryProgress::base(
-                WEEKLY_SOURCE.to_string(),
-                week_key.clone(),
-                "segment_done",
-                1,
-            );
-            p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
-            p.status = Some("error");
-            p.message = row.error.clone();
-            self.emit(p);
-            self.emit_phase("all_done", &week_key, None, None);
-            return Ok(());
+            return self
+                .write_no_data_error(
+                    &week_key,
+                    &end_key,
+                    "本周还没有任何已生成的日报。请先到「日报」页生成几天后再试。",
+                )
+                .await;
         }
 
         // 宽松模式：缺日报的天用当日 top apps 文本顶替——还是缺数据的天（既没日报
@@ -210,41 +203,18 @@ impl WeekSummaryRunner {
 
         // 宽松模式终极兜底：日报也空 + 整周 top_apps 也空 = 本周根本没用电脑，没东西可写
         if allow_missing_days && days.is_empty() && top_apps.is_empty() {
-            let row = SegmentSummaryRow {
-                source: WEEKLY_SOURCE.to_string(),
-                local_date: week_key.clone(),
-                segment_idx: WEEKLY_SEGMENT_IDX,
-                label: weekly_label(&week_key, &end_key),
-                start_hour: 0,
-                end_hour: 0,
-                content: String::new(),
-                model: String::new(),
-                status: "error".to_string(),
-                error: Some(
-                    "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。"
-                        .to_string(),
-                ),
-                generated_at: utc_now_rfc3339(),
-            };
-            ai_summaries::upsert_segment(&self.pool, &row).await?;
-            let mut p = SummaryProgress::base(
-                WEEKLY_SOURCE.to_string(),
-                week_key.clone(),
-                "segment_done",
-                1,
-            );
-            p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
-            p.status = Some("error");
-            p.message = row.error.clone();
-            self.emit(p);
-            self.emit_phase("all_done", &week_key, None, None);
-            return Ok(());
+            return self
+                .write_no_data_error(
+                    &week_key,
+                    &end_key,
+                    "本周既没有任何日报，也没有应用使用记录。请确认这一周是否有使用电脑。",
+                )
+                .await;
         }
 
         // 取消检查：启动引擎前
         if self.cancel.load(Ordering::Relaxed) {
-            self.emit_phase("cancelled", &week_key, None, None);
-            return Ok(());
+            return Err(Error::SummaryCancelled);
         }
 
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
@@ -256,7 +226,7 @@ impl WeekSummaryRunner {
                 // message 留空：前端按 phase 显示本地化的"加载模型中…"（weeklySummary.ts）
                 self.emit_phase("engine_starting", &week_key, None, None);
             }
-            Some(self.acquire_engine(&ai, file).await?)
+            Some(cancellable(&self.cancel, self.acquire_engine(&ai, file)).await?)
         } else {
             None
         };
@@ -265,8 +235,7 @@ impl WeekSummaryRunner {
 
         // 取消检查：chat 之前
         if self.cancel.load(Ordering::Relaxed) {
-            self.emit_phase("cancelled", &week_key, None, None);
-            return Ok(());
+            return Err(Error::SummaryCancelled);
         }
 
         // 拼 prompt + 调 step2
@@ -294,41 +263,47 @@ impl WeekSummaryRunner {
             self.emit(p);
         }
 
-        let (row, status_str): (SegmentSummaryRow, &'static str) =
-            match step2.chat(&system, &user_text).await {
-                Ok(content) => (
-                    SegmentSummaryRow {
-                        source: WEEKLY_SOURCE.to_string(),
-                        local_date: week_key.clone(),
-                        segment_idx: WEEKLY_SEGMENT_IDX,
-                        label: weekly_label(&week_key, &end_key),
-                        start_hour: 0,
-                        end_hour: 0,
-                        content,
-                        model: step2_model.clone(),
-                        status: "ok".to_string(),
-                        error: None,
-                        generated_at: utc_now_rfc3339(),
-                    },
-                    "ok",
-                ),
-                Err(e) => (
-                    SegmentSummaryRow {
-                        source: WEEKLY_SOURCE.to_string(),
-                        local_date: week_key.clone(),
-                        segment_idx: WEEKLY_SEGMENT_IDX,
-                        label: weekly_label(&week_key, &end_key),
-                        start_hour: 0,
-                        end_hour: 0,
-                        content: String::new(),
-                        model: step2_model,
-                        status: "error".to_string(),
-                        error: Some(e.to_string()),
-                        generated_at: utc_now_rfc3339(),
-                    },
-                    "error",
-                ),
-            };
+        // 停止时不写库，旧周报留着
+        let chat_result = cancellable(&self.cancel, step2.chat(&system, &user_text)).await;
+        if matches!(chat_result, Err(Error::SummaryCancelled)) {
+            return Err(Error::SummaryCancelled);
+        }
+        let (row, status_str): (SegmentSummaryRow, &'static str) = match chat_result {
+            Ok(content) => (
+                SegmentSummaryRow {
+                    source: WEEKLY_SOURCE.to_string(),
+                    local_date: week_key.clone(),
+                    segment_idx: WEEKLY_SEGMENT_IDX,
+                    label: weekly_label(&week_key, &end_key),
+                    start_hour: 0,
+                    end_hour: 0,
+                    content,
+                    model: step2_model.clone(),
+                    status: "ok".to_string(),
+                    error: None,
+                    generated_at: utc_now_rfc3339(),
+                },
+                "ok",
+            ),
+            // TODO: 这行错误会盖掉旧周报。开了同步时，它还会盖掉别的设备上正常的周报：
+            // 合并按 generated_at 新的赢，推送也不过滤错误行。日报一样，要改两个一起改。
+            Err(e) => (
+                SegmentSummaryRow {
+                    source: WEEKLY_SOURCE.to_string(),
+                    local_date: week_key.clone(),
+                    segment_idx: WEEKLY_SEGMENT_IDX,
+                    label: weekly_label(&week_key, &end_key),
+                    start_hour: 0,
+                    end_hour: 0,
+                    content: String::new(),
+                    model: step2_model,
+                    status: "error".to_string(),
+                    error: Some(e.to_string()),
+                    generated_at: utc_now_rfc3339(),
+                },
+                "error",
+            ),
+        };
 
         // upsert 失败不让整轮抛飞——日报路径同款防御：磁盘满 / DB lock 时 row
         // 写不进去也得让上层 emit segment_done，至少前端能看到红色 error badge
@@ -369,6 +344,46 @@ impl WeekSummaryRunner {
         Ok(status.as_deref() == Some("ok"))
     }
 
+    /// 这一周没有材料可写：写一行错误，盖掉已有的周报，再发 segment_done 和 all_done。
+    async fn write_no_data_error(
+        &self,
+        week_key: &str,
+        end_key: &str,
+        message: &str,
+    ) -> Result<()> {
+        // 停止可能在清 OCR 积压或前面查库时就按了
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(Error::SummaryCancelled);
+        }
+        let row = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            local_date: week_key.to_string(),
+            segment_idx: WEEKLY_SEGMENT_IDX,
+            label: weekly_label(week_key, end_key),
+            start_hour: 0,
+            end_hour: 0,
+            content: String::new(),
+            model: String::new(),
+            status: "error".to_string(),
+            error: Some(message.to_string()),
+            generated_at: utc_now_rfc3339(),
+        };
+        ai_summaries::upsert_segment(&self.pool, &row).await?;
+        // segment_done 让前端写入这一行，all_done 让按钮停止转圈
+        let mut p = SummaryProgress::base(
+            WEEKLY_SOURCE.to_string(),
+            week_key.to_string(),
+            "segment_done",
+            1,
+        );
+        p.segment_idx = Some(WEEKLY_SEGMENT_IDX);
+        p.status = Some("error");
+        p.message = row.error;
+        self.emit(p);
+        self.emit_phase("all_done", week_key, None, None);
+        Ok(())
+    }
+
     /// 按周报的模型和参数拿一个本机引擎。`main_name` 是周报用的本机模型文件。
     async fn acquire_engine(
         &self,
@@ -392,9 +407,7 @@ impl WeekSummaryRunner {
     }
 
     fn emit(&self, payload: SummaryProgress) {
-        if let Err(e) = self.app.emit(SUMMARY_PROGRESS_EVENT, &payload) {
-            log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
-        }
+        self.app.emit_progress(payload);
     }
 
     /// 简化版 emit——大多数 phase 字段都为 None，统一用 base 兜底。
@@ -609,6 +622,9 @@ pub async fn precheck_week(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::features::report::test_util::{
+        phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned, RecordingSink,
+    };
 
     fn row(
         date: &str,
@@ -700,5 +716,225 @@ mod tests {
         }
         assert!(format_missing_day_fallback("zh", &apps).contains("分钟"));
         assert!(format_missing_day_fallback("en", &apps).contains("min"));
+    }
+
+    // ─────────── 重新生成：没生成出新周报时，旧周报要留着 ───────────
+
+    const OLD_WEEK: &str = "2026-07-20"; // 周一
+
+    /// 种一份 ok 的旧周报、周二一段日报。
+    async fn seed_old_report(pool: &DbPool) {
+        let old_weekly = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            ..row(OLD_WEEK, 0, "", (0, 0), "旧周报", "ok")
+        };
+        ai_summaries::upsert_segment(pool, &old_weekly)
+            .await
+            .unwrap();
+        // 有日报，严格模式才会走到启动引擎那一步
+        let daily = row("2026-07-21", 0, "上午", (9, 12), "写代码", "ok");
+        ai_summaries::upsert_segment(pool, &daily).await.unwrap();
+    }
+
+    /// 模型选本机文件，但文件不存在。
+    async fn seed_missing_local_model(pool: &DbPool) {
+        // 两个路径设非空：避免 load() 补默认值时回写 settings
+        let mut s = settings_repo::Settings {
+            screenshot_path: "/tmp/hindsight-test-shots".to_string(),
+            ..Default::default()
+        };
+        let no_models = std::env::temp_dir().join(format!(
+            "hindsight-weekly-no-models-{}",
+            uuid::Uuid::new_v4()
+        ));
+        s.ai.models_path = no_models.to_string_lossy().into_owned();
+        // 周报默认继承日报的模型
+        s.ai.picks.daily = Some(ModelRef::Local {
+            file: "missing.gguf".to_string(),
+        });
+        settings_repo::save(pool, &s).await.unwrap();
+    }
+
+    async fn weekly_rows(pool: &DbPool) -> Vec<(String, String)> {
+        ai_summaries::get_day(pool, WEEKLY_SOURCE, OLD_WEEK)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.status, r.content))
+            .collect()
+    }
+
+    fn make_runner(
+        pool: &DbPool,
+        sink: RecordingSink,
+        cancel: Arc<AtomicBool>,
+    ) -> WeekSummaryRunner<RecordingSink> {
+        WeekSummaryRunner::new(
+            pool.clone(),
+            Arc::new(EngineSupervisor::new()),
+            sink,
+            cancel,
+        )
+    }
+
+    fn old_week_start() -> NaiveDate {
+        NaiveDate::parse_from_str(OLD_WEEK, "%Y-%m-%d").unwrap()
+    }
+
+    fn old_report_only() -> Vec<(String, String)> {
+        vec![("ok".to_string(), "旧周报".to_string())]
+    }
+
+    #[tokio::test]
+    async fn regenerate_overwrites_old_weekly_report() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        seed_old_report(&pool).await;
+        let (port, _) = spawn_scripted_openai_server(vec![Canned::Ok("新周报")]).await;
+        seed_cloud_settings(&pool, port, Vec::new()).await;
+        let sink = RecordingSink::default();
+
+        make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(false)))
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![
+                ("summarizing", Some(0)),
+                ("segment_done", Some(0)),
+                ("all_done", None)
+            ]
+        );
+        // 一周只有一行，新结果原地覆盖
+        assert_eq!(
+            weekly_rows(&pool).await,
+            vec![("ok".to_string(), "新周报".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_engine_start_keeps_old_weekly_report() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        seed_old_report(&pool).await;
+        seed_missing_local_model(&pool).await;
+        let sink = RecordingSink::default();
+
+        let res = make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(false)))
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await;
+
+        assert!(matches!(res, Err(Error::ModelFileMissing(_))), "{res:?}");
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![("engine_starting", None)]
+        );
+        assert_eq!(weekly_rows(&pool).await, old_report_only());
+    }
+
+    #[tokio::test]
+    async fn cancel_before_engine_start_keeps_old_weekly_report() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        seed_old_report(&pool).await;
+        seed_missing_local_model(&pool).await;
+        let sink = RecordingSink::default();
+
+        make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(true)))
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![("cancelled", None)]
+        );
+        assert_eq!(weekly_rows(&pool).await, old_report_only());
+    }
+
+    /// 停止在清 OCR 积压时就按下了，进 run 时标志已置位。
+    #[tokio::test]
+    async fn cancel_before_run_keeps_old_weekly_report_without_daily_reports() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        // 只有旧周报，这一周没有日报：严格模式下会写一行错误
+        let old_weekly = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            ..row(OLD_WEEK, 0, "", (0, 0), "旧周报", "ok")
+        };
+        ai_summaries::upsert_segment(&pool, &old_weekly)
+            .await
+            .unwrap();
+        seed_missing_local_model(&pool).await;
+        let sink = RecordingSink::default();
+
+        make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(true)))
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![("cancelled", None)]
+        );
+        assert_eq!(weekly_rows(&pool).await, old_report_only());
+    }
+
+    /// 宽松模式：没有日报也没有活动时会写一行错误。
+    #[tokio::test]
+    async fn cancel_before_run_keeps_old_weekly_report_without_activity() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let old_weekly = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            ..row(OLD_WEEK, 0, "", (0, 0), "旧周报", "ok")
+        };
+        ai_summaries::upsert_segment(&pool, &old_weekly)
+            .await
+            .unwrap();
+        seed_missing_local_model(&pool).await;
+        let sink = RecordingSink::default();
+
+        make_runner(&pool, sink.clone(), Arc::new(AtomicBool::new(true)))
+            .run(old_week_start(), true, true, &ProfileChoice::Main)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![("cancelled", None)]
+        );
+        assert_eq!(weekly_rows(&pool).await, old_report_only());
+    }
+
+    #[tokio::test]
+    async fn cancel_during_generation_keeps_old_weekly_report() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        seed_old_report(&pool).await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        seed_cloud_settings(&pool, port, Vec::new()).await;
+
+        // 假服务收到连接时按停止，之后永不回包：停止时请求一定已经发出去了
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_bg = cancel.clone();
+        tokio::spawn(async move {
+            let (_sock, _) = listener.accept().await.unwrap();
+            cancel_bg.store(true, Ordering::Relaxed);
+            std::future::pending::<()>().await;
+        });
+
+        let sink = RecordingSink::default();
+        let runner = make_runner(&pool, sink.clone(), cancel);
+        let run = runner.run(old_week_start(), true, false, &ProfileChoice::Main);
+        // 按停止后要很快返回，不能等到请求超时
+        tokio::time::timeout(std::time::Duration::from_secs(5), run)
+            .await
+            .expect("按停止后 5 秒内没有返回")
+            .unwrap();
+
+        let events = sink.events.lock().unwrap().clone();
+        assert_eq!(
+            phase_seq(&events),
+            vec![("summarizing", Some(0)), ("cancelled", None)]
+        );
+        assert_eq!(weekly_rows(&pool).await, old_report_only());
     }
 }
