@@ -605,6 +605,7 @@ pub async fn precheck_week(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::features::report::test_util::{phase_seq, RecordingSink};
 
     fn row(
         date: &str,
@@ -700,18 +701,6 @@ mod tests {
 
     // ─────────── 重新生成：没生成出新周报时，旧周报要留着 ───────────
 
-    /// 只记 phase，断言「走到了哪一步」用。
-    #[derive(Clone, Default)]
-    struct RecordingSink {
-        phases: Arc<std::sync::Mutex<Vec<&'static str>>>,
-    }
-
-    impl ProgressSink for RecordingSink {
-        fn emit_progress(&self, payload: SummaryProgress) {
-            self.phases.lock().unwrap().push(payload.phase);
-        }
-    }
-
     const OLD_WEEK: &str = "2026-07-20"; // 周一
 
     /// 种一份 ok 的旧周报、周二一段日报，模型选本机文件但文件不存在。
@@ -797,7 +786,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(*sink.phases.lock().unwrap(), vec!["cancelled"]);
+        assert_eq!(
+            phase_seq(&sink.events.lock().unwrap()),
+            vec![("cancelled", None)]
+        );
         assert_eq!(
             weekly_rows(&pool).await,
             vec![("ok".to_string(), "旧周报".to_string())]
