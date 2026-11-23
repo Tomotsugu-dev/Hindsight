@@ -10,15 +10,14 @@
 //! - [`llm`] chat completion 客户端（本地 + 外部）
 //! - [`prompt`] system / user prompt 拼装（多语言）
 //! - [`job_guard`] 子进程组保护（Windows Job Object / Linux+macOS setpgid）
-//! - [`summary`] 总结编排 façade（实际实现在 `summary_runner` / `summary_operations` /
-//!   `summary_progress`）
+//! - [`features`] 用户用到的 AI 功能
 
-pub mod auto_summary;
 pub mod binary;
 pub mod config;
 pub mod download_sources;
 pub mod embedding_runtime;
 pub mod engine;
+pub mod features;
 pub mod gguf;
 pub mod job_guard;
 pub mod llm;
@@ -37,13 +36,8 @@ pub mod policy;
 pub mod prompt;
 pub mod providers;
 pub mod recommended;
-pub mod summary;
-pub mod summary_operations;
-pub mod summary_progress;
-pub mod summary_runner;
 pub mod tools;
 pub mod transport;
-pub mod weekly_runner;
 
 /// 基础 ONNX 会话 builder:线程帽 + 关 memory pattern,**不带 GPU EP**。
 pub(crate) fn onnx_session_builder(

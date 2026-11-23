@@ -20,12 +20,12 @@ use tauri::{AppHandle, Emitter};
 
 use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
 use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::models;
-use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
-use crate::ai::summary_operations::{
+use crate::ai::features::report::summary_operations::{
     build_activity_timeline, build_step2, summarize_segment, upsert_skipped_no_activity,
 };
-use crate::ai::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
+use crate::ai::models;
+use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, list_segment_top_apps};
 use crate::repo::reports::DeviceFilter;
@@ -61,7 +61,7 @@ pub struct DaySummaryRunner<S: ProgressSink = AppHandle> {
     supervisor: Arc<EngineSupervisor>,
     app: S,
     /// 取消信号：段边界检查 + 在途 LLM 请求和引擎加载也会被
-    /// [`crate::ai::summary_operations::cancellable`] 每 250ms 轮询中断。
+    /// [`crate::ai::features::report::summary_operations::cancellable`] 每 250ms 轮询中断。
     cancel: Arc<AtomicBool>,
 }
 
@@ -255,7 +255,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             self.emit(p);
         }
         let main_path = self.resolve_local_model_path(ai, &main_name)?;
-        let engine = crate::ai::summary_operations::cancellable(
+        let engine = crate::ai::features::report::summary_operations::cancellable(
             &self.cancel,
             self.supervisor.acquire(main_path, engine_overrides),
         )

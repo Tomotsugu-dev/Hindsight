@@ -18,8 +18,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::ai::summary_progress::SummaryProgress;
-use crate::ai::summary_runner::ProgressSink;
+use crate::ai::features::report::summary_progress::SummaryProgress;
+use crate::ai::features::report::summary_runner::ProgressSink;
 use crate::memory::{digest, frames, MemoryDb};
 use crate::storage::DbPool;
 

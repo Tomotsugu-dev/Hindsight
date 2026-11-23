@@ -4,7 +4,7 @@
 //! - 常驻开着:积压近零,到点自然秒过,互不打扰;
 //! - 常驻关着:这是唯一的自动路径,给"不想 400MB 常驻、但要索引齐"的用户。
 //!
-//! 语义(与 [`crate::ai::auto_summary`] 同哲学):
+//! 语义(与 [`crate::ai::features::report::auto_summary`] 同哲学):
 //! - `settings.memory_ocr_daily_times` 非空即启用(可配多个点,如 12:00/23:00);
 //!   空(默认)本模块沉睡;旧单时刻字段经 effective_ocr_daily_times 兼容;
 //! - 到点后的下一轮检查触发(检查间隔 [`CHECK_GAP_SECS`],最多迟到一轮);
