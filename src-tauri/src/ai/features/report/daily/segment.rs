@@ -337,6 +337,57 @@ mod tests {
         assert!(r.content.is_empty() && r.error.is_none());
     }
 
+    /// upsert_skipped_no_activity 是"整段无活动"的兜底落库路径。
+    /// 真实翻车场景：兜底行 status 拼错或 content 不为空，前端会把空白段
+    /// 当成正常总结渲染出一张空卡片；覆盖旧 error 行失败则重跑后错误提示不消失。
+    #[tokio::test]
+    async fn upsert_skipped_no_activity_writes_placeholder_and_overwrites() {
+        let pool = fresh_test_pool().await;
+        let date = "2026-07-20";
+
+        // 先落一行 error（模拟前一轮 LLM 失败），兜底必须能覆盖它
+        let bad = SegmentSummaryRow {
+            source: "daily".to_string(),
+            local_date: date.to_string(),
+            segment_idx: 3,
+            label: "段3".to_string(),
+            start_hour: 9,
+            end_hour: 12,
+            content: "旧的总结正文".to_string(),
+            model: "test-model.gguf".to_string(),
+            status: "error".to_string(),
+            error: Some("boom".to_string()),
+            generated_at: "2026-07-20T01:02:03+00:00".to_string(),
+        };
+        ai_summaries::upsert_segment(&pool, &bad).await.unwrap();
+
+        upsert_skipped_no_activity(
+            &pool,
+            "daily",
+            date,
+            3,
+            "下午",
+            13,
+            18,
+            "test-model.gguf".to_string(),
+        )
+        .await
+        .unwrap();
+
+        let rows = ai_summaries::get_day(&pool, "daily", date).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        assert_eq!(r.status, "skipped_no_activity");
+        assert_eq!(r.content, "", "兜底行不该有正文");
+        assert_eq!(r.error, None, "兜底行必须清掉旧 error");
+        assert_eq!(r.label, "下午");
+        assert_eq!((r.start_hour, r.end_hour), (13, 18));
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(&r.generated_at).is_ok(),
+            "generated_at 应自动填合法时间戳"
+        );
+    }
+
     /// 用户对从没生成过的日期点"强制刷新"：空库删除必须静默成功，不能报错。
     #[tokio::test]
     async fn clear_day_on_empty_db_is_ok() {
