@@ -936,7 +936,7 @@ mod tests {
     }
 
     /// generated_at 空串时自动补当前 UTC；调用方显式给了就原样存。
-    /// 真实翻车场景：weekly_runner 自己填了 generated_at，若被 upsert 覆盖成
+    /// 真实翻车场景：周报自己填了 generated_at，若被 upsert 覆盖成
     /// now()，前端"生成于"时间戳会随每次无关写入漂移。
     #[tokio::test]
     async fn generated_at_autofill_and_preserve() {

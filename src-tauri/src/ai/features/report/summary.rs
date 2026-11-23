@@ -8,9 +8,9 @@
 
 pub use crate::ai::features::report::progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
 pub use crate::ai::features::report::summary_runner::{DaySummaryRunner, DAILY_SOURCE};
-pub use crate::ai::features::report::weekly_runner::{
+pub use crate::ai::features::report::weekly::{
     precheck_week, WeekPrecheckResp, WeekSummaryRunner, WEEKLY_SOURCE,
 };
 // `WeekPrecheckDay` 不在 façade re-export 里——它只通过 `WeekPrecheckResp.days` 字段
 // 间接出现在 JSON payload 中，前端 TS 自己 declare 对应类型；后端 crate 内部如有需要
-// 直接 `use crate::ai::features::report::weekly_runner::WeekPrecheckDay`。
+// 直接 `use crate::ai::features::report::weekly::WeekPrecheckDay`。
