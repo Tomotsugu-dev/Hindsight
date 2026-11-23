@@ -79,6 +79,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
     ///
     /// `week_start` 必须是周一（调用方负责传对——`commands` 层会把任意日期对齐到周一）。
     /// `force_refresh = true` 时无视已有行直接重跑；false 且已有 ok 行时直接 `Ok(())` 早返回。
+    /// 重跑时旧周报留到这一轮写下结果才被覆盖：取消或引擎起不来时，旧周报还在。
     /// `allow_missing_days = true` 时：
     ///   - 部分日缺日报：用当日 top apps 文本顶替进入 prompt
     ///   - 整周无日报但有 activity：仅基于整周 + 每日 top apps 做简化分析
@@ -114,10 +115,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
             .await?
             .main_filter();
-
-        if force_refresh {
-            ai_summaries::clear_day_summaries_only(&self.pool, WEEKLY_SOURCE, &week_key).await?;
-        }
 
         // 拉一周内所有 daily 段总结，按日期 group
         let daily_rows = ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
@@ -699,5 +696,111 @@ mod tests {
         }
         assert!(format_missing_day_fallback("zh", &apps).contains("分钟"));
         assert!(format_missing_day_fallback("en", &apps).contains("min"));
+    }
+
+    // ─────────── 重新生成：没生成出新周报时，旧周报要留着 ───────────
+
+    /// 只记 phase，断言「走到了哪一步」用。
+    #[derive(Clone, Default)]
+    struct RecordingSink {
+        phases: Arc<std::sync::Mutex<Vec<&'static str>>>,
+    }
+
+    impl ProgressSink for RecordingSink {
+        fn emit_progress(&self, payload: SummaryProgress) {
+            self.phases.lock().unwrap().push(payload.phase);
+        }
+    }
+
+    const OLD_WEEK: &str = "2026-07-20"; // 周一
+
+    /// 种一份 ok 的旧周报、周二一段日报，模型选本机文件但文件不存在。
+    async fn seed_old_report_and_missing_model(pool: &DbPool) {
+        // 两个路径设非空：避免 load() 补默认值时回写 settings
+        let mut s = settings_repo::Settings {
+            screenshot_path: "/tmp/hindsight-test-shots".to_string(),
+            ..Default::default()
+        };
+        let no_models = std::env::temp_dir().join(format!(
+            "hindsight-weekly-no-models-{}",
+            uuid::Uuid::new_v4()
+        ));
+        s.ai.models_path = no_models.to_string_lossy().into_owned();
+        // 周报默认继承日报的模型
+        s.ai.picks.daily = Some(ModelRef::Local {
+            file: "missing.gguf".to_string(),
+        });
+        settings_repo::save(pool, &s).await.unwrap();
+
+        let old_weekly = SegmentSummaryRow {
+            source: WEEKLY_SOURCE.to_string(),
+            ..row(OLD_WEEK, 0, "", (0, 0), "旧周报", "ok")
+        };
+        ai_summaries::upsert_segment(pool, &old_weekly)
+            .await
+            .unwrap();
+        // 有日报，严格模式才会走到启动引擎那一步
+        let daily = row("2026-07-21", 0, "上午", (9, 12), "写代码", "ok");
+        ai_summaries::upsert_segment(pool, &daily).await.unwrap();
+    }
+
+    async fn weekly_rows(pool: &DbPool) -> Vec<(String, String)> {
+        ai_summaries::get_day(pool, WEEKLY_SOURCE, OLD_WEEK)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.status, r.content))
+            .collect()
+    }
+
+    fn make_runner(
+        pool: &DbPool,
+        sink: RecordingSink,
+        cancel: bool,
+    ) -> WeekSummaryRunner<RecordingSink> {
+        WeekSummaryRunner::new(
+            pool.clone(),
+            Arc::new(EngineSupervisor::new()),
+            sink,
+            Arc::new(AtomicBool::new(cancel)),
+        )
+    }
+
+    fn old_week_start() -> NaiveDate {
+        NaiveDate::parse_from_str(OLD_WEEK, "%Y-%m-%d").unwrap()
+    }
+
+    #[tokio::test]
+    async fn failed_engine_start_keeps_old_weekly_report() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        seed_old_report_and_missing_model(&pool).await;
+
+        let res = make_runner(&pool, RecordingSink::default(), false)
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await;
+
+        assert!(matches!(res, Err(Error::ModelFileMissing(_))), "{res:?}");
+        assert_eq!(
+            weekly_rows(&pool).await,
+            vec![("ok".to_string(), "旧周报".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_before_engine_start_keeps_old_weekly_report() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        seed_old_report_and_missing_model(&pool).await;
+        let sink = RecordingSink::default();
+
+        make_runner(&pool, sink.clone(), true)
+            .run(old_week_start(), true, false, &ProfileChoice::Main)
+            .await
+            .unwrap();
+
+        assert_eq!(*sink.phases.lock().unwrap(), vec!["cancelled"]);
+        assert_eq!(
+            weekly_rows(&pool).await,
+            vec![("ok".to_string(), "旧周报".to_string())]
+        );
     }
 }
