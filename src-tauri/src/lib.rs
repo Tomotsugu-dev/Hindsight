@@ -251,7 +251,7 @@ pub fn run() {
                 let _watcher = engine_supervisor.spawn_idle_watcher();
                 handle.manage(engine_supervisor);
                 // AI 总结取消信号——单例，前端调 cancel_day_summary 设 true，
-                // summary_runner 每段循环检查；不能中断已在路上的 LLM 单段请求。
+                // 日报、周报检查到后停下；在途的模型请求和引擎加载也会被中断。
                 handle.manage(commands::ai_summary::SummaryCancel::default());
                 // Chat 生成中注册表：同会话并发拒 + 停止按钮取消 + 重开会话恢复状态
                 handle.manage(commands::chat::ChatInflight::default());

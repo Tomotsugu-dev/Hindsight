@@ -24,8 +24,8 @@ use crate::storage::DbPool;
 /// AI 总结流程的取消信号——管 lib.rs `manage` 的全局单例。
 ///
 /// 同一时刻只允许一个 generate_day_summary 在跑（前端 UI 不让重复点）；
-/// cancel_day_summary 把内部 AtomicBool 设 true，summary_runner 在每段循环检测到后
-/// 就停下来 Ok(()) 退出（不能中断已经在路上的单段 LLM 请求）。
+/// cancel_day_summary 把内部 AtomicBool 设 true，日报、周报检查到后停下来，返回 Ok(())。
+/// 在途的模型请求和引擎加载也会被中断。
 pub struct SummaryCancel(pub Arc<AtomicBool>);
 
 impl Default for SummaryCancel {

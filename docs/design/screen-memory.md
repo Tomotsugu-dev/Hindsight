@@ -313,7 +313,7 @@ guarded agent loop(护栏:步数上限/重复调用去重/降级阶梯/引用绑
 
 ### 日报/周报(现状)
 
-日报 = 单步纯文本管线(`summary_runner.rs`):activities 合成逐小时活动时间线
+日报 = 单步纯文本管线(`ai/features/report/daily/`):activities 合成逐小时活动时间线
 (应用时长 + 窗口标题样例)+ top apps → LLM 叙事,不经过 Chat 工具循环;
 周报聚合日报文本。原 step1(夜跑 VLM 逐图描述)/交错 swap 管线已于 2026-07-05 删除。
 "日报改为定时触发的模板化 Chat 查询"的完全并轨形态未采用——活动时间线直喂

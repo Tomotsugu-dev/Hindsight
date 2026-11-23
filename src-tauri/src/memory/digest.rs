@@ -1297,7 +1297,7 @@ mod tests {
     // ───────────────────── 模型下载 ─────────────────────
 
     /// 本地假文件服务:按 URL 路径回预设 body 并统计命中次数;未知路径回 404。
-    /// 范式照抄 ai/features/report/summary_operations.rs 的假 OpenAI 服务(127.0.0.1 canned HTTP)。
+    /// 范式照抄 ai/features/report/daily/segment.rs 的假 OpenAI 服务(127.0.0.1 canned HTTP)。
     async fn spawn_file_server(files: Vec<(&'static str, Vec<u8>)>) -> (u16, Arc<AtomicUsize>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

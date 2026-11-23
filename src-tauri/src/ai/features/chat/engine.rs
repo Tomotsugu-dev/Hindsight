@@ -740,7 +740,7 @@ mod tests {
 #[cfg(test)]
 mod loop_tests {
     //! answer() 主循环的行为级测试:127.0.0.1 上起脚本化的假 OpenAI 兼容端点
-    //! (范式照抄 ai/features/report/summary_operations.rs tests 的 canned HTTP 服务,扩展成
+    //! (范式照抄 ai/features/report/daily/segment.rs tests 的 canned HTTP 服务,扩展成
     //! "多发响应 + 记录请求体"),让引擎跑真实的云端协议栈。
     //! 断言分两层:返回值(ChatAnswer 契约)与请求体(引擎回喂给模型的报文)——
     //! 后者才能钉死"纠错回路/历史消毒/步数强制作答"这些只在报文里可见的行为。
