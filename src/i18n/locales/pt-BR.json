@@ -1870,7 +1870,6 @@
       "collapse": "Recolher fontes"
     },
     "model": {
-      "pickAria": "Escolher modelo do chat",
       "noToolUseModels": "Os modelos locais baixados não suportam chamadas de ferramentas. O Chat precisa de um modelo com Tool-use — baixe um com o selo Tool-use em Configurações de IA → Modelos.",
       "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
     },

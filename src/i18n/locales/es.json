@@ -1870,7 +1870,6 @@
       "collapse": "Contraer las fuentes"
     },
     "model": {
-      "pickAria": "Elegir el modelo del chat",
       "noToolUseModels": "Los modelos locales descargados no admiten llamadas a herramientas. El Chat necesita un modelo con Tool-use: descarga uno con la insignia Tool-use en Ajustes de IA → Modelos.",
       "empty": "No hay modelos disponibles: configura una API en la nube o descarga un modelo local"
     },

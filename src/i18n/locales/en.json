@@ -1870,7 +1870,6 @@
       "collapse": "Collapse sources"
     },
     "model": {
-      "pickAria": "Choose chat model",
       "noToolUseModels": "Your downloaded local models do not support tool calling. Chat needs a tool-use capable model — download one with the Tool-use badge in AI Settings → Models.",
       "empty": "No models available: configure a cloud API or download a local model"
     },

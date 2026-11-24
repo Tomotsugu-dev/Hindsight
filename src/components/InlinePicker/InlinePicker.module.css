@@ -96,6 +96,25 @@
   }
 }
 
+/* Opens upward, for pickers at the bottom of the window */
+.menuUp {
+  top: auto;
+  bottom: calc(100% + 4px * var(--density));
+  transform-origin: bottom left;
+  animation-name: menuUpIn;
+}
+
+@keyframes menuUpIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .heading {
   margin: 0;
   padding: calc(5px * var(--density)) calc(8px * var(--density)) calc(3px * var(--density));
@@ -173,4 +192,20 @@
   font-size: calc(var(--font-size-caption) * var(--font-scale));
   line-height: 1.5;
   color: var(--text-faint);
+}
+
+/* A command, not a value: a line above it, and one shade lighter than the options */
+.action {
+  position: relative;
+  margin-top: calc(5px * var(--density));
+  color: var(--text-muted);
+}
+
+.action::before {
+  content: "";
+  position: absolute;
+  top: calc(-3px * var(--density));
+  left: calc(4px * var(--density));
+  right: calc(4px * var(--density));
+  border-top: 1px solid var(--border-subtle);
 }

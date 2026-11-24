@@ -1865,7 +1865,6 @@
       "collapse": "收起來源"
     },
     "model": {
-      "pickAria": "選擇對話模型",
       "noToolUseModels": "已下載的本機模型不支援工具調用；對話需要支援工具調用（Tool-use）的模型，請在「AI 設定 → 模型」下載帶 Tool-use 標記的模型。",
       "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
     },

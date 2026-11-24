@@ -1865,7 +1865,6 @@
       "collapse": "收起来源"
     },
     "model": {
-      "pickAria": "选择对话模型",
       "noToolUseModels": "已下载的本地模型不支持工具调用；对话需要支持工具调用（Tool-use）的模型，请在「AI 设置 → 模型」下载带 Tool-use 标记的模型。",
       "empty": "没有可用模型：请配置云端 API 或下载本地模型"
     },
