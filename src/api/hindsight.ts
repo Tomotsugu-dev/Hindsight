@@ -580,9 +580,6 @@ export interface DownloadSources {
   nugetUrl: string;
 }
 
-/** The `retentionDays` value that keeps screenshots forever. The backend uses the same value. */
-export const KEEP_FOREVER_DAYS = 36500;
-
 export interface Settings {
   captureEnabled: boolean;
   /** 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续 */

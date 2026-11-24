@@ -1,4 +1,5 @@
-import { KEEP_FOREVER_DAYS } from "../../../api/hindsight";
+/** The `retentionDays` value that keeps screenshots forever. The backend uses the same value. */
+export const KEEP_FOREVER_DAYS = 36500;
 
 /** The longest retention in days (2 years). The backend uses the same value. */
 export const RETENTION_MAX_DAYS = 730;

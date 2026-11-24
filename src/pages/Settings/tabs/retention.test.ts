@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { KEEP_FOREVER_DAYS } from "../../../api/hindsight";
 import { stopPosition } from "../../../components/FormControls/sliderStops";
-import { RETENTION_MAX_DAYS, RETENTION_STOPS } from "./retention";
+import { KEEP_FOREVER_DAYS, RETENTION_MAX_DAYS, RETENTION_STOPS } from "./retention";
 
 describe("screenshot retention slider", () => {
   it("goes from one day to 2 years, then forever", () => {

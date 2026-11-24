@@ -24,11 +24,11 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog/ConfirmDialog";
 import { RemoveDeviceDialog } from "../../../components/RemoveDeviceDialog/RemoveDeviceDialog";
 import { ExportUsageDialog } from "../../../components/ExportUsageDialog/ExportUsageDialog";
 import { useSettings } from "../../../state/settings";
-import { api, KEEP_FOREVER_DAYS, type AuthState, type StorageInfo } from "../../../api/hindsight";
+import { api, type AuthState, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
 import { canClearCloud } from "../../Devices/syncAccount";
 import { formatBytes } from "../../../utils/formatBytes";
-import { RETENTION_MAX_DAYS, RETENTION_STOPS } from "./retention";
+import { KEEP_FOREVER_DAYS, RETENTION_MAX_DAYS, RETENTION_STOPS } from "./retention";
 
 /** "db" = 从云端重建本机数据；"shots" = 清空截图；"remove" = 从云端移除本设备 */
 type PurgeTarget = "db" | "shots" | "remove";
