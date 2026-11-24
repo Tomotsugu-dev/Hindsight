@@ -415,7 +415,6 @@ fn old_excluded_categories(data: &str) -> Option<Vec<String>> {
 /// Converts legacy `ai.excludedCategories` into an auto-run [`VisibilityProfile`]
 /// for daily and weekly reports.
 ///
-/// Chat never read `excludedCategories`, so its profiles are left unchanged.
 /// Migration is skipped unless the user excluded at least one active category
 /// beyond the legacy defaults (`other`, `hidden`, `private`).
 fn migrate_excluded_categories(ai: &mut AiConfig, excluded: &[String], category_ids: &[String]) {
@@ -436,12 +435,10 @@ fn migrate_excluded_categories(ai: &mut AiConfig, excluded: &[String], category_
             .cloned()
             .collect(),
     };
-    for module in [&mut ai.visibility.daily, &mut ai.visibility.weekly] {
-        module
-            .profiles
-            .insert(MIGRATED_PROFILE_ID.to_string(), profile.clone());
-        module.auto_profile = Some(MIGRATED_PROFILE_ID.to_string());
-    }
+    let v = &mut ai.visibility;
+    v.profiles.insert(MIGRATED_PROFILE_ID.to_string(), profile);
+    v.auto.daily = Some(MIGRATED_PROFILE_ID.to_string());
+    v.auto.weekly = Some(MIGRATED_PROFILE_ID.to_string());
 }
 
 /// Returns the localized display name for the migrated profile based on
@@ -1245,7 +1242,7 @@ mod tests {
         )
     }
 
-    /// 旧版排除了「浏览」和「其他」：升级后日报、周报各有一套配置，自动生成用它，
+    /// 旧版排除了「浏览」和「其他」：升级后有一套配置，日报、周报自动生成都用它，
     /// AI 看到的分类跟升级前一样。
     #[tokio::test]
     async fn old_category_filter_becomes_the_auto_profile() {
@@ -1267,18 +1264,11 @@ mod tests {
             .filter(|id| !["browse", "other", "hidden", "private"].contains(&id.as_str()))
             .collect();
         assert!(expected.iter().any(|id| id == "code"), "{expected:?}");
-        for module in [&s.ai.visibility.daily, &s.ai.visibility.weekly] {
-            assert_eq!(module.profiles.len(), 1, "{module:?}");
-            let id = module
-                .auto_profile
-                .as_deref()
-                .expect("自动生成要用迁移出来的配置");
-            assert_eq!(module.profiles[id].categories, expected);
-        }
-        assert!(
-            s.ai.visibility.chat.profiles.is_empty(),
-            "旧版聊天不读这个列表"
-        );
+        let v = &s.ai.visibility;
+        assert_eq!(v.profiles.len(), 1, "{v:?}");
+        let id = v.auto.daily.as_deref().expect("自动生成要用迁移出来的配置");
+        assert_eq!(v.auto.weekly.as_deref(), Some(id));
+        assert_eq!(v.profiles[id].categories, expected);
     }
 
     /// 旧列表只排除了「其他」、隐藏、私密或已删的分类：不建配置，用新的默认分类。
@@ -1353,7 +1343,6 @@ mod tests {
             let s = load(&pool).await.unwrap();
             let names: Vec<&str> =
                 s.ai.visibility
-                    .daily
                     .profiles
                     .values()
                     .map(|p| p.name.as_str())

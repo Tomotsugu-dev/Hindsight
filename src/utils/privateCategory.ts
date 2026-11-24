@@ -22,6 +22,38 @@ export function purgeFailedReason(e: unknown): string | null {
   return text.startsWith(PURGE_FAILED_PREFIX) ? text.slice(PURGE_FAILED_PREFIX.length) : null;
 }
 
+/** Adds up the counts of several targets, for a dialog that deletes them together. */
+export function sumCounts(counts: DataCount[]): DataCount {
+  return counts.reduce(
+    (sum, c) => ({
+      activities: sum.activities + c.activities,
+      screenshots: sum.screenshots + c.screenshots,
+      screenshotBytes: sum.screenshotBytes + c.screenshotBytes,
+    }),
+    { activities: 0, screenshots: 0, screenshotBytes: 0 },
+  );
+}
+
+/**
+ * Saves a setting for each id, one after another.
+ *
+ * When a setting is saved but deleting the private data fails, the rest still get saved, and
+ * the first such error is thrown at the end, so the caller can offer to retry the deletion.
+ * Any other error stops at once.
+ */
+export async function saveEach(ids: string[], save: (id: string) => Promise<void>): Promise<void> {
+  const purgeErrors: unknown[] = [];
+  for (const id of ids) {
+    try {
+      await save(id);
+    } catch (e) {
+      if (purgeFailedReason(e) === null) throw e;
+      purgeErrors.push(e);
+    }
+  }
+  if (purgeErrors.length > 0) throw purgeErrors[0];
+}
+
 /** 「已有的 1,234 条记录和 56 张截图（210.0 MB）」。还没统计出来时是 null，说「已有的全部记录和截图」。 */
 export function describeCount(t: TFunction, count: DataCount | null): string {
   if (count === null) return t("categories.private.count.unknown");

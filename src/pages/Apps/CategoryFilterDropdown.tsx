@@ -106,10 +106,10 @@ export function CategoryFilterDropdown({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="true"
+        aria-label={`${t("apps.filter.categoryTrigger")}: ${triggerLabel}`}
         title={t("apps.filter.categoryTrigger")}
       >
         <ListFilter size={14} strokeWidth={2} className={styles.triggerIcon} aria-hidden />
-        <span className={styles.triggerLabel}>{t("apps.filter.categoryTrigger")}:</span>
         <span className={styles.triggerValue}>{triggerLabel}</span>
         <ChevronDown size={14} strokeWidth={2} className={styles.triggerChevron} />
       </button>

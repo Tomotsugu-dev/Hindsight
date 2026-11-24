@@ -1,36 +1,65 @@
 import { describe, expect, it } from "vitest";
-import type { ModuleProfiles } from "../api/hindsight";
-import { nextProfileName, profileProblems, resolveSelected, sortProfiles } from "./aiProfiles";
+import type { AiVisibility } from "../api/hindsight";
+import {
+  clearAuto,
+  nextProfileName,
+  profileProblems,
+  resolveSelected,
+  sortProfiles,
+} from "./aiProfiles";
 
 const work = { name: "工作", categories: ["code"] };
 const study = { name: "学习", categories: ["office"] };
 
 describe("resolveSelected", () => {
-  const withAuto: ModuleProfiles = { profiles: { p_work: work }, autoProfile: "p_work" };
+  // 一个池子，日报、周报自动生成各选一套
+  const pool: AiVisibility = {
+    profiles: { p_work: work, p_study: study },
+    auto: { daily: "p_work", weekly: "p_study" },
+  };
 
-  it("没选过时，日报跟着自动生成用的那套", () => {
-    expect(resolveSelected("daily", withAuto, undefined)).toBe("p_work");
+  it("没选过时，日报、周报各跟着自己自动生成用的那套", () => {
+    expect(resolveSelected("daily", pool, undefined)).toBe("p_work");
+    expect(resolveSelected("weekly", pool, undefined)).toBe("p_study");
   });
 
   it("聊天没有自动生成，没选过就是默认分类", () => {
-    expect(resolveSelected("chat", withAuto, undefined)).toBeNull();
+    expect(resolveSelected("chat", pool, undefined)).toBeNull();
+  });
+
+  it("聊天能选池子里的任何一套", () => {
+    expect(resolveSelected("chat", pool, "p_study")).toBe("p_study");
   });
 
   it("选了默认分类就是默认分类，不被自动生成的那套顶掉", () => {
-    expect(resolveSelected("daily", withAuto, null)).toBeNull();
+    expect(resolveSelected("daily", pool, null)).toBeNull();
   });
 
   it("选中的那套被删了，回到默认", () => {
-    expect(resolveSelected("daily", withAuto, "p_gone")).toBe("p_work");
+    expect(resolveSelected("daily", pool, "p_gone")).toBe("p_work");
   });
 
   it("自动生成用的那套被删了，回到默认分类", () => {
-    const gone: ModuleProfiles = { profiles: {}, autoProfile: "p_work" };
+    const gone: AiVisibility = { profiles: {}, auto: { daily: null, weekly: "p_work" } };
     expect(resolveSelected("weekly", gone, undefined)).toBeNull();
   });
 
   it("原型上的名字不算配置", () => {
-    expect(resolveSelected("daily", { profiles: {}, autoProfile: null }, "toString")).toBeNull();
+    const empty: AiVisibility = { profiles: {}, auto: { daily: null, weekly: null } };
+    expect(resolveSelected("daily", empty, "toString")).toBeNull();
+  });
+});
+
+describe("clearAuto", () => {
+  it("删掉的那套正被自动生成用着，用它的报告回到默认分类，别的不动", () => {
+    expect(clearAuto({ daily: "p_work", weekly: "p_study" }, "p_work")).toEqual({
+      daily: null,
+      weekly: "p_study",
+    });
+    expect(clearAuto({ daily: "p_work", weekly: "p_work" }, "p_work")).toEqual({
+      daily: null,
+      weekly: null,
+    });
   });
 });
 

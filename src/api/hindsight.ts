@@ -480,8 +480,11 @@ export interface CloudConnection {
   contextLength: number | null;
 }
 
-/** 有配置的三个功能。 */
+/** The three features that pick a profile. */
 export type AiProfileModule = "daily" | "weekly" | "chat";
+
+/** The reports that run automatically. */
+export type AutoReport = "daily" | "weekly";
 
 /** 一套配置：AI 只看选中的这些分类。 */
 export interface VisibilityProfile {
@@ -490,16 +493,15 @@ export interface VisibilityProfile {
   categories: string[];
 }
 
-/** 一个功能的全部配置。 */
-export interface ModuleProfiles {
-  /** 配置 id → 配置。id 是生成的，改名不影响引用 */
-  profiles: Record<string, VisibilityProfile>;
-  /** 自动生成用哪套；null = 按默认分类。聊天没有自动生成，一直是 null */
-  autoProfile: string | null;
-}
+/** The profile each report uses when it runs automatically. null means the default categories. */
+export type AutoProfiles = Record<AutoReport, string | null>;
 
-/** 日报、周报、聊天各自的配置。镜像后端 `crate::ai::config::Visibility`。 */
-export type AiVisibility = Record<AiProfileModule, ModuleProfiles>;
+/** All profiles. Every feature picks from them. Mirrors `crate::ai::config::Visibility`. */
+export interface AiVisibility {
+  /** Profile id → profile. Ids are generated, so renaming does not break references. */
+  profiles: Record<string, VisibilityProfile>;
+  auto: AutoProfiles;
+}
 
 /** 一个模型。镜像后端 `crate::ai::config::ModelRef`。 */
 export type ModelRef = { kind: "local"; file: string } | { kind: "cloud"; connection: string };
@@ -885,6 +887,8 @@ export const api = {
     invoke<void>("set_site_rule", { host, categoryId }),
   /** Removes the website's own rule; a parent domain's rule or the browser's category applies again. */
   removeSiteRule: (host: string) => invoke<void>("remove_site_rule", { host }),
+  /** Deletes a website's data and that of the subdomains that follow it, here and in the cloud. The website's own rule stays. */
+  purgeSiteData: (host: string) => invoke<void>("purge_site_data", { host }),
   getSiteIcons: () => invoke<SiteIconPaths>("get_site_icons"),
   downloadSiteIcons: (hosts: string[]) =>
     invoke<SiteIconDownloadRound>("download_site_icons", { hosts }),

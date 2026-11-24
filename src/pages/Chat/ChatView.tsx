@@ -37,7 +37,7 @@ import {
 import { Button } from "../../components/Button/Button";
 import { IconButton } from "../../components/Button/IconButton";
 import styles from "./ChatView.module.css";
-import ThinkingToggle from "./ThinkingToggle";
+import ComposerPickers from "./ComposerPickers";
 import type { AiProfilesState } from "../../state/aiProfiles";
 import { localizeAiError } from "../../lib/aiErrors";
 import { buildThread, type Message } from "./thread";
@@ -126,7 +126,7 @@ interface ChatViewProps {
   onConversationTouched: () => void;
   /** 发送前的隐私门：false = 用户取消，本次不发送 */
   ensurePrivacyAck: () => Promise<boolean>;
-  /** AI 能看到哪些数据。左栏的下拉和这里的发送共用一份 */
+  /** AI 能看到哪些数据。输入框底部的下拉和这里的发送共用一份 */
   profiles: AiProfilesState;
 }
 
@@ -474,28 +474,32 @@ export default function ChatView({
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
-        <ThinkingToggle />
-        {busy ? (
-          <button
-            type="button"
-            className={styles.composerSend}
-            onClick={stopGeneration}
-            aria-label={t("chat.input.stopAria")}
-            title={t("chat.input.stopTooltip")}
-          >
-            <Square size={13} strokeWidth={2.4} fill="currentColor" />
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className={styles.composerSend}
-            disabled={!input.trim()}
-            aria-label={t("chat.input.sendAria")}
-            title={t("chat.input.sendTooltip")}
-          >
-            <ArrowUp size={16} strokeWidth={2.4} />
-          </button>
-        )}
+        <div className={styles.composerBar}>
+          <div className={styles.composerPickers}>
+            <ComposerPickers profiles={profiles} />
+          </div>
+          {busy ? (
+            <button
+              type="button"
+              className={styles.composerSend}
+              onClick={stopGeneration}
+              aria-label={t("chat.input.stopAria")}
+              title={t("chat.input.stopTooltip")}
+            >
+              <Square size={13} strokeWidth={2.4} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className={styles.composerSend}
+              disabled={!input.trim()}
+              aria-label={t("chat.input.sendAria")}
+              title={t("chat.input.sendTooltip")}
+            >
+              <ArrowUp size={16} strokeWidth={2.4} />
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );

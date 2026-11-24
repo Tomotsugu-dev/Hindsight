@@ -2,20 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Trans, useTranslation } from "react-i18next";
 import { EyeOff, Trash2 } from "lucide-react";
-import { api, type DataCount } from "../../api/hindsight";
+import { api, type DataCount, type PurgeTarget } from "../../api/hindsight";
 import { Button } from "../Button/Button";
 import { ChartOffIcon } from "../icons/ChartOffIcon";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { logError } from "../../lib/logger";
-import { describeCount } from "../../utils/privateCategory";
+import { describeCount, sumCounts } from "../../utils/privateCategory";
 import styles from "./RemoveAppDialog.module.css";
+
+/** Which texts the options use: one app, several apps, or websites */
+export type RemoveTexts = "app" | "apps" | "sites";
+
+const DELETE_DESC: Record<RemoveTexts, string> = {
+  app: "apps.remove.deleteDesc",
+  apps: "apps.remove.batch.deleteDescApps",
+  sites: "apps.remove.batch.deleteDescSites",
+};
 
 interface RemoveAppDialogProps {
   open: boolean;
-  /** 要移除的应用显示名，写进标题 */
-  appName: string;
-  /** 这个应用的分组，统计会删多少用 */
-  groupId: string;
+  title: string;
+  /** What the delete options delete, to count how much */
+  targets: PurgeTarget[];
+  texts: RemoveTexts;
   onDelete: () => void;
   onMakePrivate: () => void;
   onExclude: () => void;
@@ -23,7 +32,7 @@ interface RemoveAppDialogProps {
 }
 
 /**
- * 从应用列表移除一个应用时的选择弹窗。三条路后果不同，说明写在正文里，不推荐哪一条。
+ * 从应用列表移除应用或网站时的选择弹窗，可以一次移除几个。三条路后果不同，说明写在正文里，不推荐哪一条。
  * 说明和按钮都按从轻到重排：
  *   - 不计入统计：归入内置的 `hidden` 分类，照常记录，只是不算进统计；
  *   - 删除：删掉已有的数据，不可逆。这个程序下次运行时还会出现在列表里；
@@ -35,8 +44,9 @@ interface RemoveAppDialogProps {
  */
 export function RemoveAppDialog({
   open,
-  appName,
-  groupId,
+  title,
+  targets,
+  texts,
   onDelete,
   onMakePrivate,
   onExclude,
@@ -46,20 +56,23 @@ export function RemoveAppDialog({
   // null：还在统计，或者统计出错
   const [count, setCount] = useState<DataCount | null>(null);
 
+  // The caller passes a new array on each render, so count again only when its content changes
+  const targetsKey = JSON.stringify(targets);
   useEffect(() => {
     if (!open) return;
     setCount(null);
     let live = true;
-    void api.countTargetData({ kind: "appGroup", groupId }).then(
-      (c) => {
-        if (live) setCount(c);
+    const list = JSON.parse(targetsKey) as PurgeTarget[];
+    void Promise.all(list.map((target) => api.countTargetData(target))).then(
+      (counts) => {
+        if (live) setCount(sumCounts(counts));
       },
       (e) => logError("removeApp.count", e),
     );
     return () => {
       live = false;
     };
-  }, [open, groupId]);
+  }, [open, targetsKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -89,7 +102,7 @@ export function RemoveAppDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id="remove-app-title" className={styles.title}>
-          {t("apps.remove.title", { name: appName })}
+          {title}
         </h2>
 
         <ul className={styles.options}>
@@ -97,7 +110,9 @@ export function RemoveAppDialog({
             <ChartOffIcon size={15} strokeWidth={2} className={styles.optionIcon} />
             <div>
               <p className={styles.optionName}>{t("apps.remove.excludeName")}</p>
-              <p className={styles.optionDesc}>{t("apps.remove.excludeDesc")}</p>
+              <p className={styles.optionDesc}>
+                {t(texts === "app" ? "apps.remove.excludeDesc" : "apps.remove.batch.excludeDesc")}
+              </p>
             </div>
           </li>
           <li className={styles.option}>
@@ -109,11 +124,7 @@ export function RemoveAppDialog({
             <div>
               <p className={styles.optionName}>{t("apps.remove.deleteName")}</p>
               <p className={styles.optionDesc}>
-                <Trans
-                  i18nKey="apps.remove.deleteDesc"
-                  values={{ data }}
-                  components={{ b: <b /> }}
-                />
+                <Trans i18nKey={DELETE_DESC[texts]} values={{ data }} components={{ b: <b /> }} />
               </p>
             </div>
           </li>

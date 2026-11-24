@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub use self::kinds::Query;
 pub use self::lang::ChatLang;
 use crate::ai::model::{ToolCall, ToolSpec};
-use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+use crate::ai::policy::{AiDataPolicy, ProfileChoice};
 use crate::error::Result;
 use crate::storage::Connection;
 
@@ -119,7 +119,7 @@ impl ToolCtx {
         let main = Connection::open_with_flags(crate::storage::db_path()?, flags).await?;
         // Read before the model runs. If this fails, the question fails, and the model does
         // not answer from a failed tool
-        let policy = AiDataPolicy::load(&main, AiModule::Chat, profile).await?;
+        let policy = AiDataPolicy::load(&main, profile).await?;
         let mem = Connection::open_with_flags(crate::memory::memory_db_path()?, flags).await?;
         Ok(Self { main, mem, policy })
     }
@@ -284,7 +284,7 @@ mod tests {
             let main = Connection::open_with_flags(crate::storage::db_path().unwrap(), flags)
                 .await
                 .unwrap();
-            let policy = AiDataPolicy::load(&main, AiModule::Chat, &ProfileChoice::Main)
+            let policy = AiDataPolicy::load(&main, &ProfileChoice::Main)
                 .await
                 .unwrap();
             ToolCtx {

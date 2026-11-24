@@ -8,10 +8,18 @@ import { ROUTES } from "../../config/nav";
 import { logError } from "../../lib/logger";
 import { useCategories } from "../../state/categories";
 import { useSettings } from "../../state/settings";
+import { Checkbox } from "../../components/Checkbox/Checkbox";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
 import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
-import { PRIVATE_CATEGORY_ID, purgeFailedReason } from "../../utils/privateCategory";
+import { RemoveAppDialog } from "../../components/RemoveAppDialog/RemoveAppDialog";
+import { useSelection } from "../../hooks/useSelection";
+import {
+  EXCLUDED_CATEGORY_ID,
+  PRIVATE_CATEGORY_ID,
+  purgeFailedReason,
+  saveEach,
+} from "../../utils/privateCategory";
 import { TextInput } from "../../components/TextInput/TextInput";
 import { Toggle } from "../../components/FormControls/Toggle";
 import { SiteIcon } from "../../components/SiteIcon/SiteIcon";
@@ -20,9 +28,17 @@ import { CategoryFilterDropdown } from "../Apps/CategoryFilterDropdown";
 import { SortDropdown } from "../Apps/AppsFilterBar";
 import { useDurationFormatter } from "../../utils/duration";
 import { AssignDropdown } from "../Categories/parts";
+import { BatchBar, SelectModeButton } from "../Categories/BatchBar";
 import categoriesStyles from "../Categories/Categories.module.css";
 import filterBarStyles from "../Apps/AppsFilterBar.module.css";
-import { filterGroups, groupSites, ruleSource, sortGroups, type SiteSortBy } from "./siteRows";
+import {
+  filterGroups,
+  groupSites,
+  purgeHosts,
+  ruleSource,
+  sortGroups,
+  type SiteSortBy,
+} from "./siteRows";
 import styles from "./SitesPage.module.css";
 
 const SORT_OPTIONS: SiteSortBy[] = [
@@ -105,6 +121,65 @@ export default function SitesPage() {
     [groups, search, selectedCategoryIds, unassignedOnly, sortBy],
   );
 
+  // The rows on screen: each group's website, and its subdomains when the group is open
+  const shownRows = useMemo(
+    () =>
+      (visibleGroups ?? []).flatMap(({ group, children, forceOpen }) => [
+        group.root,
+        ...(forceOpen || opened.has(group.root.host) ? children : []),
+      ]),
+    [visibleGroups, opened],
+  );
+  const shownHosts = useMemo(() => shownRows.map((row) => row.host), [shownRows]);
+  const selection = useSelection(shownHosts);
+  /** The remove dialog: null when closed, else the picked websites */
+  const [removing, setRemoving] = useState<{ rows: SiteRow[]; name: string } | null>(null);
+
+  const pickedRows = () => shownRows.filter((row) => selection.isPicked(row.host));
+  const pickedName = (picked: SiteRow[]) =>
+    picked.length === 1 ? picked[0].host : t("categories.batch.sites", { count: picked.length });
+
+  /** Runs `op` for each website, one after another. A failure is logged and the rest go on. */
+  const forEachSite = async (
+    label: string,
+    hosts: string[],
+    op: (host: string) => Promise<void>,
+  ) => {
+    for (const host of hosts) {
+      try {
+        await op(host);
+      } catch (e) {
+        logError(label, e);
+      }
+    }
+    await reload();
+  };
+
+  const onBatchAssign = (categoryId: string) => {
+    const picked = pickedRows();
+    const hosts = picked.map((row) => row.host);
+    if (categoryId === PRIVATE_CATEGORY_ID) {
+      privacy.confirm({
+        name: pickedName(picked),
+        site: true,
+        many: picked.length > 1,
+        targets: purgeHosts(picked).map((host) => ({ kind: "site", host })),
+        save: async () => {
+          await saveEach(hosts, (host) => api.setSiteRule(host, PRIVATE_CATEGORY_ID));
+          selection.stop();
+        },
+      });
+      return;
+    }
+    selection.stop();
+    void forEachSite("sites.batchAssign", hosts, (host) => api.setSiteRule(host, categoryId));
+  };
+
+  const onBatchRemove = () => {
+    const picked = pickedRows();
+    setRemoving({ rows: picked, name: pickedName(picked) });
+  };
+
   const toggleCategory = (id: string) => {
     setSelectedCategoryIds((selected) =>
       selected.includes(id) ? selected.filter((current) => current !== id) : [...selected, id],
@@ -124,16 +199,12 @@ export default function SitesPage() {
   const iconHosts = useMemo(() => {
     if (!groups || !visibleGroups) return null;
     // Download the rows currently shown first, then the folded or filtered websites.
-    const shown = visibleGroups.flatMap(({ group, children, forceOpen }) => [
-      group.root.host,
-      ...(forceOpen || opened.has(group.root.host) ? children.map((row) => row.host) : []),
-    ]);
     const all = groups.flatMap((group) => [
       group.root.host,
       ...group.children.map((row) => row.host),
     ]);
-    return [...new Set([...shown, ...all])];
-  }, [groups, visibleGroups, opened]);
+    return [...new Set([...shownHosts, ...all])];
+  }, [groups, visibleGroups, shownHosts]);
   const {
     icons,
     failed: iconLoadFailed,
@@ -168,7 +239,7 @@ export default function SitesPage() {
       privacy.confirm({
         name: host,
         site: true,
-        target: { kind: "site", host },
+        targets: [{ kind: "site", host }],
         save: () => api.setSiteRule(host, PRIVATE_CATEGORY_ID),
       });
       return;
@@ -199,8 +270,31 @@ export default function SitesPage() {
     const source = ruleSource(row);
     const sub =
       note ?? (source === "parent" ? t("categories.sites.follows", { host: row.follows }) : null);
+    const picked = selection.isPicked(row.host);
     return (
-      <div key={row.host} className={`${styles.row} ${even ? styles.rowEven : ""}`}>
+      // The checkbox is the keyboard way to pick a row; a click elsewhere on it is a shortcut.
+      // The open/close button of a group keeps working.
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+      <div
+        key={row.host}
+        className={`${styles.row} ${even ? styles.rowEven : ""} ${picked ? styles.picked : ""}`}
+        onClick={
+          selection.active
+            ? (e) => {
+                if (!(e.target as Element).closest("label, button")) selection.toggle(row.host);
+              }
+            : undefined
+        }
+      >
+        {selection.active && (
+          <div className={styles.selectCol}>
+            <Checkbox
+              aria-label={t("categories.batch.selectRow", { name: row.host })}
+              checked={picked}
+              onChange={() => selection.toggle(row.host)}
+            />
+          </div>
+        )}
         <div className={`${styles.siteCol} ${child ? styles.childSite : ""}`}>
           {lead}
           <SiteIcon path={icons[row.host]} />
@@ -221,6 +315,7 @@ export default function SitesPage() {
             // is changed by giving the website its own rule.
             allowClear={source === "own"}
             clearLabel={t("categories.sites.removeRule")}
+            readOnly={selection.active}
             onPick={(categoryId) => onPick(row.host, categoryId)}
           />
         </div>
@@ -337,6 +432,10 @@ export default function SitesPage() {
               label: t(`categories.sites.sort.${value}`),
             }))}
           />
+          <SelectModeButton
+            active={selection.active}
+            onClick={selection.active ? selection.stop : selection.start}
+          />
         </div>
       </div>
       {iconSaveFailed && (
@@ -375,8 +474,9 @@ export default function SitesPage() {
             </button>
           </div>
         ) : (
-          <div className={styles.table}>
+          <div className={`${styles.table} ${selection.active ? styles.selecting : ""}`}>
             <div className={styles.headerRow}>
+              {selection.active && <span />}
               <span>
                 {t("categories.sites.header.site")}
                 <span className={styles.domainCount}>
@@ -391,6 +491,16 @@ export default function SitesPage() {
           </div>
         )}
       </section>
+      {selection.active && (
+        <BatchBar
+          count={selection.selected.length}
+          allSelected={selection.allSelected}
+          onToggleAll={selection.toggleAll}
+          categories={categories}
+          onAssign={onBatchAssign}
+          onRemove={onBatchRemove}
+        />
+      )}
 
       <ConfirmDialog
         open={iconConsentOpen}
@@ -404,6 +514,40 @@ export default function SitesPage() {
         confirmLabel={t("categories.sites.icons.confirmAction")}
         onConfirm={() => void saveIconDownloads(true)}
         onCancel={() => setIconConsentOpen(false)}
+      />
+      <RemoveAppDialog
+        open={removing !== null}
+        title={t("apps.remove.title", { name: removing?.name ?? "" })}
+        targets={purgeHosts(removing?.rows ?? []).map((host) => ({ kind: "site", host }))}
+        texts="sites"
+        onDelete={() => {
+          if (!removing) return;
+          setRemoving(null);
+          selection.stop();
+          void forEachSite("sites.delete", purgeHosts(removing.rows), (host) =>
+            api.purgeSiteData(host),
+          );
+        }}
+        onMakePrivate={() => {
+          if (!removing) return;
+          setRemoving(null);
+          selection.stop();
+          const hosts = removing.rows.map((row) => row.host);
+          privacy.run({
+            name: removing.name,
+            save: () => saveEach(hosts, (host) => api.setSiteRule(host, PRIVATE_CATEGORY_ID)),
+          });
+        }}
+        onExclude={() => {
+          if (!removing) return;
+          setRemoving(null);
+          selection.stop();
+          const hosts = removing.rows.map((row) => row.host);
+          void forEachSite("sites.exclude", hosts, (host) =>
+            api.setSiteRule(host, EXCLUDED_CATEGORY_ID),
+          );
+        }}
+        onCancel={() => setRemoving(null)}
       />
       <PrivacyDialog {...privacy.dialogProps} />
     </>

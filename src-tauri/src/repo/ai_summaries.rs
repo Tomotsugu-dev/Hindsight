@@ -936,7 +936,7 @@ mod tests {
     }
 
     /// generated_at 空串时自动补当前 UTC；调用方显式给了就原样存。
-    /// 真实翻车场景：weekly_runner 自己填了 generated_at，若被 upsert 覆盖成
+    /// 真实翻车场景：周报自己填了 generated_at，若被 upsert 覆盖成
     /// now()，前端"生成于"时间戳会随每次无关写入漂移。
     #[tokio::test]
     async fn generated_at_autofill_and_preserve() {
@@ -1002,47 +1002,6 @@ mod tests {
         assert!(
             rows.iter().all(|r| r.source == "daily"),
             "weekly 行混进了周报材料"
-        );
-    }
-
-    /// upsert_skipped_no_activity 是"整段无活动"的兜底落库路径。
-    /// 真实翻车场景：兜底行 status 拼错或 content 不为空，前端会把空白段
-    /// 当成正常总结渲染出一张空卡片；覆盖旧 error 行失败则重跑后错误提示不消失。
-    #[tokio::test]
-    async fn upsert_skipped_no_activity_writes_placeholder_and_overwrites() {
-        let pool = fresh_test_pool().await;
-        let date = "2026-07-20";
-
-        // 先落一行 error（模拟前一轮 LLM 失败），兜底必须能覆盖它
-        let mut bad = seg("daily", date, 3);
-        bad.status = "error".to_string();
-        bad.error = Some("boom".to_string());
-        upsert_segment(&pool, &bad).await.unwrap();
-
-        crate::ai::features::report::summary_operations::upsert_skipped_no_activity(
-            &pool,
-            "daily",
-            date,
-            3,
-            "下午",
-            13,
-            18,
-            "test-model.gguf".to_string(),
-        )
-        .await
-        .unwrap();
-
-        let rows = get_day(&pool, "daily", date).await.unwrap();
-        assert_eq!(rows.len(), 1);
-        let r = &rows[0];
-        assert_eq!(r.status, "skipped_no_activity");
-        assert_eq!(r.content, "", "兜底行不该有正文");
-        assert_eq!(r.error, None, "兜底行必须清掉旧 error");
-        assert_eq!(r.label, "下午");
-        assert_eq!((r.start_hour, r.end_hour), (13, 18));
-        assert!(
-            chrono::DateTime::parse_from_rfc3339(&r.generated_at).is_ok(),
-            "generated_at 应自动填合法时间戳"
         );
     }
 
@@ -1113,8 +1072,8 @@ mod tests {
 
     /// 按主库设置，AI 能看到哪些活动。
     async fn main_visible(pool: &DbPool) -> String {
-        use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
-        AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
+        use crate::ai::policy::{AiDataPolicy, ProfileChoice};
+        AiDataPolicy::load(&pool.0, &ProfileChoice::Main)
             .await
             .unwrap()
             .main_filter()

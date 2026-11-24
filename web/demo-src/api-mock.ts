@@ -689,6 +689,13 @@ export const api = {
   removeSiteRule: async (host: string): Promise<void> => {
     demoSiteRules.delete(host);
   },
+  // Deletes the time of the website and of its subdomains without their own rule.
+  purgeSiteData: async (host: string): Promise<void> => {
+    for (const h of Object.keys(demoSiteMinutes)) {
+      const sub = h.endsWith(`.${host}`) && !demoSiteRules.has(h);
+      if (h === host || sub) delete demoSiteMinutes[h];
+    }
+  },
   getSiteIcons: async (): Promise<SiteIconPaths> => {
     const listed = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
     for (const host of Object.keys(demoSiteIcons)) {
@@ -746,7 +753,8 @@ export const api = {
     s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
     s.ai.userBrief = userBriefForLocale(lng);
     // 演示配置没改过名就换成当前语言的名字
-    const demoProfile = s.ai.visibility?.daily.profiles[DEMO_PROFILE_ID];
+    // A visitor's browser may still hold demo state in the old shape, without `profiles`
+    const demoProfile = s.ai.visibility?.profiles?.[DEMO_PROFILE_ID];
     if (demoProfile && isDemoProfileName(demoProfile.name)) {
       demoProfile.name = demoProfileNameForLocale(lng);
     }

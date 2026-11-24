@@ -6,12 +6,12 @@
 use chrono::NaiveDate;
 
 use super::ToolCtx;
-use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+use crate::ai::policy::{AiDataPolicy, ProfileChoice};
 use crate::storage::Connection;
 
 /// 按主库设置读聊天的 AiDataPolicy。
 async fn main_policy(main: &Connection) -> AiDataPolicy {
-    AiDataPolicy::load(main, AiModule::Chat, &ProfileChoice::Main)
+    AiDataPolicy::load(main, &ProfileChoice::Main)
         .await
         .unwrap()
 }

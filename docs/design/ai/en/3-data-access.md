@@ -97,7 +97,7 @@ pub struct Citation {
 
 ## 3. AiDataPolicy
 
-`AiDataPolicy` decides what data AI can see. The daily report, the weekly report and chat each keep their own profiles. A profile records only which categories AI can see. With no profile selected, the main settings apply. `ReportContext` and `Tools` filter only by `AiDataPolicy`. They do not write rules themselves.
+`AiDataPolicy` decides what data AI can see. There is one set of profiles, and the daily report, the weekly report and chat all pick from it. A profile records only which categories AI can see. With no profile selected, the main settings apply. `ReportContext` and `Tools` filter only by `AiDataPolicy`. They do not write rules themselves.
 
 ```mermaid
 flowchart LR
@@ -109,7 +109,7 @@ flowchart LR
 
 ### 3.1 Requirements
 
-Each feature (daily report, weekly report, chat) can set its own data filter rules. By default, these rules follow the main settings (such as the privacy settings and the web privacy settings).
+Each feature (daily report, weekly report, chat) can pick its own data filter rules. There is one set of rules, and all features share it. The daily and weekly reports each pick one for automatic generation. By default, these rules follow the main settings (such as the privacy settings and the web privacy settings).
 
 ### 3.2 Data
 
@@ -117,14 +117,13 @@ Profiles are stored in `ai.visibility` in the settings JSON. A profile stores on
 
 ```jsonc
 "visibility": {
-  "daily": {
-    "profiles": {
-      "p_8f2a": { "name": "Work", "categories": ["work", "code"] }  // the key is a generated id, so renaming does not break references
-    },
-    "autoProfile": "p_8f2a"   // the profile for automatic generation; null means the main settings
+  "profiles": {
+    "p_8f2a": { "name": "Work", "categories": ["work", "code"] }  // the key is a generated id, so renaming does not break references
   },
-  "weekly": { "profiles": {}, "autoProfile": null },
-  "chat": { "profiles": {} }  // chat has no automatic generation
+  "auto": {
+    "daily": "p_8f2a",  // the profile for automatic daily reports; null means the main settings
+    "weekly": null      // the same for weekly reports. Chat has no automatic generation
+  }
 }
 ```
 
@@ -138,13 +137,24 @@ For manual generation and chat, the frontend passes the selected profile as a pa
 - Ignore rules and privacy keywords cannot be overridden. They always follow the main settings.
 - When a profile is created, its selection is copied from the main settings. Later changes to the main settings do not change the profile.
 - Categories created later are not selected in existing profiles.
-- If the profile that `autoProfile` points to is deleted, the main settings apply.
+- If a profile that `auto` points to is deleted, the main settings apply.
+- Development builds kept profiles per feature (daily report, weekly report, chat). They were never released, so they are not migrated. They are read as empty.
 
 ### 3.3 Interface
 
 ```rust
-/// A feature that uses AI.
-pub enum AiModule { Daily, Weekly, Chat }
+/// A report that runs automatically. Each one picks its own profile.
+pub enum Report { Daily, Weekly }
+
+/// Which profile a run uses.
+pub enum ProfileChoice {
+    /// The main settings.
+    Main,
+    /// The profile this report uses when it runs automatically.
+    Auto(Report),
+    /// The profile the user picked on the page. The value is its id.
+    Picked(String),
+}
 
 /// What AI can see.
 pub struct AiDataPolicy {
@@ -157,8 +167,9 @@ pub struct AiDataPolicy {
 }
 
 impl AiDataPolicy {
-    /// Reads the main settings and the selected profile, and returns what AI can see. If profile is None, the main settings apply.
-    pub async fn load(main: &Connection, module: AiModule, profile: Option<&str>) -> Result<Self>;
+    /// Reads the main settings and the selected profile, and returns what AI can see. If profile is Main, the main settings apply.
+    /// If the profile the user picked is gone, it is an error.
+    pub async fn load(main: &Connection, profile: &ProfileChoice) -> Result<Self>;
     /// Returns the WHERE condition to add to a main database query.
     pub fn main_filter(&self) -> String;
     /// Returns the filter for the memory database: the processes in apps that AI can see, and the windows to drop.

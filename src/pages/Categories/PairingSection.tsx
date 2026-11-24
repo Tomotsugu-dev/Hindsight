@@ -10,14 +10,21 @@ import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { logError } from "../../lib/logger";
 import { displayAppName } from "../../utils/displayName";
 import { AssignDropdown } from "./parts";
-import { RemoveAppDialog } from "../../components/RemoveAppDialog/RemoveAppDialog";
+import { BatchBar } from "./BatchBar";
+import { Checkbox } from "../../components/Checkbox/Checkbox";
+import {
+  RemoveAppDialog,
+  type RemoveTexts,
+} from "../../components/RemoveAppDialog/RemoveAppDialog";
 import { PrivacyDialog } from "../../components/PrivacyDialog/PrivacyDialog";
 import { usePrivacyDialog } from "../../components/PrivacyDialog/usePrivacyDialog";
 import { findScrollContainer, useDragAutoScroll } from "../../hooks/useDragAutoScroll";
+import type { Selection } from "../../hooks/useSelection";
 import {
   EXCLUDED_CATEGORY_ID,
   PRIVATE_CATEGORY_ID,
   purgeFailedReason,
+  saveEach,
 } from "../../utils/privateCategory";
 import { canMakeOwnGroup, pickPairingDrop, sameDrop, type PairingDrop } from "./pairingDrop";
 import styles from "./Pairing.module.css";
@@ -65,12 +72,15 @@ export interface PairingSectionProps {
   loading?: boolean;
   /** 外部数据源的 reload 回调；merge/unmerge/rename/delete 完成后调用。 */
   onReload?: () => Promise<void>;
+  /** Select mode, kept by the page because its filter bar turns it on. None: no select mode */
+  selection?: Selection;
 }
 
 export function PairingSection({
   groups: groupsProp,
   loading: loadingProp,
   onReload: onReloadProp,
+  selection,
 }: PairingSectionProps = {}) {
   const { t } = useTranslation();
   const { devices } = useDeviceFilter();
@@ -209,17 +219,16 @@ export function PairingSection({
     onScroll: () => updateHit(cursorYRef.current),
   });
 
-  /** 「移除」弹窗:null = 关闭,否则是待处理的那一行 */
-  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
-  /** 「设为隐私」：从下拉框选的先问，从移除弹窗选的直接存 */
-  const makePrivate = (groupId: string, name: string, ask: boolean) => {
-    const save = () => api.assignAppGroupCategory(groupId, PRIVATE_CATEGORY_ID);
-    if (ask) {
-      privacy.confirm({ name, site: false, target: { kind: "appGroup", groupId }, save });
-    } else {
-      privacy.run({ name, save });
-    }
-  };
+  /** The remove dialog: null when closed, else the groups to remove */
+  const [removing, setRemoving] = useState<{
+    ids: string[];
+    /** The app's name, or "3 apps" */
+    name: string;
+    texts: RemoveTexts;
+    /** Opened from the batch bar, so select mode ends afterwards */
+    batch: boolean;
+  } | null>(null);
+  const selecting = selection?.active === true;
 
   if (isLoading || visibleGroups === null) {
     return <div className={styles.toolbar}>{t("categories.pairing.loading")}</div>;
@@ -239,7 +248,7 @@ export function PairingSection({
     sourceGroupId: string,
     deviceColIdx: number,
   ) => {
-    if (e.button !== 0) return; // 只接左键
+    if (e.button !== 0 || selecting) return; // 只接左键；多选时不拖
     e.preventDefault();
     // 用源 chip 的**列容器**水平中心做 lockedX —— 后续飞行 chip 永远停在这条线上
     //（事件现在挂在 chip 上，往上找列容器；找不到退化用 chip 自身）
@@ -263,31 +272,58 @@ export function PairingSection({
     setDrag(nextDrag);
   };
 
-  /** 不计入统计:归入内建 hidden 分类——报表与 AI 总结的 SQL 都排除它,
-   *  数据一条不少,想找回就去分类页把它拖出来。 */
-  const excludeRow = async (groupId: string) => {
-    try {
-      await api.assignAppGroupCategory(groupId, EXCLUDED_CATEGORY_ID);
-      await Promise.all([reload(), refreshCategories()]);
-    } catch (e) {
-      logError("pairing.excludeRow", e);
+  /** Runs `op` for each group, one after another. A failure is logged and the rest go on. */
+  const forEachGroup = async (
+    label: string,
+    ids: string[],
+    op: (groupId: string) => Promise<void>,
+  ) => {
+    for (const id of ids) {
+      try {
+        await op(id);
+      } catch (e) {
+        logError(label, e);
+      }
     }
-  };
-
-  /** 删除:真删这个应用的活动、截图与 OCR 文字索引,最后软删组。不可逆。 */
-  const onDeleteRow = async (groupId: string) => {
-    try {
-      await api.purgeAppGroupData(groupId);
-      await reload();
-    } catch (e) {
-      logError("pairing.deleteRow", e);
-    }
+    await Promise.all([reload(), refreshCategories()]);
   };
 
   /** 点行尾按钮:每次都先讲清两条路的区别。刻意没有「不再提示」——
    *  记住「删除」等于以后每次点都直接不可逆删数据,不值得。 */
   const onRemoveClick = (groupId: string, name: string) => {
-    setRemoving({ id: groupId, name });
+    setRemoving({ ids: [groupId], name, texts: "app", batch: false });
+  };
+
+  const pickedIds = selection?.selected ?? [];
+  const pickedName = () => {
+    if (pickedIds.length !== 1) return t("categories.batch.apps", { count: pickedIds.length });
+    return visibleGroups.find((g) => g.id === pickedIds[0])?.displayName ?? pickedIds[0];
+  };
+
+  const onBatchRemove = () => {
+    const texts = pickedIds.length === 1 ? "app" : "apps";
+    setRemoving({ ids: pickedIds, name: pickedName(), texts, batch: true });
+  };
+
+  const onBatchAssign = (categoryId: string) => {
+    const ids = pickedIds;
+    if (categoryId === PRIVATE_CATEGORY_ID) {
+      privacy.confirm({
+        name: pickedName(),
+        site: false,
+        many: ids.length > 1,
+        targets: ids.map((groupId) => ({ kind: "appGroup", groupId })),
+        save: async () => {
+          await saveEach(ids, (id) => api.assignAppGroupCategory(id, PRIVATE_CATEGORY_ID));
+          selection?.stop();
+        },
+      });
+      return;
+    }
+    selection?.stop();
+    void forEachGroup("pairing.batchAssign", ids, (id) =>
+      api.assignAppGroupCategory(id, categoryId),
+    );
   };
 
   const onUnmerge = async (processName: string) => {
@@ -302,7 +338,12 @@ export function PairingSection({
   const onAssignCategory = async (group: AppGroup, categoryId: string | null) => {
     const groupId = group.id;
     if (categoryId === PRIVATE_CATEGORY_ID) {
-      makePrivate(groupId, group.displayName, true);
+      privacy.confirm({
+        name: group.displayName,
+        site: false,
+        targets: [{ kind: "appGroup", groupId }],
+        save: () => api.assignAppGroupCategory(groupId, PRIVATE_CATEGORY_ID),
+      });
       return;
     }
     try {
@@ -343,9 +384,10 @@ export function PairingSection({
     }
   };
 
-  return (
-    <div className={styles.pairing} style={cssVars}>
+  const table = (
+    <div className={`${styles.pairing} ${selecting ? styles.selecting : ""}`} style={cssVars}>
       <div className={styles.devHeader}>
+        {selecting && <span />}
         {sortedDevices.map((d) => (
           <span key={d.id} className={styles.devHeaderName}>
             {d.name}
@@ -371,7 +413,10 @@ export function PairingSection({
         // 注意还要排除找不到对应 active category 的孤儿引用情况（categoryId 非 null 但 categories 里没匹配）
         const hasActiveCategory =
           group.categoryId != null && categories.some((c) => c.id === group.categoryId);
+        const picked = selection?.isPicked(group.id) === true;
         return (
+          // The checkbox is the keyboard way to pick a row; a click elsewhere on it is a shortcut
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
           <div
             key={group.id}
             ref={setRowRef(group.id)}
@@ -381,10 +426,27 @@ export function PairingSection({
               isHot ? styles.hot : "",
               isSourceRow ? styles.sourceRow : "",
               !hasActiveCategory ? styles.unassigned : "",
+              picked ? styles.picked : "",
             ]
               .filter(Boolean)
               .join(" ")}
+            onClick={
+              selecting
+                ? (e) => {
+                    if (!(e.target as Element).closest("label")) selection?.toggle(group.id);
+                  }
+                : undefined
+            }
           >
+            {selecting && (
+              <div className={styles.selectCol}>
+                <Checkbox
+                  aria-label={t("categories.batch.selectRow", { name: group.displayName })}
+                  checked={picked}
+                  onChange={() => selection?.toggle(group.id)}
+                />
+              </div>
+            )}
             {slots.map((colMembers, idx) => {
               const dev = sortedDevices[idx];
               if (colMembers.length === 0) {
@@ -419,7 +481,7 @@ export function PairingSection({
                           {displayAppName(member.processName)}
                         </span>
                         <span className={styles.chipMeta}>{fmtDuration(member.recentSecs)}</span>
-                        {isPaired && !isDraggingThis && !isGroupNamesake && (
+                        {isPaired && !isDraggingThis && !isGroupNamesake && !selecting && (
                           <button
                             type="button"
                             className={styles.chipUnmerge}
@@ -438,26 +500,32 @@ export function PairingSection({
             })}
 
             <div className={styles.nameCol}>
-              <input
-                className={styles.nameInput}
-                value={nameDraft}
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => setPendingNames((p) => ({ ...p, [group.id]: e.target.value }))}
-                onBlur={() => void onCommitName(group.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.blur();
-                  } else if (e.key === "Escape") {
-                    renameCancelledRef.current = true;
-                    setPendingNames((p) => {
-                      const cp = { ...p };
-                      delete cp[group.id];
-                      return cp;
-                    });
-                    e.currentTarget.blur();
-                  }
-                }}
-              />
+              {selecting ? (
+                <span className={styles.nameText} title={group.displayName}>
+                  {group.displayName}
+                </span>
+              ) : (
+                <input
+                  className={styles.nameInput}
+                  value={nameDraft}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onChange={(e) => setPendingNames((p) => ({ ...p, [group.id]: e.target.value }))}
+                  onBlur={() => void onCommitName(group.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    } else if (e.key === "Escape") {
+                      renameCancelledRef.current = true;
+                      setPendingNames((p) => {
+                        const cp = { ...p };
+                        delete cp[group.id];
+                        return cp;
+                      });
+                      e.currentTarget.blur();
+                    }
+                  }}
+                />
+              )}
             </div>
 
             <div className={styles.actionCol}>
@@ -465,6 +533,7 @@ export function PairingSection({
                 categories={categories}
                 currentCategoryId={group.categoryId}
                 allowClear
+                readOnly={selecting}
                 onPick={(cid) => void onAssignCategory(group, cid)}
               />
             </div>
@@ -474,19 +543,21 @@ export function PairingSection({
                   只是其中一种。图标用垃圾桶——用户点这里的意图就是"删掉这行",
                   换成 EyeOff 反而认不出是干什么的;隐藏只是我们推荐的处理方式,
                   在弹窗里讲(见 RemoveAppDialog),不占入口的语义。 */}
-              <IconButton
-                icon={Trash2}
-                variant="outline"
-                tone="danger"
-                quiet
-                size="sm"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => onRemoveClick(group.id, group.displayName)}
-                title={t("categories.pairing.row.removeTooltip")}
-                label={t("categories.pairing.row.removeAria", {
-                  name: group.displayName,
-                })}
-              />
+              {!selecting && (
+                <IconButton
+                  icon={Trash2}
+                  variant="outline"
+                  tone="danger"
+                  quiet
+                  size="sm"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => onRemoveClick(group.id, group.displayName)}
+                  title={t("categories.pairing.row.removeTooltip")}
+                  label={t("categories.pairing.row.removeAria", {
+                    name: group.displayName,
+                  })}
+                />
+              )}
             </div>
           </div>
         );
@@ -523,25 +594,57 @@ export function PairingSection({
 
       <RemoveAppDialog
         open={removing !== null}
-        appName={removing?.name ?? ""}
-        groupId={removing?.id ?? ""}
+        title={t("apps.remove.title", { name: removing?.name ?? "" })}
+        targets={(removing?.ids ?? []).map((groupId) => ({ kind: "appGroup", groupId }))}
+        texts={removing?.texts ?? "app"}
+        // 删除:真删这些应用的活动、截图与 OCR 文字索引,最后软删组。不可逆。
         onDelete={() => {
-          const id = removing?.id;
+          if (!removing) return;
           setRemoving(null);
-          if (id) void onDeleteRow(id);
+          if (removing.batch) selection?.stop();
+          void forEachGroup("pairing.deleteRow", removing.ids, (id) => api.purgeAppGroupData(id));
         }}
+        // 从移除弹窗选的不再问一遍,直接存
         onMakePrivate={() => {
+          if (!removing) return;
           setRemoving(null);
-          if (removing) makePrivate(removing.id, removing.name, false);
+          if (removing.batch) selection?.stop();
+          privacy.run({
+            name: removing.name,
+            save: () =>
+              saveEach(removing.ids, (id) => api.assignAppGroupCategory(id, PRIVATE_CATEGORY_ID)),
+          });
         }}
+        // 不计入统计:归入内建 hidden 分类——报表与 AI 总结的 SQL 都排除它,
+        // 数据一条不少,想找回就去分类页把它拖出来。
         onExclude={() => {
-          const id = removing?.id;
+          if (!removing) return;
           setRemoving(null);
-          if (id) void excludeRow(id);
+          if (removing.batch) selection?.stop();
+          void forEachGroup("pairing.excludeRow", removing.ids, (id) =>
+            api.assignAppGroupCategory(id, EXCLUDED_CATEGORY_ID),
+          );
         }}
         onCancel={() => setRemoving(null)}
       />
       <PrivacyDialog {...privacy.dialogProps} />
     </div>
+  );
+
+  // The bar sits outside the table: the table scrolls sideways, which would hold it in place
+  return (
+    <>
+      {table}
+      {selection?.active && (
+        <BatchBar
+          count={pickedIds.length}
+          allSelected={selection.allSelected}
+          onToggleAll={selection.toggleAll}
+          categories={categories}
+          onAssign={onBatchAssign}
+          onRemove={onBatchRemove}
+        />
+      )}
+    </>
   );
 }

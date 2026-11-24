@@ -97,7 +97,7 @@ pub struct Citation {
 
 ## 3. AiDataPolicy
 
-`AiDataPolicy` 决定 AI 能看到哪些数据。日报、周报、聊天各存几套配置，一套配置只记 AI 能看到哪些分类；不选配置就按主库设置。`ReportContext` 和 `Tools` 只按 `AiDataPolicy` 过滤，自己不写规则。
+`AiDataPolicy` 决定 AI 能看到哪些数据。配置只存一组，日报、周报、聊天都从里面选；一套配置只记 AI 能看到哪些分类；不选配置就按主库设置。`ReportContext` 和 `Tools` 只按 `AiDataPolicy` 过滤，自己不写规则。
 
 ```mermaid
 flowchart LR
@@ -109,7 +109,7 @@ flowchart LR
 
 ### 3.1 需求
 
-各个功能（日报、周报、聊天）能设置不同的数据过滤规则。这些规则默认继承于主库设置（如隐私设置、网页隐私设置）
+各个功能（日报、周报、聊天）能选不同的数据过滤规则。规则只存一组，各个功能共用；日报、周报自动生成时各选一套。这些规则默认继承于主库设置（如隐私设置、网页隐私设置）
 
 ### 3.2 数据
 
@@ -117,14 +117,13 @@ flowchart LR
 
 ```jsonc
 "visibility": {
-  "daily": {
-    "profiles": {
-      "p_8f2a": { "name": "工作", "categories": ["work", "code"] }  // key 是生成的 id，改名不影响引用
-    },
-    "autoProfile": "p_8f2a"   // 自动生成用哪套；null 就是按主库设置
+  "profiles": {
+    "p_8f2a": { "name": "工作", "categories": ["work", "code"] }  // key 是生成的 id，改名不影响引用
   },
-  "weekly": { "profiles": {}, "autoProfile": null },
-  "chat": { "profiles": {} }  // 聊天没有自动生成
+  "auto": {
+    "daily": "p_8f2a",  // 日报自动生成用哪套；null 就是按主库设置
+    "weekly": null      // 周报同上。聊天没有自动生成
+  }
 }
 ```
 
@@ -138,13 +137,24 @@ flowchart LR
 - 忽略规则和隐私关键词不能覆盖，一律按主库设置。
 - 新建配置时，选中状态从主库设置复制过来；之后主库设置再改，配置不跟着变。
 - 以后新建的分类，在已有配置里都是没选中。
-- `autoProfile` 指向的配置被删了，按主库设置。
+- `auto` 里指向的配置被删了，按主库设置。
+- 开发版按日报、周报、聊天分开存配置，没发过版，不迁移：读到当空的。
 
 ### 3.3 接口
 
 ```rust
-/// 用 AI 的功能。
-pub enum AiModule { Daily, Weekly, Chat }
+/// 会自动生成的报告，各自选一套配置。
+pub enum Report { Daily, Weekly }
+
+/// 这次运行用哪套配置。
+pub enum ProfileChoice {
+    /// 主库设置。
+    Main,
+    /// 这种报告自动生成时用的那套。
+    Auto(Report),
+    /// 用户在页面上选的那套，值是 id。
+    Picked(String),
+}
 
 /// AI 能看到什么。
 pub struct AiDataPolicy {
@@ -157,8 +167,9 @@ pub struct AiDataPolicy {
 }
 
 impl AiDataPolicy {
-    /// 读主库设置和选中的配置，返回 AI 能看到什么。profile 是 None 就全按主库设置。
-    pub async fn load(main: &Connection, module: AiModule, profile: Option<&str>) -> Result<Self>;
+    /// 读主库设置和选中的配置，返回 AI 能看到什么。profile 是 Main 就全按主库设置；
+    /// 用户选的那套不在了就报错。
+    pub async fn load(main: &Connection, profile: &ProfileChoice) -> Result<Self>;
     /// 返回主库查询要加的 WHERE 条件。
     pub fn main_filter(&self) -> String;
     /// 返回记忆库的过滤条件：apps 里 AI 能看到的进程，还有要去掉的窗口。

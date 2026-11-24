@@ -11,9 +11,7 @@ import { useSettings } from "../../state/settings";
 import { useAiProfiles } from "../../state/aiProfiles";
 import { logError } from "../../lib/logger";
 import ChatView from "./ChatView";
-import ChatProfileToggle from "./ChatProfileToggle";
 import ConversationList from "./ConversationList";
-import ModelBadge from "./ModelBadge";
 import { chatLocalModelName, chatUsesCloud } from "./chatRouting";
 import { ChatPrivacyDialog } from "./ChatPrivacyDialog";
 import BackfillBanner from "../../components/BackfillBanner/BackfillBanner";
@@ -36,8 +34,10 @@ function writeLastActive(id: number | null) {
 }
 
 /**
- * 对话页外壳:标题行(右侧当前模型 badge)→ 未入索引 banner → 左右两栏
- * (左会话列表 + 底下的数据筛选 / 右聊天区)。会话与消息都落 memory.sqlite,重启不丢。
+ * The chat page: the title, the banner for screenshots not yet indexed, then
+ * two columns (conversations on the left, the chat on the right).
+ * The model, thinking and data pickers are in the chat's input box.
+ * Conversations and messages are saved in memory.sqlite, so a restart keeps them.
  */
 export default function ChatPage() {
   const { t } = useTranslation();
@@ -149,7 +149,6 @@ export default function ChatPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>{t("chat.title")}</h1>
-        <ModelBadge />
       </header>
 
       {noToolsModel && (
@@ -168,7 +167,6 @@ export default function ChatPage() {
             onChanged={refreshConversations}
             onDeletedActive={() => setActiveId(null)}
           />
-          <ChatProfileToggle state={profiles} />
         </div>
         <div className={styles.main}>
           <ChatView

@@ -30,6 +30,16 @@ interface InlinePickerProps {
   disabled?: boolean;
   /** 每次打开前调用，比如重新读一遍列表 */
   onOpen?: () => void;
+  /** Opens the menu above the button, for pickers at the bottom of the window. */
+  up?: boolean;
+  /** A command below the options, such as "Manage…". It is not a value. */
+  action?: InlinePickerAction;
+}
+
+export interface InlinePickerAction {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
 }
 
 /**
@@ -50,8 +60,11 @@ export function InlinePicker({
   note,
   disabled,
   onOpen,
+  up,
+  action,
 }: InlinePickerProps) {
   const { open, wrapRef, toggle, close } = usePicker();
+  const ActionIcon = action?.icon;
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
@@ -76,7 +89,12 @@ export function InlinePicker({
       </button>
 
       {open ? (
-        <div className={styles.menu} role="menu" aria-label={title} data-part="menu">
+        <div
+          className={`${styles.menu} ${up ? styles.menuUp : ""}`}
+          role="menu"
+          aria-label={title}
+          data-part="menu"
+        >
           <p className={styles.heading}>{title}</p>
           {options.map((o) => {
             const selected = o.value === value;
@@ -111,6 +129,20 @@ export function InlinePicker({
             );
           })}
           {note ? <p className={styles.note}>{note}</p> : null}
+          {action && ActionIcon ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${styles.item} ${styles.action}`}
+              onClick={() => {
+                close();
+                action.onClick();
+              }}
+            >
+              <ActionIcon className={styles.itemIcon} aria-hidden />
+              <span className={styles.itemLabel}>{action.label}</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

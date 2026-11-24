@@ -1,91 +1,72 @@
-//! AI 日报的编排核心（报告并轨后的单步管线）。
+//! 日报编排核心。
 //!
-//! [`DaySummaryRunner::run`] 是单点入口：拿到一天 + 设备过滤 + 是否强刷，
-//! 内部按 settings.ai.segments 切段，串行跑每一段：
+//! [`DaySummaryRunner::run`] 按用户配置的时段串行处理（本机 `llama-server` 是单实例，
+//! 并发请求只会让服务端排队）：
 //!
-//!   1. 从 activities 合成该段的逐小时活动时间线（应用时长 + 窗口标题样例）
-//!   2. 拉段内 top apps 统计
-//!   3. 拼 prompt + 调 LLM（本地 llama-server 或云端 API）
-//!   4. 把段总结落 DB（status: ok / skipped_no_activity / error）
-//!
-//! 不再有 step 1（VLM 逐图描述）与 MobileNet 去重——窗口标题时间线是唯一材料源。
-//! 串行而非并发：本地 llama-server 是单实例，并发请求只会让 llama.cpp 内部排队。
+//! 1. 从 `activities` 合成该段的逐小时活动时间线
+//! 2. 查询该段使用最多的应用统计
+//! 3. 拼 prompt 并调用配置的模型（本机或云端）
+//! 4. 将段总结落库（`ok` / `skipped_no_activity` / `error`）
 
-use std::path::PathBuf;
+mod segment;
+mod timeline;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::NaiveDate;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
-use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
-use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::features::report::summary_operations::{
-    build_activity_timeline, build_step2, summarize_segment, upsert_skipped_no_activity,
-};
-use crate::ai::features::report::summary_progress::{SummaryProgress, SUMMARY_PROGRESS_EVENT};
-use crate::ai::models;
-use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+use crate::ai::config::{AiConfig, Task};
+use crate::ai::engine::{EngineGuard, EngineSupervisor};
+use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
+use crate::ai::features::report::progress::{ProgressSink, SummaryProgress};
+use crate::ai::llm::Step2Chat;
+use crate::ai::policy::{AiDataPolicy, ProfileChoice};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, list_segment_top_apps};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
+use segment::{summarize_segment, write_skipped_segment, SegmentTarget};
+use timeline::build_activity_timeline;
 
-/// 日报在 ai_summaries 里的 `source`。
+/// 日报在 `ai_summaries` 表中的 `source` 值。
 pub const DAILY_SOURCE: &str = "daily";
 
-/// 进度事件出口的最小抽象。生产代码里就是 [`AppHandle`]（emit 给前端）；
-/// 抽成 trait 是为了让编排逻辑能脱离 Tauri 运行时做单元测试——`tauri` 依赖
-/// 没开 `test` feature，测试进程里根本构造不出 AppHandle，这是 runner
-/// 对 Tauri 的唯一硬依赖，砍断它其余全部编排都可测。
-pub trait ProgressSink {
-    fn emit_progress(&self, payload: SummaryProgress);
-}
-
-impl ProgressSink for AppHandle {
-    fn emit_progress(&self, payload: SummaryProgress) {
-        if let Err(e) = self.emit(SUMMARY_PROGRESS_EVENT, &payload) {
-            log::warn!("emit {SUMMARY_PROGRESS_EVENT} 失败: {e}");
-        }
-    }
-}
-
-/// 单点入口：跑一天的 AI 总结。lib.rs 通过 `app.manage` 不直接管它，
-/// 而是命令体里临时构造（生命周期跟随单次调用）。
+/// 某一天日报生成的编排入口。
 ///
-/// 泛型参数默认 [`AppHandle`]：所有生产调用点 `DaySummaryRunner::new(.., app, ..)`
-/// 不需要任何改动；测试里换成事件收集器。
+/// 泛型参数默认 [`AppHandle`]，生产调用点无需显式指定类型；单元测试可注入内存事件记录器。
 pub struct DaySummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
-    app: S,
-    /// 取消信号：段边界检查 + 在途 LLM 请求和引擎加载也会被
-    /// [`crate::ai::features::report::summary_operations::cancellable`] 每 250ms 轮询中断。
+    sink: S,
+    /// 与周报共用的停止标志：段边界会检查，引擎启动和模型调用期间也会每 250ms 轮询中断。
     cancel: Arc<AtomicBool>,
 }
 
 impl<S: ProgressSink> DaySummaryRunner<S> {
-    /// 由命令体临时构造（不进 Tauri State）：每次跑一次总结时新建一份。
-    /// `cancel` 来自全局 `SummaryCancel` 单例，前端调 cancel_day_summary 时被设 true。
+    /// 为单次命令调用或定时任务构造 runner 实例。
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
-        app: S,
+        sink: S,
         cancel: Arc<AtomicBool>,
     ) -> Self {
         Self {
             pool,
             supervisor,
-            app,
+            sink,
             cancel,
         }
     }
 
-    /// 跑某一天的全部段。
+    /// 生成 `local_date` 的全部时段总结。
     ///
-    /// `force_refresh = true` 会先清空当天 ai_summaries 行，否则已有 ok 段直接复用。
-    /// `profile` 决定 AI 能看到哪些活动。
+    /// - `force_refresh = false`：已有 `ok` 的段直接跳过复用。
+    /// - `force_refresh = true`：不前置删库，直接重跑所有段并用新结果原地覆盖；
+    ///   整轮跑完后再按有效段下标清理配置缩小或改非法留下的孤儿行。
+    /// - `profile`：决定 AI 能看到哪些活动。
     pub async fn run(
         &self,
         local_date: NaiveDate,
@@ -94,11 +75,10 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         profile: &ProfileChoice,
     ) -> Result<()> {
         let result = self
-            .run_inner(DAILY_SOURCE, local_date, device, force_refresh, profile)
+            .run_inner(local_date, device, force_refresh, profile)
             .await;
 
-        // 停止按钮中断在途请求 / 引擎加载时从深处抛 SummaryCancelled——不是失败，
-        // 这里统一优雅收尾：emit cancelled 让前端复位，命令返回 Ok
+        // 按停止按钮中断不属于错误：统一发 cancelled 让前端复位，并返回 Ok
         if matches!(result, Err(Error::SummaryCancelled)) {
             let p = SummaryProgress::base(
                 DAILY_SOURCE.to_string(),
@@ -114,7 +94,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
     async fn run_inner(
         &self,
-        source: &str,
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
@@ -123,40 +102,40 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let ai = settings_repo::load(&self.pool).await?.ai;
 
         ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
-        // 在启动引擎之前读：配置被删了就不白等模型加载
-        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
+        // 启动引擎前先读可见性策略：配置被删时直接报错，不白等模型加载
+        let visible = AiDataPolicy::load(&self.pool.0, profile)
             .await?
             .main_filter();
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
-        // 这里**不**前置 clear_day。删在重建之前意味着:模型文件缺失、密钥过期、
-        // 端点不可用时,当天已有的好报告先没了、重建又起不来,归零且无从恢复。
-        // upsert_segment 的 ON CONFLICT 本就原地覆盖,重建不需要先删;删除的唯一
-        // 用途是清理"段配置缩小/改非法"后的孤儿行,那件事挪到整轮跑完后按实际
-        // 有效段集合收敛(见循环后的 prune_segments_except)。
-        // force_refresh 在下面退化为"不复用已 ok 的段",语义不变。
+        // 不前置 clear_day：引擎起不来或配置失效时，已有日报不会归零；
+        // 新内容通过 upsert 原地覆盖，孤儿段留到整轮跑完后统一清理。
 
         let total_segments = ai.segments.len() as u32;
 
-        // 单一引擎全程复用：云端不起本地引擎（0 为占位端口，云端分支不使用）
-        let summary_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size_for(Task::Daily),
-            parallel_slots: ai.parallel_slots_for(Task::Daily),
-            ctx_size: ai.ctx_size_for(Task::Daily),
-        };
-        // 整轮都拿着：别的任务换不掉这个引擎
-        let engine = self
-            .acquire_engine(source, &date_str, &ai, summary_overrides, total_segments)
-            .await?;
+        // 整轮持有引擎租约，防止其他任务中途换掉引擎
+        let engine = acquire_engine(
+            &self.supervisor,
+            &self.sink,
+            &self.cancel,
+            &ai,
+            Task::Daily,
+            EngineProgress {
+                source: DAILY_SOURCE,
+                date: &date_str,
+                total_segments,
+            },
+        )
+        .await?;
         let port = engine.as_ref().map_or(0, EngineGuard::port);
-        let step2 = build_step2(&ai, Task::Daily, port)?;
+        let model = open_model(&ai, Task::Daily, port)?;
 
-        // 本轮实际有效的段下标——循环结束后用它收敛掉孤儿行
+        // 记录本轮有效段下标，循环结束后用来收敛掉孤儿行
         let mut kept: Vec<u32> = Vec::new();
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
                 let mut p = SummaryProgress::base(
-                    source.to_string(),
+                    DAILY_SOURCE.to_string(),
                     date_str.clone(),
                     "cancelled",
                     total_segments,
@@ -166,172 +145,96 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 return Ok(());
             }
             if seg.end_hour <= seg.start_hour {
-                // 非法段:不进 kept,循环后会被 prune 掉(旧实现靠前置 clear_day 顺带清)
+                // 非法时段不加入 kept，整轮完成后会被清理掉
                 continue;
             }
-            kept.push(idx as u32);
-            // force_refresh=false 时已生成的段 (status=ok) 直接复用
-            if !force_refresh
-                && self
-                    .segment_already_ok(source, &date_str, idx as u32)
-                    .await?
-            {
+            let index = idx as u32;
+            kept.push(index);
+            if !force_refresh && self.segment_already_ok(&date_str, index).await? {
                 continue;
             }
-            self.run_one_segment(
-                source,
-                &step2,
-                &ai,
-                &date_str,
-                idx as u32,
-                total_segments,
-                seg.label.clone(),
-                seg.start_hour,
-                seg.end_hour,
-                device.clone(),
-                &visible,
-            )
-            .await?;
+            let target = SegmentTarget {
+                source: DAILY_SOURCE,
+                date: &date_str,
+                index,
+                label: &seg.label,
+                start_hour: seg.start_hour,
+                end_hour: seg.end_hour,
+            };
+            self.run_one_segment(&model, &ai, &target, total_segments, &device, &visible)
+                .await?;
         }
 
-        // 整轮跑完(未被取消/未提前返错)才收敛:删除永远发生在新内容落库之后。
-        // 失败只告警——清理不掉孤儿段不影响本次生成的结果。
-        match ai_summaries::prune_segments_except(&self.pool, source, &date_str, &kept).await {
-            Ok(n) if n > 0 => log::info!("{source} {date_str}: 清理 {n} 条失效段"),
+        // 整轮顺利跑完（未被取消、未提前报错）才清理失效段；清理失败只打警告不影响本次结果
+        match ai_summaries::prune_segments_except(&self.pool, DAILY_SOURCE, &date_str, &kept).await
+        {
+            Ok(n) if n > 0 => log::info!("{DAILY_SOURCE} {date_str}: 清理 {n} 条失效段"),
             Ok(_) => {}
-            Err(e) => log::warn!("{source} {date_str}: 清理失效段失败(不影响本次结果): {e}"),
+            Err(e) => {
+                log::warn!("{DAILY_SOURCE} {date_str}: 清理失效段失败(不影响本次结果): {e}")
+            }
         }
 
-        let p = SummaryProgress::base(source.to_string(), date_str, "all_done", total_segments);
+        let p = SummaryProgress::base(
+            DAILY_SOURCE.to_string(),
+            date_str,
+            "all_done",
+            total_segments,
+        );
         self.emit(p);
         Ok(())
     }
 
     fn emit(&self, payload: SummaryProgress) {
-        self.app.emit_progress(payload);
+        self.sink.emit_progress(payload);
     }
 
-    /// 该段是否已生成且 status="ok"——给 force_refresh=false 跳过逻辑用。
-    async fn segment_already_ok(
-        &self,
-        source: &str,
-        date_str: &str,
-        segment_idx: u32,
-    ) -> Result<bool> {
+    async fn segment_already_ok(&self, date_str: &str, segment_idx: u32) -> Result<bool> {
         let status =
-            ai_summaries::get_segment_status(&self.pool, source, date_str, segment_idx).await?;
+            ai_summaries::get_segment_status(&self.pool, DAILY_SOURCE, date_str, segment_idx)
+                .await?;
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 按日报的模型和参数拿一个本机引擎。走云端时返回 `None`。
-    ///
-    /// 加载模型期间按停止也能中断。
-    async fn acquire_engine(
-        &self,
-        source: &str,
-        date_str: &str,
-        ai: &AiConfig,
-        engine_overrides: EngineStartOverrides,
-        total_segments: u32,
-    ) -> Result<Option<EngineGuard>> {
-        let main_name = match ai.model_for(Task::Daily) {
-            Some(ModelRef::Cloud { .. }) => {
-                log::info!("日报：段总结走云端，跳过本地引擎启动");
-                return Ok(None);
-            }
-            Some(ModelRef::Local { file }) => file,
-            None => return Err(Error::InvalidInput(NO_MODEL_ERROR)),
-        };
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            // message 留空：前端按 phase 显示本地化的「加载模型中…」（dailySummary.ts）
-            p.message = None;
-            self.emit(p);
-        }
-        let main_path = self.resolve_local_model_path(ai, &main_name)?;
-        let engine = crate::ai::features::report::summary_operations::cancellable(
-            &self.cancel,
-            self.supervisor.acquire(main_path, engine_overrides),
-        )
-        .await?;
-        Ok(Some(engine))
-    }
-
-    fn resolve_local_model_path(&self, ai: &AiConfig, main_name: &str) -> Result<PathBuf> {
-        let models_dir = models::root_dir(ai);
-        let main_path: PathBuf = models_dir.join(main_name);
-        if !main_path.exists() {
-            return Err(Error::ModelFileMissing(format!(
-                "{}（可能被删除或路径变了）",
-                main_name
-            )));
-        }
-        Ok(main_path)
-    }
-
-    /// 跑单段：活动时间线 + top_apps → LLM → 落 ai_summaries。
-    ///
-    /// 落库语义：
-    /// - DB 写操作错误（IO 等）向上抛
-    /// - LLM 调用失败：写一行 status='error'，不抛
-    /// - 整段无活动：status='skipped_no_activity'
-    #[allow(clippy::too_many_arguments)]
+    /// 跑单段：合成时间线与 top apps → 调模型 → 落库并推送 `segment_done`。
     async fn run_one_segment(
         &self,
-        source: &str,
-        step2: &crate::ai::llm::Step2Chat,
+        model: &Step2Chat,
         ai: &AiConfig,
-        date_str: &str,
-        idx: u32,
+        target: &SegmentTarget<'_>,
         total_segments: u32,
-        label: String,
-        start_hour: u8,
-        end_hour: u8,
-        device: DeviceFilter,
+        device: &DeviceFilter,
         visible: &str,
     ) -> Result<()> {
-        let step2_model = step2.model_label().to_string();
-
         let mut p_started = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
+            target.source.to_string(),
+            target.date.to_string(),
             "segment_started",
             total_segments,
         );
-        p_started.segment_idx = Some(idx);
+        p_started.segment_idx = Some(target.index);
         p_started.images_total = Some(0);
         self.emit(p_started);
 
-        let timeline =
-            build_activity_timeline(&self.pool, date_str, start_hour, end_hour, visible, &device)
-                .await?;
+        let timeline = build_activity_timeline(
+            &self.pool,
+            target.date,
+            target.start_hour,
+            target.end_hour,
+            visible,
+            device,
+        )
+        .await?;
 
         if timeline.is_empty() {
-            // 真的什么都没有 —— skipped_no_activity 兜底
-            upsert_skipped_no_activity(
-                &self.pool,
-                source,
-                date_str,
-                idx,
-                &label,
-                start_hour,
-                end_hour,
-                step2_model,
-            )
-            .await?;
+            write_skipped_segment(&self.pool, target, model.model_label().to_string()).await?;
             let mut p_done = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
+                target.source.to_string(),
+                target.date.to_string(),
                 "segment_done",
                 total_segments,
             );
-            p_done.segment_idx = Some(idx);
+            p_done.segment_idx = Some(target.index);
             p_done.images_total = Some(0);
             p_done.content = Some(String::new());
             p_done.status = Some("skipped_no_activity");
@@ -341,9 +244,9 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
         let top_apps = list_segment_top_apps(
             &self.pool,
-            date_str,
-            start_hour,
-            end_hour,
+            target.date,
+            target.start_hour,
+            target.end_hour,
             visible,
             device.clone(),
             8,
@@ -352,39 +255,33 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         .unwrap_or_default();
 
         let mut p_sum = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
+            target.source.to_string(),
+            target.date.to_string(),
             "summarizing",
             total_segments,
         );
-        p_sum.segment_idx = Some(idx);
+        p_sum.segment_idx = Some(target.index);
         p_sum.images_total = Some(0);
         self.emit(p_sum);
 
         let (row, status_str) = summarize_segment(
             &self.pool,
-            step2,
+            model,
             ai,
-            source,
-            date_str,
-            &label,
-            start_hour,
-            end_hour,
-            idx,
+            target,
             &timeline,
             &top_apps,
-            step2.model_label().to_string(),
             &self.cancel,
         )
         .await?;
 
         let mut p_done = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
+            target.source.to_string(),
+            target.date.to_string(),
             "segment_done",
             total_segments,
         );
-        p_done.segment_idx = Some(idx);
+        p_done.segment_idx = Some(target.index);
         p_done.images_total = Some(0);
         p_done.content = Some(row.content.clone());
         p_done.status = Some(status_str);
@@ -393,7 +290,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         Ok(())
     }
 
-    /// "重试某段"专用：只跑指定一段，复用现有引擎。
+    /// 单段重试：只重跑指定下标的这一段，不动其他段。
     pub async fn run_one_segment_only(
         &self,
         local_date: NaiveDate,
@@ -413,179 +310,56 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         if seg.end_hour <= seg.start_hour {
             return Err(Error::InvalidInput("段时间范围非法"));
         }
-        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
+        let visible = AiDataPolicy::load(&self.pool.0, profile)
             .await?
             .main_filter();
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
+        let total_segments = ai.segments.len() as u32;
 
-        let summary_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size_for(Task::Daily),
-            parallel_slots: ai.parallel_slots_for(Task::Daily),
-            ctx_size: ai.ctx_size_for(Task::Daily),
-        };
-        let engine = self
-            .acquire_engine(
-                DAILY_SOURCE,
-                &date_str,
-                &ai,
-                summary_overrides,
-                ai.segments.len() as u32,
-            )
-            .await?;
-        let port = engine.as_ref().map_or(0, EngineGuard::port);
-        let step2 = build_step2(&ai, Task::Daily, port)?;
-
-        self.run_one_segment(
-            DAILY_SOURCE,
-            &step2,
+        let engine = acquire_engine(
+            &self.supervisor,
+            &self.sink,
+            &self.cancel,
             &ai,
-            &date_str,
-            segment_idx,
-            ai.segments.len() as u32,
-            seg.label,
-            seg.start_hour,
-            seg.end_hour,
-            device,
-            &visible,
+            Task::Daily,
+            EngineProgress {
+                source: DAILY_SOURCE,
+                date: &date_str,
+                total_segments,
+            },
         )
-        .await
+        .await?;
+        let port = engine.as_ref().map_or(0, EngineGuard::port);
+        let model = open_model(&ai, Task::Daily, port)?;
+
+        let target = SegmentTarget {
+            source: DAILY_SOURCE,
+            date: &date_str,
+            index: segment_idx,
+            label: &seg.label,
+            start_hour: seg.start_hour,
+            end_hour: seg.end_hour,
+        };
+        self.run_one_segment(&model, &ai, &target, total_segments, &device, &visible)
+            .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::VecDeque;
     use std::sync::Mutex;
 
-    use crate::ai::config::{CloudConnection, DaySegment};
+    use crate::ai::config::{DaySegment, ModelRef};
+    use crate::ai::features::report::test_util::{
+        free_local_port, phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned,
+        RecordingSink,
+    };
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use crate::storage::SqliteResultExt;
 
-    // ─────────────────── 测试基建：进度收集 / 假云端 / 数据种子 ───────────────────
-    //
-    // 编排测试的思路：settings 里把段总结路由到「云端」，endpoint 指向本地
-    // 127.0.0.1 的脚本化假 OpenAI 服务——这样 runner 的引擎管理分支（本地
-    // llama-server 启停）天然短路，其余编排（切段 / 材料合成 / 落库 / 进度事件 /
-    // 取消 / 失败续跑）全部走真代码真 DB。
-
-    /// [`ProgressSink`] 的测试实现：把每个进度事件按序收进 Vec。
-    /// `cancel_on_segment_done` 模拟「用户看到某段完成后按停止」——在 emit
-    /// segment_done 的同一瞬间置位取消标志，检验段边界的取消检查。
-    #[derive(Clone, Default)]
-    struct RecordingSink {
-        events: Arc<Mutex<Vec<SummaryProgress>>>,
-        cancel_on_segment_done: Option<Arc<AtomicBool>>,
-    }
-
-    impl ProgressSink for RecordingSink {
-        fn emit_progress(&self, payload: SummaryProgress) {
-            if payload.phase == "segment_done" {
-                if let Some(c) = &self.cancel_on_segment_done {
-                    c.store(true, Ordering::Relaxed);
-                }
-            }
-            self.events.lock().unwrap().push(payload);
-        }
-    }
-
-    /// 收集到的事件压成 (phase, segment_idx) 序列，给断言比对用。
-    fn phase_seq(events: &[SummaryProgress]) -> Vec<(&'static str, Option<u32>)> {
-        events.iter().map(|p| (p.phase, p.segment_idx)).collect()
-    }
-
-    /// 脚本化假云端的单发行为。
-    enum Canned {
-        /// 回一发 OpenAI 兼容 200，content 为给定文本
-        Ok(&'static str),
-        /// 回 500——模拟云端内部错误（连接是通的，业务失败）
-        Http500,
-    }
-
-    /// 起一个脚本化的本地假 OpenAI 服务：第 N 个连接消费脚本第 N 项；
-    /// 脚本耗尽后一律回 500——这样「不应该发出的多余请求」会以 error 行
-    /// 的形式在断言里暴露出来，而不是静默成功。
-    /// 返回 (端口, 已捕获的请求 body 列表)——body 用来断言材料过滤真的生效。
-    async fn spawn_scripted_openai_server(script: Vec<Canned>) -> (u16, Arc<Mutex<Vec<String>>>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let bodies = Arc::new(Mutex::new(Vec::new()));
-        let bodies_in = bodies.clone();
-        tokio::spawn(async move {
-            let mut script = VecDeque::from(script);
-            loop {
-                let Ok((mut sock, _)) = listener.accept().await else {
-                    break;
-                };
-                // 读完整个请求（headers + Content-Length body）再回包，
-                // 避免半途关闭触发 RST 让客户端报奇怪的连接错误
-                let mut buf: Vec<u8> = Vec::new();
-                let mut tmp = [0u8; 4096];
-                let mut body_start = 0usize;
-                while let Ok(n) = sock.read(&mut tmp).await {
-                    if n == 0 {
-                        break;
-                    }
-                    buf.extend_from_slice(&tmp[..n]);
-                    if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                        let head = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
-                        let cl = head
-                            .lines()
-                            .find_map(|l| l.strip_prefix("content-length:"))
-                            .and_then(|v| v.trim().parse::<usize>().ok())
-                            .unwrap_or(0);
-                        if buf.len() >= pos + 4 + cl {
-                            body_start = pos + 4;
-                            break;
-                        }
-                    }
-                }
-                bodies_in
-                    .lock()
-                    .unwrap()
-                    .push(String::from_utf8_lossy(&buf[body_start..]).into_owned());
-                let resp = match script.pop_front().unwrap_or(Canned::Http500) {
-                    Canned::Ok(content) => {
-                        let body = serde_json::json!({
-                            "choices": [{
-                                "message": { "role": "assistant", "content": content },
-                                "finish_reason": "stop"
-                            }],
-                            "usage": { "prompt_tokens": 42, "completion_tokens": 17 }
-                        })
-                        .to_string();
-                        format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                            body.len(),
-                            body
-                        )
-                    }
-                    Canned::Http500 => {
-                        let body = r#"{"error":"internal"}"#;
-                        format!(
-                            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                            body.len(),
-                            body
-                        )
-                    }
-                };
-                let _ = sock.write_all(resp.as_bytes()).await;
-                let _ = sock.shutdown().await;
-            }
-        });
-        (port, bodies)
-    }
-
-    /// 拿一个刚刚释放的本地端口——连接必然被拒。给「不应发出任何请求」的
-    /// 场景当 endpoint：若 runner 意外发了请求，会落 error 行被断言抓住。
-    fn free_local_port() -> u16 {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = l.local_addr().unwrap().port();
-        drop(l);
-        port
-    }
+    // ─────────────────── 测试基建：数据种子 ───────────────────
 
     fn seg(label: &str, start_hour: u8, end_hour: u8) -> DaySegment {
         DaySegment {
@@ -594,31 +368,6 @@ mod tests {
             end_hour,
             color: String::new(),
         }
-    }
-
-    /// 把「云端段总结 + 指定段划分 + 排除分类」写进 settings_store。
-    /// runner 的 run_inner 每次都从 DB 现读 settings——这是唯一的注入口。
-    async fn seed_cloud_settings(pool: &DbPool, port: u16, segments: Vec<DaySegment>) {
-        // 两个路径设非空：避免 load() 的「空路径补默认值」dirty 回写干扰测试
-        let mut s = settings_repo::Settings {
-            screenshot_path: "/tmp/hindsight-test-shots".to_string(),
-            ..Default::default()
-        };
-        s.ai.models_path = "/tmp/hindsight-test-models".to_string();
-        s.ai.cloud = vec![CloudConnection {
-            id: "c1".to_string(),
-            name: "test".to_string(),
-            dialect: "openai".to_string(),
-            endpoint: format!("http://127.0.0.1:{port}/v1"),
-            model: "canned-model".to_string(),
-            api_key: String::new(),
-            context_length: None,
-        }];
-        s.ai.picks.daily = Some(ModelRef::Cloud {
-            connection: "c1".to_string(),
-        });
-        s.ai.segments = segments;
-        settings_repo::save(pool, &s).await.unwrap();
     }
 
     /// 插一行已 seal 的 activities 行（device_id 可指定，测设备过滤用）。
@@ -1204,9 +953,9 @@ mod tests {
         let (port, bodies) =
             spawn_scripted_openai_server(vec![Canned::Ok("只统计了本机代码活动。")]).await;
         seed_cloud_settings(&pool, port, vec![seg("早", 9, 10), seg("午", 13, 14)]).await;
-        // 日报的「工作」配置只选了「编程」
+        // 「工作」配置只选了「编程」
         let mut s = settings_repo::load(&pool).await.unwrap();
-        s.ai.visibility.daily.profiles.insert(
+        s.ai.visibility.profiles.insert(
             "p_work".to_string(),
             crate::ai::config::VisibilityProfile {
                 name: "工作".to_string(),
