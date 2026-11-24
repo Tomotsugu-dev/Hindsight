@@ -37,11 +37,7 @@ function baseAi(patch: Partial<AiConfig> = {}): AiConfig {
     modelsPath: "/models",
     userBrief: "",
     segments: [],
-    visibility: {
-      daily: { profiles: {}, autoProfile: null },
-      weekly: { profiles: {}, autoProfile: null },
-      chat: { profiles: {}, autoProfile: null },
-    },
+    visibility: { profiles: {}, auto: { daily: null, weekly: null } },
     promptLanguage: "zh",
     promptOverrides: {
       systemZh: "",

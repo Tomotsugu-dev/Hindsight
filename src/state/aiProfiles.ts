@@ -1,32 +1,31 @@
 /**
- * 「AI 能看到的数据」配置：读一个功能的配置，记住页面上选的那套，保存改动。
+ * AI profiles: one set that every feature picks from.
  *
- * 页面上的选择不存：每次进页面回到默认。日报、周报默认是「自动生成时用」的那套，
- * 聊天默认用默认分类。选中的那套被删了，也回到默认。
+ * The pick on a page is not saved. Each time the page opens, it goes back to the default:
+ * daily and weekly reports use the profile they use when they run automatically, and chat
+ * uses the default categories. If the picked profile is deleted, the pick also goes back to
+ * the default.
  */
 
 import { useState } from "react";
 import type {
   AiProfileModule,
   AiVisibility,
-  ModuleProfiles,
+  AutoProfiles,
   VisibilityProfile,
 } from "../api/hindsight";
+import { ROUTES } from "../config/nav";
 import { useSettings } from "./settings";
 
-const EMPTY: ModuleProfiles = { profiles: {}, autoProfile: null };
+/** Opens the profiles in AI settings. The card is outlined for a moment when a link opens it. */
+export const AI_PROFILES_HREF = `${ROUTES.aiSettings}/general?focus=profiles`;
 
 export interface AiProfilesState {
-  module: AiProfileModule;
-  /** 这个功能的全部配置 */
-  current: ModuleProfiles;
-  /** 按名字排好的 [id, 配置] */
+  /** [id, profile], sorted by name */
   list: [string, VisibilityProfile][];
-  /** 页面上选中的配置 id；null = 默认分类 */
+  /** The profile picked on the page; null = the default categories */
   selected: string | null;
   select: (id: string | null) => void;
-  /** 存这个功能的全部配置 */
-  save: (next: ModuleProfiles) => void;
 }
 
 /** 按名字排序，名字一样按 id，保证顺序稳定。 */
@@ -39,15 +38,24 @@ export function sortProfiles(profiles: Record<string, VisibilityProfile>) {
 /** 页面上该用哪套：用户选过且还在，就用它；否则回到默认。 */
 export function resolveSelected(
   module: AiProfileModule,
-  current: ModuleProfiles,
+  current: AiVisibility,
   picked: string | null | undefined,
 ): string | null {
   const exists = (id: string | null | undefined): id is string =>
     id != null && Object.prototype.hasOwnProperty.call(current.profiles, id);
-  const fallback = module !== "chat" && exists(current.autoProfile) ? current.autoProfile : null;
+  const auto = module === "chat" ? null : current.auto[module];
+  const fallback = exists(auto) ? auto : null;
   if (picked === undefined) return fallback;
   if (picked === null) return null;
   return exists(picked) ? picked : fallback;
+}
+
+/** Returns `auto` with the reports that used profile `id` back on the default categories. */
+export function clearAuto(auto: AutoProfiles, id: string): AutoProfiles {
+  return {
+    daily: auto.daily === id ? null : auto.daily,
+    weekly: auto.weekly === id ? null : auto.weekly,
+  };
 }
 
 /**
@@ -83,32 +91,33 @@ export function nextProfileName(
   return nameOf(n);
 }
 
-export function useAiProfiles(module: AiProfileModule): AiProfilesState {
+/** Reads all profiles and saves them. */
+export function useAiVisibility() {
   const { settings, update } = useSettings();
-  const visibility: Partial<AiVisibility> = settings?.ai.visibility ?? {};
-  const current = visibility[module] ?? EMPTY;
-  // undefined = 用户还没选过，跟着默认走
-  const [picked, setPicked] = useState<string | null | undefined>(undefined);
-
-  const save = (next: ModuleProfiles) => {
-    if (!settings) return;
-    const ai = settings.ai;
-    // 老版本存的设置可能没有这一块，缺的功能补成空的
-    const old: Partial<AiVisibility> = ai.visibility ?? {};
-    const filled: AiVisibility = {
-      daily: old.daily ?? EMPTY,
-      weekly: old.weekly ?? EMPTY,
-      chat: old.chat ?? EMPTY,
-    };
-    update({ ai: { ...ai, visibility: { ...filled, [module]: next } } });
+  // Settings from the web demo, or from an older version, may lack this block or parts of it
+  const v: Partial<AiVisibility> | undefined = settings?.ai.visibility;
+  const current: AiVisibility = {
+    profiles: v?.profiles ?? {},
+    auto: { daily: v?.auto?.daily ?? null, weekly: v?.auto?.weekly ?? null },
   };
 
+  const save = (next: AiVisibility) => {
+    if (!settings) return;
+    update({ ai: { ...settings.ai, visibility: next } });
+  };
+
+  return { current, save };
+}
+
+/** The profile picker of one page: all profiles, and the one picked on this page. */
+export function useAiProfiles(module: AiProfileModule): AiProfilesState {
+  const { current } = useAiVisibility();
+  // undefined = not picked yet, so it follows the default
+  const [picked, setPicked] = useState<string | null | undefined>(undefined);
+
   return {
-    module,
-    current,
     list: sortProfiles(current.profiles),
     selected: resolveSelected(module, current, picked),
     select: setPicked,
-    save,
   };
 }

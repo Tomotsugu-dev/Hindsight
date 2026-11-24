@@ -1537,19 +1537,17 @@
     "main": "Default categories",
     "pickerTitle": "AI category access",
     "manage": "Manage profiles…",
-    "moduleGroup": "Feature",
     "feature": {
       "daily": "Daily report",
-      "weekly": "Weekly report",
-      "chat": "Chat"
+      "weekly": "Weekly report"
     },
-    "intro": {
-      "daily": "Private categories and records matching privacy keywords are always excluded.",
-      "weekly": "Private categories and records matching privacy keywords are always excluded.",
-      "chat": "Private categories and records matching privacy keywords are always excluded."
-    },
-    "weeklyNote": "Existing daily reports are included as-is; this profile only filters weekly app rankings and days without a daily report.",
+    "intro": "Private categories and records matching privacy keywords are always excluded.",
+    "weeklyNote": "Weekly reports include existing daily reports as they are. Profiles only filter the weekly app ranking and days without a daily report.",
     "autoLabel": "Auto-generation",
+    "autoBadge": {
+      "daily": "Auto daily",
+      "weekly": "Auto weekly"
+    },
     "empty": "No custom profiles yet.",
     "add": "New profile",
     "defaultName": "Profile {{n}}",

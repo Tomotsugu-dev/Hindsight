@@ -1,10 +1,10 @@
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { type TabDef } from "../../components/TabNav/TabNav";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { IconButton } from "../../components/Button/IconButton";
 import { AiSettingsIcon } from "../../components/icons/AiSettingsIcon";
-import { ROUTES } from "../../config/nav";
+import { AI_PROFILES_HREF } from "../../state/aiProfiles";
 import styles from "./AISummaryPage.module.css";
 
 /** Tab 配置：日报 / 周报 / 月报。
@@ -22,9 +22,6 @@ const TAB_GROUPS: TabDef[][] = [
 export default function AISummaryPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  // 周报页进周报的设置，其余进日报的
-  const module = pathname.startsWith(`${ROUTES.aiSummary}/week`) ? "weekly" : "daily";
 
   return (
     <div className={styles.page}>
@@ -38,7 +35,7 @@ export default function AISummaryPage() {
             label={t("aiSettings.title")}
             size="lg"
             variant="soft"
-            onClick={() => navigate(`${ROUTES.aiSettings}/general?module=${module}`)}
+            onClick={() => navigate(AI_PROFILES_HREF)}
           />
         }
       />
