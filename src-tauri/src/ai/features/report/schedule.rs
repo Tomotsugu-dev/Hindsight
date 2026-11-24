@@ -19,7 +19,7 @@ use chrono::{Duration as ChronoDuration, Local, NaiveDate};
 use tauri::{AppHandle, Manager};
 
 use crate::ai::features::report::{
-    precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE,
+    precheck_week, DaySummaryRunner, WeekSummaryRunner, DAILY_SOURCE, WEEKLY_SOURCE,
 };
 use crate::ai::policy::ProfileChoice;
 use crate::commands::ai_summary::{RunLock, SummaryCancel};
@@ -116,7 +116,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     // 每个运行期至多试一次(attempted 兜底),永久性失败不会反复烧。
     if !attempted.contains(&d_key)
         && (daily_absent(&pool, yesterday).await?
-            || ai_summaries::has_error_segment(&pool, "daily", &yesterday.to_string()).await?)
+            || ai_summaries::has_error_segment(&pool, DAILY_SOURCE, &yesterday.to_string()).await?)
         && has_activity(&pool, yesterday).await?
     {
         match try_run_daily(app, yesterday, false).await {
@@ -135,11 +135,12 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
         // 账本只记"生成时刻"、不记结果:部分段失败时,成功段的 generated_at 照样
         // 把这个时间点标记成已完成,失败段从此永不补跑(实测 8/1、8/3、8/5 各留下
         // 空段至今)。有失败段时把账本按"未完成"处理,让该点重新入列。
-        let has_err = ai_summaries::has_error_segment(&pool, "daily", &today.to_string()).await?;
+        let has_err =
+            ai_summaries::has_error_segment(&pool, DAILY_SOURCE, &today.to_string()).await?;
         let last_gen = if has_err {
             None
         } else {
-            ai_summaries::latest_generated_at(&pool, "daily", &today.to_string()).await?
+            ai_summaries::latest_generated_at(&pool, DAILY_SOURCE, &today.to_string()).await?
         };
         for t in due_unsatisfied_points(now, times, last_gen.as_deref()) {
             let key = format!("d:{today}@{t}");
@@ -216,7 +217,7 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
         &app.state::<DbPool>(),
         mem.0.as_ref(),
         app,
-        "daily",
+        DAILY_SOURCE,
         &date.format("%Y-%m-%d").to_string(),
         &cancel.0,
     )
@@ -271,7 +272,8 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
 
 /// 该日是否**从未**生成过日报(任何状态的行都算"生成过",失败行留给用户处置)。
 async fn daily_absent(pool: &DbPool, date: NaiveDate) -> Result<bool> {
-    let rows = ai_summaries::get_day(pool, "daily", &date.format("%Y-%m-%d").to_string()).await?;
+    let rows =
+        ai_summaries::get_day(pool, DAILY_SOURCE, &date.format("%Y-%m-%d").to_string()).await?;
     Ok(rows.is_empty())
 }
 

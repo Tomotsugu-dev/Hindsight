@@ -28,6 +28,7 @@ use tauri::AppHandle;
 
 use crate::ai::config::Task;
 use crate::ai::engine::{EngineGuard, EngineSupervisor};
+use crate::ai::features::report::daily::DAILY_SOURCE;
 use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
 use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
@@ -130,7 +131,8 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             .main_filter();
 
         // 拉一周内所有 daily 段总结，按日期 group
-        let daily_rows = ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
+        let daily_rows =
+            ai_summaries::get_range(&self.pool, DAILY_SOURCE, &week_key, &end_key).await?;
         let lang = ai.prompt_language.as_str().to_string();
         let mut days = group_days(&daily_rows, week_start, week_end, &lang);
 
@@ -532,7 +534,7 @@ pub async fn precheck_week(
         .await?
         .main_filter();
 
-    let daily_rows = ai_summaries::get_range(pool, "daily", &week_key, &end_key).await?;
+    let daily_rows = ai_summaries::get_range(pool, DAILY_SOURCE, &week_key, &end_key).await?;
     let present_daily: HashSet<String> = daily_rows
         .iter()
         .filter(|r| r.status == "ok" && !r.content.trim().is_empty())
