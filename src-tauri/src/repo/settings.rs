@@ -30,6 +30,14 @@ pub struct TimeRange {
     pub end: String,
 }
 
+/// The longest screenshot retention in days (2 years), other than keep forever.
+pub const RETENTION_MAX_DAYS: u32 = 730;
+
+/// The `retention_days` value that keeps screenshots forever.
+///
+/// Older versions do not know it and read it as 100 years, so they keep the screenshots too.
+pub const KEEP_FOREVER_DAYS: u32 = 36_500;
+
 /// 全局设置主结构。整组 JSON 落 settings_store 单行；前端读 `get_settings` 拿全集。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -470,8 +478,10 @@ pub async fn save(pool: &DbPool, settings: &Settings) -> Result<()> {
     Ok(())
 }
 
-/// 把 [`SettingsPatch`] 应用到当前 [`Settings`] 上，输出合并结果。
-/// 各字段都做合理 clamp / sanitize（如 capture_interval 钳到 1..=600，retention 钳到 1..=365）。
+/// Applies a [`SettingsPatch`] to the current [`Settings`] and returns the result.
+///
+/// Numbers are clamped to their ranges, such as 1..=600 for the capture interval and
+/// 1..=[`RETENTION_MAX_DAYS`] for retention. [`KEEP_FOREVER_DAYS`] is kept as it is.
 pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
     Settings {
         capture_enabled: patch.capture_enabled.unwrap_or(current.capture_enabled),
@@ -502,7 +512,13 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .unwrap_or(current.show_window_on_auto_start),
         retention_days: patch
             .retention_days
-            .map(|v| v.clamp(1, 365))
+            .map(|v| {
+                if v == KEEP_FOREVER_DAYS {
+                    v
+                } else {
+                    v.clamp(1, RETENTION_MAX_DAYS)
+                }
+            })
             .unwrap_or(current.retention_days),
         google_client_id: patch
             .google_client_id
@@ -1014,7 +1030,7 @@ mod tests {
 
     /// 前端传来的数字不做钳制就会出「0 秒截一张图打满 CPU」「保留 0 天等于
     /// 即时删数据」这类事故。钳制范围以字段文档为准：interval 1..=600、
-    /// retention 1..=365、idle 上限 3600 且 0 是合法的「关闭挂机检测」。
+    /// retention 1..=730、idle 上限 3600 且 0 是合法的「关闭挂机检测」。
     #[test]
     fn apply_patch_clamps_numeric_fields_to_documented_ranges() {
         let d = Settings::default();
@@ -1037,8 +1053,41 @@ mod tests {
         high.idle_threshold_seconds = Some(1_000_000);
         let s = apply_patch(d, high);
         assert_eq!(s.capture_interval_seconds, 600);
-        assert_eq!(s.retention_days, 365);
+        assert_eq!(s.retention_days, 730);
         assert_eq!(s.idle_threshold_seconds, 3600);
+    }
+
+    /// 1 天到 2 年之间的任何天数都原样存下，超过 2 年按 2 年存。
+    #[test]
+    fn retention_accepts_any_day_up_to_two_years() {
+        for (asked, saved) in [(1, 1), (500, 500), (730, 730), (731, 730)] {
+            let mut p = empty_patch();
+            p.retention_days = Some(asked);
+            assert_eq!(apply_patch(Settings::default(), p).retention_days, saved);
+        }
+    }
+
+    /// 选「永久」原样存下；再改回天数，按天数存。
+    #[test]
+    fn retention_keeps_forever_and_goes_back_to_days() {
+        let mut forever = empty_patch();
+        forever.retention_days = Some(KEEP_FOREVER_DAYS);
+        let s = apply_patch(Settings::default(), forever);
+        assert_eq!(s.retention_days, KEEP_FOREVER_DAYS);
+
+        let mut days = empty_patch();
+        days.retention_days = Some(30);
+        assert_eq!(apply_patch(s, days).retention_days, 30);
+    }
+
+    /// 旧版本按「今天减去保留天数」算删除的分界。「永久」对它们是 100 年前，
+    /// 等于不删；数也不能大到让日期相减溢出。
+    #[test]
+    fn older_versions_read_keep_forever_as_100_years() {
+        use chrono::{Datelike, Duration, Local};
+        let now = Local::now();
+        let cutoff = now - Duration::days(KEEP_FOREVER_DAYS as i64);
+        assert!(cutoff.year() <= now.year() - 99, "{cutoff}");
     }
 
     /// patch 的语义是「None = 不动」：前端每次只传改动子集，任何字段被
