@@ -575,6 +575,14 @@ mod tests {
             .unwrap()
     }
 
+    /// 还剩的行的网站，按字母排。
+    async fn hosts(pool: &DbPool) -> Vec<String> {
+        pool.0
+            .call(|conn| column(conn, "SELECT url_host FROM activities ORDER BY 1", ()))
+            .await
+            .unwrap()
+    }
+
     async fn fts_hits(mem: &MemoryDb, needle: &str) -> i64 {
         let n = needle.to_string();
         mem.0
@@ -954,6 +962,37 @@ mod tests {
         assert_ne!(first, PurgeReport::default());
         assert_eq!(second, PurgeReport::default());
         assert_eq!(outbox_days(&pool).await, outbox_after_first);
+    }
+
+    /// 删一个网站：连同跟随它的子域名，本机和别的设备记的行都删，别的网站不动。
+    /// 只有本机的日子进 outbox，下一轮推送重传这几天的文件，云端的那份也就没了。
+    #[tokio::test]
+    async fn site_purge_enqueues_only_this_devices_days() {
+        let pool = fresh_test_pool().await;
+        let dir = std::env::temp_dir().join(format!("hs-purge-site-{}", std::process::id()));
+        for (host, device, day) in [
+            ("example.com", TEST_SELF_ID, "2026-11-05"),
+            ("www.example.com", TEST_SELF_ID, "2026-11-06"),
+            ("example.com", PEER, "2026-11-07"),
+            ("other.com", TEST_SELF_ID, "2026-11-08"),
+        ] {
+            seed_row(&pool, "Firefox", Some(host), device, day).await;
+        }
+        let site = PurgeTarget::Site {
+            host: "example.com".into(),
+        };
+
+        let report = purge(&pool, None, &dir, TEST_SELF_ID, &site).await.unwrap();
+
+        assert_eq!(report.activities, 3);
+        assert_eq!(hosts(&pool).await, ["other.com"]);
+        assert_eq!(
+            outbox_days(&pool).await,
+            vec![
+                ("activity".to_string(), "2026-11-05".to_string()),
+                ("activity".to_string(), "2026-11-06".to_string()),
+            ]
+        );
     }
 
     // ───────────── count：会删掉多少 ─────────────

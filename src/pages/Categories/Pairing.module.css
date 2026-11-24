@@ -34,14 +34,14 @@
   scrollbar-color: var(--scrollbar-thumb) var(--fill-default);
 }
 
-/* device cols / 统一名 / 指派下拉 / 行末删除（28）。
+/* 多选时的勾选列 / device cols / 统一名 / 指派下拉 / 行末删除（28）。
    统一名列默认窄 80px，鼠标 hover 整张表时展开到 240px（CSS transition）。
    表头跟 row 共用同一套列模板。 */
 .row {
   position: relative;
   display: grid;
   grid-template-columns:
-    var(--device-cols) calc(80px * var(--font-scale)) 160px
+    var(--select-col,) var(--device-cols) calc(80px * var(--font-scale)) 160px
     calc(28px * var(--density));
   align-items: center;
   gap: calc(12px * var(--density));
@@ -61,8 +61,35 @@
 .pairing:has(.nameCol:hover) .row,
 .pairing:has(.nameCol:hover) .devHeader {
   grid-template-columns:
-    var(--device-cols) calc(160px * var(--font-scale)) 160px
+    var(--select-col,) var(--device-cols) calc(160px * var(--font-scale)) 160px
     calc(28px * var(--density));
+}
+
+/* Select mode: a checkbox column, and a click anywhere on a row picks it */
+.selecting {
+  --select-col: calc(16px * var(--font-scale));
+}
+
+.selecting .row {
+  cursor: pointer;
+}
+
+.selectCol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The name as text in select mode, in the same place as the name box */
+.nameText {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-strong);
 }
 
 /* zebra：相邻行底色错开一档，分块更清晰。先于 hover / hot 写，
@@ -86,6 +113,15 @@
 
 .row.unassigned:hover {
   background: color-mix(in oklab, var(--status-pending) 16%, transparent);
+}
+
+/* A picked row in select mode. Comes after the unassigned tint so it wins */
+.row.picked {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.row.picked:hover {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
 /* 拖拽时悬停的目标行：撞起来 —— 抬升 + 阴影 + 描边 + 微缩放 */
@@ -182,6 +218,17 @@
 
 .chip:active {
   cursor: grabbing;
+}
+
+/* No dragging in select mode */
+.selecting .chip,
+.selecting .chip:active {
+  cursor: inherit;
+}
+
+.selecting .chip:hover {
+  background: transparent;
+  border-color: transparent;
 }
 
 /* 源 chip 在拖动过程中变虚线占位 —— 占据原槽，告诉你"原始位置在这" */
@@ -289,7 +336,7 @@
 .devHeader {
   display: grid;
   grid-template-columns:
-    var(--device-cols) calc(80px * var(--font-scale)) 160px
+    var(--select-col,) var(--device-cols) calc(80px * var(--font-scale)) 160px
     calc(28px * var(--density));
   transition: grid-template-columns 280ms var(--ease-out);
   gap: calc(12px * var(--density));

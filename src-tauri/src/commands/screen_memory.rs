@@ -15,7 +15,7 @@ use crate::storage::{DbPool, DbResult, SqliteResultExt};
 /// 命令层对 None 返回明确错误而不是 panic。
 pub struct MemoryState(pub Option<MemoryDb>);
 
-fn require(mem: &MemoryState) -> Result<&MemoryDb, String> {
+pub(crate) fn require(mem: &MemoryState) -> Result<&MemoryDb, String> {
     mem.0
         .as_ref()
         .ok_or_else(|| "屏幕记忆库不可用(启动时打开失败,详见日志)".to_string())

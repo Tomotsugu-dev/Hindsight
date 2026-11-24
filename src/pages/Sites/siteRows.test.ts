@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SiteRow } from "../../api/hindsight";
-import { filterGroups, groupSites, ruleSource, sortGroups } from "./siteRows";
+import { filterGroups, groupSites, purgeHosts, ruleSource, sortGroups } from "./siteRows";
 
 const row = (host: string, patch: Partial<SiteRow> = {}): SiteRow => ({
   host,
@@ -229,5 +229,37 @@ describe("website sorting", () => {
     ]);
     expect(sortGroups(groups, "default")).toEqual(original);
     expect(groups).toEqual(original);
+  });
+});
+
+describe("purgeHosts", () => {
+  it("leaves out a subdomain that deleting its picked parent already deletes", () => {
+    const rows = [row("bilibili.com"), row("www.bilibili.com"), row("github.com")];
+    expect(purgeHosts(rows)).toEqual(["bilibili.com", "github.com"]);
+  });
+
+  it("leaves out a subdomain that follows the picked parent or a domain above it", () => {
+    const rows = [
+      row("live.bilibili.com"),
+      row("a.live.bilibili.com", { categoryId: "fun", follows: "live.bilibili.com" }),
+      row("b.live.bilibili.com", { categoryId: "fun", follows: "bilibili.com" }),
+    ];
+    expect(purgeHosts(rows)).toEqual(["live.bilibili.com"]);
+  });
+
+  it("keeps a subdomain with its own rule, or one that follows a rule below the parent", () => {
+    const rows = [
+      row("bilibili.com"),
+      row("live.bilibili.com", { categoryId: "fun" }),
+      row("a.live.bilibili.com", { categoryId: "fun", follows: "live.bilibili.com" }),
+    ];
+    expect(purgeHosts(rows)).toEqual(["bilibili.com", "live.bilibili.com"]);
+  });
+
+  it("does not take a website that only ends with the same letters as a subdomain", () => {
+    expect(purgeHosts([row("google.com"), row("notgoogle.com")])).toEqual([
+      "google.com",
+      "notgoogle.com",
+    ]);
   });
 });

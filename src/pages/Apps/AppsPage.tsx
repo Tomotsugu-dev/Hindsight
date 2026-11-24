@@ -4,6 +4,7 @@ import { Info } from "lucide-react";
 import { api, type AppGroup } from "../../api/hindsight";
 import { logError } from "../../lib/logger";
 import { useCategories } from "../../state/categories";
+import { useSelection } from "../../hooks/useSelection";
 import { PairingSection } from "../Categories/PairingSection";
 import { IgnoredWindowsSection } from "./IgnoredWindowsSection";
 import categoriesStyles from "../Categories/Categories.module.css";
@@ -50,6 +51,9 @@ export default function AppsPage() {
     if (groups === null) return null;
     return applyFilter(groups, filter.filter);
   }, [groups, filter.filter]);
+
+  const visibleIds = useMemo(() => (filteredGroups ?? []).map((g) => g.id), [filteredGroups]);
+  const selection = useSelection(visibleIds);
 
   const totalGroupsCount = groups?.length ?? 0;
   const showToolbar = totalGroupsCount > TOOLBAR_THRESHOLD;
@@ -102,6 +106,8 @@ export default function AppsPage() {
           onResetCategories={filter.resetCategories}
           sortBy={filter.filter.sortBy}
           onSortChange={filter.setSortBy}
+          selecting={selection.active}
+          onToggleSelecting={selection.active ? selection.stop : selection.start}
         />
       )}
 
@@ -133,6 +139,7 @@ export default function AppsPage() {
             groups={filteredGroups ?? []}
             loading={filteredGroups === null}
             onReload={onPairingReload}
+            selection={selection}
           />
         )}
       </section>

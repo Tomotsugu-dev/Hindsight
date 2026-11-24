@@ -841,7 +841,12 @@
       "excludeDesc": "Fica salvo no disco, mas fora das estatísticas, resumos, exportações e chat. Para contar de novo, tire o app da categoria “Fora das estatísticas”.",
       "deleteAction": "Excluir mesmo assim",
       "privateAction": "Mover para Privado",
-      "excludeAction": "Tirar das estatísticas"
+      "excludeAction": "Tirar das estatísticas",
+      "batch": {
+        "excludeDesc": "Continuam sendo registrados, mas ficam fora das estatísticas, resumos, exportações e chat. Para contar de novo, tire-os da categoria “Fora das estatísticas”.",
+        "deleteDescApps": "Exclui <b>{{data}}</b>. Os programas reaparecem aqui na próxima vez que rodarem. Relatórios já gerados não são alterados. (Esta ação não pode ser desfeita.)",
+        "deleteDescSites": "Exclui <b>{{data}}</b>. Os sites reaparecem aqui na próxima vez que você os visitar. Relatórios já gerados não são alterados. (Esta ação não pode ser desfeita.)"
+      }
     }
   },
   "categories": {
@@ -910,9 +915,12 @@
         "titleNoName": "Os dados privados não foram excluídos por completo",
         "appEffect": "O Hindsight para de registrá-lo.",
         "siteEffect": "O Hindsight para de registrar este site e seus subdomínios.",
+        "appEffectMany": "O Hindsight para de registrá-los.",
+        "siteEffectMany": "O Hindsight para de registrar estes sites e seus subdomínios.",
         "counting": "Contando o que será excluído…",
         "countFailed": "Não foi possível contar o que será excluído: {{error}}",
         "noData": "Ainda não há nada registrado neste dispositivo.",
+        "noDataMany": "Ainda não há nada registrado deles neste dispositivo.",
         "willDelete": "Neste dispositivo, será excluído {{data}}.",
         "everyDevice": "Seus outros dispositivos sincronizados também excluem os registros deles. (Esta ação não pode ser desfeita.)",
         "siteLimit": "Registros antigos sem domínio não podem ser excluídos.",
@@ -974,6 +982,17 @@
         "removeTooltip": "Remover da lista",
         "removeAria": "Remover {{name}} da lista"
       }
+    },
+    "batch": {
+      "start": "Selecionar",
+      "done": "Concluir",
+      "selectAll": "Selecionar tudo",
+      "selectRow": "Selecionar “{{name}}”",
+      "selected": "Selecionados: {{count}}",
+      "remove": "Remover…",
+      "clear": "Limpar seleção",
+      "apps": "{{count}} apps",
+      "sites": "{{count}} sites"
     },
     "assign": {
       "label": "Atribuir",

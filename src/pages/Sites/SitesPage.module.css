@@ -4,13 +4,14 @@
   gap: 2px;
 }
 
-/* Website / last 30 days / all time / category. The header shares the row template. */
+/* Checkbox in select mode / website / last 30 days / all time / category.
+   The header shares the row template. */
 .headerRow,
 .row {
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr) calc(112px * var(--font-scale)) calc(112px * var(--font-scale))
-    176px;
+    var(--select-col,) minmax(0, 1fr) calc(112px * var(--font-scale))
+    calc(112px * var(--font-scale)) 176px;
   align-items: center;
   gap: calc(12px * var(--density));
   padding: 0 calc(12px * var(--density));
@@ -48,6 +49,29 @@
 
 .row:hover {
   background: var(--fill-default);
+}
+
+/* Select mode: a checkbox column, and a click anywhere on a row picks it */
+.selecting {
+  --select-col: calc(16px * var(--font-scale));
+}
+
+.selecting .row {
+  cursor: pointer;
+}
+
+.row.picked {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.row.picked:hover {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.selectCol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .siteCol {

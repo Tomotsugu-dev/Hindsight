@@ -27,14 +27,15 @@ export function PrivacyDialog({ state, onConfirm, onCancel }: PrivacyDialogProps
   if (step.kind === "ask") {
     const { count } = step;
     const empty = count.kind === "done" && count.count.activities === 0;
+    const many = state.many ? "Many" : "";
     lines = [
-      t(state.site ? `${K}.siteEffect` : `${K}.appEffect`),
+      t(state.site ? `${K}.siteEffect${many}` : `${K}.appEffect${many}`),
       count.kind === "loading"
         ? t(`${K}.counting`)
         : count.kind === "failed"
           ? t(`${K}.countFailed`, { error: count.error })
           : empty
-            ? t(`${K}.noData`)
+            ? t(`${K}.noData${many}`)
             : t(`${K}.willDelete`, { data: describeCount(t, count.count) }),
       t(`${K}.everyDevice`),
       ...(state.site ? [t(`${K}.siteLimit`), t(`${K}.sitePermission`)] : []),

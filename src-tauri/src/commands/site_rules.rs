@@ -6,9 +6,10 @@ use chrono::Local;
 use tauri::State;
 
 use crate::capture::CaptureService;
-use crate::commands::screen_memory::MemoryState;
-use crate::privacy::purge_private_after_change;
+use crate::commands::screen_memory::{require, MemoryState};
+use crate::privacy::{purge_private_after_change, purge_with_sync_paused};
 use crate::repo::categories::PRIVATE_CATEGORY_ID;
+use crate::repo::purge::PurgeTarget;
 use crate::repo::site_rules::{self, SiteRow};
 use crate::storage::DbPool;
 use crate::sync::engine::SyncEngine;
@@ -57,4 +58,27 @@ pub async fn remove_site_rule(
         .await
         .map_err(String::from)?;
     purge_private_after_change(&pool, mem.0.as_ref(), &svc, &engine).await
+}
+
+/// Deletes all data for `host` and any subdomains that follow its rule, both locally and in
+/// the cloud, while keeping the website's own rule.
+///
+/// # Errors
+///
+/// Returns an error without deleting anything if the screen memory database is not open, so
+/// activity rows are never removed while leaving their screen text behind.
+#[tauri::command]
+pub async fn purge_site_data(
+    pool: State<'_, DbPool>,
+    mem: State<'_, MemoryState>,
+    svc: State<'_, Arc<CaptureService>>,
+    engine: State<'_, Arc<SyncEngine>>,
+    host: String,
+) -> Result<(), String> {
+    let memdb = require(&mem)?;
+    let target = PurgeTarget::Site { host };
+    purge_with_sync_paused(&pool, Some(memdb), &svc, &engine, &target)
+        .await
+        .map(|_| ())
+        .map_err(String::from)
 }
