@@ -11,6 +11,16 @@ use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, SegmentSummaryRow};
 use crate::storage::{utc_now_rfc3339, DbPool};
 
+/// `ai_summaries` 中单个时段行的定位信息与时间范围。
+pub(super) struct SegmentTarget<'a> {
+    pub source: &'a str,
+    pub date: &'a str,
+    pub index: u32,
+    pub label: &'a str,
+    pub start_hour: u8,
+    pub end_hour: u8,
+}
+
 /// 段总结：拿活动时间线 + top_apps 拼 prompt → 调 LLM → 落库。
 ///
 /// 落库语义：
@@ -19,28 +29,21 @@ use crate::storage::{utc_now_rfc3339, DbPool};
 /// - DB 写入失败 → 抛 Err，整段失败
 ///
 /// 返回 `(已落库的行, status_str)`，让调用方拼 `segment_done` 事件 payload 用。
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn summarize_segment(
+pub(super) async fn summarize_segment(
     pool: &DbPool,
     model: &Step2Chat,
     ai: &AiConfig,
-    source: &str,
-    date_str: &str,
-    label: &str,
-    start_hour: u8,
-    end_hour: u8,
-    segment_idx: u32,
+    target: &SegmentTarget<'_>,
     timeline: &[(String, String)],
     top_apps: &[(String, u32, String)],
-    step2_model: String,
     // 停止按钮的取消标志：置位时中断在途请求，向上抛 SummaryCancelled
     //（**不写行**——该段下次生成自然重跑），由 runner 统一 emit cancelled 收尾
     cancel: &Arc<AtomicBool>,
 ) -> Result<(SegmentSummaryRow, &'static str)> {
     let ctx = SegmentContext {
-        label,
-        start_hour,
-        end_hour,
+        label: target.label,
+        start_hour: target.start_hour,
+        end_hour: target.end_hour,
         top_apps,
         timeline,
     };
@@ -51,19 +54,19 @@ pub(crate) async fn summarize_segment(
     if matches!(chat_result, Err(Error::SummaryCancelled)) {
         return Err(Error::SummaryCancelled);
     }
+
+    let model_label = model.model_label().to_string();
     let (row, status_str): (SegmentSummaryRow, &'static str) = match chat_result {
-        // 落库的 model 用 step2_model——本地是 GGUF 文件名，
-        // 外部是用户填的云端模型 ID（如 deepseek-chat）
         Ok(content) => (
             SegmentSummaryRow {
-                source: source.to_string(),
-                local_date: date_str.to_string(),
-                segment_idx,
-                label: label.to_string(),
-                start_hour,
-                end_hour,
+                source: target.source.to_string(),
+                local_date: target.date.to_string(),
+                segment_idx: target.index,
+                label: target.label.to_string(),
+                start_hour: target.start_hour,
+                end_hour: target.end_hour,
                 content,
-                model: step2_model,
+                model: model_label,
                 status: "ok".to_string(),
                 error: None,
                 generated_at: utc_now_rfc3339(),
@@ -72,14 +75,14 @@ pub(crate) async fn summarize_segment(
         ),
         Err(e) => (
             SegmentSummaryRow {
-                source: source.to_string(),
-                local_date: date_str.to_string(),
-                segment_idx,
-                label: label.to_string(),
-                start_hour,
-                end_hour,
+                source: target.source.to_string(),
+                local_date: target.date.to_string(),
+                segment_idx: target.index,
+                label: target.label.to_string(),
+                start_hour: target.start_hour,
+                end_hour: target.end_hour,
                 content: String::new(),
-                model: step2_model,
+                model: model_label,
                 status: "error".to_string(),
                 error: Some(e.to_string()),
                 generated_at: utc_now_rfc3339(),
@@ -101,28 +104,22 @@ pub(crate) async fn summarize_segment(
 }
 
 /// 让某段直接落 `skipped_no_activity` 行 —— 该段完全没有活动记录时的兜底。
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn upsert_skipped_no_activity(
+pub(super) async fn write_skipped_segment(
     pool: &DbPool,
-    source: &str,
-    date_str: &str,
-    segment_idx: u32,
-    label: &str,
-    start_hour: u8,
-    end_hour: u8,
-    model: String,
+    target: &SegmentTarget<'_>,
+    model_label: String,
 ) -> Result<()> {
     ai_summaries::upsert_segment(
         pool,
         &SegmentSummaryRow {
-            source: source.to_string(),
-            local_date: date_str.to_string(),
-            segment_idx,
-            label: label.to_string(),
-            start_hour,
-            end_hour,
+            source: target.source.to_string(),
+            local_date: target.date.to_string(),
+            segment_idx: target.index,
+            label: target.label.to_string(),
+            start_hour: target.start_hour,
+            end_hour: target.end_hour,
             content: String::new(),
-            model,
+            model: model_label,
             status: "skipped_no_activity".to_string(),
             error: None,
             generated_at: utc_now_rfc3339(),
@@ -141,6 +138,24 @@ mod tests {
     use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
     use crate::repo::reports::DeviceFilter;
     use crate::repo::test_util::fresh_test_pool;
+
+    fn target<'a>(
+        source: &'a str,
+        date: &'a str,
+        index: u32,
+        label: &'a str,
+        start_hour: u8,
+        end_hour: u8,
+    ) -> SegmentTarget<'a> {
+        SegmentTarget {
+            source,
+            date,
+            index,
+            label,
+            start_hour,
+            end_hour,
+        }
+    }
 
     /// 端到端:真实主库 → 新单步管线(活动时间线 + 云端文本模型)→ 写回 daily 日报。
     /// 跑法:
@@ -206,19 +221,18 @@ mod tests {
                 seg.end_hour,
                 timeline.len()
             );
+            let slot = target(
+                "daily",
+                &date,
+                idx as u32,
+                &seg.label,
+                seg.start_hour,
+                seg.end_hour,
+            );
             if timeline.is_empty() {
-                upsert_skipped_no_activity(
-                    &pool,
-                    "daily",
-                    &date,
-                    idx as u32,
-                    &seg.label,
-                    seg.start_hour,
-                    seg.end_hour,
-                    chat_model.model_label().to_string(),
-                )
-                .await
-                .unwrap();
+                write_skipped_segment(&pool, &slot, chat_model.model_label().to_string())
+                    .await
+                    .unwrap();
                 println!("(无活动,skipped)");
                 continue;
             }
@@ -237,15 +251,9 @@ mod tests {
                 &pool,
                 &chat_model,
                 &ai,
-                "daily",
-                &date,
-                &seg.label,
-                seg.start_hour,
-                seg.end_hour,
-                idx as u32,
+                &slot,
                 &timeline,
                 &top_apps,
-                chat_model.model_label().to_string(),
                 &cancel,
             )
             .await
@@ -317,11 +325,13 @@ mod tests {
     #[tokio::test]
     async fn skipped_row_upsert_overwrites_not_duplicates() {
         let pool = fresh_test_pool().await;
-        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "上午", 9, 12, "m1".into())
+        let first = target("daily", "2026-05-15", 0, "上午", 9, 12);
+        write_skipped_segment(&pool, &first, "m1".into())
             .await
             .unwrap();
         // 用户改了段配置后重跑：label / 时段 / 模型都变，应整行覆盖
-        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "早晨", 8, 12, "m2".into())
+        let second = target("daily", "2026-05-15", 0, "早晨", 8, 12);
+        write_skipped_segment(&pool, &second, "m2".into())
             .await
             .unwrap();
 
@@ -337,11 +347,11 @@ mod tests {
         assert!(r.content.is_empty() && r.error.is_none());
     }
 
-    /// upsert_skipped_no_activity 是"整段无活动"的兜底落库路径。
+    /// write_skipped_segment 是"整段无活动"的兜底落库路径。
     /// 真实翻车场景：兜底行 status 拼错或 content 不为空，前端会把空白段
     /// 当成正常总结渲染出一张空卡片；覆盖旧 error 行失败则重跑后错误提示不消失。
     #[tokio::test]
-    async fn upsert_skipped_no_activity_writes_placeholder_and_overwrites() {
+    async fn write_skipped_segment_writes_placeholder_and_overwrites() {
         let pool = fresh_test_pool().await;
         let date = "2026-07-20";
 
@@ -361,18 +371,10 @@ mod tests {
         };
         ai_summaries::upsert_segment(&pool, &bad).await.unwrap();
 
-        upsert_skipped_no_activity(
-            &pool,
-            "daily",
-            date,
-            3,
-            "下午",
-            13,
-            18,
-            "test-model.gguf".to_string(),
-        )
-        .await
-        .unwrap();
+        let slot = target("daily", date, 3, "下午", 13, 18);
+        write_skipped_segment(&pool, &slot, "test-model.gguf".to_string())
+            .await
+            .unwrap();
 
         let rows = ai_summaries::get_day(&pool, "daily", date).await.unwrap();
         assert_eq!(rows.len(), 1);
@@ -406,15 +408,27 @@ mod tests {
     #[tokio::test]
     async fn clear_day_spares_other_source_and_date() {
         let pool = fresh_test_pool().await;
-        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "上午", 9, 12, "m".into())
-            .await
-            .unwrap();
-        upsert_skipped_no_activity(&pool, "daily", "2026-05-16", 0, "上午", 9, 12, "m".into())
-            .await
-            .unwrap();
-        upsert_skipped_no_activity(&pool, "weekly", "2026-05-15", 0, "上午", 9, 12, "m".into())
-            .await
-            .unwrap();
+        write_skipped_segment(
+            &pool,
+            &target("daily", "2026-05-15", 0, "上午", 9, 12),
+            "m".into(),
+        )
+        .await
+        .unwrap();
+        write_skipped_segment(
+            &pool,
+            &target("daily", "2026-05-16", 0, "上午", 9, 12),
+            "m".into(),
+        )
+        .await
+        .unwrap();
+        write_skipped_segment(
+            &pool,
+            &target("weekly", "2026-05-15", 0, "上午", 9, 12),
+            "m".into(),
+        )
+        .await
+        .unwrap();
 
         ai_summaries::clear_day(&pool, "daily", "2026-05-15")
             .await
@@ -455,24 +469,12 @@ mod tests {
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
+        let slot = target("daily", "2026-05-15", 0, "上午", 9, 12);
 
-        let (row, status) = summarize_segment(
-            &pool,
-            &chat_model,
-            &ai,
-            "daily",
-            "2026-05-15",
-            "上午",
-            9,
-            12,
-            0,
-            &timeline,
-            &[],
-            "dead.gguf".to_string(),
-            &cancel,
-        )
-        .await
-        .expect("chat 失败不应让 summarize_segment 抛 Err");
+        let (row, status) =
+            summarize_segment(&pool, &chat_model, &ai, &slot, &timeline, &[], &cancel)
+                .await
+                .expect("chat 失败不应让 summarize_segment 抛 Err");
 
         assert_eq!(status, "error");
         assert_eq!(row.status, "error");
@@ -488,7 +490,7 @@ mod tests {
             .unwrap();
         assert_eq!(rows.len(), 1, "error 行必须已落库: {rows:?}");
         assert_eq!(rows[0].status, "error");
-        assert_eq!(rows[0].model, "dead.gguf", "model 应取传入的 step2_model");
+        assert_eq!(rows[0].model, "dead.gguf", "model 应取模型的 label");
     }
 
     /// 幂等重跑：昨天生成时该段无活动落了 skipped，今天重跑（此处走失败路径）
@@ -496,7 +498,8 @@ mod tests {
     #[tokio::test]
     async fn summarize_segment_rerun_overwrites_previous_row() {
         let pool = fresh_test_pool().await;
-        upsert_skipped_no_activity(&pool, "daily", "2026-05-15", 0, "上午", 9, 12, "m".into())
+        let slot = target("daily", "2026-05-15", 0, "上午", 9, 12);
+        write_skipped_segment(&pool, &slot, "m".into())
             .await
             .unwrap();
 
@@ -507,23 +510,9 @@ mod tests {
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
 
         for _ in 0..2 {
-            summarize_segment(
-                &pool,
-                &chat_model,
-                &ai,
-                "daily",
-                "2026-05-15",
-                "上午",
-                9,
-                12,
-                0,
-                &timeline,
-                &[],
-                "dead.gguf".to_string(),
-                &cancel,
-            )
-            .await
-            .unwrap();
+            summarize_segment(&pool, &chat_model, &ai, &slot, &timeline, &[], &cancel)
+                .await
+                .unwrap();
         }
 
         let rows = ai_summaries::get_day(&pool, "daily", "2026-05-15")
@@ -545,23 +534,9 @@ mod tests {
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(true)); // 预先按下停止
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
+        let slot = target("daily", "2026-05-15", 0, "上午", 9, 12);
 
-        let r = summarize_segment(
-            &pool,
-            &chat_model,
-            &ai,
-            "daily",
-            "2026-05-15",
-            "上午",
-            9,
-            12,
-            0,
-            &timeline,
-            &[],
-            "m.gguf".to_string(),
-            &cancel,
-        )
-        .await;
+        let r = summarize_segment(&pool, &chat_model, &ai, &slot, &timeline, &[], &cancel).await;
         assert!(
             matches!(r, Err(Error::SummaryCancelled)),
             "取消应抛 SummaryCancelled: {r:?}"
@@ -577,7 +552,7 @@ mod tests {
     }
 
     /// chat 成功的主干路径：status='ok' 行落库、正文取 choices[0] 并 trim、
-    /// model 字段用传入的 step2_model——这是日报正常生成的全部落库契约。
+    /// model 字段用模型的 label——这是日报正常生成的全部落库契约。
     #[tokio::test]
     async fn summarize_segment_ok_writes_ok_row_and_trims_content() {
         let pool = fresh_test_pool().await;
@@ -587,20 +562,15 @@ mod tests {
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
         let top_apps = vec![("VSCode".to_string(), 30u32, "code".to_string())];
+        let slot = target("daily", "2026-05-15", 2, "上午", 9, 12);
 
         let (row, status) = summarize_segment(
             &pool,
             &chat_model,
             &ai,
-            "daily",
-            "2026-05-15",
-            "上午",
-            9,
-            12,
-            2,
+            &slot,
             &timeline,
             &top_apps,
-            "qwen.gguf".to_string(),
             &cancel,
         )
         .await

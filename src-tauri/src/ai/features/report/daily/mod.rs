@@ -31,7 +31,7 @@ use crate::repo::ai_summaries::{self, list_segment_top_apps};
 use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
-use segment::{summarize_segment, upsert_skipped_no_activity};
+use segment::{summarize_segment, write_skipped_segment, SegmentTarget};
 use timeline::build_activity_timeline;
 
 /// 日报在 ai_summaries 里的 `source`。
@@ -80,7 +80,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         profile: &ProfileChoice,
     ) -> Result<()> {
         let result = self
-            .run_inner(DAILY_SOURCE, local_date, device, force_refresh, profile)
+            .run_inner(local_date, device, force_refresh, profile)
             .await;
 
         // 停止按钮中断在途请求 / 引擎加载时从深处抛 SummaryCancelled——不是失败，
@@ -100,7 +100,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
     async fn run_inner(
         &self,
-        source: &str,
         local_date: NaiveDate,
         device: DeviceFilter,
         force_refresh: bool,
@@ -133,7 +132,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             &ai,
             Task::Daily,
             EngineProgress {
-                source,
+                source: DAILY_SOURCE,
                 date: &date_str,
                 total_segments,
             },
@@ -147,7 +146,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
                 let mut p = SummaryProgress::base(
-                    source.to_string(),
+                    DAILY_SOURCE.to_string(),
                     date_str.clone(),
                     "cancelled",
                     total_segments,
@@ -160,40 +159,41 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 // 非法段:不进 kept,循环后会被 prune 掉(旧实现靠前置 clear_day 顺带清)
                 continue;
             }
-            kept.push(idx as u32);
+            let index = idx as u32;
+            kept.push(index);
             // force_refresh=false 时已生成的段 (status=ok) 直接复用
-            if !force_refresh
-                && self
-                    .segment_already_ok(source, &date_str, idx as u32)
-                    .await?
-            {
+            if !force_refresh && self.segment_already_ok(&date_str, index).await? {
                 continue;
             }
-            self.run_one_segment(
-                source,
-                &model,
-                &ai,
-                &date_str,
-                idx as u32,
-                total_segments,
-                seg.label.clone(),
-                seg.start_hour,
-                seg.end_hour,
-                device.clone(),
-                &visible,
-            )
-            .await?;
+            let target = SegmentTarget {
+                source: DAILY_SOURCE,
+                date: &date_str,
+                index,
+                label: &seg.label,
+                start_hour: seg.start_hour,
+                end_hour: seg.end_hour,
+            };
+            self.run_one_segment(&model, &ai, &target, total_segments, &device, &visible)
+                .await?;
         }
 
         // 整轮跑完(未被取消/未提前返错)才收敛:删除永远发生在新内容落库之后。
         // 失败只告警——清理不掉孤儿段不影响本次生成的结果。
-        match ai_summaries::prune_segments_except(&self.pool, source, &date_str, &kept).await {
-            Ok(n) if n > 0 => log::info!("{source} {date_str}: 清理 {n} 条失效段"),
+        match ai_summaries::prune_segments_except(&self.pool, DAILY_SOURCE, &date_str, &kept).await
+        {
+            Ok(n) if n > 0 => log::info!("{DAILY_SOURCE} {date_str}: 清理 {n} 条失效段"),
             Ok(_) => {}
-            Err(e) => log::warn!("{source} {date_str}: 清理失效段失败(不影响本次结果): {e}"),
+            Err(e) => {
+                log::warn!("{DAILY_SOURCE} {date_str}: 清理失效段失败(不影响本次结果): {e}")
+            }
         }
 
-        let p = SummaryProgress::base(source.to_string(), date_str, "all_done", total_segments);
+        let p = SummaryProgress::base(
+            DAILY_SOURCE.to_string(),
+            date_str,
+            "all_done",
+            total_segments,
+        );
         self.emit(p);
         Ok(())
     }
@@ -203,14 +203,10 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     }
 
     /// 该段是否已生成且 status="ok"——给 force_refresh=false 跳过逻辑用。
-    async fn segment_already_ok(
-        &self,
-        source: &str,
-        date_str: &str,
-        segment_idx: u32,
-    ) -> Result<bool> {
+    async fn segment_already_ok(&self, date_str: &str, segment_idx: u32) -> Result<bool> {
         let status =
-            ai_summaries::get_segment_status(&self.pool, source, date_str, segment_idx).await?;
+            ai_summaries::get_segment_status(&self.pool, DAILY_SOURCE, date_str, segment_idx)
+                .await?;
         Ok(status.as_deref() == Some("ok"))
     }
 
@@ -220,57 +216,45 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     /// - DB 写操作错误（IO 等）向上抛
     /// - LLM 调用失败：写一行 status='error'，不抛
     /// - 整段无活动：status='skipped_no_activity'
-    #[allow(clippy::too_many_arguments)]
     async fn run_one_segment(
         &self,
-        source: &str,
         model: &Step2Chat,
         ai: &AiConfig,
-        date_str: &str,
-        idx: u32,
+        target: &SegmentTarget<'_>,
         total_segments: u32,
-        label: String,
-        start_hour: u8,
-        end_hour: u8,
-        device: DeviceFilter,
+        device: &DeviceFilter,
         visible: &str,
     ) -> Result<()> {
-        let step2_model = model.model_label().to_string();
-
         let mut p_started = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
+            target.source.to_string(),
+            target.date.to_string(),
             "segment_started",
             total_segments,
         );
-        p_started.segment_idx = Some(idx);
+        p_started.segment_idx = Some(target.index);
         p_started.images_total = Some(0);
         self.emit(p_started);
 
-        let timeline =
-            build_activity_timeline(&self.pool, date_str, start_hour, end_hour, visible, &device)
-                .await?;
+        let timeline = build_activity_timeline(
+            &self.pool,
+            target.date,
+            target.start_hour,
+            target.end_hour,
+            visible,
+            device,
+        )
+        .await?;
 
         if timeline.is_empty() {
             // 真的什么都没有 —— skipped_no_activity 兜底
-            upsert_skipped_no_activity(
-                &self.pool,
-                source,
-                date_str,
-                idx,
-                &label,
-                start_hour,
-                end_hour,
-                step2_model,
-            )
-            .await?;
+            write_skipped_segment(&self.pool, target, model.model_label().to_string()).await?;
             let mut p_done = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
+                target.source.to_string(),
+                target.date.to_string(),
                 "segment_done",
                 total_segments,
             );
-            p_done.segment_idx = Some(idx);
+            p_done.segment_idx = Some(target.index);
             p_done.images_total = Some(0);
             p_done.content = Some(String::new());
             p_done.status = Some("skipped_no_activity");
@@ -280,9 +264,9 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
         let top_apps = list_segment_top_apps(
             &self.pool,
-            date_str,
-            start_hour,
-            end_hour,
+            target.date,
+            target.start_hour,
+            target.end_hour,
             visible,
             device.clone(),
             8,
@@ -291,12 +275,12 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         .unwrap_or_default();
 
         let mut p_sum = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
+            target.source.to_string(),
+            target.date.to_string(),
             "summarizing",
             total_segments,
         );
-        p_sum.segment_idx = Some(idx);
+        p_sum.segment_idx = Some(target.index);
         p_sum.images_total = Some(0);
         self.emit(p_sum);
 
@@ -304,26 +288,20 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             &self.pool,
             model,
             ai,
-            source,
-            date_str,
-            &label,
-            start_hour,
-            end_hour,
-            idx,
+            target,
             &timeline,
             &top_apps,
-            model.model_label().to_string(),
             &self.cancel,
         )
         .await?;
 
         let mut p_done = SummaryProgress::base(
-            source.to_string(),
-            date_str.to_string(),
+            target.source.to_string(),
+            target.date.to_string(),
             "segment_done",
             total_segments,
         );
-        p_done.segment_idx = Some(idx);
+        p_done.segment_idx = Some(target.index);
         p_done.images_total = Some(0);
         p_done.content = Some(row.content.clone());
         p_done.status = Some(status_str);
@@ -375,20 +353,16 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let port = engine.as_ref().map_or(0, EngineGuard::port);
         let model = open_model(&ai, Task::Daily, port)?;
 
-        self.run_one_segment(
-            DAILY_SOURCE,
-            &model,
-            &ai,
-            &date_str,
-            segment_idx,
-            total_segments,
-            seg.label,
-            seg.start_hour,
-            seg.end_hour,
-            device,
-            &visible,
-        )
-        .await
+        let target = SegmentTarget {
+            source: DAILY_SOURCE,
+            date: &date_str,
+            index: segment_idx,
+            label: &seg.label,
+            start_hour: seg.start_hour,
+            end_hour: seg.end_hour,
+        };
+        self.run_one_segment(&model, &ai, &target, total_segments, &device, &visible)
+            .await
     }
 }
 

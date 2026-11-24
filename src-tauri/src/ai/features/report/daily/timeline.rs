@@ -20,7 +20,7 @@ use crate::storage::{DbPool, SqliteResultExt};
 ///
 /// 空小时（该小时无任何活动）不产生条目；整段无活动 → 返回 `vec![]`，
 /// 调用方应据此回退到 `skipped_no_activity`。
-pub(crate) async fn build_activity_timeline(
+pub(super) async fn build_activity_timeline(
     pool: &DbPool,
     date_str: &str,
     start_hour: u8,
