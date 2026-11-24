@@ -48,6 +48,9 @@ pub struct Settings {
     /// 会被 [`load`] 启动期 sanitize 修正成 true，避免老用户升级后突然没截图。
     pub screenshot_enabled: bool,
     pub capture_interval_seconds: u32,
+    /// Takes a screenshot at once when the app or URL changes. When off, screenshots follow only
+    /// the screenshot interval. On by default.
+    pub screenshot_on_switch: bool,
     pub screenshot_path: String,
     pub work_hours_enabled: bool,
     pub work_ranges: Vec<TimeRange>,
@@ -140,6 +143,7 @@ impl Default for Settings {
             // v23 migration 同步把存量用户的 screenshotEnabled 也重置成 false。
             screenshot_enabled: false,
             capture_interval_seconds: 30,
+            screenshot_on_switch: true,
             screenshot_path: String::new(),
             work_hours_enabled: false,
             work_ranges: Vec::new(),
@@ -200,6 +204,7 @@ pub struct SettingsPatch {
     pub capture_enabled: Option<bool>,
     pub screenshot_enabled: Option<bool>,
     pub capture_interval_seconds: Option<u32>,
+    pub screenshot_on_switch: Option<bool>,
     pub screenshot_path: Option<String>,
     pub work_hours_enabled: Option<bool>,
     pub work_ranges: Option<Vec<TimeRange>>,
@@ -492,6 +497,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
             .capture_interval_seconds
             .map(|v| v.clamp(1, 600))
             .unwrap_or(current.capture_interval_seconds),
+        screenshot_on_switch: patch
+            .screenshot_on_switch
+            .unwrap_or(current.screenshot_on_switch),
         screenshot_path: patch
             .screenshot_path
             .map(|p| {
@@ -698,6 +706,7 @@ mod tests {
             capture_enabled: false,
             screenshot_enabled: true,
             capture_interval_seconds: 45,
+            screenshot_on_switch: false,
             // 路径非空，load 不会触发默认路径回填，往返应原样保留
             screenshot_path: "/tmp/hs-shots".into(),
             work_hours_enabled: true,
@@ -1065,6 +1074,21 @@ mod tests {
             p.retention_days = Some(asked);
             assert_eq!(apply_patch(Settings::default(), p).retention_days, saved);
         }
+    }
+
+    /// 旧设置里没有「切换窗口时截图」：按开着读，升级后行为不变。
+    #[test]
+    fn screenshot_on_switch_is_on_for_old_settings() {
+        let s: Settings = serde_json::from_str(r#"{"captureIntervalSeconds":60}"#).unwrap();
+        assert!(s.screenshot_on_switch);
+    }
+
+    /// 关掉「切换窗口时截图」照样存下。
+    #[test]
+    fn screenshot_on_switch_can_be_turned_off() {
+        let mut p = empty_patch();
+        p.screenshot_on_switch = Some(false);
+        assert!(!apply_patch(Settings::default(), p).screenshot_on_switch);
     }
 
     /// 选「永久」原样存下；再改回天数，按天数存。
