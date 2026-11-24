@@ -10,8 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::ai::config::{CloudConnection, DaySegment, ModelRef};
-use crate::ai::features::report::summary_progress::SummaryProgress;
-use crate::ai::features::report::summary_runner::ProgressSink;
+use crate::ai::features::report::progress::{ProgressSink, SummaryProgress};
 use crate::repo::settings as settings_repo;
 use crate::storage::DbPool;
 
@@ -123,6 +122,15 @@ pub(super) async fn spawn_scripted_openai_server(
         }
     });
     (port, bodies)
+}
+
+/// 拿一个刚刚释放的本地端口——连接必然被拒。给「不应发出任何请求」或
+/// 「连接失败」场景当 endpoint 用。
+pub(super) fn free_local_port() -> u16 {
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    drop(l);
+    port
 }
 
 /// 把「云端模型 + 指定段划分」写进 settings_store。周报默认继承日报的模型。

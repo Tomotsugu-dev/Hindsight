@@ -1,22 +1,16 @@
-//! 周报编排（单步纯文本）。
+//! 周报编排（基于一周内的日报正文与应用统计，单次纯文本生成）。
 //!
-//! 跟 [`crate::ai::features::report::summary_runner::DaySummaryRunner`] 的关键差异：
-//! - **不过 step 1**：原料是 `ai_summaries` 表里 `source='daily'` 的段总结文本，
-//!   不再过 vision LLM 看图；一次纯文本 chat 就够。
-//! - **没有"段"概念**：一周 = 一行 `ai_summaries`（`source='weekly'`，
-//!   `local_date = 周一日期`，`segment_idx = 0`）。
-//! - **进度事件极简**：只 emit `engine_starting` / `summarizing` / `segment_done` /
-//!   `all_done` / `error` / `cancelled`，复用同一份 `SUMMARY_PROGRESS_EVENT` 通道，
-//!   前端按 `source = "weekly"` 过滤跟 daily 互不干扰。
+//! 与 [`crate::ai::features::report::DaySummaryRunner`] 的差异：
+//! - 原料来自 `ai_summaries` 里 `source = "daily"` 的日报正文及应用时长统计，不逐段拼时间线。
+//! - 一周在 `ai_summaries` 中只占一行（`source = "weekly"`、`local_date = 周一`、`segment_idx = 0`）。
+//! - 复用 `SUMMARY_PROGRESS_EVENT`（`source = "weekly"`），只发出 `engine_starting` / `summarizing`
+//!   / `segment_done` / `all_done` / `cancelled`；出错时的 `error` 由命令层发。
 //!
 //! 校验链：
-//! 1. 周报必须有能用的模型（自己选的，或者跟日报的；云端连接要填完）
-//! 2. 严格模式（`allow_missing_days=false`）下：这一周内必须至少有一天的 daily
-//!    段总结落库（`status = ok`），否则直接写 `status = error` 行让前端引导。
-//!    宽松模式（前端 precheck → 用户在确认弹框点了"继续生成"）下：缺日报的天
-//!    用当日 top apps 顶替进 prompt；整周无日报也允许跑——这时仅基于 weekly +
-//!    每日 top apps 做简化分析。只有 days 和 top_apps **同时为空**时才视为
-//!    "本周没用过电脑"写 error 兜底。
+//! 1. 周报必须解析出可用模型（自选模型或继承日报模型）。
+//! 2. 严格模式（`allow_missing_days = false`）：本周至少需有一天 `ok` 日报，否则写入 `error` 行提示。
+//!    宽松模式（`allow_missing_days = true`，前端 precheck 确认后）：缺日报的天用当日 top apps
+//!    兜底；只有日报与可见活动同时为空时才写 `error` 行。
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,12 +20,11 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::AppHandle;
 
-use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
-use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::features::report::summary_operations::{build_step2, cancellable};
-use crate::ai::features::report::summary_progress::SummaryProgress;
-use crate::ai::features::report::summary_runner::ProgressSink;
-use crate::ai::models;
+use crate::ai::config::Task;
+use crate::ai::engine::{EngineGuard, EngineSupervisor};
+use crate::ai::features::report::daily::DAILY_SOURCE;
+use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
+use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
@@ -42,20 +35,18 @@ use crate::repo::reports::DeviceFilter;
 use crate::repo::settings as settings_repo;
 use crate::storage::{utc_now_rfc3339, DbPool};
 
-/// 周报固定的 source 命名空间值。
+/// 周报在 `ai_summaries` 表中的 `source` 值。
 pub const WEEKLY_SOURCE: &str = "weekly";
 
-/// 周报里那"唯一一段"的 segment_idx——主键三元组里固定填 0，避免后端读写时
-/// 各处魔术数字散落。
+/// 周报唯一一行的固定 `segment_idx`。
 const WEEKLY_SEGMENT_IDX: u32 = 0;
 
-/// 单点入口：跑某一周的周报。lib.rs 通过命令体临时构造，每次 invoke 新建一份。
+/// 某一周（周一至周日）周报生成的编排入口。
 pub struct WeekSummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
-    app: S,
-    /// 停止标志，和日报共用 [`crate::commands::ai_summary::SummaryCancel`]。
-    /// 启动引擎和等模型回答时按停止，都会中断。
+    sink: S,
+    /// 与日报共用的停止标志：启动引擎和等待模型回答时按停止都会中断。
     cancel: Arc<AtomicBool>,
 }
 
@@ -63,30 +54,23 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
-        app: S,
+        sink: S,
         cancel: Arc<AtomicBool>,
     ) -> Self {
         Self {
             pool,
             supervisor,
-            app,
+            sink,
             cancel,
         }
     }
 
-    /// 跑某一周的周报。
+    /// 生成以 `week_start`（必须为周一）开始这一周的周报。
     ///
-    /// `week_start` 必须是周一（调用方负责传对——`commands` 层会把任意日期对齐到周一）。
-    /// `force_refresh = true` 时无视已有行直接重跑；false 且已有 ok 行时直接 `Ok(())` 早返回。
-    /// 重跑时旧周报留到这一轮写下结果才被覆盖：取消或引擎起不来时，旧周报还在。
-    /// `allow_missing_days = true` 时：
-    ///   - 部分日缺日报：用当日 top apps 文本顶替进入 prompt
-    ///   - 整周无日报但有 activity：仅基于整周 + 每日 top apps 做简化分析
-    ///
-    /// 不再因"日报缺失"早 return error。
-    ///
-    /// `profile` 决定 AI 能看到哪些活动。七天的日报照原文读，日报里已经写进去的，
-    /// 这里拦不住。
+    /// - `force_refresh = false` 且已有 `ok` 行时，直接发 `all_done` 早返回。
+    /// - 重跑时旧周报留到本轮写下结果才被覆盖：取消或引擎起不来时旧周报还在。
+    /// - `allow_missing_days = true` 时，缺日报的天用当日 top apps 替代；整周无日报但有活动也能跑。
+    /// - `profile` 控制应用统计的可见范围；已有日报正文按原文读取。
     pub async fn run(
         &self,
         week_start: NaiveDate,
@@ -97,7 +81,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let result = self
             .run_inner(week_start, force_refresh, allow_missing_days, profile)
             .await;
-        // 按了停止不算失败：发 cancelled，返回 Ok
+        // 按了停止不算失败：发 cancelled 并返回 Ok
         if matches!(result, Err(Error::SummaryCancelled)) {
             let week_key = week_start.format("%Y-%m-%d").to_string();
             self.emit_phase("cancelled", &week_key, None, None);
@@ -117,7 +101,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let week_key = week_start.format("%Y-%m-%d").to_string();
         let end_key = week_end.format("%Y-%m-%d").to_string();
 
-        // 已有 ok 行 + 不强刷 → 直接返回让前端走"读 DB 路径"
         if !force_refresh && self.weekly_already_ok(&week_key).await? {
             self.emit_phase("all_done", &week_key, None, None);
             return Ok(());
@@ -127,20 +110,16 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let ai = cfg.ai.clone();
 
         ai.check_ready(Task::Weekly).map_err(Error::InvalidInput)?;
-        let Some(model) = ai.model_for(Task::Weekly) else {
-            return Err(Error::InvalidInput(NO_MODEL_ERROR));
-        };
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
             .await?
             .main_filter();
 
-        // 拉一周内所有 daily 段总结，按日期 group
-        let daily_rows = ai_summaries::get_range(&self.pool, "daily", &week_key, &end_key).await?;
+        // 拉取本周全部日报段并按日期分组
+        let daily_rows =
+            ai_summaries::get_range(&self.pool, DAILY_SOURCE, &week_key, &end_key).await?;
         let lang = ai.prompt_language.as_str().to_string();
         let mut days = group_days(&daily_rows, week_start, week_end, &lang);
 
-        // 严格模式（前端没确认 allow）下：整周无日报 = 老行为，写 error 行让前端引导
-        // 用户先补日报。宽松模式继续往下走——通过补缺失日 fallback / 简化分析兜底。
         if days.is_empty() && !allow_missing_days {
             return self
                 .write_no_data_error(
@@ -151,8 +130,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                 .await;
         }
 
-        // 宽松模式：缺日报的天用当日 top apps 文本顶替——还是缺数据的天（既没日报
-        // 也没 activity）直接不进 prompt，让 LLM 视为"未使用电脑"。
+        // 宽松模式：缺日报的天用当日 top apps 补位，既没日报也没活动的天直接跳过
         if allow_missing_days {
             let present_dates: HashSet<String> = days.iter().map(|(d, _, _)| d.clone()).collect();
             let mut day = week_start;
@@ -183,10 +161,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             days.sort_by(|a, b| a.0.cmp(&b.0));
         }
 
-        // 整周 top apps：跟 daily 段总结同语义（按 AI 能看到的过滤、按组合并），
-        // 但跨 7 天聚合。device 用 All——周报当前没暴露设备维度，跟现有"多设备聚合"一致。
-        // 查询失败不让整轮报错——top_apps 只是辅助信号，丢了就让 LLM 只看日报全文。
-        // 提到引擎启动前查：宽松模式下没 activity 也要早 fail，省得白等模型加载。
+        // 启动引擎前先查整周 top apps，无任何活动时早退，省去加载模型
         let top_apps = ai_summaries::list_range_top_apps(
             &self.pool,
             &week_key,
@@ -201,7 +176,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             Vec::new()
         });
 
-        // 宽松模式终极兜底：日报也空 + 整周 top_apps 也空 = 本周根本没用电脑，没东西可写
         if allow_missing_days && days.is_empty() && top_apps.is_empty() {
             return self
                 .write_no_data_error(
@@ -212,33 +186,30 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                 .await;
         }
 
-        // 取消检查：启动引擎前
         if self.cancel.load(Ordering::Relaxed) {
             return Err(Error::SummaryCancelled);
         }
 
-        // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
-        // 让前端显示"加载模型中…"。走云端时跳过，不动 supervisor。
-        // 整轮都拿着引擎：别的任务换不掉它
-        let engine = if let ModelRef::Local { file } = &model {
-            let st = self.supervisor.status().await;
-            if st.state != EngineState::Running {
-                // message 留空：前端按 phase 显示本地化的"加载模型中…"（weeklySummary.ts）
-                self.emit_phase("engine_starting", &week_key, None, None);
-            }
-            Some(cancellable(&self.cancel, self.acquire_engine(&ai, file)).await?)
-        } else {
-            None
-        };
-        // 云端路径用不到端口；step2 客户端会忽略它。占位 0。
+        // 整轮持有引擎租约，防止其他任务中途换掉引擎
+        let engine = acquire_engine(
+            &self.supervisor,
+            &self.sink,
+            &self.cancel,
+            &ai,
+            Task::Weekly,
+            EngineProgress {
+                source: WEEKLY_SOURCE,
+                date: &week_key,
+                total_segments: 1,
+            },
+        )
+        .await?;
         let port = engine.as_ref().map_or(0, EngineGuard::port);
 
-        // 取消检查：chat 之前
         if self.cancel.load(Ordering::Relaxed) {
             return Err(Error::SummaryCancelled);
         }
 
-        // 拼 prompt + 调 step2
         let ctx = WeeklyContext {
             week_start: &week_key,
             week_end: &end_key,
@@ -248,10 +219,9 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let system = build_weekly_system_prompt(&ai);
         let user_text = build_weekly_user_prompt(&ai, &ctx);
 
-        let step2 = build_step2(&ai, Task::Weekly, port)?;
-        let step2_model = step2.model_label().to_string();
+        let model = open_model(&ai, Task::Weekly, port)?;
+        let model_label = model.model_label().to_string();
 
-        // 推一条 summarizing 让前端段卡片切到"生成中"
         {
             let mut p = SummaryProgress::base(
                 WEEKLY_SOURCE.to_string(),
@@ -263,8 +233,8 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             self.emit(p);
         }
 
-        // 停止时不写库，旧周报留着
-        let chat_result = cancellable(&self.cancel, step2.chat(&system, &user_text)).await;
+        // 生成中途按停止时不写库，保留旧周报
+        let chat_result = cancellable(&self.cancel, model.chat(&system, &user_text)).await;
         if matches!(chat_result, Err(Error::SummaryCancelled)) {
             return Err(Error::SummaryCancelled);
         }
@@ -278,7 +248,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                     start_hour: 0,
                     end_hour: 0,
                     content,
-                    model: step2_model.clone(),
+                    model: model_label,
                     status: "ok".to_string(),
                     error: None,
                     generated_at: utc_now_rfc3339(),
@@ -296,7 +266,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                     start_hour: 0,
                     end_hour: 0,
                     content: String::new(),
-                    model: step2_model,
+                    model: model_label,
                     status: "error".to_string(),
                     error: Some(e.to_string()),
                     generated_at: utc_now_rfc3339(),
@@ -305,8 +275,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             ),
         };
 
-        // upsert 失败不让整轮抛飞——日报路径同款防御：磁盘满 / DB lock 时 row
-        // 写不进去也得让上层 emit segment_done，至少前端能看到红色 error badge
+        // 写库失败仅打日志不中断，确保前端仍能收到 `segment_done`
         if let Err(e) = ai_summaries::upsert_segment(&self.pool, &row).await {
             log::error!(
                 "ai_summaries upsert 失败（weekly {} status={}）：{e}",
@@ -315,7 +284,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             );
         }
 
-        // emit segment_done 把 row 推给前端
         let mut p = SummaryProgress::base(
             WEEKLY_SOURCE.to_string(),
             week_key.clone(),
@@ -332,7 +300,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         Ok(())
     }
 
-    /// 这一周是否已有 ok 行（用于 force_refresh=false 早返回）。
     async fn weekly_already_ok(&self, week_key: &str) -> Result<bool> {
         let status = ai_summaries::get_segment_status(
             &self.pool,
@@ -344,14 +311,14 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 这一周没有材料可写：写一行错误，盖掉已有的周报，再发 segment_done 和 all_done。
+    /// 这一周没有可用材料时写一行 `error` 并推送 `segment_done` / `all_done`。
+    /// 写之前先查 `cancel`，避免 OCR 清积压或查库期间按停止时把旧周报盖掉。
     async fn write_no_data_error(
         &self,
         week_key: &str,
         end_key: &str,
         message: &str,
     ) -> Result<()> {
-        // 停止可能在清 OCR 积压或前面查库时就按了
         if self.cancel.load(Ordering::Relaxed) {
             return Err(Error::SummaryCancelled);
         }
@@ -369,7 +336,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
             generated_at: utc_now_rfc3339(),
         };
         ai_summaries::upsert_segment(&self.pool, &row).await?;
-        // segment_done 让前端写入这一行，all_done 让按钮停止转圈
         let mut p = SummaryProgress::base(
             WEEKLY_SOURCE.to_string(),
             week_key.to_string(),
@@ -384,33 +350,10 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         Ok(())
     }
 
-    /// 按周报的模型和参数拿一个本机引擎。`main_name` 是周报用的本机模型文件。
-    async fn acquire_engine(
-        &self,
-        ai: &crate::ai::config::AiConfig,
-        main_name: &str,
-    ) -> Result<EngineGuard> {
-        let models_dir = models::root_dir(ai);
-        let main_path = models_dir.join(main_name);
-        if !main_path.exists() {
-            return Err(Error::ModelFileMissing(format!(
-                "{}（可能被删除或路径变了）",
-                main_name
-            )));
-        }
-        let wanted_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size_for(Task::Weekly),
-            parallel_slots: ai.parallel_slots_for(Task::Weekly),
-            ctx_size: ai.ctx_size_for(Task::Weekly),
-        };
-        self.supervisor.acquire(main_path, wanted_overrides).await
-    }
-
     fn emit(&self, payload: SummaryProgress) {
-        self.app.emit_progress(payload);
+        self.sink.emit_progress(payload);
     }
 
-    /// 简化版 emit——大多数 phase 字段都为 None，统一用 base 兜底。
     fn emit_phase(
         &self,
         phase: &'static str,
@@ -426,12 +369,9 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
     }
 }
 
-/// 把一周内所有 daily 段总结按日期 group + 拼成日维度文本。
+/// 将一周内所有 `ok` 日报段按日期升序分组并拼接。
 ///
-/// - 跳过 status != "ok" 的段（skipped / error 段没内容，进上下文也是噪声）
-/// - 同一天内多段按 `segment_idx` 升序拼接，段间 `\n\n` 分隔
-/// - 当天没任何 ok 段则该日**不**进结果——LLM 只看到有数据的天，逻辑更干净
-/// - 返回顺序按日期升序
+/// 非 `ok` 或正文空白的段会被跳过；没有任何有效段的天不进入结果。
 fn group_days(
     rows: &[SegmentSummaryRow],
     week_start: NaiveDate,
@@ -453,7 +393,6 @@ fn group_days(
                 if i > 0 {
                     day_text.push_str("\n\n");
                 }
-                // 段头让 LLM 区分时段，不必再让它从语境推断
                 day_text.push_str(&format!(
                     "[{} {:02}:00–{:02}:00] ",
                     r.label, r.start_hour, r.end_hour,
@@ -468,21 +407,15 @@ fn group_days(
     out
 }
 
-/// 周标签（"YYYY-MM-DD ~ YYYY-MM-DD"），写入 ai_summaries.label。
-/// label 列在 daily 用作时段标签，weekly 这里复用作"本周日期范围"——前端展示时
-/// 知道是 weekly 行就按"周"渲染，不会跟时段标签混。
+/// 拼出写入 `ai_summaries.label` 的周日期范围（`"YYYY-MM-DD ~ YYYY-MM-DD"`）。
 fn weekly_label(week_start: &str, week_end: &str) -> String {
     format!("{} ~ {}", week_start, week_end)
 }
 
-/// 当某天没日报但有活动数据时，把当日 top apps 列表拼成一段"代日报"文本。
+/// 某天没有日报时，把当日 top apps 拼成替代文本块。
 ///
-/// 拼装格式：第一行打 marker 标签让 LLM 一眼识别"这天没日报、只有应用统计"；
-/// 余下是跟段总结 user prompt 同款的应用列表。三语都遵守同样的 marker 结构，
-/// weekly_*.md 里有对应说明告诉模型遇到 marker 时怎么处理。
+/// 首行标记必须与对应语言的 `weekly_*.md` 提示词逐字一致。
 fn format_missing_day_fallback(lang: &str, day_apps: &[(String, u32, String)]) -> String {
-    // marker 必须与各语言 weekly_*.md 里教模型识别的字符串**逐字一致**——
-    // 对不上的话模型会把占位块当正文（葡语周报里混中文就是这么来的）。
     let (marker, header) = match lang {
         "en" => ("[No daily report; app stats only]", "Top apps used:"),
         "ja" => (
@@ -511,36 +444,35 @@ fn format_missing_day_fallback(lang: &str, day_apps: &[(String, u32, String)]) -
     out
 }
 
-/// precheck 返回项——一天的元数据（前端弹框显示用）。
+/// 周报生成前预检里的单日覆盖情况。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeekPrecheckDay {
-    /// "YYYY-MM-DD"
+    /// `"YYYY-MM-DD"`
     pub date: String,
-    /// 按当前 prompt 语言写的星期简写（"周一" / "Mon" / "月"）
+    /// 按当前提示词语言生成的星期简写。
     pub weekday: String,
-    /// 该日是否有 daily ok 段总结（status='ok' 且 content 非空）
+    /// 该日是否已有非空的 `ok` 日报段。
     pub has_daily: bool,
-    /// 该日是否有 AI 能看到的 activity 记录
+    /// 该日是否有 AI 可见的活动记录。
     pub has_activity: bool,
 }
 
-/// precheck 命令的返回 payload——把一周 7 天拆成"有日报 / 仅活动 / 完全空"三档。
+/// 一周 7 天的日报与活动覆盖汇总，供前端生成前确认弹窗使用。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeekPrecheckResp {
-    /// 一周 7 天，按周一到周日顺序
+    /// 周一到周日顺序排列的 7 天信息。
     pub days: Vec<WeekPrecheckDay>,
-    /// 7 天里有几天有 daily ok 段总结
+    /// 已有 `ok` 日报的天数。
     pub days_with_daily: u32,
-    /// 7 天里有几天 has_activity = true 但 has_daily = false（前端"用活动统计替代"备选项）
+    /// 仅有活动记录但缺日报的天数（`has_activity && !has_daily`）。
     pub days_activity_only: u32,
 }
 
-/// 给前端"点击生成前预览"用的查询：拿这周 7 天的日报 / 活动覆盖情况。
+/// 查询以 `week_start` 开始这一周 7 天的日报与活动覆盖情况。
 ///
-/// 不依赖 [`WeekSummaryRunner`]，纯函数形式——前端可以单独 invoke 而无需触发任何
-/// 引擎 / 模型加载，是"生成前确认"流程的支点。`profile` 跟生成时传的一样。
+/// 纯数据库查询，不触发任何引擎或模型加载。
 pub async fn precheck_week(
     pool: &DbPool,
     week_start: NaiveDate,
@@ -556,7 +488,7 @@ pub async fn precheck_week(
         .await?
         .main_filter();
 
-    let daily_rows = ai_summaries::get_range(pool, "daily", &week_key, &end_key).await?;
+    let daily_rows = ai_summaries::get_range(pool, DAILY_SOURCE, &week_key, &end_key).await?;
     let present_daily: HashSet<String> = daily_rows
         .iter()
         .filter(|r| r.status == "ok" && !r.content.trim().is_empty())
@@ -572,10 +504,8 @@ pub async fn precheck_week(
         let day_str = day.format("%Y-%m-%d").to_string();
         let has_daily = present_daily.contains(&day_str);
 
-        // 查当日 top apps：哪怕只有 1 条 → has_activity = true
-        // 失败不抛——单日 fallback 失败时按"没活动"处理，前端流程不卡
+        // 已有日报直接视为有活动，省去一次当日 top_apps 查询
         let has_activity = if has_daily {
-            // 有日报就视作有活动，跳过当日 top_apps 查询省时
             true
         } else {
             match ai_summaries::list_range_top_apps(
@@ -622,6 +552,7 @@ pub async fn precheck_week(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::config::ModelRef;
     use crate::ai::features::report::test_util::{
         phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned, RecordingSink,
     };

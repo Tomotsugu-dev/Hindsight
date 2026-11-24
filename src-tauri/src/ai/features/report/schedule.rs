@@ -1,15 +1,14 @@
-//! 自动总结调度:开关(`ai.auto_summary`)打开时,每天到设定时刻自动生成
-//! **当天的日报**(并补齐缺失的前一天)与**上一个完整周的周报**,
-//! 用户不再需要手动点「开始总结」。
+//! 自动生成日报与周报的后台定时调度。
 //!
-//! 设计要点:
-//! - 启动后延迟首查(让采集/引擎先安顿),此后每 [`CHECK_GAP_SECS`] 查一轮;
-//! - 只补"从未生成过"的目标:跑过但失败的不自动重试——失败通常是配置问题
-//!   (坏 key / 模型缺失),半小时一次的盲目重试只会烧钱刷日志,留给用户手动;
-//! - 每个目标在本次进程运行期至多尝试一次(attempted 集合);
-//! - 与手动运行共用 [`RunLock`]:抢不到锁(用户正在手动跑)、或本机引擎被聊天占着时
-//!   本轮让路,不标记已尝试,下轮再来;
-//! - 月报:生成器尚未实现(MonthlyTab 为占位页),落地后在此接入。
+//! 开启 `ai.auto_summary` 后，后台定期检查，补这三样：
+//! - 昨天的日报：缺失或有失败段时补跑，已成功的段不重跑；
+//! - 当天的日报：只在设了时间点时生成，每个已到的时间点生成或刷新一次；
+//! - 上一个完整周的周报：缺失且该周至少有一份日报时生成。
+//!
+//! 设了时间点时，要有一个点已到，这一轮才会做上面的事。
+//!
+//! 每个目标在本次进程运行期内至多尝试一次（`attempted` 集合），避免配置错误导致反复重试；
+//! 当 [`RunLock`] 或本机引擎正忙时让路，不记为已尝试，下轮再试。
 
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
@@ -18,8 +17,8 @@ use std::sync::Arc;
 use chrono::{Duration as ChronoDuration, Local, NaiveDate};
 use tauri::{AppHandle, Manager};
 
-use crate::ai::features::report::summary::{
-    precheck_week, DaySummaryRunner, WeekSummaryRunner, WEEKLY_SOURCE,
+use crate::ai::features::report::{
+    precheck_week, DaySummaryRunner, WeekSummaryRunner, DAILY_SOURCE, WEEKLY_SOURCE,
 };
 use crate::ai::policy::ProfileChoice;
 use crate::commands::ai_summary::{RunLock, SummaryCancel};
@@ -28,15 +27,14 @@ use crate::repo::reports::DeviceFilter;
 use crate::repo::{ai_summaries, settings};
 use crate::storage::{DbPool, SqliteResultExt};
 
-/// 启动后首查延迟(秒):避开启动期的采集初始化/引擎自检。
+/// 应用启动后首次检查前的延迟（秒），避开启动期初始化。
 const FIRST_CHECK_DELAY_SECS: u64 = 120;
-/// 常规检查间隔(秒)。目标是"日/周结束后不久自动补上",半小时粒度足够。
+/// 常规轮询检查间隔（秒）。
 const CHECK_GAP_SECS: u64 = 30 * 60;
-/// 设定时间点过后多久醒来检查(秒)。醒得太贴点,同分钟内 now >= t
-/// 可能差几秒;90s 稳过点,又不至于让用户觉得"到点没动静"。
-const POINT_WAKE_BUFFER_SECS: u64 = 90;
+/// 设定时间点过后附加的缓冲（秒），确保唤醒时稳定跨过目标分钟。
+const SCHEDULE_WAKE_BUFFER_SECS: u64 = 90;
 
-/// 后台调度任务。app 退出时随进程终止,无需显式停止。
+/// 启动后台调度任务，随应用进程退出自动结束。
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(FIRST_CHECK_DELAY_SECS)).await;
@@ -51,10 +49,7 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
-/// 下一轮检查前的睡眠秒数。常规 30 分钟;但若某个设定时间点更近,就睡到
-/// 该点过后 [`POINT_WAKE_BUFFER_SECS`] 再查——纯 30 分钟盲睡叠加每轮生成
-/// 耗时的漂移,实测能把 23:00 的设定点拖到 23:30 才触发(用户 23:19 来问
-/// "怎么还没动")。读设置失败或尽快模式(无设定点)回落常规间隔。
+/// 计算距离下一次检查的等待秒数：默认 [`CHECK_GAP_SECS`]，若有更近的设定时间点则提前在该点后唤醒。
 async fn next_gap_secs(app: &AppHandle) -> u64 {
     let pool = app.state::<DbPool>();
     let Ok(cfg) = settings::load(&pool).await else {
@@ -63,15 +58,14 @@ async fn next_gap_secs(app: &AppHandle) -> u64 {
     if !cfg.ai.auto_summary {
         return CHECK_GAP_SECS;
     }
-    match secs_until_next_point(Local::now(), &cfg.ai.auto_summary_times) {
-        Some(d) => (d + POINT_WAKE_BUFFER_SECS).clamp(60, CHECK_GAP_SECS),
+    match secs_until_next_scheduled_time(Local::now(), &cfg.ai.auto_summary_times) {
+        Some(d) => (d + SCHEDULE_WAKE_BUFFER_SECS).clamp(60, CHECK_GAP_SECS),
         None => CHECK_GAP_SECS,
     }
 }
 
-/// 距下一个设定时间点的秒数;点在今天已过则算到明天同一点。
-/// 空表 / 全坏格式返回 None(尽快模式)。
-fn secs_until_next_point(now: chrono::DateTime<Local>, times: &[String]) -> Option<u64> {
+/// 返回距离最近一个有效 `"HH:MM"` 设定时间点的秒数（今天已过则滚到明天）；无有效配置返回 `None`。
+fn secs_until_next_scheduled_time(now: chrono::DateTime<Local>, times: &[String]) -> Option<u64> {
     times
         .iter()
         .filter_map(|raw| chrono::NaiveTime::parse_from_str(raw.trim(), "%H:%M").ok())
@@ -102,21 +96,17 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     let yesterday = today - ChronoDuration::days(1);
     let times = &cfg.ai.auto_summary_times;
 
-    // 定时模式:任一时间点到点即放行本轮;全部未到则整体跳过。
-    // 未配置任何点 = 尽快模式(旧行为:只补前一天,不动进行中的今天)。
-    if !times.is_empty() && !any_point_due(now.time(), times) {
+    // 定时模式下至少有一个设定时间点已到才放行本轮
+    if !times.is_empty() && !any_scheduled_time_due(now.time(), times) {
         log::debug!("自动总结:未到任何设定时间({}),本轮跳过", times.join("/"));
         return Ok(());
     }
 
-    // ── 日报·前一天补漏:只补"从未生成过"的(关机错过设定时刻的场景) ──
+    // 昨天日报：缺失或残留失败段时补跑一次（force = false，只重跑未 ok 的段）
     let d_key = format!("d:{yesterday}");
-    // "从未生成过" 或 "生成过但留下失败段" 都算没补完:后者用 force=false 跑,
-    // 已 ok 的段被 segment_already_ok 跳过,只重试失败的那几段,不白烧额度。
-    // 每个运行期至多试一次(attempted 兜底),永久性失败不会反复烧。
     if !attempted.contains(&d_key)
         && (daily_absent(&pool, yesterday).await?
-            || ai_summaries::has_error_segment(&pool, "daily", &yesterday.to_string()).await?)
+            || ai_summaries::has_error_segment(&pool, DAILY_SOURCE, &yesterday.to_string()).await?)
         && has_activity(&pool, yesterday).await?
     {
         match try_run_daily(app, yesterday, false).await {
@@ -127,27 +117,22 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
         }
     }
 
-    // ── 日报·当天(仅定时模式):**每个时间点都生成/刷新一次**——
-    //    12:00 出半天版、23:00 覆盖成全天版。账本 = 日报自己的 generated_at:
-    //    生成时刻 ≥ 时间点即该点已完成,重启不重复、不白烧 LLM。
-    //    今天没活动(如凌晨点)自然跳过;失败由 attempted 兜住当天不重试。
+    // 当天日报（仅定时模式）：按已到点且未满足的时间点逐个生成或刷新
     if !times.is_empty() && has_activity(&pool, today).await? {
-        // 账本只记"生成时刻"、不记结果:部分段失败时,成功段的 generated_at 照样
-        // 把这个时间点标记成已完成,失败段从此永不补跑(实测 8/1、8/3、8/5 各留下
-        // 空段至今)。有失败段时把账本按"未完成"处理,让该点重新入列。
-        let has_err = ai_summaries::has_error_segment(&pool, "daily", &today.to_string()).await?;
+        // 有失败段时不看生成时间，每个已到的时间点都再跑一次
+        let has_err =
+            ai_summaries::has_error_segment(&pool, DAILY_SOURCE, &today.to_string()).await?;
         let last_gen = if has_err {
             None
         } else {
-            ai_summaries::latest_generated_at(&pool, "daily", &today.to_string()).await?
+            ai_summaries::latest_generated_at(&pool, DAILY_SOURCE, &today.to_string()).await?
         };
-        for t in due_unsatisfied_points(now, times, last_gen.as_deref()) {
+        for t in due_unrun_times(now, times, last_gen.as_deref()) {
             let key = format!("d:{today}@{t}");
             if attempted.contains(&key) {
                 continue;
             }
-            // 补失败段(has_err)时 force=false:已 ok 的段跳过,只重试失败的。
-            // 否则维持原语义——已有报告的时间点做整日刷新(12:00 半天版 → 23:00 全天版)。
+            // 有失败段时 force = false，已成功的段不重跑；否则整天重跑
             let force = !has_err && !daily_absent(&pool, today).await?;
             match try_run_daily(app, today, force).await {
                 RunOutcome::Ran => {
@@ -158,18 +143,16 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
                     break;
                 }
             }
-            // 一轮只处理一个点:生成本身要跑几分钟,后续点下轮按账本自然判定
+            // 每轮唤醒最多处理一个时间点，后续时间点留到下一轮检查
             break;
         }
     }
 
-    // ── 周报:上一个完整周的周一 ───────────────────────
+    // 上周周报：仅在缺失且上周至少有一天日报时自动生成
     let last_monday = align_to_monday(today) - ChronoDuration::days(7);
     let w_key = format!("w:{last_monday}");
     if !attempted.contains(&w_key) && weekly_absent(&pool, last_monday).await? {
         let pre = precheck_week(&pool, last_monday, &ProfileChoice::Auto).await?;
-        // 整周零日报不硬跑:没有叙事材料的周报只是活动统计空壳;
-        // 等日报(手动或上面的自动)补上后,同一运行期内下轮再试。
         if pre.days_with_daily > 0 {
             match try_run_weekly(app, last_monday, pre.days_with_daily < 7).await {
                 RunOutcome::Ran => {
@@ -183,17 +166,15 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
 }
 
 enum RunOutcome {
-    /// 实际启动过(无论成败——失败也不再自动重试)
+    /// 已尝试执行（成功或非忙碌类报错，本运行期不再自动重试）。
     Ran,
-    /// RunLock 被手动任务占用，或本机引擎被别的任务占着，本轮没跑成
+    /// 因 [`RunLock`] 或本机引擎正忙而让路，下轮再试。
     Busy,
 }
 
-/// 跑完的结果算不算「这轮跑过」。`what` 是写进日志的「某天的日报」这类说明。
 fn outcome_of(result: Result<()>, what: &str) -> RunOutcome {
     match result {
         Ok(()) => RunOutcome::Ran,
-        // 本机引擎被别的任务占着：这轮让路，下轮再试
         Err(Error::EngineBusy) => RunOutcome::Busy,
         Err(e) => {
             log::warn!("自动总结:{what}失败(本次运行期不再自动重试): {e}");
@@ -210,13 +191,12 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
     log::info!("自动总结:生成 {date} 日报");
     let cancel = app.state::<SummaryCancel>();
     cancel.0.store(false, Ordering::Relaxed);
-    // 与手动路径同款:先清 OCR 积压(前端若开着总结页,同样能看到阶段进度)
     let mem = app.state::<crate::commands::screen_memory::MemoryState>();
     crate::ai::ocr_catchup::run(
         &app.state::<DbPool>(),
         mem.0.as_ref(),
         app,
-        "daily",
+        DAILY_SOURCE,
         &date.format("%Y-%m-%d").to_string(),
         &cancel.0,
     )
@@ -269,9 +249,9 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
     outcome_of(result, &format!("{monday} 周报"))
 }
 
-/// 该日是否**从未**生成过日报(任何状态的行都算"生成过",失败行留给用户处置)。
 async fn daily_absent(pool: &DbPool, date: NaiveDate) -> Result<bool> {
-    let rows = ai_summaries::get_day(pool, "daily", &date.format("%Y-%m-%d").to_string()).await?;
+    let rows =
+        ai_summaries::get_day(pool, DAILY_SOURCE, &date.format("%Y-%m-%d").to_string()).await?;
     Ok(rows.is_empty())
 }
 
@@ -281,8 +261,7 @@ async fn weekly_absent(pool: &DbPool, monday: NaiveDate) -> Result<bool> {
     Ok(rows.is_empty())
 }
 
-/// 该日主库是否有活动记录(零活动的日子没有可总结的东西;
-/// excluded 行不算——全被忽略规则打标的日子同样没东西可总结)。
+/// 返回 `date` 是否存在至少一条未被忽略规则排除的活动记录。
 async fn has_activity(pool: &DbPool, date: NaiveDate) -> Result<bool> {
     let key = date.format("%Y-%m-%d").to_string();
     pool.0
@@ -300,8 +279,8 @@ async fn has_activity(pool: &DbPool, date: NaiveDate) -> Result<bool> {
         .map_err(Into::into)
 }
 
-/// 任一时间点已到(纯函数):放行本轮检查。坏格式项跳过。
-fn any_point_due(now: chrono::NaiveTime, times: &[String]) -> bool {
+/// 若 `times` 中存在任一有效 `"HH:MM"` 时间点已经到达，则返回 `true`。
+fn any_scheduled_time_due(now: chrono::NaiveTime, times: &[String]) -> bool {
     times.iter().any(|raw| {
         chrono::NaiveTime::parse_from_str(raw.trim(), "%H:%M")
             .map(|t| now >= t)
@@ -309,17 +288,17 @@ fn any_point_due(now: chrono::NaiveTime, times: &[String]) -> bool {
     })
 }
 
-/// 已到点且**尚未被满足**的时间点(纯函数,配置序):
-/// 满足 = 当天日报最近一次 generated_at(本地时刻)≥ 该时间点。
-/// last_gen 解析失败按已满足处理(宁可漏刷一版,不无限重烧 LLM)。
-fn due_unsatisfied_points(
-    now: chrono::DateTime<chrono::Local>,
+/// 返回今天已到点但尚未被 `last_gen` 满足的 `"HH:MM"` 时间点列表。
+///
+/// 当 `last_gen`（转本地时间后）不早于某个时间点时视为已满足；时间戳解析失败按已满足处理，避免死循环重跑。
+fn due_unrun_times(
+    now: chrono::DateTime<Local>,
     times: &[String],
     last_gen: Option<&str>,
 ) -> Vec<String> {
     let last_local: Option<chrono::NaiveDateTime> = last_gen.map(|raw| {
         chrono::DateTime::parse_from_rfc3339(raw)
-            .map(|dt| dt.with_timezone(&chrono::Local).naive_local())
+            .map(|dt| dt.with_timezone(&Local).naive_local())
             .unwrap_or(chrono::NaiveDateTime::MAX)
     });
     let today = now.date_naive();
@@ -330,12 +309,12 @@ fn due_unsatisfied_points(
                 return false;
             };
             if now.time() < t {
-                return false; // 未到点
+                return false;
             }
-            let point_dt = today.and_time(t);
+            let slot_dt = today.and_time(t);
             match last_local {
-                Some(gen) => gen < point_dt, // 生成早于该点 → 该点未满足
-                None => true,                // 从未生成 → 未满足
+                Some(gen) => gen < slot_dt,
+                None => true,
             }
         })
         .cloned()
@@ -365,51 +344,53 @@ mod tests {
         assert!(matches!(outcome_of(Ok(()), "日报"), RunOutcome::Ran));
     }
 
-    /// any_point_due:任一到点即放行;坏格式跳过;空表不放行(尽快模式走别的分支)。
+    /// any_scheduled_time_due: 任一到点即放行; 坏格式跳过; 空表不放行。
     #[test]
-    fn any_point_due_truth_table() {
+    fn any_scheduled_time_due_truth_table() {
         let t = |h, m| chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
         let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert!(!any_point_due(t(23, 59), &[]));
-        assert!(any_point_due(t(12, 0), &v(&["12:00", "23:00"])));
-        assert!(!any_point_due(t(11, 59), &v(&["12:00", "23:00"])));
-        assert!(any_point_due(t(23, 0), &v(&["12:00", "23:00"])));
-        assert!(!any_point_due(t(12, 0), &v(&["25:99"])));
-        assert!(any_point_due(t(9, 30), &v(&[" 09:30 "])));
+        assert!(!any_scheduled_time_due(t(23, 59), &[]));
+        assert!(any_scheduled_time_due(t(12, 0), &v(&["12:00", "23:00"])));
+        assert!(!any_scheduled_time_due(t(11, 59), &v(&["12:00", "23:00"])));
+        assert!(any_scheduled_time_due(t(23, 0), &v(&["12:00", "23:00"])));
+        assert!(!any_scheduled_time_due(t(12, 0), &v(&["25:99"])));
+        assert!(any_scheduled_time_due(t(9, 30), &v(&[" 09:30 "])));
     }
 
-    /// secs_until_next_point:点前给到点差值(轮询据此收紧),点后滚到
-    /// 明天,多点取最近,空表/坏格式回 None(尽快模式保持 30 分钟常规间隔)。
+    /// secs_until_next_scheduled_time: 点前给到点差值，点后滚到明天，多点取最近，空表/坏格式回 None。
     #[test]
-    fn secs_until_next_point_math() {
+    fn secs_until_next_scheduled_time_math() {
         use chrono::TimeZone;
         let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let at = |h, m| chrono::Local.with_ymd_and_hms(2026, 8, 8, h, m, 0).unwrap();
 
         // 22:30 → 23:00 点差 30 分钟
         assert_eq!(
-            secs_until_next_point(at(22, 30), &v(&["23:00"])),
+            secs_until_next_scheduled_time(at(22, 30), &v(&["23:00"])),
             Some(1800)
         );
         // 23:10 → 今天的点已过,滚到明天 23:00
         assert_eq!(
-            secs_until_next_point(at(23, 10), &v(&["23:00"])),
+            secs_until_next_scheduled_time(at(23, 10), &v(&["23:00"])),
             Some(24 * 3600 - 600)
         );
         // 多点取最近的
         assert_eq!(
-            secs_until_next_point(at(11, 0), &v(&["12:00", "23:00"])),
+            secs_until_next_scheduled_time(at(11, 0), &v(&["12:00", "23:00"])),
             Some(3600)
         );
         // 空表 / 坏格式 = 尽快模式
-        assert_eq!(secs_until_next_point(at(11, 0), &[]), None);
-        assert_eq!(secs_until_next_point(at(11, 0), &v(&["25:99"])), None);
+        assert_eq!(secs_until_next_scheduled_time(at(11, 0), &[]), None);
+        assert_eq!(
+            secs_until_next_scheduled_time(at(11, 0), &v(&["25:99"])),
+            None
+        );
     }
 
-    /// due_unsatisfied_points:账本(当天日报 generated_at)判定——
-    /// 生成时刻 ≥ 时间点 = 该点已完成;从未生成全未满足;解析失败视为满足。
+    /// due_unrun_times: 账本(当天日报 generated_at)判定——
+    /// 生成时刻 ≥ 时间点 = 该点已完成; 从未生成全未满足; 解析失败视为满足。
     #[test]
-    fn due_unsatisfied_points_ledger() {
+    fn due_unrun_times_ledger() {
         use chrono::TimeZone;
         let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let now = chrono::Local
@@ -418,43 +399,40 @@ mod tests {
         let times = v(&["12:00", "23:00"]);
 
         // 从未生成:两点都到期且未满足
-        assert_eq!(due_unsatisfied_points(now, &times, None), times);
+        assert_eq!(due_unrun_times(now, &times, None), times);
 
         // 12:05 生成过:12:00 点已满足,23:00 点未满足
         let gen_1205 = chrono::Local
             .with_ymd_and_hms(2026, 8, 2, 12, 5, 0)
             .unwrap()
             .to_rfc3339();
-        assert_eq!(
-            due_unsatisfied_points(now, &times, Some(&gen_1205)),
-            v(&["23:00"])
-        );
+        assert_eq!(due_unrun_times(now, &times, Some(&gen_1205)), v(&["23:00"]));
 
         // 23:05 生成过:全部满足
         let gen_2305 = chrono::Local
             .with_ymd_and_hms(2026, 8, 2, 23, 5, 0)
             .unwrap()
             .to_rfc3339();
-        assert!(due_unsatisfied_points(now, &times, Some(&gen_2305)).is_empty());
+        assert!(due_unrun_times(now, &times, Some(&gen_2305)).is_empty());
 
         // 未到点的不入列:12:30 时 23:00 还没到
         let noon = chrono::Local
             .with_ymd_and_hms(2026, 8, 2, 12, 30, 0)
             .unwrap();
-        assert_eq!(due_unsatisfied_points(noon, &times, None), v(&["12:00"]));
+        assert_eq!(due_unrun_times(noon, &times, None), v(&["12:00"]));
 
         // 昨天生成的不算满足今天的点
         let gen_yday = chrono::Local
             .with_ymd_and_hms(2026, 8, 1, 23, 5, 0)
             .unwrap()
             .to_rfc3339();
-        assert_eq!(due_unsatisfied_points(now, &times, Some(&gen_yday)), times);
+        assert_eq!(due_unrun_times(now, &times, Some(&gen_yday)), times);
 
         // 时间戳解析失败:视为满足(不无限重烧 LLM)
-        assert!(due_unsatisfied_points(now, &times, Some("垃圾时间戳")).is_empty());
+        assert!(due_unrun_times(now, &times, Some("垃圾时间戳")).is_empty());
 
         // 坏格式时间点跳过
-        assert!(due_unsatisfied_points(now, &v(&["25:99"]), None).is_empty());
+        assert!(due_unrun_times(now, &v(&["25:99"]), None).is_empty());
     }
 
     #[test]
