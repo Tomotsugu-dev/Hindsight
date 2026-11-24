@@ -13,6 +13,7 @@
 
 use std::path::Path;
 
+use chrono::{DateTime, Local};
 use rusqlite::Connection;
 
 use crate::error::{Error, Result};
@@ -20,7 +21,7 @@ use crate::memory::MemoryDb;
 use crate::repo::app_groups;
 use crate::repo::outbox::{enqueue_days, OutboxEntity};
 use crate::repo::sql::{from_stats_category_sql, matching_rule_host_sql, FROM_MEMBER_GROUP};
-use crate::storage::{DbPool, DbResult, SqliteResultExt};
+use crate::storage::{utc_now_rfc3339, DbPool, DbResult, SqliteResultExt};
 
 /// What to delete.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -158,6 +159,91 @@ pub async fn count(
     })
 }
 
+/// 删掉本机从 `at` 起记下的活动，返回删了多少。
+///
+/// - `at` 及以后开始的行删掉，连同它们独占的截图和截图衍生的数据；
+/// - 跨过 `at` 的行，结束时刻改成 `at`。
+///
+/// 改动和删除写进 outbox，调用方不用暂停同步。
+pub async fn truncate_at(
+    pool: &DbPool,
+    _mem: Option<&MemoryDb>,
+    screenshot_root: &Path,
+    self_id: &str,
+    at: DateTime<Local>,
+) -> Result<PurgeReport> {
+    let (id, at_s) = (self_id.to_string(), at.to_rfc3339());
+    let rows: Vec<i64> = pool
+        .0
+        .call(move |conn| {
+            column(
+                conn,
+                "SELECT id FROM activities
+                  WHERE device_id = ?1 AND julianday(started_at) >= julianday(?2)",
+                [&id, &at_s],
+            )
+        })
+        .await?;
+    let screenshots = screenshots_only_used_by(pool, &rows).await?;
+    let to_delete = ToDelete {
+        processes: Vec::new(),
+        rows,
+        screenshots,
+    };
+    end_rows_at(pool, self_id, at).await?;
+    let mut report = PurgeReport {
+        activities: delete_rows(pool, &to_delete, Some(self_id)).await?,
+        ..PurgeReport::default()
+    };
+    // 文件放最后：行已经删了，统计就对了；文件删不掉只会留下没人用的文件。
+    report.screenshots = delete_files(screenshot_root, &to_delete.screenshots).await?;
+    Ok(report)
+}
+
+/// 把本机跨过 `at` 的行的结束时刻改成 `at`，给它们的日子写 outbox。
+async fn end_rows_at(pool: &DbPool, self_id: &str, at: DateTime<Local>) -> Result<()> {
+    let (self_id, at_s, updated) = (self_id.to_string(), at.to_rfc3339(), utc_now_rfc3339());
+    pool.0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            let spanning: Vec<(i64, String, String)> = {
+                let mut stmt = tx
+                    .prepare(
+                        "SELECT id, started_at, local_date FROM activities
+                          WHERE device_id = ?1
+                            AND julianday(started_at) < julianday(?2)
+                            AND julianday(ended_at) > julianday(?2)",
+                    )
+                    .db()?;
+                let rows = stmt
+                    .query_map([&self_id, &at_s], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                    .db()?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .db()?;
+                rows
+            };
+            let mut days: Vec<String> = Vec::new();
+            for (id, started, day) in spanning {
+                let secs = DateTime::parse_from_rfc3339(&started)
+                    .map(|s| (at - s.with_timezone(&Local)).num_seconds())
+                    .unwrap_or(0);
+                tx.execute(
+                    "UPDATE activities SET ended_at = ?2, duration_secs = ?3, updated_at = ?4
+                      WHERE id = ?1",
+                    rusqlite::params![id, at_s, secs, updated],
+                )
+                .db()?;
+                if !days.contains(&day) {
+                    days.push(day);
+                }
+            }
+            enqueue_days(&tx, OutboxEntity::Activity, &days).db()?;
+            tx.commit().db()
+        })
+        .await?;
+    Ok(())
+}
+
 /// Finds the process names, activity rows and screenshots that `target` deletes.
 async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
     let processes = match target {
@@ -189,10 +275,19 @@ async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
             PurgeTarget::Private => column(conn, &private_rows_sql(), ()),
         })
         .await?;
+    let screenshots = screenshots_only_used_by(pool, &rows).await?;
+    Ok(ToDelete {
+        processes,
+        rows,
+        screenshots,
+    })
+}
 
-    // Leave out screenshots that other rows still use. Those rows keep them.
-    let rows_json = serde_json::to_string(&rows)?;
-    let screenshots: Vec<String> = pool
+/// Paths of the screenshots that only these rows use. Other rows still use the rest and keep
+/// them.
+async fn screenshots_only_used_by(pool: &DbPool, rows: &[i64]) -> Result<Vec<String>> {
+    let rows_json = serde_json::to_string(rows)?;
+    let screenshots = pool
         .0
         .call(move |conn| {
             column(
@@ -207,11 +302,7 @@ async fn find(pool: &DbPool, target: &PurgeTarget) -> Result<ToDelete> {
             )
         })
         .await?;
-    Ok(ToDelete {
-        processes,
-        rows,
-        screenshots,
-    })
+    Ok(screenshots)
 }
 
 /// IDs of the activity rows of website `?1`.
@@ -1055,5 +1146,209 @@ mod tests {
 
         assert_eq!(google.activities, 2, "google.com 有规则");
         assert_eq!(github.activities, 2, "github.com 没有规则");
+    }
+
+    // ───────────── truncate_at：从截断点起的记录不算 ─────────────
+
+    /// 截断点：最后一次动键鼠的时刻。
+    const CUT: &str = "2026-11-20T21:00:00+09:00";
+
+    fn at(rfc3339: &str) -> DateTime<Local> {
+        DateTime::parse_from_rfc3339(rfc3339)
+            .unwrap()
+            .with_timezone(&Local)
+    }
+
+    /// 插一行活动，返回 id。日期取开始时刻的前 10 位。
+    async fn seed_span(
+        pool: &DbPool,
+        device: &str,
+        started: &str,
+        ended: &str,
+        shot: Option<&str>,
+    ) -> i64 {
+        let (device, started, ended, shot) = (
+            device.to_string(),
+            started.to_string(),
+            ended.to_string(),
+            shot.map(str::to_string),
+        );
+        pool.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO activities(started_at, ended_at, duration_secs, local_date,
+                                            local_hour, process_name, window_title,
+                                            category_id, device_id, screenshot_path)
+                     VALUES(?1, ?2, 30, substr(?1, 1, 10), 21, 'Player', 'title', 'other',
+                            ?3, ?4)",
+                    rusqlite::params![started, ended, device, shot],
+                )
+                .db()?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 还剩的活动行的 id，从小到大。
+    async fn activity_ids(pool: &DbPool) -> Vec<i64> {
+        pool.0
+            .call(|conn| column(conn, "SELECT id FROM activities ORDER BY id", ()))
+            .await
+            .unwrap()
+    }
+
+    /// 跨过截断点的那行：结束时刻改成截断点，时长跟着变。
+    #[tokio::test]
+    async fn truncate_at_ends_the_spanning_row_at_the_cut() {
+        let pool = fresh_test_pool().await;
+        let id = seed_span(
+            &pool,
+            TEST_SELF_ID,
+            "2026-11-20T20:59:40+09:00",
+            "2026-11-20T21:00:10+09:00",
+            None,
+        )
+        .await;
+
+        truncate_at(&pool, None, Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        let (ended, secs): (String, i64) = pool
+            .0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT ended_at, duration_secs FROM activities WHERE id = ?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        assert_eq!(DateTime::parse_from_rfc3339(&ended).unwrap(), at(CUT));
+        assert_eq!(secs, 20);
+    }
+
+    /// 截断点及以后开始的行删掉，之前的不动。
+    #[tokio::test]
+    async fn truncate_at_deletes_rows_that_start_after_the_cut() {
+        let pool = fresh_test_pool().await;
+        let before = seed_span(
+            &pool,
+            TEST_SELF_ID,
+            "2026-11-20T20:50:00+09:00",
+            "2026-11-20T20:50:30+09:00",
+            None,
+        )
+        .await;
+        seed_span(&pool, TEST_SELF_ID, CUT, "2026-11-20T21:00:30+09:00", None).await;
+        seed_span(
+            &pool,
+            TEST_SELF_ID,
+            "2026-11-20T21:10:00+09:00",
+            "2026-11-20T21:10:30+09:00",
+            None,
+        )
+        .await;
+
+        let report = truncate_at(&pool, None, Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        assert_eq!(report.activities, 2);
+        assert_eq!(activity_ids(&pool).await, vec![before]);
+    }
+
+    /// 别的设备记的行不动，哪怕在截断点之后。
+    #[tokio::test]
+    async fn truncate_at_keeps_other_devices_rows() {
+        let pool = fresh_test_pool().await;
+        let peer = seed_span(
+            &pool,
+            PEER,
+            "2026-11-20T21:10:00+09:00",
+            "2026-11-20T21:10:30+09:00",
+            None,
+        )
+        .await;
+
+        let report = truncate_at(&pool, None, Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        assert_eq!(report.activities, 0);
+        assert_eq!(activity_ids(&pool).await, vec![peer]);
+    }
+
+    /// 删了行或改了行的日子都写 outbox，过了午夜的那天也算；别的设备的、没动到的日子不写。
+    #[tokio::test]
+    async fn truncate_at_marks_every_touched_day_for_push() {
+        let pool = fresh_test_pool().await;
+        let cut = "2026-11-20T23:59:50+09:00";
+        let t = |s: &str| format!("2026-{s}+09:00");
+        for (device, started, ended) in [
+            (TEST_SELF_ID, "11-19T10:00:00", "11-19T10:00:30"),
+            (TEST_SELF_ID, "11-20T23:59:40", "11-21T00:00:10"),
+            (TEST_SELF_ID, "11-21T00:00:10", "11-21T00:00:40"),
+            (PEER, "11-22T10:00:00", "11-22T10:00:30"),
+        ] {
+            seed_span(&pool, device, &t(started), &t(ended), None).await;
+        }
+
+        truncate_at(&pool, None, Path::new(""), TEST_SELF_ID, at(cut))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            outbox_days(&pool).await,
+            vec![
+                ("activity".to_string(), "2026-11-20".to_string()),
+                ("activity".to_string(), "2026-11-21".to_string()),
+            ]
+        );
+    }
+
+    /// 删掉的行独占的截图：文件和它的 AI 描述都删；留下的行的截图不动。
+    #[tokio::test]
+    async fn truncate_at_deletes_the_screenshots_of_dropped_rows() {
+        let pool = fresh_test_pool().await;
+        let dir = std::env::temp_dir().join(format!("hs-truncate-shots-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for shot in ["kept.jpg", "dropped.jpg"] {
+            std::fs::write(dir.join(shot), b"fake-jpg").unwrap();
+        }
+        seed_span(
+            &pool,
+            TEST_SELF_ID,
+            "2026-11-20T20:50:00+09:00",
+            "2026-11-20T20:50:30+09:00",
+            Some("kept.jpg"),
+        )
+        .await;
+        seed_span(
+            &pool,
+            TEST_SELF_ID,
+            "2026-11-20T21:05:00+09:00",
+            "2026-11-20T21:05:30+09:00",
+            Some("dropped.jpg"),
+        )
+        .await;
+        seed_derived(&pool, "kept.jpg", 0).await;
+        seed_derived(&pool, "dropped.jpg", 1).await;
+
+        let report = truncate_at(&pool, None, &dir, TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        assert_eq!(report.screenshots, 1);
+        assert!(dir.join("kept.jpg").exists());
+        assert!(!dir.join("dropped.jpg").exists());
+        assert_eq!(
+            query_count(&pool, "SELECT COUNT(*) FROM ai_image_descriptions").await,
+            1
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
