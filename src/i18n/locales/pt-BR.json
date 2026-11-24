@@ -1642,7 +1642,7 @@
         "start": "Gerar",
         "startTooltip": "Gerar revisão semanal a partir dos resumos diários da semana",
         "regenerateTooltip": "Regenerar o relatório semanal (mantém o atual até concluir)",
-        "noModelTooltip": "Escolha um modelo de resumo em Configurações de IA → Modelos, ou ative a API na nuvem",
+        "noModelTooltip": "Escolha primeiro um modelo no menu de modelos.",
         "delete": "Excluir",
         "deleteTooltip": "Limpar o relatório semanal desta semana (não afeta os relatórios diários)",
         "deleteEmptyTooltip": "Ainda não há relatório semanal para excluir",
@@ -1655,7 +1655,7 @@
         "dismissError": "Dispensar"
       },
       "errors": {
-        "noSummaryModel": "Escolha um modelo de resumo em Configurações de IA → Modelos, ou ative a API na nuvem",
+        "noSummaryModel": "Escolha primeiro um modelo no menu de modelos.",
         "generationFailed": "Falha na geração do relatório semanal",
         "unknown": "Erro desconhecido"
       },
@@ -1731,7 +1731,7 @@
         "start": "Iniciar resumo",
         "startTooltip": "Resumir a linha do tempo de atividades do dia por segmento",
         "regenerateTooltip": "Regenerar todos os resumos de segmento deste dia",
-        "noModelTooltip": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
+        "noModelTooltip": "Escolha primeiro um modelo no menu de modelos.",
         "delete": "Excluir",
         "deleteTooltip": "Limpar o relatório diário deste dia (não pode ser desfeito)",
         "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
@@ -1749,7 +1749,7 @@
       "errors": {
         "generationFailed": "Falha no resumo",
         "unknown": "Erro desconhecido",
-        "noModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
+        "noModel": "Escolha primeiro um modelo no menu de modelos."
       },
       "engineLoading": "Carregando modelo…",
       "toast": {
@@ -1889,7 +1889,6 @@
       "collapse": "Recolher fontes"
     },
     "model": {
-      "pickAria": "Escolher modelo do chat",
       "noToolUseModels": "Nenhum dos modelos locais baixados suporta Tool-use. Baixe um com o selo Tool-use em Configurações de IA → Modelos.",
       "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
     },

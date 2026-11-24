@@ -1637,7 +1637,7 @@
         "start": "生成開始",
         "startTooltip": "今週の日報から週次レビューを生成",
         "regenerateTooltip": "今週の週報を再生成（完了するまで既存の内容を保持）",
-        "noModelTooltip": "AI 設定 → モデル で要約モデルを選択するか、クラウド API を有効化してください",
+        "noModelTooltip": "先にモデルメニューでモデルを選んでください。",
         "delete": "削除",
         "deleteTooltip": "今週の週報データをクリアします（日報には影響しません）",
         "deleteEmptyTooltip": "削除できる週報はまだありません",
@@ -1650,7 +1650,7 @@
         "dismissError": "閉じる"
       },
       "errors": {
-        "noSummaryModel": "AI 設定 → モデル で要約モデルを選択するか、クラウド API を有効化してください",
+        "noSummaryModel": "先にモデルメニューでモデルを選んでください。",
         "generationFailed": "週報の生成に失敗しました",
         "unknown": "不明なエラー"
       },
@@ -1726,7 +1726,7 @@
         "start": "サマリー開始",
         "startTooltip": "当日のアクティビティを時間帯ごとに要約",
         "regenerateTooltip": "この日の全時間帯サマリーを再生成",
-        "noModelTooltip": "先に AI 設定 → モデル でモデルを選んでください。",
+        "noModelTooltip": "先にモデルメニューでモデルを選んでください。",
         "delete": "削除",
         "deleteTooltip": "この日の日報を消去します（取り消し不可）",
         "deleteEmptyTooltip": "この日にはまだ削除できる日次データがありません。",
@@ -1744,7 +1744,7 @@
       "errors": {
         "generationFailed": "サマリーに失敗しました",
         "unknown": "不明なエラー",
-        "noModel": "先に AI 設定 → モデル でモデルを選んでください。"
+        "noModel": "先にモデルメニューでモデルを選んでください。"
       },
       "engineLoading": "モデルを読み込み中…",
       "toast": {
@@ -1884,7 +1884,6 @@
       "collapse": "情報源を折りたたむ"
     },
     "model": {
-      "pickAria": "チャットモデルを選択",
       "noToolUseModels": "ダウンロード済みのローカルモデルはツール呼び出し非対応です。「AI 設定 → モデル」から Tool-use 対応モデルをダウンロードしてください。",
       "empty": "利用可能なモデルがありません：クラウド API を設定するか、ローカルモデルをダウンロードしてください"
     },

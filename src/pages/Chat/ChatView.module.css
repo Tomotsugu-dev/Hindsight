@@ -575,12 +575,11 @@
 
 /* ─── 输入区（底部） ─── */
 
+/* The text on top; the pickers and the send button in one row under it */
 .composer {
   display: flex;
-  /* 底对齐:输入框单行时与 32px 的发送按钮等高(视觉同居中),
-     多行长高后按钮贴底不悬空 */
-  align-items: flex-end;
-  gap: calc(8px * var(--density));
+  flex-direction: column;
+  gap: calc(2px * var(--density));
   margin-top: calc(16px * var(--density));
   padding: calc(8px * var(--density)) calc(8px * var(--density)) calc(8px * var(--density))
     calc(14px * var(--density));
@@ -601,13 +600,12 @@
 }
 
 .composerInput {
-  flex: 1;
   /* Shift+Enter 多行:单行(32px)起步随内容长高,到上限后内部滚动。
      不支持 field-sizing 的浏览器退化为固定单行,换行内容滚动查看 */
   field-sizing: content;
   min-height: calc(32px * var(--density));
   max-height: calc(128px * var(--font-scale));
-  padding: calc(6px * var(--density)) 0;
+  padding: calc(6px * var(--density)) calc(6px * var(--density)) calc(6px * var(--density)) 0;
   background: transparent;
   border: none;
   outline: none;
@@ -622,6 +620,23 @@
 
 .composerInput::placeholder {
   color: var(--text-faint);
+}
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+  /* Line the first picker's icon up with the text above */
+  margin-left: calc(-6px * var(--density));
+}
+
+/* Takes the room left of the send button; a long name is cut, the button stays */
+.composerPickers {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--density));
 }
 
 .composerSend {

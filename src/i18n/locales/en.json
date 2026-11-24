@@ -1642,7 +1642,7 @@
         "start": "Generate",
         "startTooltip": "Generate a weekly review from this week's daily reports",
         "regenerateTooltip": "Regenerate this week's report (keeps the current report until finished)",
-        "noModelTooltip": "Pick a summary model in AI Settings → Models, or enable Cloud API",
+        "noModelTooltip": "Pick a model in the model menu first.",
         "delete": "Delete",
         "deleteTooltip": "Clear this week's weekly report (does not affect daily reports)",
         "deleteEmptyTooltip": "No weekly report yet to delete",
@@ -1655,7 +1655,7 @@
         "dismissError": "Dismiss"
       },
       "errors": {
-        "noSummaryModel": "Pick a summary model in AI Settings → Models, or enable Cloud API",
+        "noSummaryModel": "Pick a model in the model menu first.",
         "generationFailed": "Weekly report generation failed",
         "unknown": "Unknown error"
       },
@@ -1731,7 +1731,7 @@
         "start": "Start summary",
         "startTooltip": "Summarize today's activity timeline by segment",
         "regenerateTooltip": "Regenerate all segment summaries for this day",
-        "noModelTooltip": "Pick a model in AI Settings → Models first.",
+        "noModelTooltip": "Pick a model in the model menu first.",
         "delete": "Delete",
         "deleteTooltip": "Clear the daily report for this day (cannot be undone)",
         "deleteEmptyTooltip": "No daily data yet to delete.",
@@ -1749,7 +1749,7 @@
       "errors": {
         "generationFailed": "Summary failed",
         "unknown": "Unknown error",
-        "noModel": "Pick a model in AI Settings → Models first."
+        "noModel": "Pick a model in the model menu first."
       },
       "engineLoading": "Loading model…",
       "toast": {
@@ -1889,7 +1889,6 @@
       "collapse": "Collapse sources"
     },
     "model": {
-      "pickAria": "Choose chat model",
       "noToolUseModels": "None of your downloaded local models support tool calling. Download one with the Tool-use badge in AI Settings → Models.",
       "empty": "No models available: configure a cloud API or download a local model"
     },
