@@ -124,6 +124,15 @@ pub(super) async fn spawn_scripted_openai_server(
     (port, bodies)
 }
 
+/// 拿一个刚刚释放的本地端口——连接必然被拒。给「不应发出任何请求」或
+/// 「连接失败」场景当 endpoint 用。
+pub(super) fn free_local_port() -> u16 {
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    drop(l);
+    port
+}
+
 /// 把「云端模型 + 指定段划分」写进 settings_store。周报默认继承日报的模型。
 /// runner 每次都从 DB 现读 settings——这是唯一的注入口。
 pub(super) async fn seed_cloud_settings(pool: &DbPool, port: u16, segments: Vec<DaySegment>) {

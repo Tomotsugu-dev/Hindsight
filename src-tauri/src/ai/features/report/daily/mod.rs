@@ -373,21 +373,13 @@ mod tests {
 
     use crate::ai::config::{DaySegment, ModelRef};
     use crate::ai::features::report::test_util::{
-        phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned, RecordingSink,
+        free_local_port, phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned,
+        RecordingSink,
     };
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
     use crate::storage::SqliteResultExt;
 
     // ─────────────────── 测试基建：数据种子 ───────────────────
-
-    /// 拿一个刚刚释放的本地端口——连接必然被拒。给「不应发出任何请求」的
-    /// 场景当 endpoint：若 runner 意外发了请求，会落 error 行被断言抓住。
-    fn free_local_port() -> u16 {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = l.local_addr().unwrap().port();
-        drop(l);
-        port
-    }
 
     fn seg(label: &str, start_hour: u8, end_hour: u8) -> DaySegment {
         DaySegment {

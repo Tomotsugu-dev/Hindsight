@@ -134,6 +134,9 @@ mod tests {
     use crate::ai::config::{ModelRef, Task};
     use crate::ai::features::report::daily::timeline::build_activity_timeline;
     use crate::ai::features::report::model::open_model;
+    use crate::ai::features::report::test_util::{
+        free_local_port, spawn_scripted_openai_server, Canned,
+    };
     use crate::ai::model::Reasoning;
     use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
     use crate::repo::reports::DeviceFilter;
@@ -263,61 +266,6 @@ mod tests {
                 println!("error: {:?}", row.error);
             }
         }
-    }
-
-    /// 拿一个刚刚释放的本地端口——连接必然被拒，用来模拟"引擎没起来/端口配错"。
-    fn free_local_port() -> u16 {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = l.local_addr().unwrap().port();
-        drop(l);
-        port
-    }
-
-    /// 起一个只回一发 canned OpenAI 兼容响应的本地假服务，返回端口。
-    /// 读完整个请求（headers + Content-Length body）再回包，避免半途关闭触发 RST。
-    async fn spawn_canned_openai_server(content: &str) -> u16 {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let body = serde_json::json!({
-            "choices": [{
-                "message": { "role": "assistant", "content": content },
-                "finish_reason": "stop"
-            }],
-            "usage": { "prompt_tokens": 42, "completion_tokens": 17 }
-        })
-        .to_string();
-        tokio::spawn(async move {
-            let (mut sock, _) = listener.accept().await.unwrap();
-            let mut buf: Vec<u8> = Vec::new();
-            let mut tmp = [0u8; 4096];
-            loop {
-                let n = sock.read(&mut tmp).await.unwrap();
-                if n == 0 {
-                    break;
-                }
-                buf.extend_from_slice(&tmp[..n]);
-                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                    let head = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
-                    let cl = head
-                        .lines()
-                        .find_map(|l| l.strip_prefix("content-length:"))
-                        .and_then(|v| v.trim().parse::<usize>().ok())
-                        .unwrap_or(0);
-                    if buf.len() >= pos + 4 + cl {
-                        break;
-                    }
-                }
-            }
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            sock.write_all(resp.as_bytes()).await.unwrap();
-            let _ = sock.shutdown().await;
-        });
-        port
     }
 
     /// 重跑同段必须覆盖不叠加——PK (source, date, idx) 语义回归：
@@ -556,7 +504,10 @@ mod tests {
     #[tokio::test]
     async fn summarize_segment_ok_writes_ok_row_and_trims_content() {
         let pool = fresh_test_pool().await;
-        let port = spawn_canned_openai_server("  上午主要在写 Hindsight 的单元测试。  ").await;
+        let (port, _) = spawn_scripted_openai_server(vec![Canned::Ok(
+            "  上午主要在写 Hindsight 的单元测试。  ",
+        )])
+        .await;
         let chat_model = Step2Chat::local(port, "qwen.gguf", 1024, Reasoning::Default).unwrap();
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
