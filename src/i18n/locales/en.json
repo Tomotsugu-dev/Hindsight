@@ -1623,7 +1623,7 @@
         "start": "Generate",
         "startTooltip": "Builds a weekly review from this week's existing daily reports — no screenshots, much faster than daily",
         "regenerateTooltip": "Regenerating will clear and replace this week's weekly report",
-        "noModelTooltip": "Pick a summary model in AI Settings → Models, or enable Cloud API",
+        "noModelTooltip": "Pick a model in the model menu first.",
         "delete": "Delete",
         "deleteTooltip": "Clear this week's weekly report (does not affect daily reports)",
         "deleteEmptyTooltip": "No weekly report yet to delete",
@@ -1636,7 +1636,7 @@
         "dismissError": "Dismiss"
       },
       "errors": {
-        "noSummaryModel": "Pick a summary model in AI Settings → Models, or enable Cloud API",
+        "noSummaryModel": "Pick a model in the model menu first.",
         "generationFailed": "Weekly report generation failed",
         "unknown": "Unknown error"
       },
@@ -1712,7 +1712,7 @@
         "start": "Start summary",
         "startTooltip": "The local model summarizes each segment's activity timeline in turn; duration depends on hardware (a few seconds per segment on GPU, tens of seconds on CPU).",
         "regenerateTooltip": "Regenerating clears all segment summaries for this day and runs them again.",
-        "noModelTooltip": "Pick a model in AI Settings → Models first.",
+        "noModelTooltip": "Pick a model in the model menu first.",
         "delete": "Delete",
         "deleteTooltip": "Clear the daily report for this day (cannot be undone)",
         "deleteEmptyTooltip": "No daily data yet to delete.",
@@ -1730,7 +1730,7 @@
       "errors": {
         "generationFailed": "Summary failed",
         "unknown": "Unknown error",
-        "noModel": "Pick a model in AI Settings → Models first."
+        "noModel": "Pick a model in the model menu first."
       },
       "engineLoading": "Loading model…",
       "toast": {

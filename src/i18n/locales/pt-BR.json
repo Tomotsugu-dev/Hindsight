@@ -1623,7 +1623,7 @@
         "start": "Gerar",
         "startTooltip": "Cria uma revisão semanal a partir dos relatórios diários existentes desta semana — sem capturas de tela, muito mais rápido que o diário",
         "regenerateTooltip": "Regenerar limpará e substituirá o relatório semanal desta semana",
-        "noModelTooltip": "Escolha um modelo de resumo em Configurações de IA → Modelos, ou ative a API na nuvem",
+        "noModelTooltip": "Escolha primeiro um modelo no menu de modelos.",
         "delete": "Excluir",
         "deleteTooltip": "Limpar o relatório semanal desta semana (não afeta os relatórios diários)",
         "deleteEmptyTooltip": "Ainda não há relatório semanal para excluir",
@@ -1636,7 +1636,7 @@
         "dismissError": "Dispensar"
       },
       "errors": {
-        "noSummaryModel": "Escolha um modelo de resumo em Configurações de IA → Modelos, ou ative a API na nuvem",
+        "noSummaryModel": "Escolha primeiro um modelo no menu de modelos.",
         "generationFailed": "Falha na geração do relatório semanal",
         "unknown": "Erro desconhecido"
       },
@@ -1712,7 +1712,7 @@
         "start": "Iniciar resumo",
         "startTooltip": "O modelo local resume a linha do tempo de atividades de cada segmento por vez; a duração depende do hardware (alguns segundos por segmento na GPU, dezenas de segundos na CPU).",
         "regenerateTooltip": "Regenerar limpa todos os resumos de segmento deste dia e os executa novamente.",
-        "noModelTooltip": "Escolha primeiro um modelo em Configurações de IA → Modelos.",
+        "noModelTooltip": "Escolha primeiro um modelo no menu de modelos.",
         "delete": "Excluir",
         "deleteTooltip": "Limpar o relatório diário deste dia (não pode ser desfeito)",
         "deleteEmptyTooltip": "Ainda não há dados diários para excluir.",
@@ -1730,7 +1730,7 @@
       "errors": {
         "generationFailed": "Falha no resumo",
         "unknown": "Erro desconhecido",
-        "noModel": "Escolha primeiro um modelo em Configurações de IA → Modelos."
+        "noModel": "Escolha primeiro um modelo no menu de modelos."
       },
       "engineLoading": "Carregando modelo…",
       "toast": {
