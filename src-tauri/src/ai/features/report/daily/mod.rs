@@ -22,7 +22,7 @@ use crate::ai::engine::{EngineGuard, EngineSupervisor};
 use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
 use crate::ai::features::report::progress::{ProgressSink, SummaryProgress};
 use crate::ai::llm::Step2Chat;
-use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+use crate::ai::policy::{AiDataPolicy, ProfileChoice};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, list_segment_top_apps};
 use crate::repo::reports::DeviceFilter;
@@ -103,7 +103,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
         ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
         // 启动引擎前先读可见性策略：配置被删时直接报错，不白等模型加载
-        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
+        let visible = AiDataPolicy::load(&self.pool.0, profile)
             .await?
             .main_filter();
 
@@ -310,7 +310,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         if seg.end_hour <= seg.start_hour {
             return Err(Error::InvalidInput("段时间范围非法"));
         }
-        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
+        let visible = AiDataPolicy::load(&self.pool.0, profile)
             .await?
             .main_filter();
 
@@ -953,9 +953,9 @@ mod tests {
         let (port, bodies) =
             spawn_scripted_openai_server(vec![Canned::Ok("只统计了本机代码活动。")]).await;
         seed_cloud_settings(&pool, port, vec![seg("早", 9, 10), seg("午", 13, 14)]).await;
-        // 日报的「工作」配置只选了「编程」
+        // 「工作」配置只选了「编程」
         let mut s = settings_repo::load(&pool).await.unwrap();
-        s.ai.visibility.daily.profiles.insert(
+        s.ai.visibility.profiles.insert(
             "p_work".to_string(),
             crate::ai::config::VisibilityProfile {
                 name: "工作".to_string(),

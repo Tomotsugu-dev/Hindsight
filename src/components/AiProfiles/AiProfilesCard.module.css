@@ -8,40 +8,6 @@
   box-shadow: 0 0 0 calc(6px * var(--density)) var(--color-accent-soft);
 }
 
-/* —— 日报 / 周报 / 对话 切换，样子同 tab 条 —— */
-.switcher {
-  display: inline-flex;
-  gap: calc(4px * var(--density));
-  padding: calc(3px * var(--density));
-  border-radius: var(--radius-md);
-  background: var(--fill-default);
-}
-
-.switchItem {
-  height: calc(var(--control-height-sm) * var(--density));
-  padding: 0 calc(12px * var(--density));
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font: inherit;
-  font-size: calc(var(--font-size-body) * var(--font-scale));
-  font-weight: var(--font-weight-500);
-  color: var(--text-muted);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color 160ms var(--ease-out);
-}
-
-.switchItem:hover {
-  color: var(--text-strong);
-}
-
-.switchActive {
-  background: var(--surface-card-elevated);
-  color: var(--text-strong);
-  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), calc(0.12 * var(--shadow-strength)));
-}
-
 /* —— 卡片里的每一行，内边距和分隔线同 Row —— */
 .line {
   margin: 0;
@@ -71,6 +37,7 @@
 
 .autoRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: calc(12px * var(--density));
@@ -80,6 +47,26 @@
   font-size: calc(var(--font-size-body-lg) * var(--font-scale));
   font-weight: var(--font-weight-500);
   color: var(--text-strong);
+}
+
+/* One picker for each report that runs automatically */
+.autoPicks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8px * var(--density)) calc(20px * var(--density));
+}
+
+.autoPick {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+}
+
+.autoReport {
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* 一套配置一行：名字一栏、分类一栏、删除按钮 */
@@ -125,21 +112,24 @@
   color: var(--text-muted);
 }
 
-.mainNote {
-  flex: 1 1 calc(240px * var(--density));
-  min-width: 0;
-  margin: 0;
-  align-self: center;
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  color: var(--text-muted);
-}
-
 .chipsCol {
   flex: 1 1 calc(240px * var(--density));
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: calc(8px * var(--density));
+}
+
+/* As wide as the delete button in the rows below */
+.deleteSpace {
+  flex: none;
+  width: calc(var(--control-height-md) * var(--density));
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--density));
 }
 
 .badge {

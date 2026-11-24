@@ -44,6 +44,11 @@
   transform: scale(0.97);
 }
 
+/* Shown only, not clicked: no hover lift and no pointer cursor */
+.readOnly {
+  pointer-events: none;
+}
+
 /* 已排除（不分析）：灰色空心 + 图标换 EyeOff + 名字划线
    "AI 看不到这个分类"——三个信号叠加但都很轻，不堆装饰 */
 .excluded {

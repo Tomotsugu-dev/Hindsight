@@ -166,7 +166,7 @@ fn pick_titles(titles: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+    use crate::ai::policy::{AiDataPolicy, ProfileChoice};
     use crate::repo::test_util::{fresh_test_pool, TEST_SELF_ID};
 
     /// 插一行 activities 行用于测试，控制 local_hour / app / title / dur / category。
@@ -239,7 +239,7 @@ mod tests {
 
     /// 按主库设置，取 2026-05-15 从 `start` 点到 `end` 点、所有设备的时间线。
     async fn timeline(pool: &DbPool, start: u8, end: u8) -> Vec<(String, String)> {
-        let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
+        let visible = AiDataPolicy::load(&pool.0, &ProfileChoice::Main)
             .await
             .unwrap()
             .main_filter();

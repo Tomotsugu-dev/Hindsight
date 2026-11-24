@@ -1537,20 +1537,17 @@
     "main": "Categorías predeterminadas",
     "pickerTitle": "Acceso de IA por categoría",
     "manage": "Gestionar perfiles…",
-    "moduleGroup": "Función",
     "feature": {
       "daily": "Resumen diario",
-      "weekly": "Resumen semanal",
-      "chat": "Chat"
+      "weekly": "Resumen semanal"
     },
-    "intro": {
-      "daily": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen.",
-      "weekly": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen.",
-      "chat": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen."
-    },
-    "weeklyNote": "Los resúmenes diarios existentes se incluyen tal cual; este perfil solo filtra el ranking semanal de apps y los días sin resumen diario.",
+    "intro": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen.",
+    "weeklyNote": "El resumen semanal incluye los resúmenes diarios existentes tal cual. Los perfiles solo filtran el ranking semanal de apps y los días sin resumen diario.",
     "autoLabel": "Generación automática",
-    "mainNote": "Todas las categorías excepto Ocultas y Privadas (solo lectura).",
+    "autoBadge": {
+      "daily": "Auto diario",
+      "weekly": "Auto semanal"
+    },
     "empty": "Aún no hay perfiles personalizados.",
     "add": "Nuevo perfil",
     "defaultName": "Perfil {{n}}",

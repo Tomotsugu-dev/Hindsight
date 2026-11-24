@@ -10,7 +10,6 @@ use std::collections::BTreeSet;
 
 use rusqlite::OptionalExtension;
 
-use crate::ai::config::{ModuleProfiles, Visibility};
 use crate::capture::ignore::{is_excluded, IgnoreRule};
 use crate::capture::screenshot::policy::matches_any;
 use crate::error::{Error, Result};
@@ -22,12 +21,11 @@ use crate::storage::{Connection, SqliteResultExt};
 /// its code.
 const PROFILE_GONE: &str = "[AI_PROFILE_GONE] the selected AI profile no longer exists";
 
-/// A feature that uses AI. Each feature keeps its own profiles.
+/// A report that runs automatically. Each one picks its own profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AiModule {
+pub enum Report {
     Daily,
     Weekly,
-    Chat,
 }
 
 /// Which profile a run uses.
@@ -35,8 +33,8 @@ pub enum AiModule {
 pub enum ProfileChoice {
     /// The main settings.
     Main,
-    /// The profile that automatic reports use.
-    Auto,
+    /// The profile this report uses when it runs automatically.
+    Auto(Report),
     /// The profile the user picked on the page. The value is its id.
     Picked(String),
 }
@@ -61,28 +59,27 @@ pub struct AiDataPolicy {
 }
 
 impl AiDataPolicy {
-    /// Returns what the AI can see in `module`: the categories it can see, and the privacy
-    /// keywords and ignore rules from the main settings.
+    /// Returns what the AI can see: the categories it can see, and the privacy keywords and
+    /// ignore rules from the main settings.
     ///
     /// # Errors
     ///
-    /// [`Error::InvalidInput`] if the profile the user picked is not in `module`.
-    pub async fn load(
-        main: &Connection,
-        module: AiModule,
-        profile: &ProfileChoice,
-    ) -> Result<Self> {
+    /// [`Error::InvalidInput`] if the profile the user picked is gone.
+    pub async fn load(main: &Connection, profile: &ProfileChoice) -> Result<Self> {
         let (settings, category_ids) = read_main(main).await?;
-        let profiles = module_profiles(&settings.ai.visibility, module);
+        let visibility = &settings.ai.visibility;
         let picked = match profile {
             ProfileChoice::Main => None,
-            ProfileChoice::Auto => profiles
-                .auto_profile
-                .as_deref()
-                .and_then(|id| profiles.profiles.get(id)),
+            ProfileChoice::Auto(report) => {
+                let id = match report {
+                    Report::Daily => &visibility.auto.daily,
+                    Report::Weekly => &visibility.auto.weekly,
+                };
+                id.as_deref().and_then(|id| visibility.profiles.get(id))
+            }
             // Not the main settings when the picked profile is gone: the AI could see more
             ProfileChoice::Picked(id) => Some(
-                profiles
+                visibility
                     .profiles
                     .get(id)
                     .ok_or(Error::InvalidInput(PROFILE_GONE))?,
@@ -214,15 +211,6 @@ async fn read_main(main: &Connection) -> Result<(Settings, Vec<String>)> {
     Ok((settings, category_ids))
 }
 
-/// Returns the profiles of `module`.
-fn module_profiles(visibility: &Visibility, module: AiModule) -> &ModuleProfiles {
-    match module {
-        AiModule::Daily => &visibility.daily,
-        AiModule::Weekly => &visibility.weekly,
-        AiModule::Chat => &visibility.chat,
-    }
-}
-
 /// Writes `s` as an SQL string: puts single quotes around it and doubles the single quotes
 /// inside.
 fn sql_text(s: &str) -> String {
@@ -239,7 +227,7 @@ mod tests {
     /// 主库：Code 和 Code.exe 在「编程」的同一个分组里；secret 不计入统计；Signal 隐私；
     /// Chrome 在「浏览」，但 github.com 的网站规则算「编程」。
     /// 忽略 Terminal 里标题有 download 的窗口、整个 Zoom；Slack 的规则关键词是空白。
-    /// 日报有三套配置：「工作」选了「编程」，「隐私」选了「隐私」和「编程」，「其他」选了「其他」。
+    /// 有三套配置：「工作」选了「编程」，「隐私」选了「隐私」和「编程」，「其他」选了「其他」。
     /// 2026-07-08 每个应用一条活动，标题用来认出它；Terminal 那条已忽略。
     async fn seeded() -> DbPool {
         let pool = fresh_test_pool().await;
@@ -290,10 +278,10 @@ mod tests {
         set(
             &pool,
             "$.ai",
-            r#"{"visibility": {"daily": {"profiles": {
+            r#"{"visibility": {"profiles": {
                  "p_work": {"name": "工作", "categories": ["code"]},
                  "p_private": {"name": "隐私", "categories": ["private", "code"]},
-                 "p_other": {"name": "其他", "categories": ["other"]}}}}}"#,
+                 "p_other": {"name": "其他", "categories": ["other"]}}}}"#,
         )
         .await;
         pool
@@ -331,9 +319,9 @@ mod tests {
     }
 
     /// `profile` 是 None 就按主库设置，否则是用户选的那套。
-    async fn load(pool: &DbPool, module: AiModule, profile: Option<&str>) -> AiDataPolicy {
+    async fn load(pool: &DbPool, profile: Option<&str>) -> AiDataPolicy {
         let choice = ProfileChoice::from(profile.map(str::to_string));
-        AiDataPolicy::load(&pool.0, module, &choice).await.unwrap()
+        AiDataPolicy::load(&pool.0, &choice).await.unwrap()
     }
 
     /// 用 `main_filter` 查主库，按加进去的顺序返回能看到的活动标题。
@@ -381,7 +369,7 @@ mod tests {
     #[tokio::test]
     async fn no_profile_follows_the_main_settings() {
         let pool = seeded().await;
-        let v = load(&pool, AiModule::Daily, None).await;
+        let v = load(&pool, None).await;
         assert_eq!(visible(&pool, &v).await, MAIN);
         let f = v.memory_filter(apps(&["Code", "secret.exe", "Signal", "notepad"]));
         assert_eq!(f.apps, ["Code", "notepad"]);
@@ -390,7 +378,7 @@ mod tests {
     #[tokio::test]
     async fn a_profile_shows_only_its_categories() {
         let pool = seeded().await;
-        let v = load(&pool, AiModule::Daily, Some("p_work")).await;
+        let v = load(&pool, Some("p_work")).await;
         // 网站规则按主库设置：github.com 算「编程」
         assert_eq!(visible(&pool, &v).await, ["main.rs", "GitHub"]);
         // 记忆库没有网站，Chrome 按它自己的分类「浏览」算
@@ -401,7 +389,7 @@ mod tests {
     #[tokio::test]
     async fn the_private_category_cannot_be_shown() {
         let pool = seeded().await;
-        let v = load(&pool, AiModule::Daily, Some("p_private")).await;
+        let v = load(&pool, Some("p_private")).await;
         assert_eq!(visible(&pool, &v).await, ["main.rs", "GitHub"]);
         let f = v.memory_filter(apps(&["Code", "Signal"]));
         assert_eq!(f.apps, ["Code"]);
@@ -410,31 +398,36 @@ mod tests {
     #[tokio::test]
     async fn a_picked_profile_that_is_gone_is_an_error() {
         let pool = seeded().await;
-        // p_work 是日报的配置，聊天里没有
-        for (module, profile) in [(AiModule::Chat, "p_work"), (AiModule::Daily, "p_gone")] {
-            let choice = ProfileChoice::Picked(profile.to_string());
-            let err = AiDataPolicy::load(&pool.0, module, &choice)
-                .await
-                .unwrap_err();
-            assert!(err.to_string().contains("[AI_PROFILE_GONE]"), "{err}");
-        }
+        let choice = ProfileChoice::Picked("p_gone".to_string());
+        let err = AiDataPolicy::load(&pool.0, &choice).await.unwrap_err();
+        assert!(err.to_string().contains("[AI_PROFILE_GONE]"), "{err}");
     }
 
+    /// 配置是同一组，日报、周报自动生成各选各的。
     #[tokio::test]
-    async fn automatic_runs_use_the_auto_profile() {
+    async fn daily_and_weekly_each_use_their_auto_profile() {
         let pool = seeded().await;
-        set(&pool, "$.ai.visibility.daily.autoProfile", r#""p_work""#).await;
-        let v = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
+        set(
+            &pool,
+            "$.ai.visibility.auto",
+            r#"{"daily": "p_work", "weekly": "p_other"}"#,
+        )
+        .await;
+        let daily = AiDataPolicy::load(&pool.0, &ProfileChoice::Auto(Report::Daily))
             .await
             .unwrap();
-        assert_eq!(visible(&pool, &v).await, ["main.rs", "GitHub"]);
+        assert_eq!(visible(&pool, &daily).await, ["main.rs", "GitHub"]);
+        let weekly = AiDataPolicy::load(&pool.0, &ProfileChoice::Auto(Report::Weekly))
+            .await
+            .unwrap();
+        assert_eq!(visible(&pool, &weekly).await, ["note"]);
     }
 
     #[tokio::test]
     async fn a_deleted_auto_profile_follows_the_main_settings() {
         let pool = seeded().await;
-        set(&pool, "$.ai.visibility.daily.autoProfile", r#""p_gone""#).await;
-        let v = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
+        set(&pool, "$.ai.visibility.auto", r#"{"daily": "p_gone"}"#).await;
+        let v = AiDataPolicy::load(&pool.0, &ProfileChoice::Auto(Report::Daily))
             .await
             .unwrap();
         assert_eq!(visible(&pool, &v).await, MAIN);
@@ -444,7 +437,7 @@ mod tests {
     async fn ignore_rules_apply_with_a_profile() {
         let pool = seeded().await;
         // notepad、Terminal、Zoom 都算「其他」；Terminal 那条活动已忽略，Zoom 整个忽略
-        let v = load(&pool, AiModule::Daily, Some("p_other")).await;
+        let v = load(&pool, Some("p_other")).await;
         assert_eq!(visible(&pool, &v).await, ["note"]);
         let f = v.memory_filter(apps(&["notepad", "Terminal", "Zoom"]));
         assert_eq!(f.apps, ["notepad", "Terminal"]);
@@ -460,7 +453,7 @@ mod tests {
         set(&pool, "$.privacyAppKeywords", r#"["工资", " BANK ", ""]"#).await;
         add(&pool, "Code", "工资表.xlsx").await;
         add(&pool, "MyBank", "home").await;
-        let v = load(&pool, AiModule::Daily, None).await;
+        let v = load(&pool, None).await;
         // 标题或进程名里有关键词，整条不给；英文不分大小写，空白关键词不算
         assert_eq!(visible(&pool, &v).await, MAIN);
         let f = v.memory_filter(apps(&["Code", "MyBank"]));
@@ -473,7 +466,7 @@ mod tests {
         let pool = seeded().await;
         set(&pool, "$.privacyAppKeywords", r#"["it's"]"#).await;
         add(&pool, "notepad", "it's mine").await;
-        let v = load(&pool, AiModule::Daily, None).await;
+        let v = load(&pool, None).await;
         assert_eq!(visible(&pool, &v).await, MAIN);
     }
 
@@ -488,7 +481,7 @@ mod tests {
             ("notepad", "note"),
         ];
         for profile in [None, Some("p_work"), Some("p_other")] {
-            let v = load(&pool, AiModule::Daily, profile).await;
+            let v = load(&pool, profile).await;
             let main = visible(&pool, &v).await;
             let f = v.memory_filter(apps(&activities.map(|(p, _)| p)));
             for (process, title) in activities {
@@ -503,7 +496,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_filter_drops_hidden_private_and_wholly_ignored_apps() {
-        let v = load(&seeded().await, AiModule::Chat, None).await;
+        let v = load(&seeded().await, None).await;
         let f = v.memory_filter(apps(&[
             "secret.exe",
             "Signal",
@@ -532,10 +525,8 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(
-            AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
-                .await
-                .is_err()
-        );
+        assert!(AiDataPolicy::load(&pool.0, &ProfileChoice::Main)
+            .await
+            .is_err());
     }
 }

@@ -916,19 +916,15 @@ export const mockSettings: Settings = {
     advanced: [],
     userBrief: "全栈开发者，主要做 React + Rust 项目。",
     segments: DEFAULT_AI_SEGMENTS.map((seg) => ({ ...seg })),
-    // 日报带一套演示配置，好看到下拉框里有东西
+    // One demo profile, so the pickers have something in them
     visibility: {
-      daily: {
-        profiles: {
-          [DEMO_PROFILE_ID]: {
-            name: DEMO_PROFILE_NAMES.zhCN,
-            categories: ["code", "office", "workchat"],
-          },
+      profiles: {
+        [DEMO_PROFILE_ID]: {
+          name: DEMO_PROFILE_NAMES.zhCN,
+          categories: ["code", "office", "workchat"],
         },
-        autoProfile: null,
       },
-      weekly: { profiles: {}, autoProfile: null },
-      chat: { profiles: {}, autoProfile: null },
+      auto: { daily: null, weekly: null },
     },
     modelsPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models",
     promptLanguage: "zh",

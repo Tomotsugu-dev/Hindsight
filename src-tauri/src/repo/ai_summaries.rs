@@ -1072,8 +1072,8 @@ mod tests {
 
     /// 按主库设置，AI 能看到哪些活动。
     async fn main_visible(pool: &DbPool) -> String {
-        use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
-        AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Main)
+        use crate::ai::policy::{AiDataPolicy, ProfileChoice};
+        AiDataPolicy::load(&pool.0, &ProfileChoice::Main)
             .await
             .unwrap()
             .main_filter()

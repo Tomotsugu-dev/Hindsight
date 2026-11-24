@@ -7,7 +7,8 @@ import styles from "./CategoryChipMultiSelect.module.css";
 interface Props {
   /** AI 能看到的分类 id */
   selectedIds: string[];
-  onChange: (next: string[]) => void;
+  /** Leave it out to show the chips read-only. */
+  onChange?: (next: string[]) => void;
 }
 
 /** 「不计入统计」和「隐私」AI 永远看不到，不给用户选，免得以为勾上就能看到。 */
@@ -20,6 +21,7 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
   const { categories, loading } = useCategories();
 
   const toggle = (id: string) => {
+    if (!onChange) return;
     if (selectedIds.includes(id)) {
       onChange(selectedIds.filter((x) => x !== id));
     } else {
@@ -34,6 +36,30 @@ export function CategoryChipMultiSelect({ selectedIds, onChange }: Props) {
   const choices = categories.filter((c) => !c.builtin && !NEVER_SHOWN.has(c.id));
   if (choices.length === 0) {
     return <div className={styles.empty}>{t("components.categoryChipMultiSelect.empty")}</div>;
+  }
+
+  // Read-only chips also show the categories the AI never sees, not picked, at the end.
+  // Nobody can click them here, so they do not look like something to turn on.
+  if (!onChange) {
+    const neverShown = categories.filter((c) => c.builtin || NEVER_SHOWN.has(c.id));
+    return (
+      <div className={styles.chips}>
+        {[...choices, ...neverShown].map((c) => {
+          const seen = selectedIds.includes(c.id);
+          const Icon = resolveCategoryIcon(c.icon);
+          return (
+            <span
+              key={c.id}
+              className={`${styles.chip} ${styles.readOnly} ${seen ? "" : styles.excluded}`}
+              style={{ background: c.color, borderColor: c.color }}
+            >
+              <Icon size={13} strokeWidth={2} aria-hidden />
+              <span className={styles.name}>{c.name}</span>
+            </span>
+          );
+        })}
+      </div>
+    );
   }
 
   return (

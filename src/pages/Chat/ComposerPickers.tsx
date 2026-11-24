@@ -5,7 +5,6 @@ import { Brain, Cloud, HardDrive, ListFilter, Settings2 } from "lucide-react";
 import { api, type ReasoningLevel } from "../../api/hindsight";
 import { InlinePicker } from "../../components/InlinePicker/InlinePicker";
 import { routeName, shortModelName } from "../../components/ReportModel/reportModelOptions";
-import { ROUTES } from "../../config/nav";
 import { logError } from "../../lib/logger";
 import {
   hasLevels,
@@ -13,7 +12,7 @@ import {
   thinkingLabelKey,
   thinkingModes,
 } from "../../lib/thinkingModes";
-import type { AiProfilesState } from "../../state/aiProfiles";
+import { AI_PROFILES_HREF, type AiProfilesState } from "../../state/aiProfiles";
 import {
   decodeModelValue,
   encodeModelRef,
@@ -69,7 +68,7 @@ function ProfilePicker({ state }: { state: AiProfilesState }) {
       action={{
         label: t("aiProfiles.manage"),
         icon: Settings2,
-        onClick: () => void navigate(`${ROUTES.aiSettings}/general?module=chat`),
+        onClick: () => void navigate(AI_PROFILES_HREF),
       }}
     />
   );

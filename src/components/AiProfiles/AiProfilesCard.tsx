@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Check, Info, ListFilter, Lock, Plus, Trash2 } from "lucide-react";
-import type { AiProfileModule, VisibilityProfile } from "../../api/hindsight";
+import type { AutoProfiles, AutoReport, VisibilityProfile } from "../../api/hindsight";
 import { useCategories } from "../../state/categories";
 import {
+  clearAuto,
   nextProfileName,
   profileProblems,
   sortProfiles,
-  useAiProfiles,
+  useAiVisibility,
 } from "../../state/aiProfiles";
 import { Button } from "../Button/Button";
 import { IconButton } from "../Button/IconButton";
@@ -18,27 +19,21 @@ import { SimplePicker } from "../SimplePicker/SimplePicker";
 import { TextInput } from "../TextInput/TextInput";
 import styles from "./AiProfilesCard.module.css";
 
-const MODULES: AiProfileModule[] = ["daily", "weekly", "chat"];
+const REPORTS: AutoReport[] = ["daily", "weekly"];
 
 /** 下拉框里「默认分类」的值；配置 id 都以 p_ 开头，不会撞 */
 const MAIN = "";
 
-/** 网址里的 ?module= 不认识或没有时，看日报的。 */
-function moduleOf(value: string | null): AiProfileModule {
-  return MODULES.find((m) => m === value) ?? "daily";
-}
-
 /**
- * AI 设置 → 常规 顶部的「AI 能看到的数据」：日报、周报、对话各有一组配置，在这里起名、选分类、
- * 新建、删除；日报和周报还能选自动生成用哪套。看哪个功能记在网址的 ?module= 里，
- * 别的页面的齿轮带着它跳过来。
+ * "Data the AI can see" at the top of AI settings → General. There is one set of profiles for
+ * every feature. Here the user names them, picks their categories, adds and deletes them, and
+ * picks the one that daily and weekly reports each use when they run automatically.
  */
 export function AiProfilesCard() {
   const { t } = useTranslation();
-  const [params, setParams] = useSearchParams();
-  const module = moduleOf(params.get("module"));
-  // 从齿轮跳过来时描一圈边，一会儿就退掉，看得出该改哪里
-  const [arrived, setArrived] = useState(() => params.has("module"));
+  const [params] = useSearchParams();
+  // Outlined for a moment when a link from another page opens it, so the user sees where to look
+  const [arrived, setArrived] = useState(() => params.get("focus") === "profiles");
 
   useEffect(() => {
     if (!arrived) return;
@@ -46,72 +41,53 @@ export function AiProfilesCard() {
     return () => window.clearTimeout(id);
   }, [arrived]);
 
-  const choose = (next: AiProfileModule) => setParams({ module: next }, { replace: true });
-
-  const switcher = (
-    <div className={styles.switcher} role="group" aria-label={t("aiProfiles.moduleGroup")}>
-      {MODULES.map((m) => (
-        <button
-          key={m}
-          type="button"
-          className={`${styles.switchItem} ${m === module ? styles.switchActive : ""}`}
-          aria-pressed={m === module}
-          onClick={() => choose(m)}
-        >
-          {t(`aiProfiles.feature.${m}`)}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
     <div className={`${styles.wrap} ${arrived ? styles.arrived : ""}`}>
       <Section
         title={t("aiProfiles.pickerTitle")}
         icon={ListFilter}
-        description={t(`aiProfiles.intro.${module}`)}
-        headerAction={switcher}
+        description={t("aiProfiles.intro")}
       >
-        {/* 换功能时整块重来：没存下的改动属于上一个功能，不带过去 */}
-        <ModuleEditor key={module} module={module} />
+        <ProfilesEditor />
       </Section>
     </div>
   );
 }
 
 /**
- * 一个功能的配置。改动先放在这里，每改一下检查一遍：都没问题就存进设置，
+ * 改动先放在这里，每改一下检查一遍：都没问题就存进设置，
  * 有问题的那几套标红，改好之前什么都不存。
  */
-function ModuleEditor({ module }: { module: AiProfileModule }) {
+function ProfilesEditor() {
   const { t } = useTranslation();
   const { categories } = useCategories();
-  const { current, save } = useAiProfiles(module);
+  const { current, save } = useAiVisibility();
   const [profiles, setProfiles] = useState(current.profiles);
-  const [autoProfile, setAutoProfile] = useState(current.autoProfile);
+  const [auto, setAuto] = useState(current.auto);
   // 进来时按名字排；新建的接在最后，改名时不跳位置
   const [order, setOrder] = useState(() => sortProfiles(current.profiles).map(([id]) => id));
   const [added, setAdded] = useState<string | null>(null);
   const newName = useRef<HTMLInputElement>(null);
   const problems = profileProblems(profiles);
   const blocked = Object.keys(problems).length > 0;
+  // The default profile: every category except "Excluded from stats" and "Private"
+  const defaultIds = categories.filter((c) => !c.builtin && c.id !== "private").map((c) => c.id);
 
-  const commit = (nextProfiles: Record<string, VisibilityProfile>, nextAuto: string | null) => {
+  const commit = (nextProfiles: Record<string, VisibilityProfile>, nextAuto: AutoProfiles) => {
     setProfiles(nextProfiles);
-    setAutoProfile(nextAuto);
+    setAuto(nextAuto);
     if (Object.keys(profileProblems(nextProfiles)).length > 0) return;
     const trimmed = Object.fromEntries(
       Object.entries(nextProfiles).map(([id, p]) => [id, { ...p, name: p.name.trim() }]),
     );
-    save({ profiles: trimmed, autoProfile: module === "chat" ? null : nextAuto });
+    save({ profiles: trimmed, auto: nextAuto });
   };
 
   const add = () => {
     const id = `p_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
-    // 新的一套从默认分类起步：除了「不计入统计」和「隐私」，全选
-    const all = categories.filter((c) => !c.builtin && c.id !== "private").map((c) => c.id);
+    // 新的一套从默认分类起步
     const name = nextProfileName(profiles, (n) => t("aiProfiles.defaultName", { n }));
-    commit({ ...profiles, [id]: { name, categories: all } }, autoProfile);
+    commit({ ...profiles, [id]: { name, categories: defaultIds } }, auto);
     setOrder((prev) => [...prev, id]);
     setAdded(id);
   };
@@ -126,16 +102,21 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
   }, [added]);
 
   const patch = (id: string, change: Partial<VisibilityProfile>) =>
-    commit({ ...profiles, [id]: { ...profiles[id], ...change } }, autoProfile);
+    commit({ ...profiles, [id]: { ...profiles[id], ...change } }, auto);
 
   const remove = (id: string) => {
     const next = { ...profiles };
     delete next[id];
-    commit(next, autoProfile === id ? null : autoProfile);
+    commit(next, clearAuto(auto, id));
     setOrder((prev) => prev.filter((x) => x !== id));
   };
 
-  const hasAuto = module !== "chat";
+  // The profile a report really runs with: one that is gone means the default categories
+  const autoOf = (report: AutoReport) => {
+    const id = auto[report];
+    return id != null && Object.prototype.hasOwnProperty.call(profiles, id) ? id : null;
+  };
+
   const autoOptions = [
     { value: MAIN, label: t("aiProfiles.main") },
     ...order.map((id) => ({
@@ -143,28 +124,46 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
       label: profiles[id].name.trim() || t("aiProfiles.unnamed"),
     })),
   ];
-  const autoBadge = <span className={styles.badge}>{t("aiProfiles.autoLabel")}</span>;
+
+  /** Tags under a profile's name for the reports that use it when they run automatically. */
+  const autoBadges = (id: string | null) => {
+    const reports = REPORTS.filter((r) => autoOf(r) === id);
+    if (reports.length === 0) return null;
+    return (
+      <div className={styles.badges}>
+        {reports.map((r) => (
+          <span key={r} className={styles.badge}>
+            {t(`aiProfiles.autoBadge.${r}`)}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <>
-      {module === "weekly" ? (
-        <p className={`${styles.line} ${styles.note}`}>
-          <Info size={14} strokeWidth={2} aria-hidden />
-          <span>{t("aiProfiles.weeklyNote")}</span>
-        </p>
-      ) : null}
+      <p className={`${styles.line} ${styles.note}`}>
+        <Info size={14} strokeWidth={2} aria-hidden />
+        <span>{t("aiProfiles.weeklyNote")}</span>
+      </p>
 
-      {hasAuto ? (
-        <div className={`${styles.line} ${styles.autoRow}`}>
-          <span className={styles.autoLabel}>{t("aiProfiles.autoLabel")}</span>
-          <SimplePicker
-            value={autoProfile ?? MAIN}
-            options={autoOptions}
-            onChange={(v) => commit(profiles, v === MAIN ? null : v)}
-            size="md"
-          />
+      <div className={`${styles.line} ${styles.autoRow}`}>
+        <span className={styles.autoLabel}>{t("aiProfiles.autoLabel")}</span>
+        <div className={styles.autoPicks}>
+          {REPORTS.map((r) => (
+            <span key={r} className={styles.autoPick}>
+              <span className={styles.autoReport}>{t(`aiProfiles.feature.${r}`)}</span>
+              <SimplePicker
+                value={autoOf(r) ?? MAIN}
+                options={autoOptions}
+                onChange={(v) => commit(profiles, { ...auto, [r]: v === MAIN ? null : v })}
+                size="md"
+                title={t(`aiProfiles.feature.${r}`)}
+              />
+            </span>
+          ))}
         </div>
-      ) : null}
+      </div>
 
       <div className={`${styles.line} ${styles.profile}`}>
         <div className={styles.nameCol}>
@@ -172,9 +171,13 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
             <Lock size={13} strokeWidth={2} aria-hidden />
             {t("aiProfiles.main")}
           </span>
-          {hasAuto && autoProfile == null ? autoBadge : null}
+          {autoBadges(null)}
         </div>
-        <p className={styles.mainNote}>{t("aiProfiles.mainNote")}</p>
+        <div className={styles.chipsCol}>
+          <CategoryChipMultiSelect selectedIds={defaultIds} />
+        </div>
+        {/* Holds the delete button's place, so the chips line up with the rows below */}
+        <span className={styles.deleteSpace} aria-hidden />
       </div>
 
       {order.map((id) => {
@@ -195,7 +198,7 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
                 maxLength={30}
                 onChange={(e) => patch(id, { name: e.target.value })}
               />
-              {hasAuto && autoProfile === id ? autoBadge : null}
+              {autoBadges(id)}
             </div>
             <div className={styles.chipsCol}>
               <CategoryChipMultiSelect
