@@ -19,6 +19,7 @@ import { api, ENGINE_DOWNLOAD_EVENT, type EngineDownloadProgress } from "../../.
 import { ocrRuntimeReady } from "../../../lib/ocrRuntime";
 import { logError } from "../../../lib/logger";
 import styles from "./GeneralTab.module.css";
+import { INTERVAL_MAX_SECS, INTERVAL_MIN_SECS, INTERVAL_STOPS } from "./captureInterval";
 
 export default function GeneralTab() {
   const { t } = useTranslation();
@@ -252,9 +253,9 @@ export default function GeneralTab() {
           <Slider
             value={settings.captureIntervalSeconds}
             onChange={(v) => update({ captureIntervalSeconds: v })}
-            min={5}
-            max={120}
-            step={5}
+            min={INTERVAL_MIN_SECS}
+            max={INTERVAL_MAX_SECS}
+            stops={INTERVAL_STOPS}
             suffix={t("common.units.seconds")}
           />
         </Row>
