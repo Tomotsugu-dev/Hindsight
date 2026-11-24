@@ -71,6 +71,8 @@ pub async fn update_settings(
     )
     .await;
     svc.set_record_browser_host(next.record_browser_host).await;
+    svc.set_screenshot_on_switch(next.screenshot_on_switch)
+        .await;
     svc.set_idle_threshold(next.idle_threshold_seconds).await;
 
     if next.auto_start != prev_autostart {

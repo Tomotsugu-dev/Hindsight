@@ -585,6 +585,8 @@ export interface Settings {
   /** 截图独立开关——关掉只停截图，窗口 / 应用切换记录继续 */
   screenshotEnabled: boolean;
   captureIntervalSeconds: number;
+  /** Take a screenshot at once when the app or URL changes. When off, only the interval takes screenshots. */
+  screenshotOnSwitch: boolean;
   screenshotPath: string;
   workHoursEnabled: boolean;
   workRanges: TimeRange[];

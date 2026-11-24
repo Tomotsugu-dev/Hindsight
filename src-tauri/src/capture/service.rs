@@ -17,8 +17,9 @@ use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 5;
 
-/// 同一个窗口里，活动记录最多开这么久（秒）就封口、开下一段。统计只算封口的记录，
-/// 所以它决定了统计最多落后多久。截图另按截图间隔计时。
+/// How long in seconds a row stays open in the same window before it ends and the next one
+/// starts. Stats count only ended rows, so this is how far behind they can be. Screenshots follow
+/// the screenshot interval instead.
 const SEAL_EVERY_SECS: u32 = 30;
 
 /// 采集服务对前端的运行时状态快照。
@@ -182,11 +183,14 @@ struct Inner {
     privacy_app_keywords: Mutex<Vec<String>>,
     /// 「记录浏览器网站域名」开关：关了浏览器会话不再写 url_host(只影响新行)。
     record_browser_host: Mutex<bool>,
+    /// Whether to take a screenshot at once when the app or URL changes.
+    screenshot_on_switch: Mutex<bool>,
     /// 用户多久不动鼠键就算"挂机"，超过这个秒数 tick 就 seal 当前会话不再延续。
     /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
     idle_threshold_secs: Mutex<u32>,
     current: Mutex<Option<CurrentSession>>,
-    /// 上次该截图的时刻。因为截图开关或隐私规则没截成的也算。锁顺序：叶子锁。
+    /// When a screenshot was last due. It counts even when the screenshot switch or a privacy rule
+    /// stopped it. Lock order: a leaf lock.
     last_shot_at: Mutex<Option<Instant>>,
     /// Sends focus changes, see [`FocusSender`]. Lock order: a leaf lock. It can be taken while
     /// holding `current`, but not the other way round.
@@ -262,6 +266,7 @@ impl CaptureService {
                 // 真实值由 bootstrap 按 settings 推入。默认 false = fail-closed：
                 // 漏推一次最多"少记域名"，绝不会在用户关掉开关后继续记录。
                 record_browser_host: Mutex::new(false),
+                screenshot_on_switch: Mutex::new(true),
                 // 真实值由 lib.rs 启动时根据 settings 写入；此处给个安全默认（180s = 3min），
                 // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
                 idle_threshold_secs: Mutex::new(180),
@@ -421,6 +426,11 @@ impl CaptureService {
     /// 更新「记录浏览器网站域名」开关。设置页改完后由命令层调一次。
     pub async fn set_record_browser_host(&self, enabled: bool) {
         *self.inner.record_browser_host.lock().await = enabled;
+    }
+
+    /// Sets "Screenshot on window switch". The settings command calls it after each change.
+    pub async fn set_screenshot_on_switch(&self, enabled: bool) {
+        *self.inner.screenshot_on_switch.lock().await = enabled;
     }
 
     /// 拉当前运行时状态（today_count 实时查 DB；其它字段从内存读）。
@@ -646,8 +656,9 @@ async fn tick(inner: &Inner) -> Result<()> {
     let interval_secs = *inner.interval_secs.lock().await;
     let last_shot_at = *inner.last_shot_at.lock().await;
     let shot_due = shot_is_due(last_shot_at.map(|t| t.elapsed().as_secs()), interval_secs);
+    let shot_on_switch = *inner.screenshot_on_switch.lock().await;
     // 触发新会话的三种情况：
-    //   1) 焦点切换（不同 app / 不同 url）—— 立即截图
+    //   1) 焦点切换（不同 app / 不同 url）—— 立即截图；「切换窗口时截图」关着时不截
     //   2) 同一焦点这一段开满 SEAL_EVERY_SECS —— 封口让统计跟上，不截图
     //   3) 同一焦点距上次截图满 interval_secs —— 补一张图，让长时间停留也有时间序列
     //   2)、3) 在用户已经手离鼠键一阵(idle 超过两个轮询周期)时要看防睡断言:
@@ -656,7 +667,7 @@ async fn tick(inner: &Inner) -> Result<()> {
     //   例外:idle_threshold == 0 = 用户明确关闭挂机检测("永远算在用")——
     //   此时不按 idle 抑制 roll,断言也不用查。
     let (need_new, shoot) = match current_lock.as_ref() {
-        None => (true, true),
+        None => (true, shot_on_switch || shot_due),
         Some(cur) => {
             let same_focus = cur.focus == new_focus;
             let roll = match roll_decision(
@@ -671,7 +682,7 @@ async fn tick(inner: &Inner) -> Result<()> {
                 // 断言查询有系统调用成本,只有"到点但键鼠已闲"这一种情况才需要问
                 RollDecision::StartNewIfMediaPlaying => keepawake_active(inner).await,
             };
-            (roll, !same_focus || shot_due)
+            (roll, (!same_focus && shot_on_switch) || shot_due)
         }
     };
 
@@ -910,7 +921,9 @@ enum RollDecision {
     StartNewIfMediaPlaying,
 }
 
-/// 距上次该截图满了截图间隔没有。还没截过算到点。
+/// Returns whether a full screenshot interval has passed since the last screenshot was due.
+///
+/// Before the first screenshot, one is always due.
 fn shot_is_due(since_last_shot: Option<u64>, interval_secs: u32) -> bool {
     since_last_shot.is_none_or(|s| s >= u64::from(interval_secs))
 }
@@ -1777,6 +1790,41 @@ mod tests {
         focus.show("Code", None);
         tick(&service.inner).await.unwrap();
         shot_secs_ago(&service, 10).await;
+
+        focus.show("Firefox", None);
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(secs_since_shot(&service).await, Some(0));
+    }
+
+    /// 关了「切换窗口时截图」：切换窗口照样开新的一段，但截图没到点就不截。
+    #[tokio::test]
+    async fn switching_windows_takes_no_screenshot_when_turned_off() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        service.set_screenshot_on_switch(false).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+        shot_secs_ago(&service, 10).await;
+
+        focus.show("Firefox", None);
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await.len(), 2);
+        assert_eq!(secs_since_shot(&service).await, Some(10));
+    }
+
+    /// 关了「切换窗口时截图」：截图到点时照样截，不管窗口换没换。
+    #[tokio::test]
+    async fn switching_windows_takes_a_due_screenshot_when_turned_off() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        service.set_screenshot_on_switch(false).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+        shot_secs_ago(&service, 600).await;
 
         focus.show("Firefox", None);
         tick(&service.inner).await.unwrap();
