@@ -885,6 +885,8 @@ export const api = {
     invoke<void>("set_site_rule", { host, categoryId }),
   /** Removes the website's own rule; a parent domain's rule or the browser's category applies again. */
   removeSiteRule: (host: string) => invoke<void>("remove_site_rule", { host }),
+  /** Deletes a website's data and that of the subdomains that follow it, here and in the cloud. The website's own rule stays. */
+  purgeSiteData: (host: string) => invoke<void>("purge_site_data", { host }),
   getSiteIcons: () => invoke<SiteIconPaths>("get_site_icons"),
   downloadSiteIcons: (hosts: string[]) =>
     invoke<SiteIconDownloadRound>("download_site_icons", { hosts }),

@@ -841,7 +841,12 @@
       "excludeDesc": "記錄進磁碟，但不算進統計、總結、匯出和聊天。想重新進行統計時把該應用程式從「不計入統計」分類中移出即可。",
       "deleteAction": "仍要刪除",
       "privateAction": "設為隱私",
-      "excludeAction": "不計入統計"
+      "excludeAction": "不計入統計",
+      "batch": {
+        "excludeDesc": "照常記錄，但不算進統計、總結、匯出和聊天。想重新統計時，把它們移出「不計入統計」分類即可。",
+        "deleteDescApps": "刪掉<b>{{data}}</b>。這些程式下次執行時還會出現在清單裡。不影響已經產生的日報與總結。（此操作無法復原）",
+        "deleteDescSites": "刪掉<b>{{data}}</b>。再造訪這些網站時，它們還會出現在清單裡。不影響已經產生的日報與總結。（此操作無法復原）"
+      }
     }
   },
   "categories": {
@@ -908,9 +913,12 @@
         "titleNoName": "隱私資料沒有刪完",
         "appEffect": "以後不再記錄它。",
         "siteEffect": "以後不再記錄這個網站和它的子網域。",
+        "appEffectMany": "以後不再記錄它們。",
+        "siteEffectMany": "以後不再記錄這些網站和它們的子網域。",
         "counting": "正在統計要刪多少…",
         "countFailed": "沒能統計出要刪多少：{{error}}",
         "noData": "本機還沒有它的記錄。",
+        "noDataMany": "本機還沒有它們的記錄。",
         "willDelete": "本機{{data}}會被刪掉。",
         "everyDevice": "同步的其他裝置也會刪掉。（此操作無法復原）",
         "siteLimit": "沒存網域的舊記錄刪不掉。",
@@ -972,6 +980,17 @@
         "removeTooltip": "從清單移除",
         "removeAria": "從清單移除 {{name}}"
       }
+    },
+    "batch": {
+      "start": "選擇",
+      "done": "完成",
+      "selectAll": "全選",
+      "selectRow": "選擇「{{name}}」",
+      "selected": "已選 {{count}} 項",
+      "remove": "移除…",
+      "clear": "取消選擇",
+      "apps": "{{count}} 個應用程式",
+      "sites": "{{count}} 個網站"
     },
     "assign": {
       "label": "指派",

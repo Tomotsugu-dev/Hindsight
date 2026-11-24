@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { api, type DataCount, type PurgeTarget } from "../../api/hindsight";
-import { errorText, purgeFailedReason } from "../../utils/privateCategory";
+import { errorText, purgeFailedReason, sumCounts } from "../../utils/privateCategory";
 
 /** 统计会删多少：还在统计、统计好了、统计出错。 */
 export type CountState =
@@ -23,6 +23,8 @@ export interface PrivacyDialogState {
   /** 应用名或域名。null：合并应用、删网站规则以后删除失败，不是在设置某一个 */
   name: string | null;
   site: boolean;
+  /** Several apps or websites are set at once */
+  many?: boolean;
   /** 保存设置的命令，后端存好以后接着删数据。null：只能重试删除 */
   save: (() => Promise<void>) | null;
   step: PrivacyStep;
@@ -32,8 +34,9 @@ export interface PrivacyDialogState {
 export interface PrivacyRequest {
   name: string;
   site: boolean;
-  /** 统计会删多少用 */
-  target: PurgeTarget;
+  many?: boolean;
+  /** What gets deleted, to count how much */
+  targets: PurgeTarget[];
   save: () => Promise<void>;
 }
 
@@ -85,7 +88,7 @@ export function usePrivacyDialog(onSaved: () => void | Promise<unknown>) {
 
   /** 先问。问的时候统计会删多少。 */
   const confirm = (req: PrivacyRequest) => {
-    const { target, ...rest } = req;
+    const { targets, ...rest } = req;
     const id = show({ ...rest, step: { kind: "ask", count: { kind: "loading" } } });
     const setCount = (count: CountState) =>
       setState((s) =>
@@ -93,8 +96,8 @@ export function usePrivacyDialog(onSaved: () => void | Promise<unknown>) {
           ? { ...s, step: { kind: "ask", count } }
           : s,
       );
-    void api.countTargetData(target).then(
-      (count) => setCount({ kind: "done", count }),
+    void Promise.all(targets.map((target) => api.countTargetData(target))).then(
+      (counts) => setCount({ kind: "done", count: sumCounts(counts) }),
       (e) => setCount({ kind: "failed", error: errorText(e) }),
     );
   };

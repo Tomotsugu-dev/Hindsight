@@ -841,7 +841,12 @@
       "excludeDesc": "记录进磁盘，但不算进统计、总结、导出和聊天。想重新进行统计时把该应用从“不计入统计”分类中移出即可。",
       "deleteAction": "仍然删除",
       "privateAction": "设为隐私",
-      "excludeAction": "不计入统计"
+      "excludeAction": "不计入统计",
+      "batch": {
+        "excludeDesc": "照常记录，但不算进统计、总结、导出和聊天。想重新统计时，把它们移出「不计入统计」分类即可。",
+        "deleteDescApps": "删掉<b>{{data}}</b>。这些程序下次运行时还会出现在列表里。不影响已经生成的日报与总结。（此操作不可恢复）",
+        "deleteDescSites": "删掉<b>{{data}}</b>。再访问这些网站时，它们还会出现在列表里。不影响已经生成的日报与总结。（此操作不可恢复）"
+      }
     }
   },
   "categories": {
@@ -908,9 +913,12 @@
         "titleNoName": "隐私数据没有删完",
         "appEffect": "以后不再记录它。",
         "siteEffect": "以后不再记录这个网站和它的子域名。",
+        "appEffectMany": "以后不再记录它们。",
+        "siteEffectMany": "以后不再记录这些网站和它们的子域名。",
         "counting": "正在统计要删多少…",
         "countFailed": "没能统计出要删多少：{{error}}",
         "noData": "本机还没有它的记录。",
+        "noDataMany": "本机还没有它们的记录。",
         "willDelete": "本机{{data}}会被删掉。",
         "everyDevice": "同步的其他设备也会删掉。（此操作不可恢复）",
         "siteLimit": "没存域名的旧记录删不掉。",
@@ -972,6 +980,17 @@
         "removeTooltip": "从列表移除",
         "removeAria": "从列表移除 {{name}}"
       }
+    },
+    "batch": {
+      "start": "选择",
+      "done": "完成",
+      "selectAll": "全选",
+      "selectRow": "选择「{{name}}」",
+      "selected": "已选 {{count}} 项",
+      "remove": "移除…",
+      "clear": "取消选择",
+      "apps": "{{count}} 个应用",
+      "sites": "{{count}} 个网站"
     },
     "assign": {
       "label": "指派",

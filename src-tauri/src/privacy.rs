@@ -1,5 +1,6 @@
 //! Commands delete the data of the `private` category through here: sync is paused first, then
 //! capture drops the session it is recording, and then [`crate::repo::purge::purge`] runs.
+//! Deleting the data of one website also goes through here ([`purge_with_sync_paused`]).
 
 use crate::capture::CaptureService;
 use crate::error::Result;
@@ -15,21 +16,31 @@ pub const ERR_PREFIX_PURGE_FAILED: &str = "[PURGE_FAILED] ";
 
 /// Deletes all data of the apps and websites now in the `private` category, and returns how
 /// much was deleted.
-///
-/// Sync is paused first: the deletion writes outbox rows and deletes from tables that push
-/// reads. Then capture drops the activity row it is recording, because that row may be one of
-/// the rows to delete.
 pub async fn purge_private(
     pool: &DbPool,
     mem: Option<&MemoryDb>,
     svc: &CaptureService,
     engine: &SyncEngine,
 ) -> Result<PurgeReport> {
+    purge_with_sync_paused(pool, mem, svc, engine, &PurgeTarget::Private).await
+}
+
+/// Deletes the data of `target`, and returns how much was deleted.
+///
+/// Sync is paused first: the deletion writes outbox rows and deletes from tables that push
+/// reads. Then capture drops the activity row it is recording, because that row may be one of
+/// the rows to delete.
+pub async fn purge_with_sync_paused(
+    pool: &DbPool,
+    mem: Option<&MemoryDb>,
+    svc: &CaptureService,
+    engine: &SyncEngine,
+    target: &PurgeTarget,
+) -> Result<PurgeReport> {
     let cfg = settings::load(pool).await?;
     let root = std::path::PathBuf::from(&cfg.screenshot_path);
     let _paused = engine.pause_flushes().await;
-    let target = PurgeTarget::Private;
-    svc.run_with_session_cleared(|| purge::purge(pool, mem, &root, engine.self_id(), &target))
+    svc.run_with_session_cleared(|| purge::purge(pool, mem, &root, engine.self_id(), target))
         .await
 }
 
@@ -150,5 +161,24 @@ mod tests {
             .unwrap();
 
         assert_eq!(activity_count(&pool).await, 0);
+    }
+
+    /// 按网站删：只删这个网站的行，别的网站不动。
+    #[tokio::test]
+    async fn purge_with_sync_paused_deletes_one_website() {
+        let pool = fresh_test_pool().await;
+        seed_row(&pool, "Firefox", Some("example.com"), None).await;
+        seed_row(&pool, "Firefox", Some("other.com"), None).await;
+        let (engine, svc) = engine_and_capture(&pool);
+        let site = PurgeTarget::Site {
+            host: "example.com".into(),
+        };
+
+        let report = purge_with_sync_paused(&pool, None, &svc, &engine, &site)
+            .await
+            .unwrap();
+
+        assert_eq!(report.activities, 1);
+        assert_eq!(activity_count(&pool).await, 1);
     }
 }

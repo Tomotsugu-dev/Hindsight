@@ -8,6 +8,29 @@ export function ruleSource(row: SiteRow): SiteRuleSource {
   return row.categoryId !== null ? "own" : "none";
 }
 
+/**
+ * Deleting a website also deletes its subdomains that follow it, as the backend's purge does: a
+ * subdomain with no rule, or one whose rule is that website's or a parent domain's.
+ */
+function deletedWith(row: SiteRow, parent: string): boolean {
+  if (!row.host.endsWith(`.${parent}`)) return false;
+  switch (ruleSource(row)) {
+    case "own":
+      return false;
+    case "none":
+      return true;
+    case "parent":
+      return row.follows === parent || parent.endsWith(`.${row.follows}`);
+  }
+}
+
+/** The hosts to delete for these rows, without those that deleting another one already deletes. */
+export function purgeHosts(rows: SiteRow[]): string[] {
+  return rows
+    .filter((row) => !rows.some((other) => deletedWith(row, other.host)))
+    .map((row) => row.host);
+}
+
 /** A website and the subdomains listed under it. */
 export interface SiteGroup {
   root: SiteRow;

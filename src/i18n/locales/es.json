@@ -841,7 +841,12 @@
       "excludeDesc": "Se guarda en el disco, pero queda fuera de las estadísticas, los resúmenes, las exportaciones y el chat. Para volver a contarla, saca la app de la categoría «Excluido de estadísticas».",
       "deleteAction": "Eliminar de todos modos",
       "privateAction": "Pasar a Privado",
-      "excludeAction": "Excluir de estadísticas"
+      "excludeAction": "Excluir de estadísticas",
+      "batch": {
+        "excludeDesc": "Se siguen registrando, pero quedan fuera de las estadísticas, los resúmenes, las exportaciones y el chat. Para volver a contarlos, sácalos de la categoría «Excluido de estadísticas».",
+        "deleteDescApps": "Elimina <b>{{data}}</b>. Los programas volverán a aparecer aquí la próxima vez que se ejecuten. Los informes ya generados no cambian. (Esta acción no se puede deshacer.)",
+        "deleteDescSites": "Elimina <b>{{data}}</b>. Los sitios volverán a aparecer aquí la próxima vez que los visites. Los informes ya generados no cambian. (Esta acción no se puede deshacer.)"
+      }
     }
   },
   "categories": {
@@ -910,9 +915,12 @@
         "titleNoName": "Los datos privados no se eliminaron del todo",
         "appEffect": "Hindsight deja de registrarla.",
         "siteEffect": "Hindsight deja de registrar este sitio y sus subdominios.",
+        "appEffectMany": "Hindsight deja de registrarlas.",
+        "siteEffectMany": "Hindsight deja de registrar estos sitios y sus subdominios.",
         "counting": "Contando lo que se eliminará…",
         "countFailed": "No se pudo contar lo que se eliminará: {{error}}",
         "noData": "Todavía no hay nada registrado en este dispositivo.",
+        "noDataMany": "Todavía no hay nada registrado de ellos en este dispositivo.",
         "willDelete": "En este dispositivo se eliminará {{data}}.",
         "everyDevice": "Tus otros dispositivos sincronizados también eliminan sus registros. (Esta acción no se puede deshacer.)",
         "siteLimit": "Los registros antiguos sin dominio no se pueden eliminar.",
@@ -974,6 +982,17 @@
         "removeTooltip": "Quitar de la lista",
         "removeAria": "Quitar {{name}} de la lista"
       }
+    },
+    "batch": {
+      "start": "Seleccionar",
+      "done": "Listo",
+      "selectAll": "Seleccionar todo",
+      "selectRow": "Seleccionar «{{name}}»",
+      "selected": "Seleccionados: {{count}}",
+      "remove": "Quitar…",
+      "clear": "Quitar la selección",
+      "apps": "{{count}} apps",
+      "sites": "{{count}} sitios"
     },
     "assign": {
       "label": "Asignar",

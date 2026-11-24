@@ -104,7 +104,7 @@ export function AppList({ category }: { category: Category }) {
       privacy.confirm({
         name: displayAppName(trimmed),
         site: false,
-        target: { kind: "appGroup", groupId: group?.id ?? trimmed },
+        targets: [{ kind: "appGroup", groupId: group?.id ?? trimmed }],
         save: () => api.assignApp(trimmed, PRIVATE_CATEGORY_ID),
       });
       cancel();
@@ -250,6 +250,7 @@ export function AssignDropdown({
   onPick,
   allowClear = false,
   clearLabel,
+  readOnly = false,
 }: {
   categories: Category[];
   /** 当前已选中的 category id；用于在 trigger 上显示当前分类名 + 颜色 */
@@ -260,6 +261,8 @@ export function AssignDropdown({
   allowClear?: boolean;
   /** Text of the clear option when clearing means something other than "Clear category" */
   clearLabel?: string;
+  /** Show the category only, with no menu. Clicks go through to the row. */
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const current =
@@ -324,6 +327,27 @@ export function AssignDropdown({
   //   已分类 → "<分类 icon> <分类名>"（icon 染分类色，跟 chip filter 一族对齐）
   const triggerStyle = current ? ({ "--cat-color": current.color } as CSSProperties) : undefined;
   const CurrentIcon = current ? resolveCategoryIcon(current.icon) : null;
+
+  if (readOnly) {
+    return (
+      <div className={styles.assignWrap}>
+        {current && CurrentIcon && (
+          <span
+            className={`${styles.assignBtn} ${styles.assignBtnPicked} ${styles.assignBtnStatic}`}
+            style={triggerStyle}
+          >
+            <CurrentIcon
+              size={12}
+              strokeWidth={2}
+              className={styles.assignOptionIcon}
+              aria-hidden
+            />
+            <span className={styles.assignBtnLabel}>{current.name}</span>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.assignWrap}>

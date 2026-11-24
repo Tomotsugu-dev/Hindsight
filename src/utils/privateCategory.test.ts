@@ -7,7 +7,7 @@ import ja from "../i18n/locales/ja.json";
 import ptBR from "../i18n/locales/pt-BR.json";
 import zhCN from "../i18n/locales/zh-CN.json";
 import zhTW from "../i18n/locales/zh-TW.json";
-import { describeCount, purgeFailedReason } from "./privateCategory";
+import { describeCount, purgeFailedReason, saveEach, sumCounts } from "./privateCategory";
 
 const LOCALES = { "zh-CN": zhCN, "zh-TW": zhTW, en, ja, es, "pt-BR": ptBR };
 
@@ -68,5 +68,53 @@ describe("describeCount", () => {
       expect(describeCount(t, count), lng).not.toContain("categories.private");
       expect(describeCount(t, null), lng).not.toContain("categories.private");
     }
+  });
+});
+
+describe("sumCounts", () => {
+  it("adds up each part", () => {
+    expect(
+      sumCounts([
+        { activities: 3, screenshots: 1, screenshotBytes: 100 },
+        { activities: 2, screenshots: 0, screenshotBytes: 0 },
+      ]),
+    ).toEqual({ activities: 5, screenshots: 1, screenshotBytes: 100 });
+  });
+
+  it("nothing to add is zero", () => {
+    expect(sumCounts([])).toEqual({ activities: 0, screenshots: 0, screenshotBytes: 0 });
+  });
+});
+
+describe("saveEach", () => {
+  const purgeFailed = (why: string) => new Error(`[PURGE_FAILED] ${why}`);
+
+  it("saves each one in order", async () => {
+    const saved: string[] = [];
+    await saveEach(["a", "b"], (id) => {
+      saved.push(id);
+      return Promise.resolve();
+    });
+    expect(saved).toEqual(["a", "b"]);
+  });
+
+  it("goes on after a failed purge and throws the first one at the end", async () => {
+    const saved: string[] = [];
+    const run = saveEach(["a", "b", "c"], (id) => {
+      saved.push(id);
+      return id === "c" ? Promise.resolve() : Promise.reject(purgeFailed(`disk ${id}`));
+    });
+    await expect(run).rejects.toThrow("[PURGE_FAILED] disk a");
+    expect(saved).toEqual(["a", "b", "c"]);
+  });
+
+  it("stops at a failed save, because the rest would fail the same way", async () => {
+    const saved: string[] = [];
+    const run = saveEach(["a", "b"], (id) => {
+      saved.push(id);
+      return Promise.reject(new Error("database locked"));
+    });
+    await expect(run).rejects.toThrow("database locked");
+    expect(saved).toEqual(["a"]);
   });
 });
