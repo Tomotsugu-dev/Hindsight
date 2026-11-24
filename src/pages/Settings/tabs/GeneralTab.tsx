@@ -247,7 +247,7 @@ export default function GeneralTab() {
         <Row
           label={t("settings.general.capture.intervalLabel")}
           description={t("settings.general.capture.intervalDescription")}
-          disabled={!settings.captureEnabled}
+          disabled={!settings.captureEnabled || !settings.screenshotEnabled}
           labelHint={t("settings.general.capture.intervalHint")}
         >
           <Slider
@@ -257,6 +257,16 @@ export default function GeneralTab() {
             max={INTERVAL_MAX_SECS}
             stops={INTERVAL_STOPS}
             suffix={t("common.units.seconds")}
+          />
+        </Row>
+        <Row
+          label={t("settings.general.capture.screenshotOnSwitchLabel")}
+          description={t("settings.general.capture.screenshotOnSwitchDescription")}
+          disabled={!settings.captureEnabled || !settings.screenshotEnabled}
+        >
+          <Toggle
+            checked={settings.screenshotOnSwitch}
+            onChange={(v) => update({ screenshotOnSwitch: v })}
           />
         </Row>
         <Row

@@ -876,6 +876,7 @@ export const mockSettings: Settings = {
   captureEnabled: true,
   screenshotEnabled: true,
   captureIntervalSeconds: 30,
+  screenshotOnSwitch: true,
   screenshotPath: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\screenshots",
   workHoursEnabled: true,
   workRanges: [
