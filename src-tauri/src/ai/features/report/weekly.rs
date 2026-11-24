@@ -25,7 +25,7 @@ use crate::ai::engine::{EngineGuard, EngineSupervisor};
 use crate::ai::features::report::daily::DAILY_SOURCE;
 use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
 use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
-use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+use crate::ai::policy::{AiDataPolicy, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
 };
@@ -110,7 +110,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let ai = cfg.ai.clone();
 
         ai.check_ready(Task::Weekly).map_err(Error::InvalidInput)?;
-        let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
+        let visible = AiDataPolicy::load(&self.pool.0, profile)
             .await?
             .main_filter();
 
@@ -484,9 +484,7 @@ pub async fn precheck_week(
 
     let cfg = settings_repo::load(pool).await?;
     let lang = cfg.ai.prompt_language.as_str().to_string();
-    let visible = AiDataPolicy::load(&pool.0, AiModule::Weekly, profile)
-        .await?
-        .main_filter();
+    let visible = AiDataPolicy::load(&pool.0, profile).await?.main_filter();
 
     let daily_rows = ai_summaries::get_range(pool, DAILY_SOURCE, &week_key, &end_key).await?;
     let present_daily: HashSet<String> = daily_rows

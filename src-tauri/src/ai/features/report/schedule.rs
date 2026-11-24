@@ -20,7 +20,7 @@ use tauri::{AppHandle, Manager};
 use crate::ai::features::report::{
     precheck_week, DaySummaryRunner, WeekSummaryRunner, DAILY_SOURCE, WEEKLY_SOURCE,
 };
-use crate::ai::policy::ProfileChoice;
+use crate::ai::policy::{ProfileChoice, Report};
 use crate::commands::ai_summary::{RunLock, SummaryCancel};
 use crate::error::{Error, Result};
 use crate::repo::reports::DeviceFilter;
@@ -152,7 +152,7 @@ async fn check_once(app: &AppHandle, attempted: &mut HashSet<String>) -> Result<
     let last_monday = align_to_monday(today) - ChronoDuration::days(7);
     let w_key = format!("w:{last_monday}");
     if !attempted.contains(&w_key) && weekly_absent(&pool, last_monday).await? {
-        let pre = precheck_week(&pool, last_monday, &ProfileChoice::Auto).await?;
+        let pre = precheck_week(&pool, last_monday, &ProfileChoice::Auto(Report::Weekly)).await?;
         if pre.days_with_daily > 0 {
             match try_run_weekly(app, last_monday, pre.days_with_daily < 7).await {
                 RunOutcome::Ran => {
@@ -211,7 +211,12 @@ async fn try_run_daily(app: &AppHandle, date: NaiveDate, force_refresh: bool) ->
         Arc::clone(&cancel.0),
     );
     let result = runner
-        .run(date, DeviceFilter::All, force_refresh, &ProfileChoice::Auto)
+        .run(
+            date,
+            DeviceFilter::All,
+            force_refresh,
+            &ProfileChoice::Auto(Report::Daily),
+        )
         .await;
     outcome_of(result, &format!("{date} 日报"))
 }
@@ -244,7 +249,12 @@ async fn try_run_weekly(app: &AppHandle, monday: NaiveDate, allow_missing: bool)
         Arc::clone(&cancel.0),
     );
     let result = runner
-        .run(monday, false, allow_missing, &ProfileChoice::Auto)
+        .run(
+            monday,
+            false,
+            allow_missing,
+            &ProfileChoice::Auto(Report::Weekly),
+        )
         .await;
     outcome_of(result, &format!("{monday} 周报"))
 }

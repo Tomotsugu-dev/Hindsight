@@ -21,7 +21,7 @@ pub use model_choice::{
 };
 pub use sanitize::sanitize;
 pub use segments::{default_segments_for, DaySegment};
-pub use visibility::{ModuleProfiles, Visibility, VisibilityProfile};
+pub use visibility::{Visibility, VisibilityProfile};
 
 /// A saved cloud API connection bound to one model.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -200,6 +200,18 @@ mod tests {
         ] {
             assert!(!json.contains(gone), "legacy key {gone} leaked: {json}");
         }
+    }
+
+    /// 开发版按日报、周报、对话分开存配置，没发过版，不迁移：读进来当空的，不报错。
+    #[test]
+    fn per_feature_profiles_read_as_empty() {
+        let parsed: AiConfig = serde_json::from_str(
+            r#"{"visibility": {"daily": {
+                "profiles": {"p_work": {"name": "工作", "categories": ["code"]}},
+                "autoProfile": "p_work"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.visibility, Visibility::default());
     }
 
     #[test]

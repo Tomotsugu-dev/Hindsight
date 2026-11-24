@@ -134,7 +134,7 @@ mod tests {
         free_local_port, spawn_scripted_openai_server, Canned,
     };
     use crate::ai::model::Reasoning;
-    use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
+    use crate::ai::policy::{AiDataPolicy, ProfileChoice, Report};
     use crate::repo::reports::DeviceFilter;
     use crate::repo::test_util::fresh_test_pool;
 
@@ -194,7 +194,7 @@ mod tests {
 
         let cancel = Arc::new(AtomicBool::new(false));
         let chat_model = open_model(&ai, Task::Daily, 0).unwrap();
-        let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
+        let visible = AiDataPolicy::load(&pool.0, &ProfileChoice::Auto(Report::Daily))
             .await
             .unwrap()
             .main_filter();
