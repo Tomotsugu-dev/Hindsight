@@ -17,6 +17,10 @@ use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 5;
 
+/// 同一个窗口里，活动记录最多开这么久（秒）就封口、开下一段。统计只算封口的记录，
+/// 所以它决定了统计最多落后多久。截图另按截图间隔计时。
+const SEAL_EVERY_SECS: u32 = 30;
+
 /// 采集服务对前端的运行时状态快照。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -182,6 +186,8 @@ struct Inner {
     /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
     idle_threshold_secs: Mutex<u32>,
     current: Mutex<Option<CurrentSession>>,
+    /// 上次该截图的时刻。因为截图开关或隐私规则没截成的也算。锁顺序：叶子锁。
+    last_shot_at: Mutex<Option<Instant>>,
     /// Sends focus changes, see [`FocusSender`]. Lock order: a leaf lock. It can be taken while
     /// holding `current`, but not the other way round.
     focus_tx: Mutex<FocusSender>,
@@ -260,6 +266,7 @@ impl CaptureService {
                 // 万一 set 没调到，行为仍然合理。与 settings::Settings::default 保持一致。
                 idle_threshold_secs: Mutex::new(180),
                 current: Mutex::new(None),
+                last_shot_at: Mutex::new(None),
                 focus_tx: Mutex::new(FocusSender {
                     tx: focus_tx,
                     last: None,
@@ -637,33 +644,39 @@ async fn tick(inner: &Inner) -> Result<()> {
     };
 
     let interval_secs = *inner.interval_secs.lock().await;
-    // 触发新会话的两种情况：
+    let last_shot_at = *inner.last_shot_at.lock().await;
+    let shot_due = shot_is_due(last_shot_at.map(|t| t.elapsed().as_secs()), interval_secs);
+    // 触发新会话的三种情况：
     //   1) 焦点切换（不同 app / 不同 url）—— 立即截图
-    //   2) 同一焦点停留满 interval_secs —— 周期性补一张图，让长时间停留也有时间序列。
-    //      但用户已经手离鼠键一阵(idle 超过两个轮询周期)时要看防睡断言:
-    //      无断言才**不 roll**——roll 出来的会话按墙钟封口,会把阈值前的挂机
-    //      秒数(默认最多 180s-30s=150s/次)全记成使用;有断言 = 媒体播放中,
-    //      照常补帧,否则这类时段只剩开场一帧。
-    //      例外:idle_threshold == 0 = 用户明确关闭挂机检测("永远算在用")——
-    //      此时不按 idle 抑制 roll,断言也不用查。
-    let need_new = match current_lock.as_ref() {
-        None => true,
-        Some(cur) => match roll_decision(
-            cur.focus == new_focus,
-            cur.last_extend_at.elapsed().as_secs() as u32,
-            interval_secs,
-            idle_threshold,
-            idle_now,
-        ) {
-            RollDecision::StartNew => true,
-            RollDecision::Continue => false,
-            // 断言查询有系统调用成本,只有"到点但键鼠已闲"这一种情况才需要问
-            RollDecision::StartNewIfMediaPlaying => keepawake_active(inner).await,
-        },
+    //   2) 同一焦点这一段开满 SEAL_EVERY_SECS —— 封口让统计跟上，不截图
+    //   3) 同一焦点距上次截图满 interval_secs —— 补一张图，让长时间停留也有时间序列
+    //   2)、3) 在用户已经手离鼠键一阵(idle 超过两个轮询周期)时要看防睡断言:
+    //   无断言才**不 roll**——roll 出来的会话按墙钟封口,会把阈值前的挂机
+    //   秒数全记成使用;有断言 = 媒体播放中,照常 roll,否则这类时段只剩开场一帧。
+    //   例外:idle_threshold == 0 = 用户明确关闭挂机检测("永远算在用")——
+    //   此时不按 idle 抑制 roll,断言也不用查。
+    let (need_new, shoot) = match current_lock.as_ref() {
+        None => (true, true),
+        Some(cur) => {
+            let same_focus = cur.focus == new_focus;
+            let roll = match roll_decision(
+                same_focus,
+                cur.last_extend_at.elapsed().as_secs() as u32,
+                shot_due,
+                idle_threshold,
+                idle_now,
+            ) {
+                RollDecision::StartNew => true,
+                RollDecision::Continue => false,
+                // 断言查询有系统调用成本,只有"到点但键鼠已闲"这一种情况才需要问
+                RollDecision::StartNewIfMediaPlaying => keepawake_active(inner).await,
+            };
+            (roll, !same_focus || shot_due)
+        }
     };
 
     if need_new {
-        // 焦点切换 / 间隔到点：先把旧会话钉死（推 outbox），再开新会话
+        // 焦点切换 / 到点：先把旧会话钉死（推 outbox），再开新会话
         if let Some(prev) = current_lock.take() {
             if let Err(e) = activities::seal_session(&inner.pool, prev.id, now).await {
                 log::warn!("seal_session 失败 (开新会话, id={}): {e}", prev.id);
@@ -682,7 +695,7 @@ async fn tick(inner: &Inner) -> Result<()> {
         }
         // 隐私过滤：标题或 URL（如果有）命中关键词 → 不截图，但活动行照常落库。
         let skip = should_skip_for_privacy(inner, &info, privacy_url, is_browser).await;
-        if skip {
+        if skip && shoot {
             // TODO: the full URL and title are logged at info level, but the logging rule allows
             // them only at debug
             log::info!(
@@ -692,7 +705,10 @@ async fn tick(inner: &Inner) -> Result<()> {
                 url
             );
         }
-        let shot = if skip {
+        if shoot {
+            *inner.last_shot_at.lock().await = Some(Instant::now());
+        }
+        let shot = if skip || !shoot {
             None
         } else {
             match take_screenshot(inner, info.pid).await {
@@ -795,7 +811,7 @@ impl FocusSender {
     /// sent.
     ///
     /// The same focus is not sent again: a new session also starts when the same focus stays for
-    /// a full interval and gets another screenshot.
+    /// 30 seconds, or for a full screenshot interval.
     fn window(&mut self, window: FocusedWindow) -> bool {
         if self
             .last
@@ -886,25 +902,31 @@ fn in_work_hours(now_minutes: i32, ranges: &[TimeRange]) -> bool {
 /// 同焦点会话的"是否开新会话"决策(纯分类;断言查询留给调用方惰性执行)。
 #[derive(Debug, PartialEq, Eq)]
 enum RollDecision {
-    /// 焦点变了 / 间隔到点且用户仍活跃:立即开新会话
+    /// 焦点变了 / 到点且用户仍活跃:立即开新会话
     StartNew,
-    /// 间隔未到:延续当前会话
+    /// 没到点:延续当前会话
     Continue,
-    /// 间隔到点但键鼠已闲:仅当媒体播放(防睡断言)时才 roll,否则维持现状
+    /// 到点但键鼠已闲:仅当媒体播放(防睡断言)时才 roll,否则维持现状
     StartNewIfMediaPlaying,
 }
 
+/// 距上次该截图满了截图间隔没有。还没截过算到点。
+fn shot_is_due(since_last_shot: Option<u64>, interval_secs: u32) -> bool {
+    since_last_shot.is_none_or(|s| s >= u64::from(interval_secs))
+}
+
+/// 「到点」指这一段开满了 [`SEAL_EVERY_SECS`]，或者截图到点了。
 fn roll_decision(
     same_focus: bool,
-    elapsed_secs: u32,
-    interval_secs: u32,
+    row_secs: u32,
+    shot_due: bool,
     idle_threshold: u32,
     idle_now: u64,
 ) -> RollDecision {
     if !same_focus {
         return RollDecision::StartNew;
     }
-    if elapsed_secs < interval_secs {
+    if row_secs < SEAL_EVERY_SECS && !shot_due {
         return RollDecision::Continue;
     }
     if idle_threshold == 0 || idle_now < POLL_INTERVAL_SECS * 2 {
@@ -1181,15 +1203,27 @@ mod tests {
     fn roll_decision_matrix() {
         use RollDecision::*;
         // 焦点变了:无条件开新会话(其余参数不看)
-        assert_eq!(roll_decision(false, 0, 30, 180, 999), StartNew);
-        // 同焦点、间隔未到:延续
-        assert_eq!(roll_decision(true, 29, 30, 180, 0), Continue);
-        // 到点且用户活跃(idle < 2 个轮询周期):roll
-        assert_eq!(roll_decision(true, 30, 30, 180, 9), StartNew);
+        assert_eq!(roll_decision(false, 0, false, 180, 999), StartNew);
+        // 同焦点、不满 30 秒、截图没到点:延续
+        assert_eq!(roll_decision(true, 29, false, 180, 0), Continue);
+        // 开满 30 秒且用户活跃(idle < 2 个轮询周期):roll
+        assert_eq!(roll_decision(true, 30, false, 180, 9), StartNew);
+        // 截图到点(间隔短于 30 秒):不满 30 秒也 roll
+        assert_eq!(roll_decision(true, 5, true, 180, 0), StartNew);
         // 到点但键鼠已闲:要问媒体断言
-        assert_eq!(roll_decision(true, 30, 30, 180, 10), StartNewIfMediaPlaying);
+        assert_eq!(
+            roll_decision(true, 30, false, 180, 10),
+            StartNewIfMediaPlaying
+        );
         // 挂机检测关闭(阈值 0):永远算在用,直接 roll
-        assert_eq!(roll_decision(true, 30, 30, 0, 9999), StartNew);
+        assert_eq!(roll_decision(true, 30, false, 0, 9999), StartNew);
+    }
+
+    #[test]
+    fn shot_is_due_after_a_full_interval() {
+        assert!(shot_is_due(None, 600), "还没截过");
+        assert!(!shot_is_due(Some(599), 600));
+        assert!(shot_is_due(Some(600), 600));
     }
 
     #[test]
@@ -1498,9 +1532,17 @@ mod tests {
     fn fake_service(
         pool: &DbPool,
     ) -> (CaptureService, Arc<FakeFocus>, mpsc::Receiver<FocusChange>) {
+        fake_service_idle(pool, 0)
+    }
+
+    /// 同 [`fake_service`]，键鼠已经空闲了 `idle_secs` 秒。
+    fn fake_service_idle(
+        pool: &DbPool,
+        idle_secs: u64,
+    ) -> (CaptureService, Arc<FakeFocus>, mpsc::Receiver<FocusChange>) {
         let focus = Arc::new(FakeFocus::default());
         let idle = FakeIdle {
-            idle_secs: 0,
+            idle_secs,
             screen_unavailable: false,
             keepawake: false,
         };
@@ -1641,5 +1683,120 @@ mod tests {
         tick(&service.inner).await.unwrap();
 
         assert_eq!(recorded(&pool).await, [("Firefox".to_string(), None)]);
+    }
+
+    // ───────────── 截图间隔：记录每 30 秒封口，截图另外计时 ─────────────
+
+    /// 把正在记录的那一段的开始往前拨 `secs` 秒。
+    async fn age_current(service: &CaptureService, secs: u64) {
+        let mut cur = service.inner.current.lock().await;
+        cur.as_mut().unwrap().last_extend_at -= std::time::Duration::from_secs(secs);
+    }
+
+    /// 截图间隔 10 分钟，同一个窗口待满 30 秒：这一段封口，开下一段。
+    #[tokio::test]
+    async fn same_window_ends_the_row_every_30_seconds() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+
+        age_current(&service, 30).await;
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await.len(), 2);
+    }
+
+    /// 不满 30 秒、截图也没到点：还是同一段。
+    #[tokio::test]
+    async fn same_window_keeps_the_row_before_30_seconds() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+
+        age_current(&service, 25).await;
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await.len(), 1);
+    }
+
+    /// 距上次该截图过了几秒；None = 还没截过。
+    async fn secs_since_shot(service: &CaptureService) -> Option<u64> {
+        let last = *service.inner.last_shot_at.lock().await;
+        last.map(|t| t.elapsed().as_secs())
+    }
+
+    /// 把上次该截图的时刻设成 `secs` 秒前。
+    async fn shot_secs_ago(service: &CaptureService, secs: u64) {
+        let at = Instant::now() - std::time::Duration::from_secs(secs);
+        *service.inner.last_shot_at.lock().await = Some(at);
+    }
+
+    /// 封口开的下一段，截图没到点就不截。
+    #[tokio::test]
+    async fn the_next_row_takes_no_screenshot_before_the_interval() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+        shot_secs_ago(&service, 30).await;
+
+        age_current(&service, 30).await;
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await.len(), 2);
+        assert_eq!(secs_since_shot(&service).await, Some(30));
+    }
+
+    /// 同一个窗口，距上次截图满了间隔：开下一段，并截图。
+    #[tokio::test]
+    async fn same_window_takes_a_screenshot_when_the_interval_is_up() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+        shot_secs_ago(&service, 600).await;
+
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await.len(), 2);
+        assert_eq!(secs_since_shot(&service).await, Some(0));
+    }
+
+    /// 切换窗口：截图没到点也立刻截。
+    #[tokio::test]
+    async fn switching_windows_takes_a_screenshot_at_once() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service(&pool);
+        service.set_interval(600).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+        shot_secs_ago(&service, 10).await;
+
+        focus.show("Firefox", None);
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(secs_since_shot(&service).await, Some(0));
+    }
+
+    /// 键鼠空闲了一会儿（还没到空闲阈值）、也没在播放：满 30 秒也不封口，
+    /// 等到了空闲阈值再按最后一次输入封口。
+    #[tokio::test]
+    async fn idle_user_keeps_the_row_past_30_seconds() {
+        let pool = crate::repo::test_util::fresh_test_pool().await;
+        let (service, focus, _rx) = fake_service_idle(&pool, 60);
+        service.set_interval(600).await;
+        focus.show("Code", None);
+        tick(&service.inner).await.unwrap();
+
+        age_current(&service, 30).await;
+        tick(&service.inner).await.unwrap();
+
+        assert_eq!(recorded(&pool).await.len(), 1);
     }
 }
