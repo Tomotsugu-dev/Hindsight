@@ -143,6 +143,7 @@ export function SortDropdown<T extends string>({
   }, [open]);
 
   const isDefault = value === "default";
+  const current = options.find((option) => option.value === value)?.label;
 
   return (
     <>
@@ -153,12 +154,11 @@ export function SortDropdown<T extends string>({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="true"
+        aria-label={`${label}: ${current}`}
+        title={label}
       >
         <ArrowUpDown size={14} strokeWidth={2} className={styles.triggerIcon} aria-hidden />
-        <span className={styles.triggerLabel}>{label}:</span>
-        <span className={styles.triggerValue}>
-          {options.find((option) => option.value === value)?.label}
-        </span>
+        <span className={styles.triggerValue}>{current}</span>
         <ChevronDown size={14} strokeWidth={2} className={styles.triggerChevron} />
       </button>
 
