@@ -219,6 +219,7 @@
         "description": "截图保留时长和当前占用情况；数据库永不自动清理。",
         "retentionLabel": "截图保留",
         "retentionDescription": "到期的截图文件将被自动删除（活动记录本身保留）。",
+        "retentionForever": "永久",
         "currentUsageLabel": "当前占用",
         "currentUsageDescription": "活动记录 {{db}} · 截图文字（OCR）{{mem}} · 截图 {{shots}}",
         "modelsPathLabel": "AI 模型保存路径",

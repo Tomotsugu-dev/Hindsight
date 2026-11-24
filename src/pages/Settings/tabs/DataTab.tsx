@@ -28,6 +28,7 @@ import { api, type AuthState, type StorageInfo } from "../../../api/hindsight";
 import { logError } from "../../../lib/logger";
 import { canClearCloud } from "../../Devices/syncAccount";
 import { formatBytes } from "../../../utils/formatBytes";
+import { KEEP_FOREVER_DAYS, RETENTION_MAX_DAYS, RETENTION_STOPS } from "./retention";
 
 /** "db" = 从云端重建本机数据；"shots" = 清空截图；"remove" = 从云端移除本设备 */
 type PurgeTarget = "db" | "shots" | "remove";
@@ -180,9 +181,12 @@ export default function DataTab() {
             value={settings.retentionDays}
             onChange={(v) => update({ retentionDays: v })}
             min={1}
-            max={120}
-            step={1}
+            max={RETENTION_MAX_DAYS}
+            stops={RETENTION_STOPS}
             suffix={t("common.units.days")}
+            valueLabel={(v) =>
+              v === KEEP_FOREVER_DAYS ? t("settings.data.storage.retentionForever") : undefined
+            }
           />
         </Row>
         <Row

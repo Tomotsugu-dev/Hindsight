@@ -10,6 +10,7 @@ use crate::capture::WindowInfo;
 use crate::device;
 use crate::error::Result;
 use crate::repo::outbox::{enqueue, enqueue_days, OutboxEntity, OutboxOp};
+use crate::repo::settings::KEEP_FOREVER_DAYS;
 use crate::storage::{utc_now_rfc3339, DbPool, SqliteResultExt};
 
 /// 创建一条新的会话记录。device_id = self；updated_at = captured_at；
@@ -246,9 +247,15 @@ pub async fn reapply_ignore_rules(pool: &DbPool, rules: &[IgnoreRule]) -> Result
     Ok(changed)
 }
 
-/// 清理超过 retention_days 的截图文件（jpg），不删 activities 行；只把对应行的 screenshot_path 置 NULL。
-/// 返回成功删除的文件数。
+/// Deletes the screenshot files from before `retention_days` days ago and clears their
+/// `screenshot_path`. The activity rows stay.
+///
+/// Returns the number of files deleted. Deletes nothing when `retention_days` is
+/// [`KEEP_FOREVER_DAYS`].
 pub async fn delete_screenshots_older_than(pool: &DbPool, retention_days: u32) -> Result<u64> {
+    if retention_days == KEEP_FOREVER_DAYS {
+        return Ok(0);
+    }
     let days = retention_days.max(1) as i64;
     let cutoff = (Local::now() - Duration::days(days))
         .format("%Y-%m-%d")
@@ -800,6 +807,28 @@ mod tests {
         // 若 0 没被钳制，cutoff 会变成今天 → 昨天的文件被误删。这两条钉死语义
         assert!(f_d1.exists(), "昨天的文件必须保留（max(1) 语义）");
         assert!(f_d0.exists(), "今天的文件必须保留");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 选了「永久」：多老的截图都不删。1900 年的截图比 100 年还早，只按天数算会被删。
+    #[tokio::test]
+    async fn keep_forever_deletes_no_screenshots() {
+        let pool = fresh_test_pool().await;
+        let dir =
+            std::env::temp_dir().join(format!("hindsight-shots-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("old.jpg");
+        std::fs::write(&f, b"jpg").unwrap();
+        let path = f.to_string_lossy().to_string();
+        let id = insert_shot_row(&pool, "1900-01-01", Some(path.clone())).await;
+
+        let deleted = delete_screenshots_older_than(&pool, KEEP_FOREVER_DAYS)
+            .await
+            .unwrap();
+        assert_eq!(deleted, 0);
+        assert!(f.exists());
+        assert_eq!(read_screenshot_path(&pool, id).await, Some(path));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

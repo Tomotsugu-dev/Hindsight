@@ -219,6 +219,7 @@
         "description": "Screenshot retention and current usage. The database is never auto-cleaned.",
         "retentionLabel": "Screenshot retention",
         "retentionDescription": "Expired screenshot files are deleted automatically (activity records are kept).",
+        "retentionForever": "Forever",
         "currentUsageLabel": "Current usage",
         "currentUsageDescription": "Activity {{db}} · Screen text (OCR) {{mem}} · Screenshots {{shots}}",
         "modelsPathLabel": "AI models folder",

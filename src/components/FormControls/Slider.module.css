@@ -162,6 +162,15 @@
   color: var(--text-muted);
 }
 
+/* Text shown in place of the number, such as "Forever" */
+.label {
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  line-height: 1;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .strip {
     transition: none;

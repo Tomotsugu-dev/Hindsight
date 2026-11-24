@@ -219,6 +219,7 @@
         "description": "Retenção de capturas de tela e uso atual. O banco de dados nunca é limpo automaticamente.",
         "retentionLabel": "Retenção de capturas de tela",
         "retentionDescription": "Os arquivos de captura de tela expirados são excluídos automaticamente (os registros de atividade são mantidos).",
+        "retentionForever": "Para sempre",
         "currentUsageLabel": "Uso atual",
         "currentUsageDescription": "Atividade {{db}} · Texto de tela (OCR) {{mem}} · Capturas de tela {{shots}}",
         "modelsPathLabel": "Pasta de modelos de IA",

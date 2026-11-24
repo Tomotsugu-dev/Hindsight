@@ -2,6 +2,7 @@ import { useContext, useId, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { RowLabelContext } from "../FormLayout/rowLabelContext";
 import styles from "./Slider.module.css";
+import { adjacentStop, nearestStop, stopPosition } from "./sliderStops";
 
 interface SliderProps {
   value: number;
@@ -11,14 +12,35 @@ interface SliderProps {
   step?: number;
   /** 数值显示后缀，如 "秒" / "天" */
   suffix?: string;
+  /** Text to show in place of the number and suffix, such as "Forever". Undefined shows the number. */
+  valueLabel?: (value: number) => string | undefined;
+  /**
+   * Values that dragging snaps to, in increasing order, spaced evenly on the track. Typing in the
+   * value box still takes any value from min to max. A stop above max, such as "Forever", is
+   * reached only by dragging.
+   */
+  stops?: readonly number[];
 }
 
-export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderProps) {
+export function Slider({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  suffix,
+  valueLabel,
+  stops,
+}: SliderProps) {
   const { t } = useTranslation();
+  const label = valueLabel?.(value);
   const id = useId();
   // Row 通过 context 下传可见 label 的 id；不在 Row 内时回落到通用 valueAria
   const rowLabelId = useContext(RowLabelContext);
-  const percent = ((value - min) / (max - min)) * 100;
+  const position = stops ? stopPosition(value, stops) : value;
+  const trackMin = stops ? 0 : min;
+  const trackMax = stops ? stops.length - 1 : max;
+  const percent = ((position - trackMin) / (trackMax - trackMin)) * 100;
 
   const [focused, setFocused] = useState(false);
   const typedRef = useRef("");
@@ -34,7 +56,15 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
 
   const change = (delta: number) => {
     typedRef.current = "";
+    // A stop above max stays where it is when raised
+    if (value > max && delta > 0) return;
     onChange(clamp(value + delta));
+  };
+
+  const moveToStop = (direction: 1 | -1) => {
+    if (!stops) return;
+    const next = adjacentStop(value, stops, direction);
+    if (next !== value) onChange(next);
   };
 
   const resetTypedAfter = (ms: number) => {
@@ -64,11 +94,25 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
         <input
           id={id}
           type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          min={trackMin}
+          max={trackMax}
+          step={stops ? "any" : step}
+          value={position}
+          onChange={(e) => {
+            const p = Number(e.target.value);
+            const next = stops ? nearestStop(p, stops) : p;
+            if (next !== value) onChange(next);
+          }}
+          onKeyDown={(e) => {
+            if (!stops) return;
+            if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+              e.preventDefault();
+              moveToStop(1);
+            } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+              e.preventDefault();
+              moveToStop(-1);
+            }
+          }}
           className={styles.input}
           style={{ "--fill": `${percent}%` } as CSSProperties}
         />
@@ -79,15 +123,23 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
+        aria-valuetext={label}
         aria-label={rowLabelId ? undefined : t("components.slider.valueAria")}
         aria-labelledby={rowLabelId}
         className={`${styles.valueBox} ${focused ? styles.valueBoxFocused : ""}`}
+        onMouseDown={(e) => {
+          // WebKit does not focus a button on click, so typed digits would go nowhere
+          e.preventDefault();
+          e.currentTarget.focus();
+        }}
         onFocus={() => setFocused(true)}
         onBlur={() => {
           setFocused(false);
           typedRef.current = "";
           if (typeTimerRef.current) clearTimeout(typeTimerRef.current);
-          // 失焦时按 step 对齐
+          // Align to step on blur. With stops, typing already gives a whole value, and a stop
+          // above max must not be pulled down to max.
+          if (stops) return;
           const snapped = clamp(snap(value));
           if (snapped !== value) onChange(snapped);
         }}
@@ -116,12 +168,18 @@ export function Slider({ value, onChange, min, max, step = 1, suffix }: SliderPr
           change(e.deltaY > 0 ? -step : step);
         }}
       >
-        <span className={styles.digits}>
-          {padded.split("").map((d, i) => (
-            <DigitColumn key={i} digit={Number(d)} hidden={i < visibleStart} />
-          ))}
-        </span>
-        {suffix ? <span className={styles.suffix}>{suffix}</span> : null}
+        {label !== undefined ? (
+          <span className={styles.label}>{label}</span>
+        ) : (
+          <>
+            <span className={styles.digits}>
+              {padded.split("").map((d, i) => (
+                <DigitColumn key={i} digit={Number(d)} hidden={i < visibleStart} />
+              ))}
+            </span>
+            {suffix ? <span className={styles.suffix}>{suffix}</span> : null}
+          </>
+        )}
       </button>
     </div>
   );
