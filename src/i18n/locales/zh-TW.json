@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "載入分類…",
       "empty": "還沒有分類",
-      "unseenTitle": "AI 看不到——點一下給它看",
-      "seenTitle": "AI 看得到——點一下不給看"
+      "unseenTitle": "已排除，點擊允許存取",
+      "seenTitle": "已允許存取，點擊排除"
     },
     "rankedList": {
       "expand": "展開剩餘 {{count}} 項",
@@ -1078,7 +1078,7 @@
       },
       "noCuda": {
         "headline": "未檢測到 NVIDIA CUDA。",
-        "prefix": " vision LLM 在 CPU 上跑會非常慢。建議先去",
+        "prefix": " 本機模型在 CPU 上執行會非常慢，建議先去",
         "linkText": " NVIDIA 官網安裝 CUDA Toolkit",
         "suffix": "（≥ 12.4），重啟 Hindsight 後會自動切到 GPU 加速變體。"
       },
@@ -1155,9 +1155,9 @@
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 檔案下載自 HuggingFace。",
       "reports": {
-        "title": "日報和週報用的模型",
-        "description": "自動產生也用這裡的選擇。思考模式能選哪幾檔要看使用哪家服務，越強越慢。",
-        "inUse": "目前使用：{{model}}"
+        "title": "日報與週報模型",
+        "description": "自動總結同步使用此設定；思考模式檔位因服務商而異。",
+        "inUse": "目前：{{model}}"
       },
       "toolbar": {
         "statusAll": "所有",
@@ -1174,7 +1174,7 @@
         "cardTitle": "雲端 · {{provider}}",
         "modelUnset": "（未填模型）",
         "summaryConfirmTitle": "把總結資料傳送到雲端？",
-        "summaryConfirmMessage": "Text 選雲端後，每次段總結會把應用程式名、分類、活動時間線傳送到 {{provider}}。此選項不會上傳截圖圖片本身。",
+        "summaryConfirmMessage": "使用雲端模型時，會將應用程式名、分類和活動時間線傳送至 {{provider}}，不會上傳截圖。",
         "summaryConfirmAccept": "我瞭解，繼續"
       },
       "card": {
@@ -1199,8 +1199,8 @@
           "DEFAULT": "推薦首選"
         },
         "step2": "Text",
-        "step2ToggleOnTooltip": "把這個模型設為段總結（Text）使用。會替換之前的選擇。",
-        "step2ToggleOffTooltip": "點選取消段總結（Text）選擇（會回退到舊版 active 模型）。",
+        "step2ToggleOnTooltip": "設為日報模型",
+        "step2ToggleOffTooltip": "取消日報模型選擇",
         "uninstall": "解除安裝",
         "uninstallTooltipInstalled": "刪除本地檔案（main + mmproj）",
         "uninstallTooltipNotInstalled": "尚未安裝",
@@ -1254,7 +1254,7 @@
     },
     "prompt": {
       "sectionTitle": "提示詞",
-      "sectionDesc": "告訴模型怎麼寫總結。三種語言各有內建預設；改完點儲存生效，點重置回預設。",
+      "sectionDesc": "自訂總結提示詞。按語言分別儲存，點擊儲存後生效。",
       "rowLabel": "系統提示詞",
       "hint": {
         "dirty": "有未儲存的改動",
@@ -1270,12 +1270,12 @@
     },
     "segments": {
       "sectionTitle": "時段劃分",
-      "sectionInfo": "AI 按段彙總；段內截圖按相似度抽幀再發給模型。",
+      "sectionInfo": "日報按以下時段分別彙總當日活動。",
       "rowLabel": "時段"
     },
     "external": {
       "sectionTitle": "雲端 API（可選）",
-      "sectionDesc": "時段總結與「對話」問答改用雲端模型，截圖永遠不會上傳。",
+      "sectionDesc": "設定雲端模型用於總結與對話，不會上傳截圖。",
       "enableLabel": "啟用雲端 API",
       "enableHint": "開啟後，段總結與「對話」會呼叫下方設定的 API；截圖永遠不會上傳。",
       "providerLabel": "服務商",
@@ -1301,8 +1301,8 @@
       "testOk": "連線成功 · 拉到 {{count}} 個模型",
       "testOkNoModels": "連線成功",
       "testFail": "連線失敗：{{message}}",
-      "missingFields": "請先填 Base URL 和 Model ID",
-      "privacyNote": "提示：文字 API 用於段總結和「對話」——應用名稱、分類、活動時間線、你的提問及命中的螢幕文字會傳送到該 API。API Key 以明文儲存在本機設定中。",
+      "missingFields": "請先填寫 Base URL 和模型 ID",
+      "privacyNote": "使用雲端 API 時，應用程式名、分類、活動時間線、提問及命中的螢幕文字會傳送至該服務商。API Key 以明文儲存在本機設定中。",
       "kimiBaseUrlNote": "國內站 api.moonshot.cn 與國際站 api.moonshot.ai 的 Key 不通用——按你申請 Key 的站點填。",
       "groupTextTitle": "文本 API",
       "groupTextHint": "段總結 · 「對話」ChatBot",
@@ -1311,14 +1311,14 @@
       "testStepChat": "模型 {{model}} 可用",
       "profilesLabel": "已儲存的配置",
       "saveProfile": "儲存目前配置",
-      "saveProfileHint": "把目前的服務地址、API Key 和模型存為一組,隨時一鍵切換",
+      "saveProfileHint": "將目前服務位址、API Key 與模型儲存為一組設定，隨時切換",
       "deleteProfileAria": "刪除配置 {{name}}",
       "fetchModels": "從伺服端拉取可用模型",
-      "modelsFetched": "已拉取 {{count}} 個模型,輸入框內可搜尋選擇"
+      "modelsFetched": "已拉取 {{count}} 個模型，可在輸入框內搜尋選擇"
     },
     "autoSummary": {
       "sectionTitle": "定時計劃",
-      "sectionDesc": "到點自動執行:生成報告與辨識截圖。",
+      "sectionDesc": "按設定時間自動產生日報與辨識截圖。",
       "enableLabel": "定時總結",
       "enableHint": "每天到點自動生成當天的日報",
       "timeLabel": "指定處理時間",
@@ -1530,7 +1530,7 @@
   },
   "aiProfiles": {
     "main": "預設分類",
-    "pickerTitle": "AI 看得到的資料",
+    "pickerTitle": "AI 存取的分類設定",
     "manage": "管理設定檔…",
     "moduleGroup": "功能",
     "feature": {
@@ -1539,25 +1539,25 @@
       "chat": "對話"
     },
     "intro": {
-      "daily": "每個設定檔是一組分類，產生日報時 AI 只看這些分類裡的記錄。隱私分類和命中隱私關鍵字的記錄，任何設定檔下 AI 都看不到。",
-      "weekly": "每個設定檔是一組分類，產生週報時 AI 只看這些分類裡的記錄。隱私分類和命中隱私關鍵字的記錄，任何設定檔下 AI 都看不到。",
-      "chat": "每個設定檔是一組分類，對話時 AI 只看這些分類裡的記錄。隱私分類和命中隱私關鍵字的記錄，任何設定檔下 AI 都看不到。"
+      "daily": "隱私分類和命中隱私關鍵字的記錄始終排除。",
+      "weekly": "隱私分類和命中隱私關鍵字的記錄始終排除。",
+      "chat": "隱私分類和命中隱私關鍵字的記錄始終排除。"
     },
-    "weeklyNote": "週報會照原文讀這週的日報，日報裡已經寫進去的內容，這裡攔不住。設定檔只管週報自己查的記錄：整週的應用排行，和沒有日報那幾天的記錄。",
-    "autoLabel": "自動產生時使用",
-    "mainNote": "除了「不計入統計」和「隱私」以外的全部分類，不能改。",
-    "empty": "還沒有設定檔。新增一個，只給 AI 看你選的分類。",
+    "weeklyNote": "已產生日報的內容會直接納入週報；此設定僅過濾整週應用程式排行及缺少日報日期的記錄。",
+    "autoLabel": "用於自動產生",
+    "mainNote": "除「不計入統計」和「隱私」外的全部分類，不可修改。",
+    "empty": "尚無自訂設定檔。",
     "add": "新增設定檔",
     "defaultName": "設定檔 {{n}}",
     "unnamed": "（未命名）",
     "namePlaceholder": "設定檔名稱",
-    "delete": "刪除這個設定檔",
-    "saved": "變更已自動儲存",
-    "notSaved": "標紅的設定檔改好之前，變更不會儲存",
+    "delete": "刪除設定檔",
+    "saved": "已自動儲存",
+    "notSaved": "修正標紅項目後才會儲存",
     "errors": {
-      "noName": "要有名稱",
-      "sameName": "和另一個設定檔同名",
-      "noCategory": "至少給 AI 看一個分類"
+      "noName": "請輸入名稱",
+      "sameName": "名稱重複",
+      "noCategory": "至少選擇一個分類"
     }
   },
   "aiSummary": {
@@ -1568,25 +1568,25 @@
       "month": "月報"
     },
     "model": {
-      "title": "模型和思考模式",
+      "title": "模型與思考模式",
       "modelGroup": "模型",
-      "followDaily": "跟日報一樣",
-      "cloudConfirmMessage": "選了雲端後，每次產生報告都會把應用程式名、分類和活動時間線傳送到 {{provider}}。不會上傳截圖。"
+      "followDaily": "跟隨日報",
+      "cloudConfirmMessage": "使用雲端模型時，會將應用程式名、分類和活動時間線傳送至 {{provider}}，不會上傳截圖。"
     },
     "placeholder": {
       "hint": "功能開發中。"
     },
     "errors": {
-      "runBusy": "已有一個 AI 生成任務在執行中。等它完成或先點「停止」再試。",
-      "profileGone": "選中的設定檔已經不存在了。在下拉選單裡換一個再試。",
+      "runBusy": "已有產生任務正在執行，請等待完成或先停止。",
+      "profileGone": "所選分類設定檔已不存在，請重新選擇。",
       "noModel": "尚未設定語言模型。請在 AI 設定裡新增雲端連線，或選擇一個本機模型。",
       "cloudUnavailable": "選中的雲端連線設定不完整或無法使用。請在 AI 設定裡檢查端點網址與模型名稱。",
       "modelMissing": "找不到選中的本機模型檔案，可能已被刪除或移動。",
-      "engineMissing": "AI 引擎還沒下載。請到「設定 → AI 引擎」下載後再試。",
-      "llmEmptyReasoning": "模型把額度都用在「思考」上，沒來得及寫出答案。請更新應用程式後重試（新版預設關閉本地思考）；若仍出現，換一個非推理（instruct）類文本模型，或在 AI 設定裡調大該步驟的上下文。",
-      "llmEmptyEos": "模型還沒開始生成就停了——通常是選的模型或它的視覺投影器（mmproj）不匹配。在 AI 設定裡換一個模型。",
-      "llmEmptyTruncated": "模型的回答還沒輸出有用內容就被截斷了（多半是推理模型）。換 Gemma 或 Qwen3 這類普通文本模型，或在 AI 設定裡調大上下文。",
-      "llmEmpty": "模型沒有返回任何內容。在 AI 設定裡換一個模型試試。"
+      "engineMissing": "AI 引擎尚未下載，請前往「設定 → AI 引擎」下載。",
+      "llmEmptyReasoning": "模型思考耗盡了輸出額度，未能產生正文。請調低或關閉思考模式、調大上下文，或更換模型重試。",
+      "llmEmptyEos": "模型未輸出內容即結束，可能與目前引擎不相容。請在「AI 設定」中更換模型。",
+      "llmEmptyTruncated": "模型輸出在產生正文前被截斷。請調低思考模式、調大上下文，或更換模型重試。",
+      "llmEmpty": "模型未返回內容，請重試或在「AI 設定」中更換模型。"
     },
     "edit": {
       "action": "修改",
@@ -1599,7 +1599,7 @@
     "weekly": {
       "title": "週報",
       "hint": "一週的活動彙總；按日期 + 主題給出整週回顧。",
-      "subtitle": "基於本週已生成的日報內容，整合成一段整週回顧",
+      "subtitle": "彙總本週日報，產生整週回顧",
       "weekNav": {
         "prevAria": "上一週",
         "nextAria": "下一週",
@@ -1627,16 +1627,16 @@
         "generateDay": "生成這天的日報"
       },
       "empty": {
-        "ready": "點「開始總結」，把這幾天的日報寫成一段回顧。",
-        "fewDaily": "這週只有 {{count}} 天有日報。日報越完整，週報越準，可以先到日報頁補上。",
-        "noDaily": "這週還沒有日報。可以先到日報頁生成，也可以直接用應用程式記錄寫一份簡短的回顧。"
+        "ready": "點擊「開始總結」產生本週回顧。",
+        "fewDaily": "本週僅 {{count}} 天有日報，可先補全日報以獲得更準確的週報。",
+        "noDaily": "本週尚無日報。可先產生日報，或直接基於應用程式記錄產生簡版週報。"
       },
       "actions": {
         "stop": "停止",
         "regenerate": "重新生成",
         "start": "開始總結",
-        "startTooltip": "基於本週已生成的日報合成整週回顧，無需再讀截圖，速度比日報快得多",
-        "regenerateTooltip": "重新生成會清掉本週週報，重新跑一遍",
+        "startTooltip": "基於本週日報產生整週回顧",
+        "regenerateTooltip": "重新產生本週週報（產生完成前保留舊內容）",
         "noModelTooltip": "請先在模型選單裡選一個模型",
         "delete": "刪除",
         "deleteTooltip": "清空本週週報資料（不影響日報）",
@@ -1658,12 +1658,12 @@
         "continueAnyway": "繼續生成",
         "partialMissing": {
           "title": "部分日期沒有日報",
-          "message": "本週有 {{count}} 天還沒有生成日報：{{dates}}。如果繼續，缺失日將僅使用當日應用程式統計代替日報；其餘天仍正常使用日報。是否繼續？"
+          "message": "本週有 {{count}} 天缺少日報（{{dates}}）。繼續產生時，缺失日期將改用應用程式統計代替，是否繼續？"
         },
         "fullMissing": {
           "title": "本週還沒有任何日報",
-          "message": "本週 7 天都沒有日報，但其中 {{activityCount}} 天有應用程式使用記錄可參考。繼續生成只能根據應用程式統計做一份簡化的整週回顧，質量會明顯低於有日報的情況。是否繼續？",
-          "messageNoActivity": "本週 7 天都沒有日報，也沒有任何應用程式使用記錄。繼續生成大機率會失敗。是否仍要嘗試？"
+          "message": "本週尚無日報，僅 {{activityCount}} 天有應用程式記錄。繼續產生將僅基於應用程式統計輸出簡版週報，是否繼續？",
+          "messageNoActivity": "本週既無日報也無應用程式記錄，繼續產生可能會失敗，是否仍要嘗試？"
         }
       },
       "engineLoading": "載入模型中…",
@@ -1681,7 +1681,7 @@
         "body": {
           "empty": "點上方「開始總結」基於本週日報合成整週回顧。",
           "engineStarting": "正在載入模型，首次約 30-90 秒…",
-          "summarizing": "正在讓模型綜合本週日報生成整週回顧…",
+          "summarizing": "正在產生週報…",
           "errorLabel": "失敗："
         }
       },
@@ -1699,7 +1699,7 @@
       "hint": "一個月的活動趨勢 + 關鍵事件回顧。功能開發中。"
     },
     "daily": {
-      "subtitle": "按時段彙總當日活動記錄，本地模型生成",
+      "subtitle": "按時段彙總當日活動記錄",
       "runtimeMissing": {
         "title": "需要先下載 AI 引擎",
         "message": "本機生成總結需要 AI 引擎（llama.cpp）。下載完成後會自動繼續生成。",
@@ -1724,8 +1724,8 @@
         "stopping": "停止中…",
         "regenerate": "重新生成",
         "start": "開始總結",
-        "startTooltip": "本地模型逐段總結當日活動時間線；時長取決於硬體（GPU 數秒/段，CPU 數十秒/段）",
-        "regenerateTooltip": "重新生成會清掉本日所有段總結，重新跑一遍",
+        "startTooltip": "按時段總結當日活動時間線",
+        "regenerateTooltip": "重新產生當日全部時段總結",
         "noModelTooltip": "請先在模型選單裡選一個模型",
         "delete": "刪除",
         "deleteTooltip": "清空當天的日報（不可撤銷）",
@@ -1784,7 +1784,7 @@
       },
       "cloudOffer": {
         "title": "改用雲端 API 生成？",
-        "message": "偵測到你已設定雲端 API（{{provider}} · {{model}}），但總結目前設為本機模型，且本機引擎未安裝。確認後總結將改用雲端 API 生成——應用程式名稱、分類與活動時間軸將傳送給該服務商；也可以到「設定 → AI 引擎」下載本機引擎。",
+        "message": "本機引擎尚未安裝。可改用已設定的雲端 API（{{provider}} · {{model}}）產生，應用程式名、分類與活動時間線將傳送至該服務商；也可前往「設定 → AI 引擎」下載本機引擎。",
         "confirm": "使用雲端生成"
       },
       "ocrLoading": "載入 OCR 模型中…",
@@ -1862,7 +1862,7 @@
       "local": "本機 · {{model}}",
       "none": "未選擇模型"
     },
-    "localModelNoTools": "目前模型 {{model}} 未聲明工具調用支援，回答可能不可靠，建議更換；不支援工具調用的本機模型不會顯示在模型列表中。",
+    "localModelNoTools": "目前模型 {{model}} 不支援工具調用，回答可能不可靠，建議更換。",
     "backfill": {
       "pending": "有 {{count}} 張截圖尚未進入文字索引，對話可能查不到它們。",
       "action": "立即回填",
@@ -1876,7 +1876,7 @@
       "ocrConfirmMessage": "建立文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開始索引。",
       "ocrConfirmAccept": "下載並開始",
       "downloadingOcr": "正在下載文字辨識元件… {{mb}} MB",
-      "stoppedNotice": "本批已停止;常駐辨識約 1 分鐘後將繼續",
+      "stoppedNotice": "本批已停止，常駐辨識約 1 分鐘後繼續",
       "disableResident": "關閉常駐 OCR"
     },
     "citations": {
@@ -1884,7 +1884,7 @@
       "collapse": "收起來源"
     },
     "model": {
-      "noToolUseModels": "已下載的本機模型不支援工具調用；對話需要支援工具調用（Tool-use）的模型，請在「AI 設定 → 模型」下載帶 Tool-use 標記的模型。",
+      "noToolUseModels": "已下載的本機模型均不支援工具調用，請在「AI 設定 → 模型」下載帶 Tool-use 標記的模型。",
       "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
     },
     "tokens": {
@@ -1903,7 +1903,7 @@
       "nextBranch": "下一個分支"
     },
     "edit": {
-      "hint": "編輯將建立新的對話分支,可用箭頭在分支間切換。",
+      "hint": "編輯會建立新分支，可用箭頭切換。",
       "save": "儲存",
       "cancel": "取消"
     },
@@ -1917,7 +1917,7 @@
       "medium": "中",
       "high": "高",
       "max": "最強",
-      "hintLevels": "強度越高,回應越慢",
+      "hintLevels": "強度越高，回應越慢",
       "hintOpenai": "OpenAI 官方介面在對話中不支援思考"
     }
   },

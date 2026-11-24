@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "Cargando las categorías…",
       "empty": "Aún no hay categorías",
-      "unseenTitle": "La IA no la ve. Pulsa para mostrársela",
-      "seenTitle": "La IA puede verla. Pulsa para ocultarla"
+      "unseenTitle": "Excluida — pulsa para incluir",
+      "seenTitle": "Incluida — pulsa para excluir"
     },
     "rankedList": {
       "expand": "Mostrar {{count}} más",
@@ -1083,7 +1083,7 @@
       },
       "noCuda": {
         "headline": "No se detectó NVIDIA CUDA.",
-        "prefix": " Los LLM de visión van muy lentos en CPU. Recomendamos instalar antes el",
+        "prefix": " Los modelos locales van muy lentos en CPU. Recomendamos instalar antes el",
         "linkText": " CUDA Toolkit de NVIDIA",
         "suffix": " (≥ 12.4); Hindsight cambiará automáticamente a la variante acelerada por GPU tras reiniciar."
       },
@@ -1160,8 +1160,8 @@
       "sectionTitle": "Modelos",
       "sectionDesc": "El LLM que se usa para la inferencia local; los archivos GGUF se descargan de HuggingFace.",
       "reports": {
-        "title": "Modelos de los informes diario y semanal",
-        "description": "Los informes automáticos también usan esta elección. Los niveles de razonamiento dependen del servicio. Cuanto más alto, más lento.",
+        "title": "Modelos de informes",
+        "description": "También se usa en los informes automáticos. Los niveles de razonamiento dependen del proveedor.",
         "inUse": "En uso: {{model}}"
       },
       "toolbar": {
@@ -1179,7 +1179,7 @@
         "cardTitle": "Nube · {{provider}}",
         "modelUnset": "(modelo sin definir)",
         "summaryConfirmTitle": "¿Enviar los datos del resumen a la nube?",
-        "summaryConfirmMessage": "Con Text en la nube, los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se envían a {{provider}} en cada resumen por tramos. Esta opción no envía las imágenes.",
+        "summaryConfirmMessage": "Al usar un modelo en la nube, los nombres de aplicaciones, categorías y la línea de tiempo de actividad se enviarán a {{provider}}. Las capturas de pantalla nunca se envían.",
         "summaryConfirmAccept": "Lo entiendo, continuar"
       },
       "card": {
@@ -1204,8 +1204,8 @@
           "DEFAULT": "Recomendado"
         },
         "step2": "Texto",
-        "step2ToggleOnTooltip": "Usar este modelo para los resúmenes por tramos (Text). Sustituye la selección anterior.",
-        "step2ToggleOffTooltip": "Pulsa para quitar la selección de Text (volverá al modelo activo heredado).",
+        "step2ToggleOnTooltip": "Usar en los informes diarios",
+        "step2ToggleOffTooltip": "Quitar selección de informe diario",
         "uninstall": "Desinstalar",
         "uninstallTooltipInstalled": "Eliminar los archivos locales (principal + mmproj)",
         "uninstallTooltipNotInstalled": "No instalado",
@@ -1259,7 +1259,7 @@
     },
     "prompt": {
       "sectionTitle": "Prompts",
-      "sectionDesc": "Dile al modelo cómo escribir los resúmenes. Cada idioma tiene un valor predeterminado integrado; pulsa Guardar tras editar, o Restablecer para volver al predeterminado.",
+      "sectionDesc": "Personaliza las instrucciones de resumen. Se guarda por idioma; pulsa Guardar para aplicar.",
       "rowLabel": "Prompt del sistema",
       "hint": {
         "dirty": "Cambios sin guardar",
@@ -1275,12 +1275,12 @@
     },
     "segments": {
       "sectionTitle": "Tramos horarios",
-      "sectionInfo": "Los resúmenes de IA se generan por tramos; las capturas de pantalla de cada tramo se muestrean por similitud antes de enviarse al modelo.",
+      "sectionInfo": "Los informes diarios resumen la actividad en cada tramo horario siguiente.",
       "rowLabel": "Tramos"
     },
     "external": {
       "sectionTitle": "API en la nube (opcional)",
-      "sectionDesc": "Genera los resúmenes de periodos y las respuestas del Chat con un modelo en la nube. Las capturas de pantalla nunca se envían.",
+      "sectionDesc": "Configura modelos en la nube para resúmenes y Chat. Las capturas de pantalla nunca se envían.",
       "enableLabel": "Activar la API en la nube",
       "enableHint": "Al activarla, los resúmenes por tramos y el Chat llaman a la API configurada abajo; las capturas de pantalla nunca se envían.",
       "providerLabel": "Proveedor",
@@ -1307,7 +1307,7 @@
       "testOkNoModels": "Conectado",
       "testFail": "Falló la conexión: {{message}}",
       "missingFields": "Rellena primero la Base URL y el ID del modelo",
-      "privacyNote": "Nota: la API de texto atiende los resúmenes y el Chat: se le envían los nombres de aplicaciones, las categorías, la línea de tiempo de actividad, tus preguntas y el texto de pantalla correspondiente. Las claves de API se guardan en texto plano en los ajustes locales.",
+      "privacyNote": "Al usar una API en la nube, se envían al proveedor los nombres de apps, categorías, línea de tiempo, tus preguntas y el texto de pantalla coincidente. Las claves de API se guardan localmente en texto plano.",
       "kimiBaseUrlNote": "Las claves de api.moonshot.cn (China) y api.moonshot.ai (global) no son intercambiables: usa el sitio donde se emitió tu clave.",
       "groupTextTitle": "API de texto",
       "groupTextHint": "Resúmenes por tramos · Chat",
@@ -1535,7 +1535,7 @@
   },
   "aiProfiles": {
     "main": "Categorías predeterminadas",
-    "pickerTitle": "Datos que ve la IA",
+    "pickerTitle": "Acceso de IA por categoría",
     "manage": "Gestionar perfiles…",
     "moduleGroup": "Función",
     "feature": {
@@ -1544,25 +1544,25 @@
       "chat": "Chat"
     },
     "intro": {
-      "daily": "Un perfil es un conjunto de categorías. Al escribir el resumen diario, la IA solo ve los registros de esas categorías. En ningún perfil ve la IA los registros privados ni los que coinciden con una palabra clave de privacidad.",
-      "weekly": "Un perfil es un conjunto de categorías. Al escribir el resumen semanal, la IA solo ve los registros de esas categorías. En ningún perfil ve la IA los registros privados ni los que coinciden con una palabra clave de privacidad.",
-      "chat": "Un perfil es un conjunto de categorías. En el chat, la IA solo ve los registros de esas categorías. En ningún perfil ve la IA los registros privados ni los que coinciden con una palabra clave de privacidad."
+      "daily": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen.",
+      "weekly": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen.",
+      "chat": "Las categorías privadas y los registros que coinciden con palabras clave de privacidad siempre se excluyen."
     },
-    "weeklyNote": "El resumen semanal lee los resúmenes diarios tal como están. Un perfil no puede quitar lo que ya dicen. Solo filtra lo que el resumen semanal consulta por sí mismo: las apps más usadas de la semana y los registros de los días sin resumen diario.",
-    "autoLabel": "Usar en los resúmenes automáticos",
-    "mainNote": "Todas las categorías salvo las ocultas y las privadas. No se puede cambiar.",
-    "empty": "Aún no hay perfiles. Crea uno para que la IA solo vea las categorías que elijas.",
+    "weeklyNote": "Los resúmenes diarios existentes se incluyen tal cual; este perfil solo filtra el ranking semanal de apps y los días sin resumen diario.",
+    "autoLabel": "Generación automática",
+    "mainNote": "Todas las categorías excepto Ocultas y Privadas (solo lectura).",
+    "empty": "Aún no hay perfiles personalizados.",
     "add": "Nuevo perfil",
     "defaultName": "Perfil {{n}}",
     "unnamed": "(sin nombre)",
     "namePlaceholder": "Nombre del perfil",
-    "delete": "Eliminar este perfil",
-    "saved": "Los cambios se guardan automáticamente",
-    "notSaved": "Los cambios no se guardan hasta que corrijas los perfiles marcados en rojo",
+    "delete": "Eliminar perfil",
+    "saved": "Guardado automáticamente",
+    "notSaved": "Corrige los errores marcados para guardar",
     "errors": {
-      "noName": "Necesita un nombre",
-      "sameName": "Otro perfil tiene este nombre",
-      "noCategory": "Deja que la IA vea al menos una categoría"
+      "noName": "Introduce un nombre",
+      "sameName": "Nombre duplicado",
+      "noCategory": "Selecciona al menos una categoría"
     }
   },
   "aiSummary": {
@@ -1576,22 +1576,22 @@
       "title": "Modelo y razonamiento",
       "modelGroup": "Modelo",
       "followDaily": "Igual que el diario",
-      "cloudConfirmMessage": "Con la nube, cada informe envía los nombres de las aplicaciones, las categorías y la línea de tiempo de actividad a {{provider}}. No se envían capturas de pantalla."
+      "cloudConfirmMessage": "Al usar un modelo en la nube, los nombres de aplicaciones, categorías y la línea de tiempo de actividad se enviarán a {{provider}}. Las capturas de pantalla nunca se envían."
     },
     "placeholder": {
       "hint": "Función en desarrollo."
     },
     "errors": {
-      "runBusy": "Ya hay otra tarea de generación de IA en marcha. Espera a que termine o pulsa Detener primero.",
-      "profileGone": "El perfil elegido ya no existe. Elige otro en el menú y vuelve a intentarlo.",
+      "runBusy": "Ya hay otra tarea de generación de IA en curso. Espera a que termine o detenla primero.",
+      "profileGone": "El perfil seleccionado ya no existe. Selecciona otro.",
       "noModel": "No hay ningún modelo de lenguaje configurado. Añade una conexión en la nube o elige un modelo local en los Ajustes de IA.",
       "cloudUnavailable": "La conexión en la nube seleccionada está incompleta o no está disponible. Comprueba el endpoint y el modelo en los Ajustes de IA.",
       "modelMissing": "No se encontró el archivo del modelo local seleccionado. Puede haberse eliminado o movido.",
-      "engineMissing": "El motor de IA aún no está descargado. Descárgalo en Ajustes → Motor de IA y vuelve a intentarlo.",
-      "llmEmptyReasoning": "El modelo gastó todo el presupuesto pensando y no llegó a escribir la respuesta. Actualiza la aplicación e inténtalo de nuevo (las versiones nuevas desactivan el razonamiento local de forma predeterminada); si persiste, cambia a un modelo sin razonamiento (instruct) o amplía el contexto de este paso.",
-      "llmEmptyEos": "El modelo se detuvo sin generar nada: normalmente el modelo elegido o el proyector de visión (mmproj) no encajan. Elige otro modelo en los Ajustes de IA.",
-      "llmEmptyTruncated": "La respuesta del modelo se cortó antes de producir texto útil (probablemente un modelo de razonamiento). Usa un modelo de texto normal, como Gemma o Qwen3, o amplía el contexto en los Ajustes de IA.",
-      "llmEmpty": "El modelo no devolvió ningún contenido. Prueba con otro modelo en los Ajustes de IA."
+      "engineMissing": "El motor de IA no está instalado. Descárgalo en Ajustes → Motor de IA.",
+      "llmEmptyReasoning": "El modelo agotó el límite de salida al razonar. Reduce o desactiva el modo de razonamiento, amplía el contexto o cambia de modelo.",
+      "llmEmptyEos": "El modelo terminó sin generar salida. Prueba a cambiar de modelo en Ajustes de IA.",
+      "llmEmptyTruncated": "La salida del modelo se truncó antes de generar texto útil. Reduce el razonamiento, amplía el contexto o cambia de modelo.",
+      "llmEmpty": "El modelo no devolvió contenido. Vuelve a intentarlo o cambia de modelo en Ajustes de IA."
     },
     "edit": {
       "action": "Editar",
@@ -1604,7 +1604,7 @@
     "weekly": {
       "title": "Semanal",
       "hint": "Resumen semanal de actividad con desglose por fecha y tema.",
-      "subtitle": "Sintetiza los informes diarios de esta semana en una única revisión semanal",
+      "subtitle": "Sintetiza los resúmenes diarios de la semana en una revisión semanal",
       "weekNav": {
         "prevAria": "Semana anterior",
         "nextAria": "Semana siguiente",
@@ -1632,16 +1632,16 @@
         "generateDay": "Generar el informe de este día"
       },
       "empty": {
-        "ready": "Pulsa «Generar» para unir estos informes diarios en una revisión.",
-        "fewDaily": "Solo {{count}} días de esta semana tienen informe diario. Cuantos más informes diarios, mejor el resumen. Puedes generarlos antes en la pestaña Diario.",
-        "noDaily": "Todavía no hay informes diarios esta semana. Genéralos antes en la pestaña Diario o escribe una revisión corta solo con los registros de apps."
+        "ready": "Pulsa «Generar» para crear la revisión semanal.",
+        "fewDaily": "Solo {{count}} día(s) tienen informe diario esta semana. Genera más en la pestaña Diario para un resultado más completo.",
+        "noDaily": "Aún no hay informes diarios esta semana. Genéralos primero o crea una revisión breve a partir de la actividad de apps."
       },
       "actions": {
         "stop": "Detener",
         "regenerate": "Regenerar",
         "start": "Generar",
-        "startTooltip": "Crea una revisión semanal a partir de los informes diarios existentes de esta semana: sin capturas de pantalla, mucho más rápido que el diario",
-        "regenerateTooltip": "Regenerar borrará y sustituirá el informe semanal de esta semana",
+        "startTooltip": "Generar revisión semanal a partir de los resúmenes diarios de la semana",
+        "regenerateTooltip": "Regenerar el informe semanal (mantiene el actual hasta terminar)",
         "noModelTooltip": "Elige primero un modelo en el menú de modelos.",
         "delete": "Eliminar",
         "deleteTooltip": "Borrar el informe semanal de esta semana (no afecta a los informes diarios)",
@@ -1663,12 +1663,12 @@
         "continueAnyway": "Generar de todos modos",
         "partialMissing": {
           "title": "Algunos días no tienen informe diario",
-          "message": "{{count}} día(s) de esta semana no tienen informe diario: {{dates}}. Si continúas, esos días usarán solo las estadísticas de aplicaciones en lugar de un informe diario; el resto seguirá usando los informes diarios con normalidad. ¿Continuar?"
+          "message": "Faltan {{count}} día(s) de informe diario ({{dates}}). Esos días usarán estadísticas de apps. ¿Continuar?"
         },
         "fullMissing": {
           "title": "Ningún informe diario para esta semana",
-          "message": "Ninguno de los 7 días de esta semana tiene informe diario, pero {{activityCount}} de ellos sí tienen registros de uso de aplicaciones como base. Al generar solo se obtendrá una revisión semanal simplificada basada en las estadísticas de aplicaciones, de calidad claramente inferior a la que se lograría con los informes diarios. ¿Continuar?",
-          "messageNoActivity": "Ninguno de los 7 días de esta semana tiene informe diario, y tampoco hay registros de uso de aplicaciones. La generación probablemente falle. ¿Intentarlo igualmente?"
+          "message": "No hay informes diarios esta semana ({{activityCount}} día(s) con registros de apps). Continuar generará una revisión simplificada basada solo en estadísticas de apps. ¿Continuar?",
+          "messageNoActivity": "No hay informes diarios ni registros de apps esta semana. Es probable que la generación falle. ¿Intentarlo igualmente?"
         }
       },
       "engineLoading": "Cargando el modelo…",
@@ -1686,7 +1686,7 @@
         "body": {
           "empty": "Pulsa «Generar» arriba para sintetizar una revisión semanal a partir de los informes diarios de esta semana.",
           "engineStarting": "Cargando el modelo: unos 30-90 s la primera vez…",
-          "summarizing": "El modelo está sintetizando los informes diarios de esta semana en una revisión semanal…",
+          "summarizing": "Generando revisión semanal…",
           "errorLabel": "Falló: "
         }
       },
@@ -1704,7 +1704,7 @@
       "hint": "Tendencias y aspectos destacados del mes. Función en desarrollo."
     },
     "daily": {
-      "subtitle": "Resumen por tramos de la línea de tiempo de actividad de hoy, generado por un modelo local.",
+      "subtitle": "Resumen por tramos de la actividad del día",
       "runtimeMissing": {
         "title": "El motor de IA no está instalado",
         "message": "Generar resúmenes localmente requiere el motor de IA (llama.cpp). La generación continúa automáticamente cuando termine la descarga.",
@@ -1729,8 +1729,8 @@
         "stopping": "Deteniendo…",
         "regenerate": "Regenerar",
         "start": "Iniciar el resumen",
-        "startTooltip": "El modelo local resume la línea de tiempo de actividad de cada tramo por turnos; la duración depende del hardware (unos segundos por tramo en GPU, decenas de segundos en CPU).",
-        "regenerateTooltip": "Regenerar borra todos los resúmenes por tramos de este día y los vuelve a ejecutar.",
+        "startTooltip": "Resumir por tramos la línea de tiempo de actividad del día",
+        "regenerateTooltip": "Regenerar todos los resúmenes por tramos de este día",
         "noModelTooltip": "Elige primero un modelo en el menú de modelos.",
         "delete": "Eliminar",
         "deleteTooltip": "Borrar el informe diario de este día (no se puede deshacer)",
@@ -1789,7 +1789,7 @@
       },
       "cloudOffer": {
         "title": "¿Generar con tu API en la nube?",
-        "message": "Ya hay una API en la nube configurada ({{provider}} · {{model}}), pero los resúmenes están puestos en un modelo local y el motor local no está instalado. Al confirmar, los resúmenes pasarán a usar la API en la nube: los nombres de aplicaciones, las categorías y la línea de tiempo de actividad se enviarán a ese proveedor. También puedes descargar el motor local en Ajustes → Motor de IA.",
+        "message": "El motor local no está instalado. Cambia a la API en la nube configurada ({{provider}} · {{model}}) — se enviarán nombres de apps, categorías y línea de tiempo al proveedor — o descarga el motor local en Ajustes → Motor de IA.",
         "confirm": "Usar la API en la nube"
       },
       "ocrLoading": "Cargando el modelo de OCR…",
@@ -1867,7 +1867,7 @@
       "local": "Local · {{model}}",
       "none": "Ningún modelo seleccionado"
     },
-    "localModelNoTools": "El modelo actual {{model}} no declara compatibilidad con llamadas a herramientas: las respuestas pueden ser poco fiables; conviene cambiarlo. Los modelos locales sin esa compatibilidad no aparecen en la lista de modelos.",
+    "localModelNoTools": "El modelo actual {{model}} no admite llamadas a herramientas; las respuestas pueden ser poco fiables.",
     "backfill": {
       "pending": "{{count}} capturas de pantalla aún no están en el índice de texto; puede que el chat no las encuentre.",
       "action": "Indexar ahora",
@@ -1889,7 +1889,7 @@
       "collapse": "Contraer las fuentes"
     },
     "model": {
-      "noToolUseModels": "Los modelos locales descargados no admiten llamadas a herramientas. El Chat necesita un modelo con Tool-use: descarga uno con la insignia Tool-use en Ajustes de IA → Modelos.",
+      "noToolUseModels": "Ninguno de los modelos locales descargados admite Tool-use. Descarga uno con la insignia Tool-use en Ajustes de IA → Modelos.",
       "empty": "No hay modelos disponibles: configura una API en la nube o descarga un modelo local"
     },
     "tokens": {
