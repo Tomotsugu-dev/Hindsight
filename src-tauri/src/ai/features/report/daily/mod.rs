@@ -1,15 +1,12 @@
-//! AI 日报的编排核心（报告并轨后的单步管线）。
+//! 日报编排核心。
 //!
-//! [`DaySummaryRunner::run`] 是单点入口：拿到一天 + 设备过滤 + 是否强刷，
-//! 内部按 settings.ai.segments 切段，串行跑每一段：
+//! [`DaySummaryRunner::run`] 按用户配置的时段串行处理（本机 `llama-server` 是单实例，
+//! 并发请求只会让服务端排队）：
 //!
-//!   1. 从 activities 合成该段的逐小时活动时间线（应用时长 + 窗口标题样例）
-//!   2. 拉段内 top apps 统计
-//!   3. 拼 prompt + 调 LLM（本地 llama-server 或云端 API）
-//!   4. 把段总结落 DB（status: ok / skipped_no_activity / error）
-//!
-//! 不再有 step 1（VLM 逐图描述）与 MobileNet 去重——窗口标题时间线是唯一材料源。
-//! 串行而非并发：本地 llama-server 是单实例，并发请求只会让 llama.cpp 内部排队。
+//! 1. 从 `activities` 合成该段的逐小时活动时间线
+//! 2. 查询该段使用最多的应用统计
+//! 3. 拼 prompt 并调用配置的模型（本机或云端）
+//! 4. 将段总结落库（`ok` / `skipped_no_activity` / `error`）
 
 mod segment;
 mod timeline;
@@ -34,26 +31,22 @@ use crate::storage::DbPool;
 use segment::{summarize_segment, write_skipped_segment, SegmentTarget};
 use timeline::build_activity_timeline;
 
-/// 日报在 ai_summaries 里的 `source`。
+/// 日报在 `ai_summaries` 表中的 `source` 值。
 pub const DAILY_SOURCE: &str = "daily";
 
-/// 单点入口：跑一天的 AI 总结。lib.rs 通过 `app.manage` 不直接管它，
-/// 而是命令体里临时构造（生命周期跟随单次调用）。
+/// 某一天日报生成的编排入口。
 ///
-/// 泛型参数默认 [`AppHandle`]：所有生产调用点 `DaySummaryRunner::new(.., app, ..)`
-/// 不需要任何改动；测试里换成事件收集器。
+/// 泛型参数默认 [`AppHandle`]，生产调用点无需显式指定类型；单元测试可注入内存事件记录器。
 pub struct DaySummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
     sink: S,
-    /// 取消信号：段边界检查 + 在途 LLM 请求和引擎加载也会被
-    /// [`cancellable`] 每 250ms 轮询中断。
+    /// 与周报共用的停止标志：段边界会检查，引擎启动和模型调用期间也会每 250ms 轮询中断。
     cancel: Arc<AtomicBool>,
 }
 
 impl<S: ProgressSink> DaySummaryRunner<S> {
-    /// 由命令体临时构造（不进 Tauri State）：每次跑一次总结时新建一份。
-    /// `cancel` 来自全局 `SummaryCancel` 单例，前端调 cancel_day_summary 时被设 true。
+    /// 为单次命令调用或定时任务构造 runner 实例。
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
@@ -68,10 +61,12 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         }
     }
 
-    /// 跑某一天的全部段。
+    /// 生成 `local_date` 的全部时段总结。
     ///
-    /// `force_refresh = true` 会先清空当天 ai_summaries 行，否则已有 ok 段直接复用。
-    /// `profile` 决定 AI 能看到哪些活动。
+    /// - `force_refresh = false`：已有 `ok` 的段直接跳过复用。
+    /// - `force_refresh = true`：不前置删库，直接重跑所有段并用新结果原地覆盖；
+    ///   整轮跑完后再按有效段下标清理配置缩小或改非法留下的孤儿行。
+    /// - `profile`：决定 AI 能看到哪些活动。
     pub async fn run(
         &self,
         local_date: NaiveDate,
@@ -83,8 +78,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             .run_inner(local_date, device, force_refresh, profile)
             .await;
 
-        // 停止按钮中断在途请求 / 引擎加载时从深处抛 SummaryCancelled——不是失败，
-        // 这里统一优雅收尾：emit cancelled 让前端复位，命令返回 Ok
+        // 按停止按钮中断不属于错误：统一发 cancelled 让前端复位，并返回 Ok
         if matches!(result, Err(Error::SummaryCancelled)) {
             let p = SummaryProgress::base(
                 DAILY_SOURCE.to_string(),
@@ -108,23 +102,18 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let ai = settings_repo::load(&self.pool).await?.ai;
 
         ai.check_ready(Task::Daily).map_err(Error::InvalidInput)?;
-        // 在启动引擎之前读：配置被删了就不白等模型加载
+        // 启动引擎前先读可见性策略：配置被删时直接报错，不白等模型加载
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Daily, profile)
             .await?
             .main_filter();
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
-        // 这里**不**前置 clear_day。删在重建之前意味着:模型文件缺失、密钥过期、
-        // 端点不可用时,当天已有的好报告先没了、重建又起不来,归零且无从恢复。
-        // upsert_segment 的 ON CONFLICT 本就原地覆盖,重建不需要先删;删除的唯一
-        // 用途是清理"段配置缩小/改非法"后的孤儿行,那件事挪到整轮跑完后按实际
-        // 有效段集合收敛(见循环后的 prune_segments_except)。
-        // force_refresh 在下面退化为"不复用已 ok 的段",语义不变。
+        // 不前置 clear_day：引擎起不来或配置失效时，已有日报不会归零；
+        // 新内容通过 upsert 原地覆盖，孤儿段留到整轮跑完后统一清理。
 
         let total_segments = ai.segments.len() as u32;
 
-        // 单一引擎全程复用：云端不起本地引擎（0 为占位端口，云端分支不使用）
-        // 整轮都拿着：别的任务换不掉这个引擎
+        // 整轮持有引擎租约，防止其他任务中途换掉引擎
         let engine = acquire_engine(
             &self.supervisor,
             &self.sink,
@@ -141,7 +130,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let port = engine.as_ref().map_or(0, EngineGuard::port);
         let model = open_model(&ai, Task::Daily, port)?;
 
-        // 本轮实际有效的段下标——循环结束后用它收敛掉孤儿行
+        // 记录本轮有效段下标，循环结束后用来收敛掉孤儿行
         let mut kept: Vec<u32> = Vec::new();
         for (idx, seg) in ai.segments.iter().enumerate() {
             if self.cancel.load(Ordering::Relaxed) {
@@ -156,12 +145,11 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 return Ok(());
             }
             if seg.end_hour <= seg.start_hour {
-                // 非法段:不进 kept,循环后会被 prune 掉(旧实现靠前置 clear_day 顺带清)
+                // 非法时段不加入 kept，整轮完成后会被清理掉
                 continue;
             }
             let index = idx as u32;
             kept.push(index);
-            // force_refresh=false 时已生成的段 (status=ok) 直接复用
             if !force_refresh && self.segment_already_ok(&date_str, index).await? {
                 continue;
             }
@@ -177,8 +165,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
                 .await?;
         }
 
-        // 整轮跑完(未被取消/未提前返错)才收敛:删除永远发生在新内容落库之后。
-        // 失败只告警——清理不掉孤儿段不影响本次生成的结果。
+        // 整轮顺利跑完（未被取消、未提前报错）才清理失效段；清理失败只打警告不影响本次结果
         match ai_summaries::prune_segments_except(&self.pool, DAILY_SOURCE, &date_str, &kept).await
         {
             Ok(n) if n > 0 => log::info!("{DAILY_SOURCE} {date_str}: 清理 {n} 条失效段"),
@@ -202,7 +189,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         self.sink.emit_progress(payload);
     }
 
-    /// 该段是否已生成且 status="ok"——给 force_refresh=false 跳过逻辑用。
     async fn segment_already_ok(&self, date_str: &str, segment_idx: u32) -> Result<bool> {
         let status =
             ai_summaries::get_segment_status(&self.pool, DAILY_SOURCE, date_str, segment_idx)
@@ -210,12 +196,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 跑单段：活动时间线 + top_apps → LLM → 落 ai_summaries。
-    ///
-    /// 落库语义：
-    /// - DB 写操作错误（IO 等）向上抛
-    /// - LLM 调用失败：写一行 status='error'，不抛
-    /// - 整段无活动：status='skipped_no_activity'
+    /// 跑单段：合成时间线与 top apps → 调模型 → 落库并推送 `segment_done`。
     async fn run_one_segment(
         &self,
         model: &Step2Chat,
@@ -246,7 +227,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         .await?;
 
         if timeline.is_empty() {
-            // 真的什么都没有 —— skipped_no_activity 兜底
             write_skipped_segment(&self.pool, target, model.model_label().to_string()).await?;
             let mut p_done = SummaryProgress::base(
                 target.source.to_string(),
@@ -310,7 +290,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         Ok(())
     }
 
-    /// "重试某段"专用：只跑指定一段，复用现有引擎。
+    /// 单段重试：只重跑指定下标的这一段，不动其他段。
     pub async fn run_one_segment_only(
         &self,
         local_date: NaiveDate,

@@ -141,8 +141,7 @@ mod tests {
         assert_eq!(body["chat_template_kwargs"]["enable_thinking"], true);
     }
 
-    /// 云端路由时落库 model 必须是云端连接的模型名——取成本地 GGUF 文件名
-    /// 会让 DailyTab / 导出 Markdown 显示错误的生成来源。
+    /// 云端路由时落库的 model 必须是云端模型 ID，不能误取本地文件名。
     #[test]
     fn cloud_route_uses_cloud_model_label() {
         let mut ai = AiConfig::default();
@@ -163,9 +162,7 @@ mod tests {
         assert_eq!(s.model_label(), "deepseek-chat");
     }
 
-    /// 选了云端但连接没填全或已删除：必须构造期就报 InvalidInput。顶层错误条按这个类型
-    /// 显示「去补配置」的引导；悄悄构造一个打空地址的 client，到运行期才失败，
-    /// 用户只会看到一条没法照着做的通用报错。
+    /// 云端连接未填全或已删除时，必须在构造期直接报 InvalidInput。
     #[test]
     fn cloud_missing_config_errors() {
         let mut ai = AiConfig::default();

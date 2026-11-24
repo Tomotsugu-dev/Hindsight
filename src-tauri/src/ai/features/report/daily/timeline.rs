@@ -1,25 +1,20 @@
-//! 日报一段的材料：从活动记录合成逐小时的时间线。
+//! 从活动记录合成日报单段所需的逐小时时间线。
 
 use crate::error::Result;
 use crate::repo::reports::DeviceFilter;
 use crate::repo::sql::{from_stats_category_sql, host_rule_with_sql};
 use crate::storage::{DbPool, SqliteResultExt};
 
-/// 从 `activities` 表合成段内「按小时」的活动时间线，形状 `(time_label, desc)`，
-/// 直接喂给 [`summarize_segment`](super::segment::summarize_segment)。这是日报的唯一材料源（不再有截图描述）。
+/// 从 `activities` 表合成段内逐小时的 `(time_label, summary_text)` 列表，
+/// 喂给 [`summarize_segment`](super::segment::summarize_segment)。
 ///
-/// SQL 语义：
-/// - `local_date` + `local_hour` 在 `[start_hour, end_hour)` 范围内
-/// - 仅取 `duration_secs > 0` 的已 seal 行（unsealed 心跳行 dur=0 排除）
-/// - `visible` 是 AI 能看到哪些活动，见
-///   [`AiDataPolicy::main_filter`](crate::ai::policy::AiDataPolicy::main_filter)；
-///   再按 [`DeviceFilter`] 过滤
+/// 过滤规则：
+/// - `local_date` 等于 `date_str`，且 `local_hour` 落在 `[start_hour, end_hour)`
+/// - 仅统计 `duration_secs > 0` 的行（未封存的行时长为 0）
+/// - 遵守 `visible`（见 [`AiDataPolicy::main_filter`](crate::ai::policy::AiDataPolicy::main_filter)）
+///   与 [`DeviceFilter`]
 ///
-/// 返回的 `Vec` 元素形状：`(time_label, hour_summary_text)`，如：
-///   `("09:00-10:00", "VSCode 45 分钟（DataTab.tsx、ModelsSection.tsx）· Chrome 10 分钟…")`
-///
-/// 空小时（该小时无任何活动）不产生条目；整段无活动 → 返回 `vec![]`，
-/// 调用方应据此回退到 `skipped_no_activity`。
+/// 没有可见活动的小时会省略；整段无活动时返回空 `Vec`，由调用方落 `skipped_no_activity` 行。
 pub(super) async fn build_activity_timeline(
     pool: &DbPool,
     date_str: &str,
@@ -54,7 +49,7 @@ pub(super) async fn build_activity_timeline(
                 from = from_stats_category_sql("activities"),
                 device = dev.sql_clause(),
             );
-            // 网站规则的 WITH 在最前，它的两个 ? 是日期范围的两头
+            // 网站规则的 WITH 子句在最前面，前两个 `?` 绑定日期起止边界
             let mut params: Vec<&dyn ToSql> = vec![&date, &date, &date];
             let sh = start_hour as i64;
             let eh = end_hour as i64;
@@ -84,13 +79,11 @@ pub(super) async fn build_activity_timeline(
     Ok(format_timeline_hours(rows))
 }
 
-/// 把 SQL 行（hour, app, title, dur）按小时 / 应用聚合成 `(time_label, desc)` 列表。
-/// 抽函数让单测可以纯粹喂结构化数据，不依赖 SQLite。
+/// 将原始 `(hour, app, title, duration_secs)` 行聚合成 `(time_label, summary_text)` 列表。
 fn format_timeline_hours(rows: Vec<(u8, String, Option<String>, i64)>) -> Vec<(String, String)> {
     use std::collections::BTreeMap;
 
-    // hour → app → (total_secs, Vec<title>)
-    // BTreeMap 让 hour 升序、app 名稳定；app 内时长聚合后再排序。
+    // hour → app → (总秒数, 窗口标题列表)
     let mut by_hour: BTreeMap<u8, BTreeMap<String, (i64, Vec<String>)>> = BTreeMap::new();
     for (hour, app, title, dur) in rows {
         let app_bucket = by_hour
@@ -113,7 +106,7 @@ fn format_timeline_hours(rows: Vec<(u8, String, Option<String>, i64)>) -> Vec<(S
             .into_iter()
             .map(|(app, (secs, titles))| (app, secs, titles))
             .collect();
-        // 按总时长降序，时长相同时按 app 名稳定
+        // 按总时长降序排列，时长相同时按应用名稳定排序
         apps.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
         let mut major_parts: Vec<String> = Vec::new();
@@ -156,9 +149,7 @@ fn format_secs_human(secs: i64) -> String {
     }
 }
 
-/// 去重保序后按字符数降序取前 5 个，"、" 分隔。
-/// 窗口标题是总结的主线索（文件名 / 网页标题 / 视频标题），多带一点
-/// 让模型有素材可写；5 条 × 每小时几个应用的 prompt 开销可忽略。
+/// 窗口标题去重后按字符长度降序取前 5 条，用「、」拼接。
 fn pick_titles(titles: &[String]) -> String {
     use std::collections::HashSet;
     let mut seen: HashSet<&str> = HashSet::new();

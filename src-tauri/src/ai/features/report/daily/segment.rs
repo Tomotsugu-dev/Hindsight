@@ -1,4 +1,4 @@
-//! 日报一段的结果写库：段总结，以及没有活动时的占位行。
+//! 日报单段的生成与落库，以及无活动时的占位行写入。
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -21,14 +21,13 @@ pub(super) struct SegmentTarget<'a> {
     pub end_hour: u8,
 }
 
-/// 段总结：拿活动时间线 + top_apps 拼 prompt → 调 LLM → 落库。
+/// 为单个时段调用模型生成总结并落库。
 ///
 /// 落库语义：
-/// - chat 成功 → status = "ok"
-/// - chat 失败 → status = "error"，error 字段塞错误描述（不抛 Err，让上层继续走）
-/// - DB 写入失败 → 抛 Err，整段失败
-///
-/// 返回 `(已落库的行, status_str)`，让调用方拼 `segment_done` 事件 payload 用。
+/// - 模型成功：写入 `status = "ok"` 和正文。
+/// - 模型失败：写入 `status = "error"` 和错误描述，返回 `Ok` 让日报继续跑后面的段。
+/// - 按下停止：中断在途请求并返回 [`Error::SummaryCancelled`]，**不写库**。
+/// - 写库失败仅记录错误日志不抛错，确保调用方仍能发 `segment_done` 更新界面。
 pub(super) async fn summarize_segment(
     pool: &DbPool,
     model: &Step2Chat,
@@ -36,8 +35,6 @@ pub(super) async fn summarize_segment(
     target: &SegmentTarget<'_>,
     timeline: &[(String, String)],
     top_apps: &[(String, u32, String)],
-    // 停止按钮的取消标志：置位时中断在途请求，向上抛 SummaryCancelled
-    //（**不写行**——该段下次生成自然重跑），由 runner 统一 emit cancelled 收尾
     cancel: &Arc<AtomicBool>,
 ) -> Result<(SegmentSummaryRow, &'static str)> {
     let ctx = SegmentContext {
@@ -91,8 +88,7 @@ pub(super) async fn summarize_segment(
         ),
     };
 
-    // upsert 失败不让整轮 daily 抛飞——磁盘满 / DB lock 时 row 写不进去也得让上层
-    // emit segment_done 把当前 row 推给前端（至少能看到红色 error badge + 错误描述）。
+    // 磁盘满或库锁导致写库失败时不中止整轮，让上层照常推送 `segment_done`
     if let Err(e) = ai_summaries::upsert_segment(pool, &row).await {
         log::error!(
             "ai_summaries upsert 失败（段 {} status={}）：{e}",
@@ -103,7 +99,7 @@ pub(super) async fn summarize_segment(
     Ok((row, status_str))
 }
 
-/// 让某段直接落 `skipped_no_activity` 行 —— 该段完全没有活动记录时的兜底。
+/// 当某个时段没有任何可见活动时，写入 `skipped_no_activity` 占位行。
 pub(super) async fn write_skipped_segment(
     pool: &DbPool,
     target: &SegmentTarget<'_>,
@@ -351,7 +347,7 @@ mod tests {
             .is_empty());
     }
 
-    /// force_refresh 清某天日报时误伤别的 source 或相邻日期会让用户丢历史报告——
+    /// 清某天日报时误伤别的 source 或相邻日期会让用户丢历史报告——
     /// DELETE 少写一个 WHERE 条件就是这个后果。
     #[tokio::test]
     async fn clear_day_spares_other_source_and_date() {
