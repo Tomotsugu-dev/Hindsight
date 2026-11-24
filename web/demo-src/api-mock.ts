@@ -689,6 +689,13 @@ export const api = {
   removeSiteRule: async (host: string): Promise<void> => {
     demoSiteRules.delete(host);
   },
+  // Deletes the time of the website and of its subdomains without their own rule.
+  purgeSiteData: async (host: string): Promise<void> => {
+    for (const h of Object.keys(demoSiteMinutes)) {
+      const sub = h.endsWith(`.${host}`) && !demoSiteRules.has(h);
+      if (h === host || sub) delete demoSiteMinutes[h];
+    }
+  },
   getSiteIcons: async (): Promise<SiteIconPaths> => {
     const listed = new Set([...Object.keys(demoSiteMinutes), ...demoSiteRules.keys()]);
     for (const host of Object.keys(demoSiteIcons)) {
