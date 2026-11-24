@@ -1637,7 +1637,7 @@
         "start": "開始總結",
         "startTooltip": "基於本週已生成的日報合成整週回顧，無需再讀截圖，速度比日報快得多",
         "regenerateTooltip": "重新生成會清掉本週週報，重新跑一遍",
-        "noModelTooltip": "請先到 AI 設定 → 模型 給段總結選一個模型，或在雲端 API 啟用雲端總結",
+        "noModelTooltip": "請先在模型選單裡選一個模型",
         "delete": "刪除",
         "deleteTooltip": "清空本週週報資料（不影響日報）",
         "deleteEmptyTooltip": "本週還沒有周報資料可刪除",
@@ -1650,7 +1650,7 @@
         "dismissError": "關閉"
       },
       "errors": {
-        "noSummaryModel": "請先到 AI 設定 → 模型 給段總結選一個模型，或啟用雲端 API",
+        "noSummaryModel": "請先在模型選單裡選一個模型",
         "generationFailed": "週報生成失敗",
         "unknown": "未知錯誤"
       },
@@ -1726,7 +1726,7 @@
         "start": "開始總結",
         "startTooltip": "本地模型逐段總結當日活動時間線；時長取決於硬體（GPU 數秒/段，CPU 數十秒/段）",
         "regenerateTooltip": "重新生成會清掉本日所有段總結，重新跑一遍",
-        "noModelTooltip": "請先到 AI 設定 → 模型 選一個模型",
+        "noModelTooltip": "請先在模型選單裡選一個模型",
         "delete": "刪除",
         "deleteTooltip": "清空當天的日報（不可撤銷）",
         "deleteEmptyTooltip": "當天還沒有日報資料可刪除",
@@ -1744,7 +1744,7 @@
       "errors": {
         "generationFailed": "總結失敗",
         "unknown": "未知錯誤",
-        "noModel": "請先到 AI 設定 → 模型 選一個模型"
+        "noModel": "請先在模型選單裡選一個模型"
       },
       "engineLoading": "載入模型中…",
       "toast": {
@@ -1884,7 +1884,6 @@
       "collapse": "收起來源"
     },
     "model": {
-      "pickAria": "選擇對話模型",
       "noToolUseModels": "已下載的本機模型不支援工具調用；對話需要支援工具調用（Tool-use）的模型，請在「AI 設定 → 模型」下載帶 Tool-use 標記的模型。",
       "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
     },

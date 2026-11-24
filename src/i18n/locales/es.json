@@ -1642,7 +1642,7 @@
         "start": "Generar",
         "startTooltip": "Crea una revisión semanal a partir de los informes diarios existentes de esta semana: sin capturas de pantalla, mucho más rápido que el diario",
         "regenerateTooltip": "Regenerar borrará y sustituirá el informe semanal de esta semana",
-        "noModelTooltip": "Elige un modelo de resumen en Ajustes de IA → Modelos, o activa la API en la nube",
+        "noModelTooltip": "Elige primero un modelo en el menú de modelos.",
         "delete": "Eliminar",
         "deleteTooltip": "Borrar el informe semanal de esta semana (no afecta a los informes diarios)",
         "deleteEmptyTooltip": "Aún no hay informe semanal que eliminar",
@@ -1655,7 +1655,7 @@
         "dismissError": "Descartar"
       },
       "errors": {
-        "noSummaryModel": "Elige un modelo de resumen en Ajustes de IA → Modelos, o activa la API en la nube",
+        "noSummaryModel": "Elige primero un modelo en el menú de modelos.",
         "generationFailed": "No se pudo generar el informe semanal",
         "unknown": "Error desconocido"
       },
@@ -1731,7 +1731,7 @@
         "start": "Iniciar el resumen",
         "startTooltip": "El modelo local resume la línea de tiempo de actividad de cada tramo por turnos; la duración depende del hardware (unos segundos por tramo en GPU, decenas de segundos en CPU).",
         "regenerateTooltip": "Regenerar borra todos los resúmenes por tramos de este día y los vuelve a ejecutar.",
-        "noModelTooltip": "Elige primero un modelo en Ajustes de IA → Modelos.",
+        "noModelTooltip": "Elige primero un modelo en el menú de modelos.",
         "delete": "Eliminar",
         "deleteTooltip": "Borrar el informe diario de este día (no se puede deshacer)",
         "deleteEmptyTooltip": "Aún no hay datos diarios que eliminar.",
@@ -1749,7 +1749,7 @@
       "errors": {
         "generationFailed": "Falló el resumen",
         "unknown": "Error desconocido",
-        "noModel": "Elige primero un modelo en Ajustes de IA → Modelos."
+        "noModel": "Elige primero un modelo en el menú de modelos."
       },
       "engineLoading": "Cargando el modelo…",
       "toast": {
@@ -1889,7 +1889,6 @@
       "collapse": "Contraer las fuentes"
     },
     "model": {
-      "pickAria": "Elegir el modelo del chat",
       "noToolUseModels": "Los modelos locales descargados no admiten llamadas a herramientas. El Chat necesita un modelo con Tool-use: descarga uno con la insignia Tool-use en Ajustes de IA → Modelos.",
       "empty": "No hay modelos disponibles: configura una API en la nube o descarga un modelo local"
     },

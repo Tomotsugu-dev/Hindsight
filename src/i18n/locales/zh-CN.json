@@ -1637,7 +1637,7 @@
         "start": "开始总结",
         "startTooltip": "基于本周已生成的日报合成整周回顾，无需再读截图，速度比日报快得多",
         "regenerateTooltip": "重新生成会清掉本周周报，重新跑一遍",
-        "noModelTooltip": "请先到 AI 设置 → 模型 给段总结选一个模型，或在云端 API 启用云端总结",
+        "noModelTooltip": "请先在模型菜单里选一个模型",
         "delete": "删除",
         "deleteTooltip": "清空本周周报数据（不影响日报）",
         "deleteEmptyTooltip": "本周还没有周报数据可删除",
@@ -1650,7 +1650,7 @@
         "dismissError": "关闭"
       },
       "errors": {
-        "noSummaryModel": "请先到 AI 设置 → 模型 给段总结选一个模型，或启用云端 API",
+        "noSummaryModel": "请先在模型菜单里选一个模型",
         "generationFailed": "周报生成失败",
         "unknown": "未知错误"
       },
@@ -1726,7 +1726,7 @@
         "start": "开始总结",
         "startTooltip": "本地模型逐段总结当日活动时间线；时长取决于硬件（GPU 数秒/段，CPU 数十秒/段）",
         "regenerateTooltip": "重新生成会清掉本日所有段总结，重新跑一遍",
-        "noModelTooltip": "请先到 AI 设置 → 模型 选一个模型",
+        "noModelTooltip": "请先在模型菜单里选一个模型",
         "delete": "删除",
         "deleteTooltip": "清空当天的日报（不可撤销）",
         "deleteEmptyTooltip": "当天还没有日报数据可删除",
@@ -1744,7 +1744,7 @@
       "errors": {
         "generationFailed": "总结失败",
         "unknown": "未知错误",
-        "noModel": "请先到 AI 设置 → 模型 选一个模型"
+        "noModel": "请先在模型菜单里选一个模型"
       },
       "engineLoading": "加载模型中…",
       "toast": {
@@ -1884,7 +1884,6 @@
       "collapse": "收起来源"
     },
     "model": {
-      "pickAria": "选择对话模型",
       "noToolUseModels": "已下载的本地模型不支持工具调用；对话需要支持工具调用（Tool-use）的模型，请在「AI 设置 → 模型」下载带 Tool-use 标记的模型。",
       "empty": "没有可用模型：请配置云端 API 或下载本地模型"
     },
