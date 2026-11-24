@@ -12,7 +12,7 @@ use crate::capture::{browser_url, ignore, screenshot};
 use crate::error::Result;
 use crate::memory::{frames as memory_frames, MemoryDb};
 use crate::repo::settings::TimeRange;
-use crate::repo::{activities, app_groups, categories, process_paths};
+use crate::repo::{activities, app_groups, categories, process_paths, purge};
 use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 5;
@@ -140,12 +140,8 @@ struct KeepawakeProbe {
 /// 限频只是避免每个 tick 都打一次 syscall 的噪音。
 const PROBE_MIN_GAP_SECS: u64 = 20;
 
-/// Hard ceiling on keyboard/mouse idle time (seconds).
-/// Once this limit is exceeded, the current session is sealed regardless of
-/// any media keep-awake assertion or screen-change state.
-/// 45 minutes is intentionally looser than Work-Review's 10-minute cap
-/// to allow passive viewing (e.g. a full TV episode) without false cuts.
-const IDLE_HARD_CAP_SECS: u64 = 45 * 60;
+/// 键鼠空闲满这么久（秒），前台在播放也算闲置：从最后一次输入起记下的都不算。
+const PASSIVE_VIEWING_LIMIT_SECS: u64 = 60 * 60;
 
 /// CaptureService 的内部状态。
 ///
@@ -527,21 +523,12 @@ async fn tick(inner: &Inner) -> Result<()> {
         if inner.current.lock().await.is_none() {
             return Ok(());
         }
-        // Hard cap: seal unconditionally once the ceiling is hit, overriding
-        // any keep-awake or screen-change exemption. Prevents an indefinitely
-        // held keep-awake assertion from recording an entire night as active use.
-        let hard_cap_hit = idle_now >= IDLE_HARD_CAP_SECS;
-        if hard_cap_hit {
-            log::info!(
-                "idle {idle_now}s exceeds hard cap {}s, sealing session",
-                IDLE_HARD_CAP_SECS
-            );
+        if idle_now >= PASSIVE_VIEWING_LIMIT_SECS {
+            drop_since_last_input(inner, idle_now).await;
+            return Ok(());
         }
-        if !hard_cap_hit
-            && !crate::platform::is_desktop_foreground()
-            && keepawake_active(inner).await
-        {
-            log::debug!("idle {idle_now}s but keep-awake assertion is set (media playing), session continues");
+        if !crate::platform::is_desktop_foreground() && keepawake_active(inner).await {
+            log::debug!("键鼠空闲 {idle_now}s 但有显示防睡断言（媒体播放中），会话延续");
         } else {
             let mut cur_lock = inner.current.lock().await;
             if let Some(prev) = cur_lock.take() {
@@ -927,6 +914,28 @@ fn roll_decision(
     }
 }
 
+/// 结束当前会话，从最后一次输入起记下的活动、截图和屏幕文字都删掉。
+async fn drop_since_last_input(inner: &Inner, idle_now: u64) {
+    let Some(prev) = inner.current.lock().await.take() else {
+        return;
+    };
+    let last_input = Local::now() - Duration::seconds(idle_now as i64);
+    log::info!("键鼠空闲 {idle_now}s，最后一次输入以后的记录不算");
+    if let Err(e) = activities::seal_session(&inner.pool, prev.id, last_input).await {
+        log::warn!("seal_session 失败 (空闲满上限, id={}): {e}", prev.id);
+    }
+    let root = std::path::PathBuf::from(&inner.screenshot.lock().await.dir);
+    let mem = inner.memory.as_ref();
+    let dropped = async {
+        let self_id = crate::device::self_id()?;
+        purge::truncate_at(&inner.pool, mem, &root, self_id, last_input).await
+    };
+    if let Err(e) = dropped.await {
+        log::warn!("删最后一次输入以后的记录失败: {e}");
+    }
+    inner.focus_tx.lock().await.away(last_input);
+}
+
 /// 挂机封口时刻 = 最后键鼠输入与媒体断言最后活跃的较晚者(无断言记录按输入算)。
 fn idle_seal_end(
     input_end: DateTime<Local>,
@@ -1296,18 +1305,23 @@ mod tests {
 
     /// 10 分钟前开始记录一段会话，然后用给定的挂机信号跑一次 tick。挂机阈值是默认的 180 秒。
     async fn tick_with(idle: FakeIdle) -> Ticked {
+        tick_on(idle, 180, Local::now() - Duration::minutes(10)).await
+    }
+
+    /// 同 [`tick_with`]，挂机阈值和当前会话的开始时刻由测试给。
+    async fn tick_on(idle: FakeIdle, idle_threshold: u32, started: DateTime<Local>) -> Ticked {
         let pool = crate::repo::test_util::fresh_test_pool().await;
         let focus = Arc::new(NoWindow::default());
         let (tx, _rx) = mpsc::channel(8);
         let service =
             CaptureService::with_sources(pool.clone(), None, 30, tx, focus.clone(), Arc::new(idle));
+        service.set_idle_threshold(idle_threshold).await;
         let info = WindowInfo {
             app_name: "Code".into(),
             title: "main.rs".into(),
             app_path: None,
             pid: 1,
         };
-        let started = Local::now() - Duration::minutes(10);
         let id = activities::insert_new(&pool, &info, started, None, false, None)
             .await
             .unwrap();
@@ -1387,6 +1401,57 @@ mod tests {
         .await;
         assert_eq!(t.current, Some(t.id));
         assert_eq!(t.focus_reads, 1);
+    }
+
+    /// 会话那一行还在不在。
+    async fn row_exists(pool: &DbPool, id: i64) -> bool {
+        use crate::storage::SqliteResultExt;
+        pool.0
+            .call(move |conn| {
+                conn.query_row("SELECT COUNT(*) FROM activities WHERE id = ?1", [id], |r| {
+                    r.get::<_, i64>(0)
+                })
+                .db()
+            })
+            .await
+            .unwrap()
+            == 1
+    }
+
+    #[tokio::test]
+    async fn viewing_past_the_limit_counts_nothing_after_the_last_input() {
+        // 开着视频睡着了：键鼠满一小时没动，最后一次输入以后开始的会话整条删掉
+        let watching = || FakeIdle {
+            idle_secs: PASSIVE_VIEWING_LIMIT_SECS,
+            screen_unavailable: false,
+            keepawake: true,
+        };
+        let t = tick_with(watching()).await;
+        assert_eq!(t.current, None);
+        assert_eq!(t.focus_reads, 0);
+        assert!(!row_exists(&t.pool, t.id).await);
+
+        // 最后一次输入之前就开始的会话：只记到最后一次输入
+        let t = tick_on(watching(), 180, Local::now() - Duration::minutes(70)).await;
+        assert_eq!(t.current, None);
+        assert!((ended_secs_ago(&t.pool, t.id).await - 3600).abs() <= 2);
+    }
+
+    #[tokio::test]
+    async fn the_limit_is_off_when_idle_detection_is_off() {
+        // 挂机检测关了（阈值 0）：一直算在用，空闲多久都不删
+        let t = tick_on(
+            FakeIdle {
+                idle_secs: PASSIVE_VIEWING_LIMIT_SECS * 2,
+                screen_unavailable: false,
+                keepawake: false,
+            },
+            0,
+            Local::now() - Duration::minutes(10),
+        )
+        .await;
+        assert_eq!(t.current, Some(t.id));
+        assert!(row_exists(&t.pool, t.id).await);
     }
 
     #[tokio::test]
