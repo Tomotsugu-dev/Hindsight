@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "加载分类…",
       "empty": "还没有分类",
-      "unseenTitle": "AI 看不到——点一下给它看",
-      "seenTitle": "AI 能看到——点一下不给看"
+      "unseenTitle": "已排除，点击允许访问",
+      "seenTitle": "已允许访问，点击排除"
     },
     "rankedList": {
       "expand": "展开剩余 {{count}} 项",
@@ -1078,7 +1078,7 @@
       },
       "noCuda": {
         "headline": "未检测到 NVIDIA CUDA。",
-        "prefix": " vision LLM 在 CPU 上跑会非常慢。建议先去",
+        "prefix": " 本地模型在 CPU 上运行会非常慢，建议先去",
         "linkText": " NVIDIA 官网安装 CUDA Toolkit",
         "suffix": "（≥ 12.4），重启 Hindsight 后会自动切到 GPU 加速变体。"
       },
@@ -1155,9 +1155,9 @@
       "sectionTitle": "模型",
       "sectionDesc": "本地推理用的 LLM；GGUF 文件下载自 HuggingFace。",
       "reports": {
-        "title": "日报和周报用的模型",
-        "description": "自动生成也用这里的选择。思考模式能选哪几档看用的是哪家服务，越强越慢。",
-        "inUse": "现在用：{{model}}"
+        "title": "日报与周报模型",
+        "description": "自动总结同步使用此配置；思考模式档位因服务商而异。",
+        "inUse": "当前：{{model}}"
       },
       "toolbar": {
         "statusAll": "所有",
@@ -1174,7 +1174,7 @@
         "cardTitle": "云端 · {{provider}}",
         "modelUnset": "（未填模型）",
         "summaryConfirmTitle": "把总结数据发送到云端？",
-        "summaryConfirmMessage": "Text 选云端后，每次段总结会把应用名、分类、活动时间线发送到 {{provider}}。此选项不会上传截图图片本身。",
+        "summaryConfirmMessage": "使用云端模型时，会将应用名、分类和活动时间线发送至 {{provider}}，不会上传截图。",
         "summaryConfirmAccept": "我了解，继续"
       },
       "card": {
@@ -1199,8 +1199,8 @@
           "DEFAULT": "推荐首选"
         },
         "step2": "Text",
-        "step2ToggleOnTooltip": "把这个模型设为段总结（Text）使用。会替换之前的选择。",
-        "step2ToggleOffTooltip": "点击取消段总结（Text）选择（会回退到旧版 active 模型）。",
+        "step2ToggleOnTooltip": "设为日报模型",
+        "step2ToggleOffTooltip": "取消日报模型选择",
         "uninstall": "卸载",
         "uninstallTooltipInstalled": "删除本地文件（main + mmproj）",
         "uninstallTooltipNotInstalled": "尚未安装",
@@ -1254,7 +1254,7 @@
     },
     "prompt": {
       "sectionTitle": "提示词",
-      "sectionDesc": "告诉模型怎么写总结。三种语言各有内置默认；改完点保存生效，点重置回默认。",
+      "sectionDesc": "自定义总结提示词。按语言分别保存，点击保存后生效。",
       "rowLabel": "系统提示词",
       "hint": {
         "dirty": "有未保存的改动",
@@ -1270,12 +1270,12 @@
     },
     "segments": {
       "sectionTitle": "时段划分",
-      "sectionInfo": "AI 按段汇总；段内截图按相似度抽帧再发给模型。",
+      "sectionInfo": "日报按以下时段分别汇总当日活动。",
       "rowLabel": "时段"
     },
     "external": {
       "sectionTitle": "云端 API（可选）",
-      "sectionDesc": "时段总结与「对话」问答改用云端模型，截图永远不上传。",
+      "sectionDesc": "配置云端模型用于总结与对话，不会上传截图。",
       "enableLabel": "启用云端 API",
       "enableHint": "开启后，段总结与「对话」调下方配置的 API；截图永远不上传。",
       "providerLabel": "服务商",
@@ -1301,8 +1301,8 @@
       "testOk": "连接成功 · 拉到 {{count}} 个模型",
       "testOkNoModels": "连接成功",
       "testFail": "连接失败：{{message}}",
-      "missingFields": "请先填 Base URL 和 Model ID",
-      "privacyNote": "提示：文本 API 用于段总结和「对话」——应用名、分类、活动时间线、你的提问及命中的屏幕文字会发送到该 API。API Key 以明文保存在本地设置中。",
+      "missingFields": "请先填写 Base URL 和模型 ID",
+      "privacyNote": "使用云端 API 时，应用名、分类、活动时间线、提问及命中的屏幕文字会发送至该服务商。API Key 以明文保存在本地设置中。",
       "kimiBaseUrlNote": "国内站 api.moonshot.cn 与国际站 api.moonshot.ai 的 Key 不通用——按你申请 Key 的站点填。",
       "groupTextTitle": "文本 API",
       "groupTextHint": "段总结 · 「对话」ChatBot",
@@ -1311,14 +1311,14 @@
       "testStepChat": "模型 {{model}} 可用",
       "profilesLabel": "已保存的配置",
       "saveProfile": "保存当前配置",
-      "saveProfileHint": "把当前的服务地址、API Key 和模型存为一组,随时一键切换",
+      "saveProfileHint": "将当前服务地址、API Key 和模型保存为一组配置，随时切换",
       "deleteProfileAria": "删除配置 {{name}}",
       "fetchModels": "从服务端拉取可用模型",
-      "modelsFetched": "已拉取 {{count}} 个模型,输入框内可搜索选择"
+      "modelsFetched": "已拉取 {{count}} 个模型，可在输入框内搜索选择"
     },
     "autoSummary": {
       "sectionTitle": "定时计划",
-      "sectionDesc": "到点自动执行:生成报告与识别截图。",
+      "sectionDesc": "按设定时间自动生成日报与识别截图。",
       "enableLabel": "定时总结",
       "enableHint": "每天到点自动生成当天的日报",
       "timeLabel": "指定处理时间",
@@ -1530,7 +1530,7 @@
   },
   "aiProfiles": {
     "main": "默认分类",
-    "pickerTitle": "AI 能看到的数据",
+    "pickerTitle": "AI 访问的分类配置",
     "manage": "管理配置…",
     "moduleGroup": "功能",
     "feature": {
@@ -1539,25 +1539,25 @@
       "chat": "对话"
     },
     "intro": {
-      "daily": "每套配置是一组分类，生成日报时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。",
-      "weekly": "每套配置是一组分类，生成周报时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。",
-      "chat": "每套配置是一组分类，对话时 AI 只看这些分类里的记录。隐私分类和命中隐私关键词的记录，任何配置下 AI 都看不到。"
+      "daily": "隐私分类和命中隐私关键词的记录始终排除。",
+      "weekly": "隐私分类和命中隐私关键词的记录始终排除。",
+      "chat": "隐私分类和命中隐私关键词的记录始终排除。"
     },
-    "weeklyNote": "周报会照原文读这周的日报，日报里已经写进去的内容，这里拦不住。配置只管周报自己查的记录：整周的应用排行，和没有日报那几天的记录。",
-    "autoLabel": "自动生成时用",
-    "mainNote": "除了「不计入统计」和「隐私」以外的全部分类，不能改。",
-    "empty": "还没有配置。新建一套，只给 AI 看你选的分类。",
+    "weeklyNote": "已生成日报的内容会直接纳入周报；此配置仅过滤整周应用排行及缺少日报日期的记录。",
+    "autoLabel": "用于自动生成",
+    "mainNote": "除「不计入统计」和「隐私」外的全部分类，不可修改。",
+    "empty": "暂无自定义配置。",
     "add": "新建配置",
     "defaultName": "配置 {{n}}",
     "unnamed": "（未命名）",
     "namePlaceholder": "配置名",
-    "delete": "删除这套配置",
-    "saved": "改动已自动保存",
-    "notSaved": "标红的配置改好之前，改动不会保存",
+    "delete": "删除配置",
+    "saved": "已自动保存",
+    "notSaved": "修正标红项后才会保存",
     "errors": {
-      "noName": "要有名字",
-      "sameName": "和另一套配置重名",
-      "noCategory": "至少给 AI 看一个分类"
+      "noName": "请输入名称",
+      "sameName": "名称重复",
+      "noCategory": "至少选择一个分类"
     }
   },
   "aiSummary": {
@@ -1568,25 +1568,25 @@
       "month": "月报"
     },
     "model": {
-      "title": "模型和思考模式",
+      "title": "模型与思考模式",
       "modelGroup": "模型",
-      "followDaily": "跟日报一样",
-      "cloudConfirmMessage": "选了云端后，每次生成报告都会把应用名、分类和活动时间线发送到 {{provider}}。不会上传截图。"
+      "followDaily": "跟随日报",
+      "cloudConfirmMessage": "使用云端模型时，会将应用名、分类和活动时间线发送至 {{provider}}，不会上传截图。"
     },
     "placeholder": {
       "hint": "功能开发中。"
     },
     "errors": {
-      "runBusy": "已有一个 AI 生成任务在运行中。等它完成或先点「停止」再试。",
-      "profileGone": "选中的配置已经不存在了。在下拉框里换一套再试。",
+      "runBusy": "已有生成任务正在运行，请等待完成或先停止。",
+      "profileGone": "所选分类配置已不存在，请重新选择。",
       "noModel": "尚未配置语言模型。请在 AI 设置里添加云端连接，或选择一个本地模型。",
       "cloudUnavailable": "选中的云端连接配置不完整或不可用。请在 AI 设置里检查端点地址和模型名称。",
       "modelMissing": "找不到选中的本地模型文件，可能已被删除或移动。",
-      "engineMissing": "AI 引擎还没下载。请到「设置 → AI 引擎」下载后再试。",
-      "llmEmptyReasoning": "模型把额度都用在「思考」上，没来得及写出答案。请更新应用后重试（新版默认关闭本地思考）；若仍出现，换一个非推理（instruct）类文本模型，或在 AI 设置里调大该步骤的上下文。",
-      "llmEmptyEos": "模型还没开始生成就停了——通常是选的模型或它的视觉投影器（mmproj）不匹配。在 AI 设置里换一个模型。",
-      "llmEmptyTruncated": "模型的回答还没输出有用内容就被截断了（多半是推理模型）。换 Gemma 或 Qwen3 这类普通文本模型，或在 AI 设置里调大上下文。",
-      "llmEmpty": "模型没有返回任何内容。在 AI 设置里换一个模型试试。"
+      "engineMissing": "AI 引擎尚未下载，请前往「设置 → AI 引擎」下载。",
+      "llmEmptyReasoning": "模型思考耗尽了输出额度，未能生成正文。请调低或关闭思考模式、调大上下文，或更换模型重试。",
+      "llmEmptyEos": "模型未输出内容即结束，可能与当前引擎不兼容。请在「AI 设置」中更换模型。",
+      "llmEmptyTruncated": "模型输出在生成正文前被截断。请调低思考模式、调大上下文，或更换模型重试。",
+      "llmEmpty": "模型未返回内容，请重试或在「AI 设置」中更换模型。"
     },
     "edit": {
       "action": "修改",
@@ -1599,7 +1599,7 @@
     "weekly": {
       "title": "周报",
       "hint": "一周的活动汇总；按日期 + 主题给出整周回顾。",
-      "subtitle": "基于本周已生成的日报内容，整合成一段整周回顾",
+      "subtitle": "汇总本周日报，生成整周回顾",
       "weekNav": {
         "prevAria": "上一周",
         "nextAria": "下一周",
@@ -1627,16 +1627,16 @@
         "generateDay": "生成这天的日报"
       },
       "empty": {
-        "ready": "点「开始总结」，把这几天的日报写成一段回顾。",
-        "fewDaily": "这周只有 {{count}} 天有日报。日报越全，周报越准，可以先去日报页补上。",
-        "noDaily": "这周还没有日报。可以先去日报页生成，也可以直接用应用记录写一份简短的回顾。"
+        "ready": "点击「开始总结」生成本周回顾。",
+        "fewDaily": "本周仅 {{count}} 天有日报，可先补全日报以获得更准确的周报。",
+        "noDaily": "本周暂无日报。可先生成日报，或直接基于应用记录生成简版周报。"
       },
       "actions": {
         "stop": "停止",
         "regenerate": "重新生成",
         "start": "开始总结",
-        "startTooltip": "基于本周已生成的日报合成整周回顾，无需再读截图，速度比日报快得多",
-        "regenerateTooltip": "重新生成会清掉本周周报，重新跑一遍",
+        "startTooltip": "基于本周日报生成整周回顾",
+        "regenerateTooltip": "重新生成本周周报（生成完成前保留旧内容）",
         "noModelTooltip": "请先到 AI 设置 → 模型 给段总结选一个模型，或在云端 API 启用云端总结",
         "delete": "删除",
         "deleteTooltip": "清空本周周报数据（不影响日报）",
@@ -1658,12 +1658,12 @@
         "continueAnyway": "继续生成",
         "partialMissing": {
           "title": "部分日期没有日报",
-          "message": "本周有 {{count}} 天还没有生成日报：{{dates}}。如果继续，缺失日将仅使用当日应用统计代替日报；其余天仍正常使用日报。是否继续？"
+          "message": "本周有 {{count}} 天缺少日报（{{dates}}）。继续生成时，缺失日期将改用应用统计代替，是否继续？"
         },
         "fullMissing": {
           "title": "本周还没有任何日报",
-          "message": "本周 7 天都没有日报，但其中 {{activityCount}} 天有应用使用记录可参考。继续生成只能根据应用统计做一份简化的整周回顾，质量会明显低于有日报的情况。是否继续？",
-          "messageNoActivity": "本周 7 天都没有日报，也没有任何应用使用记录。继续生成大概率会失败。是否仍要尝试？"
+          "message": "本周暂无日报，仅 {{activityCount}} 天有应用记录。继续生成将仅基于应用统计输出简版周报，是否继续？",
+          "messageNoActivity": "本周既无日报也无应用记录，继续生成可能会失败，是否仍要尝试？"
         }
       },
       "engineLoading": "加载模型中…",
@@ -1681,7 +1681,7 @@
         "body": {
           "empty": "点上方「开始总结」基于本周日报合成整周回顾。",
           "engineStarting": "正在加载模型，首次约 30-90 秒…",
-          "summarizing": "正在让模型综合本周日报生成整周回顾…",
+          "summarizing": "正在生成周报…",
           "errorLabel": "失败："
         }
       },
@@ -1699,7 +1699,7 @@
       "hint": "一个月的活动趋势 + 关键事件回顾。功能开发中。"
     },
     "daily": {
-      "subtitle": "按时段汇总当日活动记录，本地模型生成",
+      "subtitle": "按时段汇总当日活动记录",
       "runtimeMissing": {
         "title": "需要先下载 AI 引擎",
         "message": "本地生成总结需要 AI 引擎（llama.cpp）。下载完成后会自动继续生成。",
@@ -1724,8 +1724,8 @@
         "stopping": "停止中…",
         "regenerate": "重新生成",
         "start": "开始总结",
-        "startTooltip": "本地模型逐段总结当日活动时间线；时长取决于硬件（GPU 数秒/段，CPU 数十秒/段）",
-        "regenerateTooltip": "重新生成会清掉本日所有段总结，重新跑一遍",
+        "startTooltip": "按时段总结当日活动时间线",
+        "regenerateTooltip": "重新生成当日全部时段总结",
         "noModelTooltip": "请先到 AI 设置 → 模型 选一个模型",
         "delete": "删除",
         "deleteTooltip": "清空当天的日报（不可撤销）",
@@ -1784,7 +1784,7 @@
       },
       "cloudOffer": {
         "title": "改用云端 API 生成？",
-        "message": "检测到你已配置云端 API（{{provider}} · {{model}}），但总结当前设为本地模型，且本地引擎未安装。确认后总结将改用云端 API 生成——应用名、分类与活动时间线将发送给该服务商；也可以到「设置 → AI 引擎」下载本地引擎。",
+        "message": "本地引擎尚未安装。可改用已配置的云端 API（{{provider}} · {{model}}）生成，应用名、分类和活动时间线将发送至该服务商；也可前往「设置 → AI 引擎」下载本地引擎。",
         "confirm": "使用云端生成"
       },
       "ocrLoading": "加载 OCR 模型中…",
@@ -1862,7 +1862,7 @@
       "local": "本地 · {{model}}",
       "none": "未选择模型"
     },
-    "localModelNoTools": "当前模型 {{model}} 未声明工具调用支持，回答可能不可靠，建议更换；不支持工具调用的本地模型不会显示在模型列表中。",
+    "localModelNoTools": "当前模型 {{model}} 不支持工具调用，回答可能不可靠，建议更换。",
     "backfill": {
       "pending": "有 {{count}} 张截图尚未进入文字索引，对话可能查不到它们。",
       "action": "立即回填",
@@ -1876,7 +1876,7 @@
       "ocrConfirmMessage": "建立文字索引需要下载文字识别组件（约 40MB），下载完成后自动开始索引。",
       "ocrConfirmAccept": "下载并开始",
       "downloadingOcr": "正在下载文字识别组件… {{mb}} MB",
-      "stoppedNotice": "本批已停止;常驻识别约 1 分钟后将继续",
+      "stoppedNotice": "本批已停止，常驻识别约 1 分钟后继续",
       "disableResident": "关闭常驻 OCR"
     },
     "citations": {
@@ -1885,7 +1885,7 @@
     },
     "model": {
       "pickAria": "选择对话模型",
-      "noToolUseModels": "已下载的本地模型不支持工具调用；对话需要支持工具调用（Tool-use）的模型，请在「AI 设置 → 模型」下载带 Tool-use 标记的模型。",
+      "noToolUseModels": "已下载的本地模型均不支持工具调用，请在「AI 设置 → 模型」下载带 Tool-use 标记的模型。",
       "empty": "没有可用模型：请配置云端 API 或下载本地模型"
     },
     "tokens": {
@@ -1904,7 +1904,7 @@
       "nextBranch": "下一个分支"
     },
     "edit": {
-      "hint": "编辑将创建新的对话分支,可用箭头在分支间切换。",
+      "hint": "编辑会创建新分支，可用箭头切换。",
       "save": "保存",
       "cancel": "取消"
     },
@@ -1918,7 +1918,7 @@
       "medium": "中",
       "high": "高",
       "max": "最强",
-      "hintLevels": "强度越高,响应越慢",
+      "hintLevels": "强度越高，响应越慢",
       "hintOpenai": "OpenAI 官方接口在对话中不支持思考"
     }
   },

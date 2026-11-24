@@ -500,8 +500,8 @@
     "categoryChipMultiSelect": {
       "loading": "Loading categories…",
       "empty": "No categories yet",
-      "unseenTitle": "The AI can't see this. Click to show it",
-      "seenTitle": "The AI can see this. Click to hide it"
+      "unseenTitle": "Excluded — click to include",
+      "seenTitle": "Included — click to exclude"
     },
     "rankedList": {
       "expand": "Show {{count}} more",
@@ -1083,7 +1083,7 @@
       },
       "noCuda": {
         "headline": "NVIDIA CUDA was not detected.",
-        "prefix": " Vision LLMs run very slowly on CPU. We recommend installing the",
+        "prefix": " Local LLMs run very slowly on CPU. We recommend installing the",
         "linkText": " CUDA Toolkit from NVIDIA",
         "suffix": " (≥ 12.4) first; Hindsight will automatically switch to the GPU-accelerated variant after a restart."
       },
@@ -1160,9 +1160,9 @@
       "sectionTitle": "Models",
       "sectionDesc": "LLM used for local inference; GGUF files are downloaded from HuggingFace.",
       "reports": {
-        "title": "Models for daily and weekly reports",
-        "description": "Automatic reports use these choices too. The thinking levels depend on the service. Higher levels are slower.",
-        "inUse": "In use: {{model}}"
+        "title": "Report models",
+        "description": "Also used for scheduled reports. Available thinking levels depend on the provider.",
+        "inUse": "Current: {{model}}"
       },
       "toolbar": {
         "statusAll": "All",
@@ -1179,7 +1179,7 @@
         "cardTitle": "Cloud · {{provider}}",
         "modelUnset": "(model not set)",
         "summaryConfirmTitle": "Send summary data to the cloud?",
-        "summaryConfirmMessage": "Routing Text to the cloud sends app names, categories, and the activity timeline to {{provider}} on every segment summary. The screenshot images themselves are not uploaded by this option.",
+        "summaryConfirmMessage": "App names, categories, and activity timelines will be sent to {{provider}} when generating reports. Screenshots are never uploaded.",
         "summaryConfirmAccept": "I understand, continue"
       },
       "card": {
@@ -1204,8 +1204,8 @@
           "DEFAULT": "Recommended"
         },
         "step2": "Text",
-        "step2ToggleOnTooltip": "Use this model for segment summaries (Text). Replaces the previous selection.",
-        "step2ToggleOffTooltip": "Click to clear the Text selection (will fall back to the legacy active model).",
+        "step2ToggleOnTooltip": "Use for daily reports",
+        "step2ToggleOffTooltip": "Clear daily report model",
         "uninstall": "Uninstall",
         "uninstallTooltipInstalled": "Delete local files (main + mmproj)",
         "uninstallTooltipNotInstalled": "Not installed",
@@ -1259,7 +1259,7 @@
     },
     "prompt": {
       "sectionTitle": "Prompts",
-      "sectionDesc": "Tell the model how to write summaries. Each language has a built-in default; click Save after editing, or Reset to revert to default.",
+      "sectionDesc": "Customize summary instructions. Saved per language; click Save to apply.",
       "rowLabel": "System prompt",
       "hint": {
         "dirty": "Unsaved changes",
@@ -1275,12 +1275,12 @@
     },
     "segments": {
       "sectionTitle": "Time segments",
-      "sectionInfo": "AI summaries are produced per segment; screenshots within each segment are sampled by similarity before being sent to the model.",
+      "sectionInfo": "Daily reports summarize activity for each time segment below.",
       "rowLabel": "Segments"
     },
     "external": {
       "sectionTitle": "Cloud API (optional)",
-      "sectionDesc": "Generate segment summaries and Chat answers with a cloud model. Screenshots are never uploaded.",
+      "sectionDesc": "Configure cloud models for summaries and Chat. Screenshots are never uploaded.",
       "enableLabel": "Enable cloud API",
       "enableHint": "When on, segment summaries and Chat call the API configured below; screenshots are never uploaded.",
       "providerLabel": "Provider",
@@ -1307,7 +1307,7 @@
       "testOkNoModels": "Connected",
       "testFail": "Connection failed: {{message}}",
       "missingFields": "Fill in Base URL and Model ID first",
-      "privacyNote": "Note: the Text API serves segment summaries and Chat — app names, categories, the activity timeline, your questions and matching screen text are sent to it. API keys are stored in plain text in local settings.",
+      "privacyNote": "When using a cloud API, app names, categories, activity timelines, your questions, and matching screen text are sent to the provider. API keys are stored in plain text locally.",
       "kimiBaseUrlNote": "Keys for api.moonshot.cn (China) and api.moonshot.ai (global) are not interchangeable — use the site where your key was issued.",
       "groupTextTitle": "Text API",
       "groupTextHint": "Segment summaries · Chat",
@@ -1535,7 +1535,7 @@
   },
   "aiProfiles": {
     "main": "Default categories",
-    "pickerTitle": "Data the AI can see",
+    "pickerTitle": "AI category access",
     "manage": "Manage profiles…",
     "moduleGroup": "Feature",
     "feature": {
@@ -1544,25 +1544,25 @@
       "chat": "Chat"
     },
     "intro": {
-      "daily": "A profile is a set of categories. When it writes the daily report, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile.",
-      "weekly": "A profile is a set of categories. When it writes the weekly report, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile.",
-      "chat": "A profile is a set of categories. In chat, the AI only sees records in those categories. The AI never sees private records, or records that match a privacy keyword, in any profile."
+      "daily": "Private categories and records matching privacy keywords are always excluded.",
+      "weekly": "Private categories and records matching privacy keywords are always excluded.",
+      "chat": "Private categories and records matching privacy keywords are always excluded."
     },
-    "weeklyNote": "The weekly report reads this week's daily reports as they are. A profile can't remove what they already say. It only filters what the weekly report looks up itself: the top apps of the week, and the records of days with no daily report.",
-    "autoLabel": "Use for automatic reports",
-    "mainNote": "Every category except hidden and private ones. You can't change it.",
-    "empty": "No profiles yet. Add one to let the AI see only the categories you choose.",
+    "weeklyNote": "Existing daily reports are included as-is; this profile only filters weekly app rankings and days without a daily report.",
+    "autoLabel": "Auto-generation",
+    "mainNote": "All categories except Hidden and Private (read-only).",
+    "empty": "No custom profiles yet.",
     "add": "New profile",
     "defaultName": "Profile {{n}}",
     "unnamed": "(no name)",
     "namePlaceholder": "Profile name",
-    "delete": "Delete this profile",
-    "saved": "Changes are saved automatically",
-    "notSaved": "Changes aren't saved until you fix the profiles marked in red",
+    "delete": "Delete profile",
+    "saved": "Saved automatically",
+    "notSaved": "Fix highlighted errors to save",
     "errors": {
-      "noName": "Needs a name",
-      "sameName": "Another profile has this name",
-      "noCategory": "Let the AI see at least one category"
+      "noName": "Name is required",
+      "sameName": "Duplicate name",
+      "noCategory": "Select at least one category"
     }
   },
   "aiSummary": {
@@ -1576,22 +1576,22 @@
       "title": "Model and thinking",
       "modelGroup": "Model",
       "followDaily": "Same as daily",
-      "cloudConfirmMessage": "With the cloud, each report sends app names, categories and your activity timeline to {{provider}}. Screenshots are not sent."
+      "cloudConfirmMessage": "App names, categories, and activity timelines will be sent to {{provider}} when generating reports. Screenshots are never uploaded."
     },
     "placeholder": {
       "hint": "Feature in development."
     },
     "errors": {
-      "runBusy": "Another AI generation task is already running. Wait for it to finish, or press Stop first.",
-      "profileGone": "The selected profile no longer exists. Pick another one in the menu and try again.",
+      "runBusy": "Another AI generation task is already running. Wait for it to finish or stop it first.",
+      "profileGone": "The selected profile no longer exists. Please choose another.",
       "noModel": "No language model is configured. Add a cloud connection or select a local model in AI Settings.",
       "cloudUnavailable": "The selected cloud connection is incomplete or unavailable. Check its endpoint and model in AI Settings.",
       "modelMissing": "The selected local model file could not be found. It may have been deleted or moved.",
-      "engineMissing": "The AI engine is not downloaded yet. Download it in Settings → AI Engine, then try again.",
-      "llmEmptyReasoning": "The model spent its entire budget thinking and never wrote the answer. Update the app and retry (new builds disable local thinking by default); if it persists, switch to a non-reasoning (instruct) model or raise this step's context size.",
-      "llmEmptyEos": "The model stopped without generating anything — usually the chosen model or its vision projector (mmproj) don't match. Pick a different model in AI Settings.",
-      "llmEmptyTruncated": "The model's answer was cut off before any usable text came out (likely a reasoning model). Use a regular text model like Gemma or Qwen3, or raise the context size in AI Settings.",
-      "llmEmpty": "The model returned no content. Try a different model in AI Settings."
+      "engineMissing": "AI engine not installed. Download it in Settings → AI Engine.",
+      "llmEmptyReasoning": "The model exhausted its output limit while thinking. Lower or disable thinking mode, increase context length, or switch models.",
+      "llmEmptyEos": "The model stopped without producing output. Try switching to another model in AI Settings.",
+      "llmEmptyTruncated": "Model output was truncated before generating usable text. Lower thinking mode, increase context length, or switch models.",
+      "llmEmpty": "The model returned no content. Retry or switch models in AI Settings."
     },
     "edit": {
       "action": "Edit",
@@ -1604,7 +1604,7 @@
     "weekly": {
       "title": "Weekly",
       "hint": "Weekly activity rollup with date + theme breakdown.",
-      "subtitle": "Synthesize this week's daily reports into a single weekly review",
+      "subtitle": "Synthesize this week's daily reports into a weekly review",
       "weekNav": {
         "prevAria": "Previous week",
         "nextAria": "Next week",
@@ -1632,16 +1632,16 @@
         "generateDay": "Generate this day's report"
       },
       "empty": {
-        "ready": "Click \"Generate\" to turn these daily reports into one review.",
-        "fewDaily": "Only {{count}} days this week have a daily report. The more daily reports, the better the review. You can fill them in on the Daily tab first.",
-        "noDaily": "No daily reports this week yet. Generate them on the Daily tab first, or write a short review from app records only."
+        "ready": "Click \"Generate\" to create this week's review.",
+        "fewDaily": "Only {{count}} day(s) have daily reports this week. Generate more on the Daily tab for a fuller review.",
+        "noDaily": "No daily reports this week yet. Generate them first, or create a brief review from app activity."
       },
       "actions": {
         "stop": "Stop",
         "regenerate": "Regenerate",
         "start": "Generate",
-        "startTooltip": "Builds a weekly review from this week's existing daily reports — no screenshots, much faster than daily",
-        "regenerateTooltip": "Regenerating will clear and replace this week's weekly report",
+        "startTooltip": "Generate a weekly review from this week's daily reports",
+        "regenerateTooltip": "Regenerate this week's report (keeps the current report until finished)",
         "noModelTooltip": "Pick a summary model in AI Settings → Models, or enable Cloud API",
         "delete": "Delete",
         "deleteTooltip": "Clear this week's weekly report (does not affect daily reports)",
@@ -1663,12 +1663,12 @@
         "continueAnyway": "Generate anyway",
         "partialMissing": {
           "title": "Some days don't have a daily report",
-          "message": "{{count}} day(s) this week have no daily report: {{dates}}. If you continue, those days will use only their app stats in place of a daily report; the rest will still use the daily reports as usual. Continue?"
+          "message": "{{count}} day(s) lack a daily report ({{dates}}). Those days will fall back to app stats. Continue?"
         },
         "fullMissing": {
           "title": "No daily reports for this week",
-          "message": "None of the 7 days this week has a daily report, but {{activityCount}} of them have app usage records to work from. Generating will only produce a simplified weekly review based on app stats — noticeably lower quality than with daily reports. Continue?",
-          "messageNoActivity": "None of the 7 days this week has a daily report, and there are no app usage records either. Generation will very likely fail. Try anyway?"
+          "message": "No daily reports this week ({{activityCount}} day(s) have app records). Continuing will generate a brief review from app stats only. Continue?",
+          "messageNoActivity": "No daily reports or app records exist for this week. Generation will likely fail. Try anyway?"
         }
       },
       "engineLoading": "Loading model…",
@@ -1686,7 +1686,7 @@
         "body": {
           "empty": "Click \"Generate\" above to synthesize a weekly review from this week's daily reports.",
           "engineStarting": "Loading model — about 30-90s for the first run…",
-          "summarizing": "The model is synthesizing this week's daily reports into a weekly review…",
+          "summarizing": "Generating weekly review…",
           "errorLabel": "Failed: "
         }
       },
@@ -1704,7 +1704,7 @@
       "hint": "Monthly activity trends and highlights. Feature in development."
     },
     "daily": {
-      "subtitle": "Per-segment rollup of today's activity timeline, generated by a local model.",
+      "subtitle": "Per-segment summary of today's activity",
       "runtimeMissing": {
         "title": "AI engine not installed",
         "message": "Generating summaries locally requires the AI engine (llama.cpp). Generation continues automatically once the download finishes.",
@@ -1729,8 +1729,8 @@
         "stopping": "Stopping…",
         "regenerate": "Regenerate",
         "start": "Start summary",
-        "startTooltip": "The local model summarizes each segment's activity timeline in turn; duration depends on hardware (a few seconds per segment on GPU, tens of seconds on CPU).",
-        "regenerateTooltip": "Regenerating clears all segment summaries for this day and runs them again.",
+        "startTooltip": "Summarize today's activity timeline by segment",
+        "regenerateTooltip": "Regenerate all segment summaries for this day",
         "noModelTooltip": "Pick a model in AI Settings → Models first.",
         "delete": "Delete",
         "deleteTooltip": "Clear the daily report for this day (cannot be undone)",
@@ -1789,7 +1789,7 @@
       },
       "cloudOffer": {
         "title": "Generate with your cloud API instead?",
-        "message": "A cloud API is already configured ({{provider}} · {{model}}), but summaries are currently set to a local model and the local engine isn't installed. Confirm to switch summaries to the cloud API — app names, categories and the activity timeline will be sent to that provider. Alternatively, download the local engine under Settings → AI Engine.",
+        "message": "Local engine is not installed. Switch to your configured cloud API ({{provider}} · {{model}}) — app names, categories, and activity timelines will be sent to that provider — or download the local engine in Settings → AI Engine.",
         "confirm": "Use cloud API"
       },
       "ocrLoading": "Loading OCR model…",
@@ -1867,7 +1867,7 @@
       "local": "Local · {{model}}",
       "none": "No model selected"
     },
-    "localModelNoTools": "The current model {{model}} does not declare tool-calling support — answers may be unreliable, consider switching. Local models without tool-calling support are not shown in the model list.",
+    "localModelNoTools": "The current model {{model}} does not declare tool-calling support; answers may be unreliable.",
     "backfill": {
       "pending": "{{count}} screenshots are not yet in the text index; chat may miss them.",
       "action": "Index now",
@@ -1890,7 +1890,7 @@
     },
     "model": {
       "pickAria": "Choose chat model",
-      "noToolUseModels": "Your downloaded local models do not support tool calling. Chat needs a tool-use capable model — download one with the Tool-use badge in AI Settings → Models.",
+      "noToolUseModels": "None of your downloaded local models support tool calling. Download one with the Tool-use badge in AI Settings → Models.",
       "empty": "No models available: configure a cloud API or download a local model"
     },
     "tokens": {
