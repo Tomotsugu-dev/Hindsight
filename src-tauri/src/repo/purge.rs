@@ -159,15 +159,16 @@ pub async fn count(
     })
 }
 
-/// 删掉本机从 `at` 起记下的活动，返回删了多少。
+/// 删掉本机从 `at` 起记下的活动和屏幕文字，返回删了多少。
 ///
 /// - `at` 及以后开始的行删掉，连同它们独占的截图和截图衍生的数据；
-/// - 跨过 `at` 的行，结束时刻改成 `at`。
+/// - 跨过 `at` 的行，结束时刻改成 `at`；
+/// - 屏幕文字按同样的时刻删，见 [`truncate_memory`]。
 ///
 /// 改动和删除写进 outbox，调用方不用暂停同步。
 pub async fn truncate_at(
     pool: &DbPool,
-    _mem: Option<&MemoryDb>,
+    mem: Option<&MemoryDb>,
     screenshot_root: &Path,
     self_id: &str,
     at: DateTime<Local>,
@@ -195,9 +196,90 @@ pub async fn truncate_at(
         activities: delete_rows(pool, &to_delete, Some(self_id)).await?,
         ..PurgeReport::default()
     };
+    if let Some(mem) = mem {
+        report.memory_sessions = truncate_memory(pool, mem, at).await?;
+    }
     // 文件放最后：行已经删了，统计就对了；文件删不掉只会留下没人用的文件。
     report.screenshots = delete_files(screenshot_root, &to_delete.screenshots).await?;
     Ok(report)
+}
+
+/// 本机的、从 `at` 起开始的文字段。
+const SESSIONS_FROM: &str = "origin_device IS NULL AND julianday(started_ts) >= julianday(?1)";
+/// 本机的、跨过 `at` 的文字段。
+const SESSIONS_ACROSS: &str = "origin_device IS NULL
+    AND julianday(started_ts) < julianday(?1) AND julianday(ended_ts) > julianday(?1)";
+
+/// 删掉本机从 `at` 起识别出的屏幕文字，返回删了几段：
+///
+/// - `at` 及以后登记的截图删掉，还没识别的就不再识别；
+/// - `at` 及以后开始的段整段删；
+/// - 跨过 `at` 的段，删掉 `at` 及以后才第一次出现的行，剩下的行重新拼，结束时刻改成 `at`。
+async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> Result<u64> {
+    let at_s = at.to_rfc3339();
+    let (sessions, days) = mem
+        .0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            let days: Vec<String> = column(
+                &tx,
+                "SELECT DISTINCT local_date FROM text_sessions
+                  WHERE origin_device IS NULL AND julianday(ended_ts) >= julianday(?1)",
+                [&at_s],
+            )?;
+            tx.execute(
+                &format!(
+                    "DELETE FROM session_lines
+                      WHERE session_id IN (SELECT id FROM text_sessions WHERE {SESSIONS_FROM})"
+                ),
+                [&at_s],
+            )
+            .db()?;
+            let sessions = tx
+                .execute(
+                    &format!("DELETE FROM text_sessions WHERE {SESSIONS_FROM}"),
+                    [&at_s],
+                )
+                .db()?;
+            tx.execute(
+                &format!(
+                    "DELETE FROM session_lines
+                      WHERE julianday(first_ts) >= julianday(?1)
+                        AND session_id IN (SELECT id FROM text_sessions WHERE {SESSIONS_ACROSS})"
+                ),
+                [&at_s],
+            )
+            .db()?;
+            tx.execute(
+                &format!(
+                    "UPDATE text_sessions
+                        SET text = COALESCE((SELECT group_concat(l.text, char(10) ORDER BY l.line_no)
+                                               FROM session_lines l
+                                              WHERE l.session_id = text_sessions.id), ''),
+                            ended_ts = ?1
+                      WHERE {SESSIONS_ACROSS}"
+                ),
+                [&at_s],
+            )
+            .db()?;
+            tx.execute(
+                "DELETE FROM frames WHERE julianday(ts) >= julianday(?1)",
+                [&at_s],
+            )
+            .db()?;
+            tx.commit().db()?;
+            Ok((sessions as u64, days))
+        })
+        .await?;
+    // 先删再写 outbox：反过来的话，推送落在两步之间会传上没删的文字，还把 outbox 用掉。
+    pool.0
+        .call(move |conn| {
+            let tx = conn.transaction().db()?;
+            enqueue_days(&tx, OutboxEntity::Memory, &days).db()?;
+            tx.commit().db()
+        })
+        .await?;
+    Ok(sessions)
 }
 
 /// 把本机跨过 `at` 的行的结束时刻改成 `at`，给它们的日子写 outbox。
@@ -1350,5 +1432,208 @@ mod tests {
             1
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 插一段屏幕文字，每行带第一次出现的时刻，`text` 照识别时的样子拼好。返回段的 id。
+    async fn seed_text(
+        mem: &MemoryDb,
+        origin: Option<&str>,
+        started: &str,
+        ended: &str,
+        lines: &[(&str, &str)],
+    ) -> i64 {
+        let (origin, started, ended) = (
+            origin.map(str::to_string),
+            started.to_string(),
+            ended.to_string(),
+        );
+        let lines: Vec<(String, String)> = lines
+            .iter()
+            .map(|(line, ts)| (line.to_string(), ts.to_string()))
+            .collect();
+        mem.0
+            .call(move |conn| {
+                let text: Vec<&str> = lines.iter().map(|(line, _)| line.as_str()).collect();
+                conn.execute(
+                    "INSERT INTO text_sessions(local_date, started_ts, ended_ts, app_id, title,
+                                               text, origin_device)
+                     VALUES(substr(?1, 1, 10), ?1, ?2, 'Player', 't', ?3, ?4)",
+                    rusqlite::params![started, ended, text.join("\n"), origin],
+                )
+                .db()?;
+                let sid = conn.last_insert_rowid();
+                for (no, (line, ts)) in lines.iter().enumerate() {
+                    conn.execute(
+                        "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
+                         VALUES(?1, ?2, ?3, 'x.jpg', ?4)",
+                        rusqlite::params![sid, no as i64, line, ts],
+                    )
+                    .db()?;
+                }
+                Ok(sid)
+            })
+            .await
+            .unwrap()
+    }
+
+    /// 登记一张还没识别的截图。
+    async fn seed_frame(mem: &MemoryDb, path: &str, ts: &str) {
+        let (path, ts) = (path.to_string(), ts.to_string());
+        mem.0
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO frames(path, ts, local_date, app_id, title)
+                     VALUES(?1, ?2, substr(?2, 1, 10), 'Player', 't')",
+                    rusqlite::params![path, ts],
+                )
+                .db()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    /// 截断点及以后登记的截图删掉，之前的留着。
+    #[tokio::test]
+    async fn truncate_at_deletes_frames_after_the_cut() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        seed_frame(&mem, "before.jpg", "2026-11-20T20:55:00+09:00").await;
+        seed_frame(&mem, "after.jpg", "2026-11-20T21:05:00+09:00").await;
+
+        truncate_at(&pool, Some(&mem), Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        let paths: Vec<String> = mem
+            .0
+            .call(|conn| column(conn, "SELECT path FROM frames ORDER BY path", ()))
+            .await
+            .unwrap();
+        assert_eq!(paths, vec!["before.jpg"]);
+    }
+
+    /// 截断点及以后开始的段整段删，搜不到了。
+    #[tokio::test]
+    async fn truncate_at_deletes_text_sessions_that_start_after_the_cut() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let after = "2026-11-20T21:05:00+09:00";
+        seed_text(
+            &mem,
+            None,
+            after,
+            "2026-11-20T21:20:00+09:00",
+            &[("睡着以后视频里的字幕", after)],
+        )
+        .await;
+
+        let report = truncate_at(&pool, Some(&mem), Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        assert_eq!(report.memory_sessions, 1);
+        assert_eq!(fts_hits(&mem, "睡着以后视频里的字幕").await, 0);
+        let lines: i64 = mem
+            .0
+            .call(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM session_lines", [], |r| r.get(0))
+                    .db()
+            })
+            .await
+            .unwrap();
+        assert_eq!(lines, 0);
+    }
+
+    /// 跨过截断点的段：只删截断点以后才出现的行，文字重新拼，结束时刻改成截断点。
+    #[tokio::test]
+    async fn truncate_at_drops_lines_first_seen_after_the_cut() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let sid = seed_text(
+            &mem,
+            None,
+            "2026-11-20T20:50:00+09:00",
+            "2026-11-20T21:20:00+09:00",
+            &[
+                ("睡前看到的第一行字", "2026-11-20T20:50:00+09:00"),
+                ("睡前看到的第二行字", "2026-11-20T20:55:00+09:00"),
+                ("睡着以后才出现的字幕", "2026-11-20T21:05:00+09:00"),
+            ],
+        )
+        .await;
+
+        truncate_at(&pool, Some(&mem), Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        let (text, ended): (String, String) = mem
+            .0
+            .call(move |conn| {
+                conn.query_row(
+                    "SELECT text, ended_ts FROM text_sessions WHERE id = ?1",
+                    [sid],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .db()
+            })
+            .await
+            .unwrap();
+        assert_eq!(text, "睡前看到的第一行字\n睡前看到的第二行字");
+        assert_eq!(DateTime::parse_from_rfc3339(&ended).unwrap(), at(CUT));
+        assert_eq!(fts_hits(&mem, "睡着以后才出现的字幕").await, 0);
+        assert_eq!(fts_hits(&mem, "睡前看到的第二行字").await, 1);
+    }
+
+    /// 别的设备同步过来的文字不动，哪怕在截断点之后。
+    #[tokio::test]
+    async fn truncate_at_keeps_text_from_other_devices() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let after = "2026-11-20T21:05:00+09:00";
+        seed_text(
+            &mem,
+            Some(PEER),
+            after,
+            "2026-11-20T21:20:00+09:00",
+            &[("另一台机器上的字幕", after)],
+        )
+        .await;
+
+        let report = truncate_at(&pool, Some(&mem), Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        assert_eq!(report.memory_sessions, 0);
+        assert_eq!(fts_hits(&mem, "另一台机器上的字幕").await, 1);
+    }
+
+    /// 动到的本机文字段的日子都写 outbox，过了午夜的那天也算；别的设备的、没动到的不写。
+    #[tokio::test]
+    async fn truncate_at_marks_every_touched_memory_day_for_push() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let t = |s: &str| format!("2026-{s}:00+09:00");
+        for (origin, started, ended, line) in [
+            (None, "11-19T10:00", "11-19T10:05", "没动到的一天"),
+            (None, "11-20T20:50", "11-20T21:20", "睡前的字"),
+            (None, "11-21T00:10", "11-21T00:20", "午夜后的字"),
+            (Some(PEER), "11-22T10:00", "11-22T10:05", "别人的字"),
+        ] {
+            let started = t(started);
+            seed_text(&mem, origin, &started, &t(ended), &[(line, &started)]).await;
+        }
+
+        truncate_at(&pool, Some(&mem), Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            outbox_days(&pool).await,
+            vec![
+                ("memory".to_string(), "2026-11-20".to_string()),
+                ("memory".to_string(), "2026-11-21".to_string()),
+            ]
+        );
     }
 }
