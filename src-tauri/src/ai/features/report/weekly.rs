@@ -26,11 +26,10 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::Serialize;
 use tauri::AppHandle;
 
-use crate::ai::config::{ModelRef, Task, NO_MODEL_ERROR};
-use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::features::report::model::build_step2;
+use crate::ai::config::Task;
+use crate::ai::engine::{EngineGuard, EngineSupervisor};
+use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
 use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
-use crate::ai::models;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::ai::prompt::{
     build_weekly_system_prompt, build_weekly_user_prompt, weekday_short, WeeklyContext,
@@ -52,7 +51,7 @@ const WEEKLY_SEGMENT_IDX: u32 = 0;
 pub struct WeekSummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
-    app: S,
+    sink: S,
     /// 停止标志，和日报共用 [`crate::commands::ai_summary::SummaryCancel`]。
     /// 启动引擎和等模型回答时按停止，都会中断。
     cancel: Arc<AtomicBool>,
@@ -62,13 +61,13 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
-        app: S,
+        sink: S,
         cancel: Arc<AtomicBool>,
     ) -> Self {
         Self {
             pool,
             supervisor,
-            app,
+            sink,
             cancel,
         }
     }
@@ -126,9 +125,6 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let ai = cfg.ai.clone();
 
         ai.check_ready(Task::Weekly).map_err(Error::InvalidInput)?;
-        let Some(model) = ai.model_for(Task::Weekly) else {
-            return Err(Error::InvalidInput(NO_MODEL_ERROR));
-        };
         let visible = AiDataPolicy::load(&self.pool.0, AiModule::Weekly, profile)
             .await?
             .main_filter();
@@ -219,16 +215,19 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         // 本地引擎冷启动提示——supervisor.status() 不是 Running 时才推 engine_starting
         // 让前端显示"加载模型中…"。走云端时跳过，不动 supervisor。
         // 整轮都拿着引擎：别的任务换不掉它
-        let engine = if let ModelRef::Local { file } = &model {
-            let st = self.supervisor.status().await;
-            if st.state != EngineState::Running {
-                // message 留空：前端按 phase 显示本地化的"加载模型中…"（weeklySummary.ts）
-                self.emit_phase("engine_starting", &week_key, None, None);
-            }
-            Some(cancellable(&self.cancel, self.acquire_engine(&ai, file)).await?)
-        } else {
-            None
-        };
+        let engine = acquire_engine(
+            &self.supervisor,
+            &self.sink,
+            &self.cancel,
+            &ai,
+            Task::Weekly,
+            EngineProgress {
+                source: WEEKLY_SOURCE,
+                date: &week_key,
+                total_segments: 1,
+            },
+        )
+        .await?;
         // 云端路径用不到端口；step2 客户端会忽略它。占位 0。
         let port = engine.as_ref().map_or(0, EngineGuard::port);
 
@@ -247,8 +246,8 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         let system = build_weekly_system_prompt(&ai);
         let user_text = build_weekly_user_prompt(&ai, &ctx);
 
-        let step2 = build_step2(&ai, Task::Weekly, port)?;
-        let step2_model = step2.model_label().to_string();
+        let model = open_model(&ai, Task::Weekly, port)?;
+        let model_label = model.model_label().to_string();
 
         // 推一条 summarizing 让前端段卡片切到"生成中"
         {
@@ -263,7 +262,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         }
 
         // 停止时不写库，旧周报留着
-        let chat_result = cancellable(&self.cancel, step2.chat(&system, &user_text)).await;
+        let chat_result = cancellable(&self.cancel, model.chat(&system, &user_text)).await;
         if matches!(chat_result, Err(Error::SummaryCancelled)) {
             return Err(Error::SummaryCancelled);
         }
@@ -277,7 +276,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                     start_hour: 0,
                     end_hour: 0,
                     content,
-                    model: step2_model.clone(),
+                    model: model_label,
                     status: "ok".to_string(),
                     error: None,
                     generated_at: utc_now_rfc3339(),
@@ -295,7 +294,7 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
                     start_hour: 0,
                     end_hour: 0,
                     content: String::new(),
-                    model: step2_model,
+                    model: model_label,
                     status: "error".to_string(),
                     error: Some(e.to_string()),
                     generated_at: utc_now_rfc3339(),
@@ -383,30 +382,8 @@ impl<S: ProgressSink> WeekSummaryRunner<S> {
         Ok(())
     }
 
-    /// 按周报的模型和参数拿一个本机引擎。`main_name` 是周报用的本机模型文件。
-    async fn acquire_engine(
-        &self,
-        ai: &crate::ai::config::AiConfig,
-        main_name: &str,
-    ) -> Result<EngineGuard> {
-        let models_dir = models::root_dir(ai);
-        let main_path = models_dir.join(main_name);
-        if !main_path.exists() {
-            return Err(Error::ModelFileMissing(format!(
-                "{}（可能被删除或路径变了）",
-                main_name
-            )));
-        }
-        let wanted_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size_for(Task::Weekly),
-            parallel_slots: ai.parallel_slots_for(Task::Weekly),
-            ctx_size: ai.ctx_size_for(Task::Weekly),
-        };
-        self.supervisor.acquire(main_path, wanted_overrides).await
-    }
-
     fn emit(&self, payload: SummaryProgress) {
-        self.app.emit_progress(payload);
+        self.sink.emit_progress(payload);
     }
 
     /// 简化版 emit——大多数 phase 字段都为 None，统一用 base 兜底。
@@ -621,6 +598,7 @@ pub async fn precheck_week(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::config::ModelRef;
     use crate::ai::features::report::test_util::{
         phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned, RecordingSink,
     };

@@ -22,7 +22,7 @@ use crate::storage::{utc_now_rfc3339, DbPool};
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn summarize_segment(
     pool: &DbPool,
-    step2: &Step2Chat,
+    model: &Step2Chat,
     ai: &AiConfig,
     source: &str,
     date_str: &str,
@@ -47,7 +47,7 @@ pub(crate) async fn summarize_segment(
     let system = build_system_prompt(ai);
     let user_text = build_user_prompt(ai, &ctx);
 
-    let chat_result = cancellable(cancel, step2.chat(&system, &user_text)).await;
+    let chat_result = cancellable(cancel, model.chat(&system, &user_text)).await;
     if matches!(chat_result, Err(Error::SummaryCancelled)) {
         return Err(Error::SummaryCancelled);
     }
@@ -136,7 +136,7 @@ mod tests {
     use super::*;
     use crate::ai::config::{ModelRef, Task};
     use crate::ai::features::report::daily::timeline::build_activity_timeline;
-    use crate::ai::features::report::model::build_step2;
+    use crate::ai::features::report::model::open_model;
     use crate::ai::model::Reasoning;
     use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
     use crate::repo::reports::DeviceFilter;
@@ -179,7 +179,7 @@ mod tests {
             .unwrap();
 
         let cancel = Arc::new(AtomicBool::new(false));
-        let step2 = build_step2(&ai, Task::Daily, 0).unwrap();
+        let chat_model = open_model(&ai, Task::Daily, 0).unwrap();
         let visible = AiDataPolicy::load(&pool.0, AiModule::Daily, &ProfileChoice::Auto)
             .await
             .unwrap()
@@ -215,7 +215,7 @@ mod tests {
                     &seg.label,
                     seg.start_hour,
                     seg.end_hour,
-                    step2.model_label().to_string(),
+                    chat_model.model_label().to_string(),
                 )
                 .await
                 .unwrap();
@@ -235,7 +235,7 @@ mod tests {
             .unwrap_or_default();
             let (row, status) = summarize_segment(
                 &pool,
-                &step2,
+                &chat_model,
                 &ai,
                 "daily",
                 &date,
@@ -245,7 +245,7 @@ mod tests {
                 idx as u32,
                 &timeline,
                 &top_apps,
-                step2.model_label().to_string(),
+                chat_model.model_label().to_string(),
                 &cancel,
             )
             .await
@@ -451,14 +451,14 @@ mod tests {
     async fn summarize_segment_chat_failure_writes_error_row() {
         let pool = fresh_test_pool().await;
         let port = free_local_port();
-        let step2 = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
+        let chat_model = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
 
         let (row, status) = summarize_segment(
             &pool,
-            &step2,
+            &chat_model,
             &ai,
             "daily",
             "2026-05-15",
@@ -501,7 +501,7 @@ mod tests {
             .unwrap();
 
         let port = free_local_port();
-        let step2 = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
+        let chat_model = Step2Chat::local(port, "dead.gguf", 1024, Reasoning::Default).unwrap();
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
@@ -509,7 +509,7 @@ mod tests {
         for _ in 0..2 {
             summarize_segment(
                 &pool,
-                &step2,
+                &chat_model,
                 &ai,
                 "daily",
                 "2026-05-15",
@@ -541,14 +541,14 @@ mod tests {
         // 挂起的假服务：backlog 完成握手但永不回包，让请求停在途中等 cancel 打断
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let step2 = Step2Chat::local(port, "m.gguf", 1024, Reasoning::Default).unwrap();
+        let chat_model = Step2Chat::local(port, "m.gguf", 1024, Reasoning::Default).unwrap();
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(true)); // 预先按下停止
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
 
         let r = summarize_segment(
             &pool,
-            &step2,
+            &chat_model,
             &ai,
             "daily",
             "2026-05-15",
@@ -582,7 +582,7 @@ mod tests {
     async fn summarize_segment_ok_writes_ok_row_and_trims_content() {
         let pool = fresh_test_pool().await;
         let port = spawn_canned_openai_server("  上午主要在写 Hindsight 的单元测试。  ").await;
-        let step2 = Step2Chat::local(port, "qwen.gguf", 1024, Reasoning::Default).unwrap();
+        let chat_model = Step2Chat::local(port, "qwen.gguf", 1024, Reasoning::Default).unwrap();
         let ai = AiConfig::default();
         let cancel = Arc::new(AtomicBool::new(false));
         let timeline = vec![("09:00-10:00".to_string(), "VSCode 30 分钟".to_string())];
@@ -590,7 +590,7 @@ mod tests {
 
         let (row, status) = summarize_segment(
             &pool,
-            &step2,
+            &chat_model,
             &ai,
             "daily",
             "2026-05-15",

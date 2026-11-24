@@ -14,18 +14,17 @@
 mod segment;
 mod timeline;
 
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::NaiveDate;
 use tauri::AppHandle;
 
-use crate::ai::config::{AiConfig, ModelRef, Task, NO_MODEL_ERROR};
-use crate::ai::engine::{EngineGuard, EngineStartOverrides, EngineState, EngineSupervisor};
-use crate::ai::features::report::model::build_step2;
-use crate::ai::features::report::progress::{cancellable, ProgressSink, SummaryProgress};
-use crate::ai::models;
+use crate::ai::config::{AiConfig, Task};
+use crate::ai::engine::{EngineGuard, EngineSupervisor};
+use crate::ai::features::report::model::{acquire_engine, open_model, EngineProgress};
+use crate::ai::features::report::progress::{ProgressSink, SummaryProgress};
+use crate::ai::llm::Step2Chat;
 use crate::ai::policy::{AiDataPolicy, AiModule, ProfileChoice};
 use crate::error::{Error, Result};
 use crate::repo::ai_summaries::{self, list_segment_top_apps};
@@ -46,7 +45,7 @@ pub const DAILY_SOURCE: &str = "daily";
 pub struct DaySummaryRunner<S: ProgressSink = AppHandle> {
     pool: DbPool,
     supervisor: Arc<EngineSupervisor>,
-    app: S,
+    sink: S,
     /// 取消信号：段边界检查 + 在途 LLM 请求和引擎加载也会被
     /// [`cancellable`] 每 250ms 轮询中断。
     cancel: Arc<AtomicBool>,
@@ -58,13 +57,13 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     pub fn new(
         pool: DbPool,
         supervisor: Arc<EngineSupervisor>,
-        app: S,
+        sink: S,
         cancel: Arc<AtomicBool>,
     ) -> Self {
         Self {
             pool,
             supervisor,
-            app,
+            sink,
             cancel,
         }
     }
@@ -126,17 +125,22 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         let total_segments = ai.segments.len() as u32;
 
         // 单一引擎全程复用：云端不起本地引擎（0 为占位端口，云端分支不使用）
-        let summary_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size_for(Task::Daily),
-            parallel_slots: ai.parallel_slots_for(Task::Daily),
-            ctx_size: ai.ctx_size_for(Task::Daily),
-        };
         // 整轮都拿着：别的任务换不掉这个引擎
-        let engine = self
-            .acquire_engine(source, &date_str, &ai, summary_overrides, total_segments)
-            .await?;
+        let engine = acquire_engine(
+            &self.supervisor,
+            &self.sink,
+            &self.cancel,
+            &ai,
+            Task::Daily,
+            EngineProgress {
+                source,
+                date: &date_str,
+                total_segments,
+            },
+        )
+        .await?;
         let port = engine.as_ref().map_or(0, EngineGuard::port);
-        let step2 = build_step2(&ai, Task::Daily, port)?;
+        let model = open_model(&ai, Task::Daily, port)?;
 
         // 本轮实际有效的段下标——循环结束后用它收敛掉孤儿行
         let mut kept: Vec<u32> = Vec::new();
@@ -167,7 +171,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             }
             self.run_one_segment(
                 source,
-                &step2,
+                &model,
                 &ai,
                 &date_str,
                 idx as u32,
@@ -195,7 +199,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     }
 
     fn emit(&self, payload: SummaryProgress) {
-        self.app.emit_progress(payload);
+        self.sink.emit_progress(payload);
     }
 
     /// 该段是否已生成且 status="ok"——给 force_refresh=false 跳过逻辑用。
@@ -210,58 +214,6 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         Ok(status.as_deref() == Some("ok"))
     }
 
-    /// 按日报的模型和参数拿一个本机引擎。走云端时返回 `None`。
-    ///
-    /// 加载模型期间按停止也能中断。
-    async fn acquire_engine(
-        &self,
-        source: &str,
-        date_str: &str,
-        ai: &AiConfig,
-        engine_overrides: EngineStartOverrides,
-        total_segments: u32,
-    ) -> Result<Option<EngineGuard>> {
-        let main_name = match ai.model_for(Task::Daily) {
-            Some(ModelRef::Cloud { .. }) => {
-                log::info!("日报：段总结走云端，跳过本地引擎启动");
-                return Ok(None);
-            }
-            Some(ModelRef::Local { file }) => file,
-            None => return Err(Error::InvalidInput(NO_MODEL_ERROR)),
-        };
-        let st = self.supervisor.status().await;
-        if st.state != EngineState::Running {
-            let mut p = SummaryProgress::base(
-                source.to_string(),
-                date_str.to_string(),
-                "engine_starting",
-                total_segments,
-            );
-            // message 留空：前端按 phase 显示本地化的「加载模型中…」（dailySummary.ts）
-            p.message = None;
-            self.emit(p);
-        }
-        let main_path = self.resolve_local_model_path(ai, &main_name)?;
-        let engine = cancellable(
-            &self.cancel,
-            self.supervisor.acquire(main_path, engine_overrides),
-        )
-        .await?;
-        Ok(Some(engine))
-    }
-
-    fn resolve_local_model_path(&self, ai: &AiConfig, main_name: &str) -> Result<PathBuf> {
-        let models_dir = models::root_dir(ai);
-        let main_path: PathBuf = models_dir.join(main_name);
-        if !main_path.exists() {
-            return Err(Error::ModelFileMissing(format!(
-                "{}（可能被删除或路径变了）",
-                main_name
-            )));
-        }
-        Ok(main_path)
-    }
-
     /// 跑单段：活动时间线 + top_apps → LLM → 落 ai_summaries。
     ///
     /// 落库语义：
@@ -272,7 +224,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
     async fn run_one_segment(
         &self,
         source: &str,
-        step2: &crate::ai::llm::Step2Chat,
+        model: &Step2Chat,
         ai: &AiConfig,
         date_str: &str,
         idx: u32,
@@ -283,7 +235,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
         device: DeviceFilter,
         visible: &str,
     ) -> Result<()> {
-        let step2_model = step2.model_label().to_string();
+        let step2_model = model.model_label().to_string();
 
         let mut p_started = SummaryProgress::base(
             source.to_string(),
@@ -350,7 +302,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
 
         let (row, status_str) = summarize_segment(
             &self.pool,
-            step2,
+            model,
             ai,
             source,
             date_str,
@@ -360,7 +312,7 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             idx,
             &timeline,
             &top_apps,
-            step2.model_label().to_string(),
+            model.model_label().to_string(),
             &self.cancel,
         )
         .await?;
@@ -405,31 +357,31 @@ impl<S: ProgressSink> DaySummaryRunner<S> {
             .main_filter();
 
         let date_str = local_date.format("%Y-%m-%d").to_string();
+        let total_segments = ai.segments.len() as u32;
 
-        let summary_overrides = EngineStartOverrides {
-            batch_size: ai.batch_size_for(Task::Daily),
-            parallel_slots: ai.parallel_slots_for(Task::Daily),
-            ctx_size: ai.ctx_size_for(Task::Daily),
-        };
-        let engine = self
-            .acquire_engine(
-                DAILY_SOURCE,
-                &date_str,
-                &ai,
-                summary_overrides,
-                ai.segments.len() as u32,
-            )
-            .await?;
+        let engine = acquire_engine(
+            &self.supervisor,
+            &self.sink,
+            &self.cancel,
+            &ai,
+            Task::Daily,
+            EngineProgress {
+                source: DAILY_SOURCE,
+                date: &date_str,
+                total_segments,
+            },
+        )
+        .await?;
         let port = engine.as_ref().map_or(0, EngineGuard::port);
-        let step2 = build_step2(&ai, Task::Daily, port)?;
+        let model = open_model(&ai, Task::Daily, port)?;
 
         self.run_one_segment(
             DAILY_SOURCE,
-            &step2,
+            &model,
             &ai,
             &date_str,
             segment_idx,
-            ai.segments.len() as u32,
+            total_segments,
             seg.label,
             seg.start_hour,
             seg.end_hour,
@@ -445,7 +397,7 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    use crate::ai::config::DaySegment;
+    use crate::ai::config::{DaySegment, ModelRef};
     use crate::ai::features::report::test_util::{
         phase_seq, seed_cloud_settings, spawn_scripted_openai_server, Canned, RecordingSink,
     };
