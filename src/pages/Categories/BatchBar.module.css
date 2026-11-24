@@ -1,0 +1,41 @@
+/* Sticks to the bottom of the scrolling page. The empty space on both sides lets clicks
+   through to the rows under it. No transform or filter here: the category menu inside is
+   placed against the window, and either would move it. */
+.dock {
+  position: sticky;
+  bottom: calc(16px * var(--density));
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+  padding: calc(6px * var(--density)) calc(8px * var(--density)) calc(6px * var(--density))
+    calc(16px * var(--density));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow:
+    0 8px 24px rgba(var(--shadow-rgb), calc(0.16 * var(--shadow-strength))),
+    0 2px 4px rgba(var(--shadow-rgb), calc(0.06 * var(--shadow-strength)));
+  pointer-events: auto;
+}
+
+.count {
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.divider {
+  align-self: stretch;
+  width: 1px;
+  margin: calc(4px * var(--density)) calc(2px * var(--density));
+  background: var(--border-subtle);
+}

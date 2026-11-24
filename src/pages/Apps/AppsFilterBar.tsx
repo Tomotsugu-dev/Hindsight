@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowUpDown, ChevronDown, Search } from "lucide-react";
 import type { Category } from "../../api/hindsight";
 import { TextInput } from "../../components/TextInput/TextInput";
+import { SelectModeButton } from "../Categories/BatchBar";
 import { CategoryFilterDropdown } from "./CategoryFilterDropdown";
 import type { AppsSortBy } from "./useAppsFilter";
 import styles from "./AppsFilterBar.module.css";
@@ -27,9 +28,11 @@ interface Props {
   onResetCategories: () => void;
   sortBy: AppsSortBy;
   onSortChange: (v: AppsSortBy) => void;
+  selecting: boolean;
+  onToggleSelecting: () => void;
 }
 
-/** `/apps` 页头部的单行工具栏：搜索 + 分类 dropdown + 排序 dropdown。 */
+/** `/apps` 页头部的单行工具栏：搜索 + 分类 dropdown + 排序 dropdown + 选择。 */
 export function AppsFilterBar({
   search,
   onSearchChange,
@@ -41,6 +44,8 @@ export function AppsFilterBar({
   onResetCategories,
   sortBy,
   onSortChange,
+  selecting,
+  onToggleSelecting,
 }: Props) {
   const { t } = useTranslation();
 
@@ -74,6 +79,7 @@ export function AppsFilterBar({
             label: t(`apps.filter.sort.${camelCase(value)}`),
           }))}
         />
+        <SelectModeButton active={selecting} onClick={onToggleSelecting} />
       </div>
     </div>
   );

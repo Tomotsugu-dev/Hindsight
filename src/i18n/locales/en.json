@@ -841,7 +841,12 @@
       "excludeDesc": "Saved to disk, but left out of stats, summaries, exports and chat. To count it again, move the app out of the “Excluded from stats” category.",
       "deleteAction": "Delete anyway",
       "privateAction": "Make private",
-      "excludeAction": "Exclude from stats"
+      "excludeAction": "Exclude from stats",
+      "batch": {
+        "excludeDesc": "Still recorded, but left out of stats, summaries, exports and chat. To count them again, move them out of the “Excluded from stats” category.",
+        "deleteDescApps": "Deletes <b>{{data}}</b>. The programs show up here again the next time they run. Reports already generated are left untouched. (This cannot be undone.)",
+        "deleteDescSites": "Deletes <b>{{data}}</b>. The websites show up here again the next time you visit them. Reports already generated are left untouched. (This cannot be undone.)"
+      }
     }
   },
   "categories": {
@@ -910,9 +915,12 @@
         "titleNoName": "Private data not fully deleted",
         "appEffect": "Hindsight stops recording it.",
         "siteEffect": "Hindsight stops recording this website and its subdomains.",
+        "appEffectMany": "Hindsight stops recording them.",
+        "siteEffectMany": "Hindsight stops recording these websites and their subdomains.",
         "counting": "Counting what will be deleted…",
         "countFailed": "Could not count what will be deleted: {{error}}",
         "noData": "Nothing is recorded for it on this device yet.",
+        "noDataMany": "Nothing is recorded for them on this device yet.",
         "willDelete": "On this device, {{data}} will be deleted.",
         "everyDevice": "Your other synced devices delete their records too. (This cannot be undone.)",
         "siteLimit": "Old records without a domain cannot be deleted.",
@@ -974,6 +982,17 @@
         "removeTooltip": "Remove from list",
         "removeAria": "Remove {{name}} from the list"
       }
+    },
+    "batch": {
+      "start": "Select",
+      "done": "Done",
+      "selectAll": "Select all",
+      "selectRow": "Select “{{name}}”",
+      "selected": "{{count}} selected",
+      "remove": "Remove…",
+      "clear": "Clear selection",
+      "apps": "{{count}} apps",
+      "sites": "{{count}} websites"
     },
     "assign": {
       "label": "Assign",
