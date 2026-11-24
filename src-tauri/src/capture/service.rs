@@ -17,8 +17,9 @@ use crate::storage::DbPool;
 
 const POLL_INTERVAL_SECS: u64 = 5;
 
-/// 同一个窗口里，活动记录最多开这么久（秒）就封口、开下一段。统计只算封口的记录，
-/// 所以它决定了统计最多落后多久。截图另按截图间隔计时。
+/// How long in seconds a row stays open in the same window before it ends and the next one
+/// starts. Stats count only ended rows, so this is how far behind they can be. Screenshots follow
+/// the screenshot interval instead.
 const SEAL_EVERY_SECS: u32 = 30;
 
 /// 采集服务对前端的运行时状态快照。
@@ -186,7 +187,8 @@ struct Inner {
     /// 0 = 关闭挂机检测（永远算在用，回到 idle 检测之前的行为）。
     idle_threshold_secs: Mutex<u32>,
     current: Mutex<Option<CurrentSession>>,
-    /// 上次该截图的时刻。因为截图开关或隐私规则没截成的也算。锁顺序：叶子锁。
+    /// When a screenshot was last due. It counts even when the screenshot switch or a privacy rule
+    /// stopped it. Lock order: a leaf lock.
     last_shot_at: Mutex<Option<Instant>>,
     /// Sends focus changes, see [`FocusSender`]. Lock order: a leaf lock. It can be taken while
     /// holding `current`, but not the other way round.
@@ -910,7 +912,9 @@ enum RollDecision {
     StartNewIfMediaPlaying,
 }
 
-/// 距上次该截图满了截图间隔没有。还没截过算到点。
+/// Returns whether a full screenshot interval has passed since the last screenshot was due.
+///
+/// Before the first screenshot, one is always due.
 fn shot_is_due(since_last_shot: Option<u64>, interval_secs: u32) -> bool {
     since_last_shot.is_none_or(|s| s >= u64::from(interval_secs))
 }
