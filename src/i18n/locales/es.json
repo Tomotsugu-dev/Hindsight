@@ -219,6 +219,7 @@
         "description": "Retención de las capturas de pantalla y uso actual. La base de datos nunca se borra automáticamente.",
         "retentionLabel": "Retención de las capturas de pantalla",
         "retentionDescription": "Los archivos de captura caducados se eliminan automáticamente (los registros de actividad se conservan).",
+        "retentionForever": "Para siempre",
         "currentUsageLabel": "Uso actual",
         "currentUsageDescription": "Actividad {{db}} · Texto de pantalla (OCR) {{mem}} · Capturas de pantalla {{shots}}",
         "modelsPathLabel": "Carpeta de modelos de IA",

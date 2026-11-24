@@ -219,6 +219,7 @@
         "description": "スクリーンショットの保持期間と現在の使用量です。データベースは自動削除されません。",
         "retentionLabel": "スクリーンショット保持",
         "retentionDescription": "期限切れのスクリーンショットファイルは自動的に削除されます (アクティビティ記録は保持)。",
+        "retentionForever": "無期限",
         "currentUsageLabel": "現在の使用量",
         "currentUsageDescription": "アクティビティ {{db}} · 画面テキスト（OCR）{{mem}} · スクリーンショット {{shots}}",
         "modelsPathLabel": "AI モデルの保存先",
