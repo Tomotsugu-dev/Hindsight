@@ -1550,7 +1550,6 @@
     },
     "weeklyNote": "Existing daily reports are included as-is; this profile only filters weekly app rankings and days without a daily report.",
     "autoLabel": "Auto-generation",
-    "mainNote": "All categories except Hidden and Private (read-only).",
     "empty": "No custom profiles yet.",
     "add": "New profile",
     "defaultName": "Profile {{n}}",

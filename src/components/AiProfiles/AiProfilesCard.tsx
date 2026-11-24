@@ -95,6 +95,8 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
   const newName = useRef<HTMLInputElement>(null);
   const problems = profileProblems(profiles);
   const blocked = Object.keys(problems).length > 0;
+  // The default profile: every category except "Excluded from stats" and "Private"
+  const defaultIds = categories.filter((c) => !c.builtin && c.id !== "private").map((c) => c.id);
 
   const commit = (nextProfiles: Record<string, VisibilityProfile>, nextAuto: string | null) => {
     setProfiles(nextProfiles);
@@ -108,10 +110,9 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
 
   const add = () => {
     const id = `p_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
-    // 新的一套从默认分类起步：除了「不计入统计」和「隐私」，全选
-    const all = categories.filter((c) => !c.builtin && c.id !== "private").map((c) => c.id);
+    // 新的一套从默认分类起步
     const name = nextProfileName(profiles, (n) => t("aiProfiles.defaultName", { n }));
-    commit({ ...profiles, [id]: { name, categories: all } }, autoProfile);
+    commit({ ...profiles, [id]: { name, categories: defaultIds } }, autoProfile);
     setOrder((prev) => [...prev, id]);
     setAdded(id);
   };
@@ -174,7 +175,11 @@ function ModuleEditor({ module }: { module: AiProfileModule }) {
           </span>
           {hasAuto && autoProfile == null ? autoBadge : null}
         </div>
-        <p className={styles.mainNote}>{t("aiProfiles.mainNote")}</p>
+        <div className={styles.chipsCol}>
+          <CategoryChipMultiSelect selectedIds={defaultIds} />
+        </div>
+        {/* Holds the delete button's place, so the chips line up with the rows below */}
+        <span className={styles.deleteSpace} aria-hidden />
       </div>
 
       {order.map((id) => {

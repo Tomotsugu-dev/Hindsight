@@ -125,21 +125,18 @@
   color: var(--text-muted);
 }
 
-.mainNote {
-  flex: 1 1 calc(240px * var(--density));
-  min-width: 0;
-  margin: 0;
-  align-self: center;
-  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
-  color: var(--text-muted);
-}
-
 .chipsCol {
   flex: 1 1 calc(240px * var(--density));
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: calc(8px * var(--density));
+}
+
+/* As wide as the delete button in the rows below */
+.deleteSpace {
+  flex: none;
+  width: calc(var(--control-height-md) * var(--density));
 }
 
 .badge {

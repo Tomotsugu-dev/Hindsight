@@ -1550,7 +1550,6 @@
     },
     "weeklyNote": "Los resúmenes diarios existentes se incluyen tal cual; este perfil solo filtra el ranking semanal de apps y los días sin resumen diario.",
     "autoLabel": "Generación automática",
-    "mainNote": "Todas las categorías excepto Ocultas y Privadas (solo lectura).",
     "empty": "Aún no hay perfiles personalizados.",
     "add": "Nuevo perfil",
     "defaultName": "Perfil {{n}}",
