@@ -1,6 +1,6 @@
 //! Commands delete the data of the `private` category through here: sync is paused first, then
 //! capture drops the session it is recording, and then [`crate::repo::purge::purge`] runs.
-//! 删一个网站的数据也走这里（[`purge_with_sync_paused`]）。
+//! Deleting the data of one website also goes through here ([`purge_with_sync_paused`]).
 
 use crate::capture::CaptureService;
 use crate::error::Result;
@@ -25,7 +25,7 @@ pub async fn purge_private(
     purge_with_sync_paused(pool, mem, svc, engine, &PurgeTarget::Private).await
 }
 
-/// 删掉 `target` 的数据，返回删了多少。
+/// Deletes the data of `target`, and returns how much was deleted.
 ///
 /// Sync is paused first: the deletion writes outbox rows and deletes from tables that push
 /// reads. Then capture drops the activity row it is recording, because that row may be one of
