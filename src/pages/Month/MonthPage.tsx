@@ -261,6 +261,7 @@ export default function MonthPage() {
         headLeftExtras={
           <ViewToggle
             view={view}
+            bar="day"
             onChange={(v) => withViewTransition(() => setStatsView("month", v))}
           />
         }

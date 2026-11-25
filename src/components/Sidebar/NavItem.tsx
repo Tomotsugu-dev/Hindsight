@@ -49,7 +49,11 @@ export function NavItem({ to, label, Icon, iconSrc, color, end, badge, onClick }
       <span className={styles.label} data-sb-label>
         {label}
       </span>
-      {badge ? <span className={styles.badge}>{badge}</span> : null}
+      {badge ? (
+        <span className={styles.badge} data-sb-badge>
+          {badge}
+        </span>
+      ) : null}
     </>
   );
 
