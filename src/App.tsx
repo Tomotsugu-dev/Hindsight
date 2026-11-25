@@ -24,11 +24,9 @@ const MonthlyTab = lazy(() => import("./pages/AISummary/tabs/MonthlyTab"));
 const ChatPage = lazy(() => import("./pages/Chat/ChatPage"));
 const SearchPage = lazy(() => import("./pages/Search/SearchPage"));
 const AISettingsPage = lazy(() => import("./pages/AISettings/AISettingsPage"));
-const EngineTab = lazy(() => import("./pages/AISettings/tabs/EngineTab"));
 const ModelsTab = lazy(() => import("./pages/AISettings/tabs/ModelsTab"));
 const AiGeneralTab = lazy(() => import("./pages/AISettings/tabs/GeneralTab"));
 const PromptTab = lazy(() => import("./pages/AISettings/tabs/PromptTab"));
-const ExternalApiTab = lazy(() => import("./pages/AISettings/tabs/ExternalApiTab"));
 const Devices = lazy(() => import("./pages/Devices/DevicesPage"));
 const CategoriesPage = lazy(() => import("./pages/Categories/CategoriesPage"));
 const ListTab = lazy(() => import("./pages/Categories/tabs/ListTab"));
@@ -41,6 +39,7 @@ const DataTab = lazy(() => import("./pages/Settings/tabs/DataTab"));
 const PrivacyTab = lazy(() => import("./pages/Settings/tabs/PrivacyTab"));
 const AboutTab = lazy(() => import("./pages/Settings/tabs/AboutTab"));
 const PluginsTab = lazy(() => import("./pages/Settings/tabs/PluginsTab"));
+const AiModelsTab = lazy(() => import("./pages/Settings/tabs/AiModelsTab"));
 const PluginPage = lazy(() => import("./pages/Plugin/PluginPage"));
 
 // A page of every shared control, for development. A release build sets import.meta.env.DEV to
@@ -153,7 +152,8 @@ function App() {
             <Route path="models" element={<ModelsTab />} />
             <Route path="general" element={<AiGeneralTab />} />
             <Route path="prompt" element={<PromptTab />} />
-            <Route path="external" element={<ExternalApiTab />} />
+            {/* Cloud API connections moved to Settings → AI models; old links still land there */}
+            <Route path="external" element={<Navigate to={ROUTES.settingsAiModels} replace />} />
           </Route>
           <Route path={ROUTES.devices} element={<Devices />} />
           <Route path={ROUTES.categories} element={<CategoriesPage />}>
@@ -171,7 +171,9 @@ function App() {
             <Route path="appearance" element={<AppearanceTab />} />
             <Route path="data" element={<DataTab />} />
             <Route path="privacy" element={<PrivacyTab />} />
-            <Route path="engine" element={<EngineTab />} />
+            <Route path="models" element={<AiModelsTab />} />
+            {/* The tab was called AI engine and lived at /settings/engine */}
+            <Route path="engine" element={<Navigate to={ROUTES.settingsAiModels} replace />} />
             <Route path="plugins" element={<PluginsTab />} />
             <Route path="about" element={<AboutTab />} />
           </Route>

@@ -106,9 +106,101 @@
       "appearance": "Appearance",
       "data": "Data",
       "privacy": "Privacy",
-      "engine": "AI Engine",
+      "aiModels": "AI Models",
       "plugins": "Plugins",
       "about": "About"
+    },
+    "aiModels": {
+      "toc": {
+        "title": "On this page",
+        "runtime": "Runtime",
+        "mine": "My models",
+        "catalog": "Download models",
+        "cloud": "Cloud API"
+      },
+      "runtime": {
+        "title": "Runtime",
+        "desc": "The programs this computer needs to run models."
+      },
+      "engine": {
+        "meta": "{{version}} · {{accel}} · {{size}} MB",
+        "running": "Running",
+        "stopped": "Not running",
+        "more": "More actions for the local AI engine",
+        "openDir": "Open install folder",
+        "uninstall": "Uninstall engine"
+      },
+      "ocr": {
+        "more": "More actions for the text recognition component",
+        "uninstall": "Uninstall text recognition component"
+      },
+      "source": {
+        "customDesc": "Downloads from the addresses you entered."
+      },
+      "mine": {
+        "title": "My models",
+        "desc": "Models you can use now. Choose which one each of Daily, Weekly and Chat uses in AI Settings → Models.",
+        "testTip": "Check that the models chosen for Daily, Weekly and Chat work. Local models start the engine first.",
+        "testing": "Testing…",
+        "local": "On this computer · {{size}} GB",
+        "imported": "On this computer · Imported file · {{size}} GB",
+        "withMmproj": "With vision projector",
+        "cloud": "Cloud · {{host}}",
+        "cloudIncomplete": "Not finished",
+        "unused": "Not in use",
+        "listSep": ", ",
+        "more": "More actions for {{name}}",
+        "reveal": "Show in folder",
+        "delete": "Delete model file",
+        "edit": "Edit",
+        "deleteCloud": "Delete this connection",
+        "deleteTitle": "Delete “{{name}}”?",
+        "deleteMessage": "The model file will be deleted from this computer. To use it again, download it again.",
+        "deleteMessageInUse": "In use by {{tasks}}. After you delete it, choose again in AI Settings → Models.",
+        "deleteCloudMessage": "This connection will be deleted, including its API key.",
+        "deleteCloudMessageInUse": "In use by {{tasks}}. After you delete it, choose again in AI Settings → Models.",
+        "empty": "No models you can use yet. Pick one way to start:",
+        "emptyLocal": "Download a local model",
+        "emptyLocalDesc": "Your data stays on this computer. Install the engine above, then download a model. About 4 GB in all.",
+        "emptyLocalAction": "Go to the download list",
+        "emptyCloud": "Connect a cloud API",
+        "emptyCloudDesc": "Nothing to download, and answers come faster. You need an API key from the provider, and your activity is sent to the provider.",
+        "emptyCloudAction": "Enter API details"
+      },
+      "catalog": {
+        "title": "Download local models",
+        "desc": "All of these run on the local engine. When a download finishes, the model appears in My models.",
+        "all": "All {{count}}",
+        "vision": "Sees images",
+        "reasoning": "Thinks",
+        "small": "Under 5 GB",
+        "brandAll": "All makers",
+        "sortDefault": "Recommended order",
+        "paused": "Paused · {{size}} GB downloaded",
+        "allDone": "All recommended models are downloaded.",
+        "noMatch": "No models match.",
+        "showMore": "Show {{count}} more",
+        "showLess": "Show less",
+        "notFound": "Can’t find the one you want?"
+      },
+      "cloud": {
+        "title": "Cloud API",
+        "hint": "Saved connections are in My models above. Click ⋯ to edit or delete one. Up to {{max}}.",
+        "add": "Add cloud API",
+        "full": "You already have {{max}}. Delete one before you add another.",
+        "editing": "Edit “{{name}}”",
+        "test": "Test",
+        "done": "Done"
+      },
+      "caps": {
+        "TEXT": "Text",
+        "VISION": "Vision",
+        "CODE": "Code",
+        "FAST": "Fast",
+        "BALANCED": "Balanced",
+        "REASONING": "Thinks",
+        "DEFAULT": "Recommended"
+      }
     },
     "appearance": {
       "sectionTitle": "Theme",
@@ -191,7 +283,7 @@
         "backfillProgress": "Recognizing… {{n}} frames left",
         "backfillBackground": "Registered; indexing continues in the background (you can leave this page)",
         "backfillDone": "Done: {{ok}} recognized, {{failed}} skipped",
-        "backfillRuntimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Engine and click the download button.",
+        "backfillRuntimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Models and click the download button.",
         "ocrConfirmTitle": "Text recognition (OCR) component required",
         "ocrConfirmResident": "Enabling text indexing requires downloading the text recognition component (~40MB). It turns on automatically once the download finishes.",
         "ocrConfirmBackfill": "Backfilling requires downloading the text recognition component (~40MB). Backfill starts automatically once the download finishes.",
@@ -1061,21 +1153,14 @@
     "tabs": {
       "models": "Models",
       "general": "General",
-      "prompt": "Prompt",
-      "external": "Cloud API"
+      "prompt": "Prompt"
     },
     "engine": {
       "sectionTitle": "Local AI engine",
-      "sectionDesc": "Hindsight ships with the llama.cpp inference engine and runs everything locally — screenshots are never uploaded to any external service.",
       "loading": "Loading…",
       "installed": "Installed",
       "notInstalled": "Not installed",
-      "versionAria": "Version {{version}}",
-      "versionStaleAria": "Version {{version}} (latest {{latest}})",
-      "versionLabel": "Version {{version}}",
-      "versionStaleLabel": " · latest {{latest}}",
       "versionUnknown": "?",
-      "detected": "Detected {{accel}}",
       "accel": {
         "cuda12": "CUDA 12.4",
         "cuda13": "CUDA 13.1",
@@ -1097,20 +1182,11 @@
         "downloading": "Downloading…",
         "updating": "Updating…",
         "updateToLatest": "Update to latest",
-        "redownload": "Re-download",
         "downloadEngine": "Download llama engine",
         "testConnection": "Test connection",
-        "testTooltipReady": "Start the engine (if not running) and verify by hitting the local /v1/models endpoint",
         "testTooltipNotInstalled": "Not installed",
         "releaseVram": "Release VRAM",
         "releaseVramTooltip": "Stop the engine and free GPU memory now. It will spawn again automatically on the next summary run.",
-        "releaseVramTooltipNotInstalled": "Engine is not installed",
-        "releaseVramTooltipNotRunning": "Engine is not running — nothing to release",
-        "openFolderTooltipInstalled": "Reveal the install folder in the file manager",
-        "openFolderTooltipNotInstalled": "Not installed",
-        "uninstallTooltipInstalled": "Uninstall the local AI engine",
-        "uninstallTooltipNotInstalled": "Not installed",
-        "uninstall": "Uninstall llama",
         "approxSize": "~{{size}} MB"
       },
       "runtimeBadge": "runtime v{{version}}",
@@ -1160,42 +1236,31 @@
       "recommendedHint": "Recommended: slots {{slots}} · ctx {{ctx}} · batch {{batch}}"
     },
     "models": {
-      "sectionTitle": "Models",
-      "sectionDesc": "LLM used for local inference; GGUF files are downloaded from HuggingFace.",
+      "manageHint": "Download local models and add cloud APIs in Settings → AI Models.",
+      "manageLink": "Open",
       "reports": {
         "title": "Report models",
         "description": "Also used for scheduled reports. Available thinking levels depend on the provider.",
         "inUse": "Current: {{model}}"
       },
       "toolbar": {
-        "statusAll": "All",
-        "statusInstalled": "Downloaded",
-        "statusNotInstalled": "Not downloaded",
-        "brandAll": "All",
-        "sortDefault": "Default order",
         "sortSizeAsc": "Size ↑",
         "sortSizeDesc": "Size ↓",
         "sortName": "Name A-Z",
         "sortReleased": "Release date"
       },
       "cloud": {
-        "cardTitle": "Cloud · {{provider}}",
         "modelUnset": "(model not set)",
         "summaryConfirmTitle": "Send summary data to the cloud?",
-        "summaryConfirmMessage": "App names, categories, and activity timelines will be sent to {{provider}} when generating reports. Screenshots are never uploaded.",
         "summaryConfirmAccept": "I understand, continue"
       },
       "card": {
-        "hfTooltipPrefix": "HuggingFace · ",
-        "hfTooltipAria": "HuggingFace {{repo}}",
-        "approxSize": "~{{size}} GB",
         "download": "Download",
         "downloading": "Downloading…",
         "installedBadge": "Downloaded",
         "pause": "Pause",
         "pauseTooltip": "Pause the current download. Partial bytes are kept; resume later picks up where you left off.",
         "resume": "Resume",
-        "resumeTooltip": "Resume from {{size}} MB already downloaded.",
         "capsTooltips": {
           "TEXT": "Generates text",
           "VISION": "Reads images",
@@ -1206,25 +1271,15 @@
           "R1": "DeepSeek R1",
           "DEFAULT": "Recommended"
         },
-        "step2": "Text",
-        "step2ToggleOnTooltip": "Use for daily reports",
-        "step2ToggleOffTooltip": "Clear daily report model",
-        "uninstall": "Uninstall",
-        "uninstallTooltipInstalled": "Delete local files (main + mmproj)",
-        "uninstallTooltipNotInstalled": "Not installed",
         "progressMain": "main weights",
         "progressMmproj": "vision projector",
         "progressUnit": "MB",
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "Uninstall {{name}}? This will delete the main weights{{extra}} — cannot be undone.",
-      "uninstallConfirmTitle": "Uninstall {{name}}?",
-      "uninstallConfirmMessage": "This will delete the main weights{{extra}}. The action cannot be undone.",
-      "uninstallConfirmExtra": " and the mmproj projector",
       "expand": {
         "more": "Show more models ({{count}})",
-        "collapse": "Collapse",
-        "busyTooltip": "Can collapse only after downloads finish"
+        "collapse": "Collapse"
       },
       "custom": {
         "expand": "Custom HuggingFace model",
@@ -1246,10 +1301,7 @@
         "dialogTitle": "Select GGUF model file(s)"
       },
       "local": {
-        "title": "Local models (not in the recommended list)",
-        "pairedMmproj": "Vision projector: {{name}}",
         "orphanMmproj": "This is a vision projector file (mmproj) and cannot be used as a model by itself. To import a model, pick the much larger main GGUF file from the same repository.",
-        "toolsTip": "This model's chat template declares tool calling — usable for Chat.",
         "noTools": "No tool calling",
         "noToolsTip": "This model's chat template does not declare tool calling, so it cannot be used for Chat; summaries are unaffected."
       }
@@ -1282,7 +1334,6 @@
       "rowLabel": "Segments"
     },
     "external": {
-      "sectionTitle": "Cloud API (optional)",
       "sectionDesc": "Configure cloud models for summaries and Chat. Screenshots are never uploaded.",
       "enableLabel": "Enable cloud API",
       "enableHint": "When on, segment summaries and Chat call the API configured below; screenshots are never uploaded.",
@@ -1314,13 +1365,9 @@
       "kimiBaseUrlNote": "Keys for api.moonshot.cn (China) and api.moonshot.ai (global) are not interchangeable — use the site where your key was issued.",
       "groupTextTitle": "Text API",
       "groupTextHint": "Segment summaries · Chat",
-      "testTextButton": "Test text API",
       "testStepConn": "Network & authentication",
       "testStepChat": "Model {{model}} responds",
-      "profilesLabel": "Saved profiles",
-      "saveProfile": "Save current profile",
       "saveProfileHint": "Store the current endpoint, API key and model as a profile for one-click switching",
-      "deleteProfileAria": "Delete profile {{name}}",
       "fetchModels": "Fetch available models from the endpoint",
       "modelsFetched": "{{count}} models fetched — type in the model box to search"
     },
@@ -1354,7 +1401,6 @@
       "saving": "Saving download sources…",
       "saveFailed": "Could not save download sources. Please try again.",
       "invalidUrl": "Enter an HTTP or HTTPS address without login details, query parameters or a fragment.",
-      "change": "Change download source",
       "nugetLabel": "NuGet package download URL",
       "nugetHelp": "Enter the NuGet package base address (PackageBaseAddress) for Windows OCR components."
     }
@@ -1587,7 +1633,7 @@
       "noModel": "No language model is configured. Add a cloud connection or select a local model in AI Settings.",
       "cloudUnavailable": "The selected cloud connection is incomplete or unavailable. Check its endpoint and model in AI Settings.",
       "modelMissing": "The selected local model file could not be found. It may have been deleted or moved.",
-      "engineMissing": "AI engine not installed. Download it in Settings → AI Engine.",
+      "engineMissing": "AI engine not installed. Download it in Settings → AI Models.",
       "llmEmptyReasoning": "The model exhausted its output limit while thinking. Lower or disable thinking mode, increase context length, or switch models.",
       "llmEmptyEos": "The model stopped without producing output. Try switching to another model in AI Settings.",
       "llmEmptyTruncated": "Model output was truncated before generating usable text. Lower thinking mode, increase context length, or switch models.",
@@ -1789,7 +1835,7 @@
       },
       "cloudOffer": {
         "title": "Generate with your cloud API instead?",
-        "message": "Local engine is not installed. Switch to your configured cloud API ({{provider}} · {{model}}) — app names, categories, and activity timelines will be sent to that provider — or download the local engine in Settings → AI Engine.",
+        "message": "Local engine is not installed. Switch to your configured cloud API ({{provider}} · {{model}}) — app names, categories, and activity timelines will be sent to that provider — or download the local engine in Settings → AI Models.",
         "confirm": "Use cloud API"
       },
       "ocrLoading": "Loading OCR model…",
@@ -1876,7 +1922,7 @@
       "running": "Building index… {{count}} remaining",
       "alreadyRunning": "Indexing is running in the background, {{count}} remaining",
       "failed": "Backfill failed: {{msg}}",
-      "runtimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Engine and click the download button.",
+      "runtimeMissing": "The text recognition (OCR) component needs an update (~40MB): go to Settings → AI Models and click the download button.",
       "ocrConfirmTitle": "Text recognition (OCR) component required",
       "ocrConfirmMessage": "Building the text index requires downloading the text recognition component (~40MB). Indexing starts automatically once the download finishes.",
       "ocrConfirmAccept": "Download & start",
@@ -1889,8 +1935,9 @@
       "collapse": "Collapse sources"
     },
     "model": {
-      "noToolUseModels": "None of your downloaded local models support tool calling. Download one with the Tool-use badge in AI Settings → Models.",
-      "empty": "No models available: configure a cloud API or download a local model"
+      "noToolUseModels": "None of your downloaded local models support tool calling. Download one with the Tool-use badge in Settings → AI Models.",
+      "empty": "No models available: configure a cloud API or download a local model",
+      "manage": "Manage models"
     },
     "tokens": {
       "prompt": "Tokens sent to the model this turn (upstream)",

@@ -106,9 +106,101 @@
       "appearance": "外観",
       "data": "データ",
       "privacy": "プライバシー",
-      "engine": "AI エンジン",
+      "aiModels": "AI モデル",
       "plugins": "プラグイン",
       "about": "情報"
+    },
+    "aiModels": {
+      "toc": {
+        "title": "このページ",
+        "runtime": "実行環境",
+        "mine": "マイモデル",
+        "catalog": "モデルのダウンロード",
+        "cloud": "クラウド API"
+      },
+      "runtime": {
+        "title": "実行環境",
+        "desc": "このコンピューターでモデルを動かすのに必要なプログラムです。"
+      },
+      "engine": {
+        "meta": "{{version}} · {{accel}} · {{size}} MB",
+        "running": "実行中",
+        "stopped": "停止中",
+        "more": "ローカル AI エンジンのその他の操作",
+        "openDir": "インストール先を開く",
+        "uninstall": "エンジンをアンインストール"
+      },
+      "ocr": {
+        "more": "文字認識コンポーネントのその他の操作",
+        "uninstall": "文字認識コンポーネントをアンインストール"
+      },
+      "source": {
+        "customDesc": "入力したアドレスからダウンロードします。"
+      },
+      "mine": {
+        "title": "マイモデル",
+        "desc": "今すぐ使えるモデルです。日次・週次・チャットでどれを使うかは AI 設定 → モデル で選びます。",
+        "testTip": "日次・週次・チャットで選んだモデルが使えるか試します。ローカルモデルは先にエンジンを起動します。",
+        "testing": "テスト中…",
+        "local": "ローカル · {{size}} GB",
+        "imported": "ローカル · インポートしたファイル · {{size}} GB",
+        "withMmproj": "ビジョン投影付き",
+        "cloud": "クラウド · {{host}}",
+        "cloudIncomplete": "未入力あり",
+        "unused": "未使用",
+        "listSep": "、",
+        "more": "{{name}} のその他の操作",
+        "reveal": "フォルダーで表示",
+        "delete": "モデルファイルを削除",
+        "edit": "編集",
+        "deleteCloud": "この接続を削除",
+        "deleteTitle": "「{{name}}」を削除しますか？",
+        "deleteMessage": "モデルファイルをこのコンピューターから削除します。また使うには再ダウンロードが必要です。",
+        "deleteMessageInUse": "{{tasks}}でこのモデルを使っています。削除したら AI 設定 → モデル で選び直してください。",
+        "deleteCloudMessage": "この接続を削除します。API キーも消えます。",
+        "deleteCloudMessageInUse": "{{tasks}}でこの接続を使っています。削除したら AI 設定 → モデル で選び直してください。",
+        "empty": "使えるモデルがまだありません。どちらかで始めましょう：",
+        "emptyLocal": "ローカルモデルをダウンロード",
+        "emptyLocalDesc": "データはこのコンピューターから出ません。上のエンジンを入れてからモデルを 1 つダウンロードします。合計約 4 GB です。",
+        "emptyLocalAction": "ダウンロード一覧へ",
+        "emptyCloud": "クラウド API に接続",
+        "emptyCloudDesc": "ダウンロード不要で、応答も速くなります。プロバイダーの API キーが必要で、活動記録はプロバイダーに送られます。",
+        "emptyCloudAction": "API を入力"
+      },
+      "catalog": {
+        "title": "ローカルモデルのダウンロード",
+        "desc": "どれもローカルエンジンで動きます。ダウンロードが終わると「マイモデル」に表示されます。",
+        "all": "すべて {{count}}",
+        "vision": "画像を読める",
+        "reasoning": "思考あり",
+        "small": "5 GB 未満",
+        "brandAll": "すべてのメーカー",
+        "sortDefault": "おすすめ順",
+        "paused": "一時停止中 · {{size}} GB ダウンロード済み",
+        "allDone": "おすすめのモデルはすべてダウンロード済みです。",
+        "noMatch": "条件に合うモデルがありません。",
+        "showMore": "残り {{count}} 件を表示",
+        "showLess": "閉じる",
+        "notFound": "見つかりませんか？"
+      },
+      "cloud": {
+        "title": "クラウド API",
+        "hint": "追加した接続は上の「マイモデル」にあります。⋯ から編集・削除できます。最大 {{max}} 件です。",
+        "add": "クラウド API を追加",
+        "full": "すでに {{max}} 件あります。1 件削除してから追加してください。",
+        "editing": "「{{name}}」を編集",
+        "test": "テスト",
+        "done": "完了"
+      },
+      "caps": {
+        "TEXT": "テキスト",
+        "VISION": "ビジョン",
+        "CODE": "コード",
+        "FAST": "高速",
+        "BALANCED": "バランス",
+        "REASONING": "思考あり",
+        "DEFAULT": "おすすめ"
+      }
     },
     "appearance": {
       "sectionTitle": "テーマ",
@@ -191,7 +283,7 @@
         "backfillProgress": "認識中…残り {{n}} 枚",
         "backfillBackground": "登録済み。バックグラウンドで索引作成中（このページを離れても続行されます）",
         "backfillDone": "完了：{{ok}} 枚を認識、{{failed}} 枚をスキップ",
-        "backfillRuntimeMissing": "文字認識（OCR）コンポーネントの更新が必要です（約 40MB）：設定 → AI エンジン でダウンロードボタンを押してください。",
+        "backfillRuntimeMissing": "文字認識（OCR）コンポーネントの更新が必要です（約 40MB）：設定 → AI モデル でダウンロードボタンを押してください。",
         "ocrConfirmTitle": "文字認識（OCR）コンポーネントが必要です",
         "ocrConfirmResident": "テキスト索引を有効にするには文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に有効になります。",
         "ocrConfirmBackfill": "取り込みには文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に取り込みを開始します。",
@@ -1056,21 +1148,14 @@
     "tabs": {
       "models": "モデル",
       "general": "一般",
-      "prompt": "プロンプト",
-      "external": "クラウド API"
+      "prompt": "プロンプト"
     },
     "engine": {
       "sectionTitle": "ローカル AI エンジン",
-      "sectionDesc": "Hindsight には llama.cpp 推論エンジンが同梱されており、すべてローカルで実行されます。スクリーンショットが外部サービスへアップロードされることはありません。",
       "loading": "読み込み中…",
       "installed": "インストール済み",
       "notInstalled": "未インストール",
-      "versionAria": "バージョン {{version}}",
-      "versionStaleAria": "バージョン {{version}} (最新 {{latest}})",
-      "versionLabel": "バージョン {{version}}",
-      "versionStaleLabel": " · 最新 {{latest}}",
       "versionUnknown": "?",
-      "detected": "{{accel}} を検出",
       "accel": {
         "cuda12": "CUDA 12.4",
         "cuda13": "CUDA 13.1",
@@ -1092,20 +1177,11 @@
         "downloading": "ダウンロード中…",
         "updating": "更新中…",
         "updateToLatest": "最新版に更新",
-        "redownload": "再ダウンロード",
         "downloadEngine": "llama エンジンをダウンロード",
         "testConnection": "接続テスト",
-        "testTooltipReady": "エンジンを起動 (未起動の場合) し、ローカルの /v1/models エンドポイントへリクエストして確認します",
         "testTooltipNotInstalled": "未インストール",
         "releaseVram": "VRAM を解放",
         "releaseVramTooltip": "エンジンを停止して VRAM をすぐに解放します。次の要約実行時に自動的に再起動します。",
-        "releaseVramTooltipNotInstalled": "エンジンが未インストールです",
-        "releaseVramTooltipNotRunning": "エンジンが起動していません — 解放対象なし",
-        "openFolderTooltipInstalled": "インストール先のフォルダをファインダー / エクスプローラーで開く",
-        "openFolderTooltipNotInstalled": "未インストール",
-        "uninstallTooltipInstalled": "ローカル AI エンジンをアンインストール",
-        "uninstallTooltipNotInstalled": "未インストール",
-        "uninstall": "llama をアンインストール",
         "approxSize": "約 {{size}} MB"
       },
       "runtimeBadge": "ランタイム v{{version}}",
@@ -1155,42 +1231,31 @@
       "recommendedHint": "推奨：slots {{slots}} · ctx {{ctx}} · batch {{batch}}"
     },
     "models": {
-      "sectionTitle": "モデル",
-      "sectionDesc": "ローカル推論に使う LLM。GGUF ファイルは HuggingFace からダウンロードします。",
+      "manageHint": "ローカルモデルのダウンロードとクラウド API の追加は「設定 → AI モデル」で行います。",
+      "manageLink": "開く",
       "reports": {
         "title": "日報・週報モデル",
         "description": "自動生成にも適用されます。思考レベルの選択肢はプロバイダーによって異なります。",
         "inUse": "使用中：{{model}}"
       },
       "toolbar": {
-        "statusAll": "すべて",
-        "statusInstalled": "ダウンロード済み",
-        "statusNotInstalled": "未ダウンロード",
-        "brandAll": "すべて",
-        "sortDefault": "デフォルト順",
         "sortSizeAsc": "サイズ ↑",
         "sortSizeDesc": "サイズ ↓",
         "sortName": "名前 A-Z",
         "sortReleased": "公開日"
       },
       "cloud": {
-        "cardTitle": "クラウド · {{provider}}",
         "modelUnset": "(モデル未設定)",
         "summaryConfirmTitle": "要約データをクラウドへ送信しますか？",
-        "summaryConfirmMessage": "クラウドモデルを使用すると、レポート生成時にアプリ名・分類・アクティビティのタイムラインが {{provider}} に送信されます。スクリーンショットは送信されません。",
         "summaryConfirmAccept": "理解した、続行する"
       },
       "card": {
-        "hfTooltipPrefix": "HuggingFace · ",
-        "hfTooltipAria": "HuggingFace {{repo}}",
-        "approxSize": "~{{size}} GB",
         "download": "ダウンロード",
         "downloading": "ダウンロード中…",
         "installedBadge": "ダウンロード済み",
         "pause": "一時停止",
         "pauseTooltip": "現在のダウンロードを一時停止します。ダウンロード済みバイトは保持され、「再開」で続きからダウンロードします。",
         "resume": "再開",
-        "resumeTooltip": "ダウンロード済み {{size}} MB から再開します。",
         "capsTooltips": {
           "TEXT": "文章を生成",
           "VISION": "画像を見る",
@@ -1201,25 +1266,15 @@
           "R1": "DeepSeek R1",
           "DEFAULT": "おすすめ"
         },
-        "step2": "Text",
-        "step2ToggleOnTooltip": "日報モデルに設定",
-        "step2ToggleOffTooltip": "日報モデルの選択を解除",
-        "uninstall": "アンインストール",
-        "uninstallTooltipInstalled": "ローカルファイルを削除 (main + mmproj)",
-        "uninstallTooltipNotInstalled": "未インストール",
         "progressMain": "メイン重み",
         "progressMmproj": "ビジョンプロジェクター",
         "progressUnit": "MB",
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "{{name}} をアンインストールしますか? メイン重み{{extra}}を削除します。この操作は取り消せません。",
-      "uninstallConfirmTitle": "{{name}} をアンインストールしますか?",
-      "uninstallConfirmMessage": "メイン重み{{extra}}を削除します。この操作は取り消せません。",
-      "uninstallConfirmExtra": " と mmproj プロジェクター",
       "expand": {
         "more": "他のモデルを表示 ({{count}})",
-        "collapse": "折りたたむ",
-        "busyTooltip": "ダウンロード完了後にのみ折りたためます"
+        "collapse": "折りたたむ"
       },
       "custom": {
         "expand": "カスタム HuggingFace モデル",
@@ -1241,10 +1296,7 @@
         "dialogTitle": "GGUF モデルファイルを選択"
       },
       "local": {
-        "title": "ローカルモデル（推奨リストにないもの）",
-        "pairedMmproj": "ビジョンプロジェクター：{{name}}",
         "orphanMmproj": "これはビジョン投影ファイル（mmproj）で、単独ではモデルとして使用できません。モデルを取り込むには、同じリポジトリのより大きなメイン GGUF ファイルを選択してください。",
-        "toolsTip": "このモデルの会話テンプレートはツール呼び出しを宣言しており、チャットで利用できます。",
         "noTools": "ツール呼び出し非対応",
         "noToolsTip": "このモデルの会話テンプレートはツール呼び出しを宣言していないため、チャットには使えません。要約には影響しません。"
       }
@@ -1277,7 +1329,6 @@
       "rowLabel": "セグメント"
     },
     "external": {
-      "sectionTitle": "クラウド API（任意）",
       "sectionDesc": "要約やチャット用のクラウドモデルを設定します。スクリーンショットは送信されません。",
       "enableLabel": "クラウド API を有効化",
       "enableHint": "オンにすると、セグメント要約と「チャット」が下記の API を呼び出します。スクリーンショットはアップロードされません。",
@@ -1309,13 +1360,9 @@
       "kimiBaseUrlNote": "api.moonshot.cn（中国）と api.moonshot.ai（グローバル）の Key は互換性がありません——Key を発行したサイトに合わせてください。",
       "groupTextTitle": "テキスト API",
       "groupTextHint": "時間帯要約 · チャット",
-      "testTextButton": "テキスト API をテスト",
       "testStepConn": "ネットワークと認証",
       "testStepChat": "モデル {{model}} が応答",
-      "profilesLabel": "保存済み設定",
-      "saveProfile": "現在の設定を保存",
       "saveProfileHint": "現在のエンドポイント・API キー・モデルをセットで保存し、ワンクリックで切り替え",
-      "deleteProfileAria": "設定 {{name}} を削除",
       "fetchModels": "エンドポイントから利用可能なモデルを取得",
       "modelsFetched": "{{count}} 個のモデルを取得しました。入力欄で検索できます"
     },
@@ -1349,7 +1396,6 @@
       "saving": "ダウンロード元を保存中…",
       "saveFailed": "ダウンロード元を保存できませんでした。再試行してください。",
       "invalidUrl": "認証情報、クエリパラメーター、フラグメントを含まない HTTP または HTTPS アドレスを入力してください。",
-      "change": "ダウンロード元を変更",
       "nugetLabel": "NuGet パッケージダウンロード URL",
       "nugetHelp": "Windows の OCR コンポーネント用の NuGet パッケージベースアドレス（PackageBaseAddress）を入力します。"
     }
@@ -1582,7 +1628,7 @@
       "noModel": "言語モデルが設定されていません。AI 設定でクラウド接続を追加するか、ローカルモデルを選択してください。",
       "cloudUnavailable": "選択されたクラウド接続の設定が不完全か利用できません。AI 設定でエンドポイントとモデル名を確認してください。",
       "modelMissing": "選択されたローカルモデルファイルが見つかりません。削除または移動された可能性があります。",
-      "engineMissing": "AI エンジンが未インストールです。「設定 → AI エンジン」からダウンロードしてください。",
+      "engineMissing": "AI エンジンが未インストールです。「設定 → AI モデル」からダウンロードしてください。",
       "llmEmptyReasoning": "思考にトークンを使い切り、本文を生成できませんでした。思考モードを下げるかオフにする、コンテキスト長を増やす、またはモデルを変更してください。",
       "llmEmptyEos": "モデルが出力を生成せずに終了しました。AI 設定で別のモデルをお試しください。",
       "llmEmptyTruncated": "本文が生成される前に出力が打ち切られました。思考モードを下げる、コンテキスト長を増やす、またはモデルを変更してください。",
@@ -1784,7 +1830,7 @@
       },
       "cloudOffer": {
         "title": "クラウド API で生成しますか？",
-        "message": "ローカルエンジンが未インストールです。設定済みのクラウド API（{{provider}} · {{model}}）に切り替える（アプリ名・分類・アクティビティのタイムラインが送信されます）か、「設定 → AI エンジン」からローカルエンジンをダウンロードできます。",
+        "message": "ローカルエンジンが未インストールです。設定済みのクラウド API（{{provider}} · {{model}}）に切り替える（アプリ名・分類・アクティビティのタイムラインが送信されます）か、「設定 → AI モデル」からローカルエンジンをダウンロードできます。",
         "confirm": "クラウドで生成"
       },
       "ocrLoading": "OCR モデルを読み込み中…",
@@ -1871,7 +1917,7 @@
       "running": "索引を作成中…残り {{count}} 枚",
       "alreadyRunning": "索引タスクはバックグラウンドで実行中、残り {{count}} 枚",
       "failed": "取り込みに失敗：{{msg}}",
-      "runtimeMissing": "文字認識（OCR）コンポーネントの更新が必要です（約 40MB）：設定 → AI エンジン でダウンロードボタンを押してください。",
+      "runtimeMissing": "文字認識（OCR）コンポーネントの更新が必要です（約 40MB）：設定 → AI モデル でダウンロードボタンを押してください。",
       "ocrConfirmTitle": "文字認識（OCR）コンポーネントが必要です",
       "ocrConfirmMessage": "テキスト索引の作成には文字認識コンポーネントのダウンロードが必要です（約 40MB）。ダウンロード完了後、自動的に索引作成を開始します。",
       "ocrConfirmAccept": "ダウンロードして開始",
@@ -1884,8 +1930,9 @@
       "collapse": "情報源を折りたたむ"
     },
     "model": {
-      "noToolUseModels": "ダウンロード済みのローカルモデルはツール呼び出し非対応です。「AI 設定 → モデル」から Tool-use 対応モデルをダウンロードしてください。",
-      "empty": "利用可能なモデルがありません：クラウド API を設定するか、ローカルモデルをダウンロードしてください"
+      "noToolUseModels": "ダウンロード済みのローカルモデルはツール呼び出し非対応です。「設定 → AI モデル」から Tool-use 対応モデルをダウンロードしてください。",
+      "empty": "利用可能なモデルがありません：クラウド API を設定するか、ローカルモデルをダウンロードしてください",
+      "manage": "モデルを管理"
     },
     "tokens": {
       "prompt": "このターンでモデルに送信した token(上り)",

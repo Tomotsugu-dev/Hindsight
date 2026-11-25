@@ -1,0 +1,93 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Same surface as the InlinePicker menu, opened to the left so it stays inside the card */
+.menu {
+  position: absolute;
+  top: calc(100% + 4px * var(--density));
+  right: 0;
+  z-index: var(--z-dropdown);
+  width: max-content;
+  min-width: calc(180px * var(--font-scale));
+  max-width: calc(320px * var(--font-scale));
+  padding: calc(4px * var(--density));
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow:
+    0 1px 0 var(--hairline-hi) inset,
+    0 4px 12px rgba(var(--shadow-rgb), calc(0.08 * var(--shadow-strength))),
+    0 12px 28px rgba(var(--shadow-rgb), calc(0.1 * var(--shadow-strength)));
+  transform-origin: top right;
+  animation: menuIn 160ms var(--ease-out);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+  width: 100%;
+  height: calc(30px * var(--density));
+  padding: 0 calc(8px * var(--density));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  color: var(--text-regular);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+.danger,
+.danger:hover,
+.danger:focus-visible {
+  color: var(--status-error-strong);
+}
+
+.icon {
+  flex-shrink: 0;
+  width: calc(13px * var(--font-scale));
+  height: calc(13px * var(--font-scale));
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.divider {
+  height: 1px;
+  margin: calc(4px * var(--density)) calc(2px * var(--density));
+  border: 0;
+  background: var(--border-subtle);
+}

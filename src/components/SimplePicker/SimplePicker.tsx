@@ -46,7 +46,7 @@ export function SimplePicker<T extends string>({
   const [placement, setPlacement] = useState<MenuPlacement | null>(null);
 
   // 打开时按 trigger 在视口里的位置 + 估算菜单高度，决定向哪边展开、最多多高。
-  // 避免靠底的 picker（如 EngineTab 的 ctxSize）或选项很多的 picker（如插件版本）
+  // 避免靠底的 picker（如 AiModelsTab 的 ctxSize）或选项很多的 picker（如插件版本）
   // 撑出窗口被裁。useLayoutEffect 在 paint 前定位置，避免一帧闪现。
   useLayoutEffect(() => {
     if (!open || !wrapRef.current) return;

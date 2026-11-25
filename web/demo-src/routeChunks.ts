@@ -43,8 +43,6 @@ export const routeChunks = {
   aiModels: createPreloadable(() => import("@app/pages/AISettings/tabs/ModelsTab")),
   aiGeneral: createPreloadable(() => import("@app/pages/AISettings/tabs/GeneralTab")),
   aiPrompt: createPreloadable(() => import("@app/pages/AISettings/tabs/PromptTab")),
-  aiExternal: createPreloadable(() => import("@app/pages/AISettings/tabs/ExternalApiTab")),
-  aiEngine: createPreloadable(() => import("@app/pages/AISettings/tabs/EngineTab")),
   devices: createPreloadable(() => import("@app/pages/Devices/DevicesPage")),
   categories: createPreloadable(() => import("@app/pages/Categories/CategoriesPage")),
   categoriesList: createPreloadable(() => import("@app/pages/Categories/tabs/ListTab")),
@@ -56,6 +54,7 @@ export const routeChunks = {
   settingsData: createPreloadable(() => import("@app/pages/Settings/tabs/DataTab")),
   settingsPrivacy: createPreloadable(() => import("@app/pages/Settings/tabs/PrivacyTab")),
   settingsPlugins: createPreloadable(() => import("@app/pages/Settings/tabs/PluginsTab")),
+  settingsAiModels: createPreloadable(() => import("@app/pages/Settings/tabs/AiModelsTab")),
   settingsAbout: createPreloadable(() => import("@app/pages/Settings/tabs/AboutTab")),
 } as const;
 
@@ -96,8 +95,6 @@ export function chunkKeysForPath(to: string): RouteChunkKey[] {
       return ["aiSettings", "aiGeneral"];
     case `${ROUTES.aiSettings}/prompt`:
       return ["aiSettings", "aiPrompt"];
-    case `${ROUTES.aiSettings}/external`:
-      return ["aiSettings", "aiExternal"];
     case ROUTES.devices:
       return ["devices"];
     case ROUTES.categories:
@@ -115,8 +112,8 @@ export function chunkKeysForPath(to: string): RouteChunkKey[] {
       return ["settings", "settingsData"];
     case `${ROUTES.settings}/privacy`:
       return ["settings", "settingsPrivacy"];
-    case `${ROUTES.settings}/engine`:
-      return ["settings", "aiEngine"];
+    case ROUTES.settingsAiModels:
+      return ["settings", "settingsAiModels"];
     case `${ROUTES.settings}/plugins`:
       return ["settings", "settingsPlugins"];
     case `${ROUTES.settings}/about`:

@@ -1,0 +1,456 @@
+/* Rows inside the section cards of Settings → AI models.
+   An .item is one row plus the lines under it (progress, warnings, a form). */
+
+.item {
+  display: flex;
+  flex-direction: column;
+}
+
+.item + .item {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--density)) calc(12px * var(--density));
+  min-height: calc(56px * var(--density));
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: calc(30px * var(--density));
+  height: calc(30px * var(--density));
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.tile svg {
+  width: 16px;
+  height: 16px;
+}
+
+.logo {
+  flex-shrink: 0;
+  width: calc(30px * var(--density));
+  height: calc(30px * var(--density));
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 calc(220px * var(--font-scale));
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--density));
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--density));
+  margin-left: auto;
+}
+
+/* Lines under a row start where the row's text starts */
+.sub {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--density));
+  padding: 0 calc(16px * var(--density)) calc(12px * var(--density))
+    calc(16px * var(--density) + 30px * var(--density) + 12px * var(--density));
+}
+
+/* —— State pills —— */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px calc(9px * var(--density));
+  border-radius: var(--radius-pill);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pillOk {
+  background: color-mix(in oklab, var(--status-ok-strong) 14%, transparent);
+  color: var(--status-ok-strong);
+}
+
+.pillWarn {
+  background: color-mix(in oklab, var(--status-pending) 20%, transparent);
+  color: var(--status-pending-strong);
+}
+
+.pillBad {
+  background: color-mix(in oklab, var(--status-error-strong) 14%, transparent);
+  color: var(--status-error-strong);
+}
+
+.pillIdle {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+/* —— What a model can do, and which tasks use it —— */
+.cap {
+  padding: 0 calc(6px * var(--density));
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-500);
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.capWarn {
+  background: color-mix(in oklab, var(--status-pending) 16%, transparent);
+  color: var(--status-pending-strong);
+}
+
+.use {
+  padding: 1px calc(8px * var(--density));
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.unused {
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.size {
+  min-width: calc(56px * var(--font-scale));
+  text-align: right;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— Progress —— */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transition: width 300ms var(--ease-out);
+}
+
+.fillUnknown {
+  width: 35%;
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+  .fillUnknown {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
+/* —— Test results above the list —— */
+.tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--density)) calc(14px * var(--density));
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+}
+
+.test {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+
+.testOk {
+  color: var(--status-ok-strong);
+}
+
+.testFail {
+  color: var(--status-error-strong);
+}
+
+.testRunning {
+  color: var(--text-muted);
+}
+
+/* —— Download list —— */
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--density));
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* 厂商和排序两个选择器：窄的时候一起换到下一行，仍然靠右 */
+.toolbarEnd {
+  display: flex;
+  gap: calc(6px * var(--density));
+  margin-left: auto;
+}
+
+.chip {
+  height: calc(26px * var(--density));
+  padding: 0 calc(10px * var(--density));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.chip:hover {
+  color: var(--text-strong);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-600);
+}
+
+/* A button that wraps to a second line stays on the right, under the others */
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--density)) calc(12px * var(--density));
+  padding: calc(10px * var(--density)) calc(16px * var(--density));
+  border-top: 1px solid var(--border-subtle);
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.list:empty + .foot {
+  border-top: 0;
+}
+
+.linkBtn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  text-decoration: underline;
+}
+
+.empty {
+  padding: calc(14px * var(--density)) calc(16px * var(--density));
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+/* —— A form inside a card: custom download address, Hugging Face download, cloud API —— */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--density));
+  padding: calc(14px * var(--density)) calc(16px * var(--density));
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* 区块里只有这个表单时，上面没有别的行要隔开 */
+.panel:first-child {
+  border-top: 0;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.help {
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  color: var(--text-faint);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--density));
+}
+
+.note {
+  display: flex;
+  gap: calc(8px * var(--density));
+  margin: 0;
+  padding: calc(8px * var(--density)) calc(10px * var(--density));
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.error {
+  margin: calc(10px * var(--density)) calc(16px * var(--density)) 0;
+}
+
+/* —— Nothing to use yet —— */
+.start {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(10px * var(--density));
+  padding: calc(14px * var(--density)) calc(16px * var(--density));
+}
+
+.startLead {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: calc(12px * var(--density));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.choiceTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(var(--font-size-body) * var(--font-scale));
+  font-weight: var(--font-weight-600);
+  color: var(--text-strong);
+}
+
+.choiceText {
+  margin: 0 0 4px;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.cloudBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--density)) calc(12px * var(--density));
+  padding: calc(12px * var(--density)) calc(16px * var(--density));
+}
+
+.cloudBar p {
+  flex: 1 1 calc(240px * var(--font-scale));
+  margin: 0;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .start {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sub {
+    padding-left: calc(16px * var(--density));
+  }
+}
