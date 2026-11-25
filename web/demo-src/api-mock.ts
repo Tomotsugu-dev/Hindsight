@@ -859,20 +859,10 @@ export const api = {
     };
   },
   syncStatus: async (): Promise<SyncStatus> => structuredClone(state.syncStatus),
-  syncNow: async (): Promise<void> => {
-    state.syncStatus.running = true;
-    setTimeout(() => {
-      state.syncStatus.running = false;
-      state.syncStatus.lastPushedAt = new Date().toISOString();
-    }, 1500);
-  },
+  syncNow: () => syncRound(),
   syncRetryFailed: async (): Promise<void> => {
     state.syncStatus.deadLetter = 0;
-    state.syncStatus.running = true;
-    setTimeout(() => {
-      state.syncStatus.running = false;
-      state.syncStatus.lastPushedAt = new Date().toISOString();
-    }, 1500);
+    await syncRound();
   },
 
   // ─── AI external endpoint ──────────────────
@@ -1910,6 +1900,14 @@ async function simulateEngineDownload(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Runs one pretend sync round. Like the app, it returns when the round is over. */
+async function syncRound(): Promise<void> {
+  state.syncStatus.syncInFlight = true;
+  await sleep(1500);
+  state.syncStatus.syncInFlight = false;
+  state.syncStatus.lastPushedAt = new Date().toISOString();
 }
 
 /** Waits `ms`, but returns early once `stopped()` is true. Returns whether it stopped. */

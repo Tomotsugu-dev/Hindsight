@@ -102,6 +102,29 @@ it("dates the weekly check from the visitor's own Monday", async () => {
   ]);
 });
 
+// 和应用一样：同步跑完才返回。跑的时候状态里标着「同步中」，跑完更新同步时间
+it("keeps a sync in flight until the round is done", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.useFakeTimers();
+  const { api: mock } = await import("./api-mock");
+
+  for (const sync of [mock.syncNow, mock.syncRetryFailed]) {
+    const before = (await mock.syncStatus()).lastPushedAt;
+    let done = false;
+    const run = sync().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(done).toBe(false);
+    expect((await mock.syncStatus()).syncInFlight).toBe(true);
+
+    await vi.runAllTimersAsync();
+    await run;
+    const after = await mock.syncStatus();
+    expect(after.syncInFlight).toBe(false);
+    expect(after.lastPushedAt).not.toBe(before);
+  }
+  vi.useRealTimers();
+});
+
 /** 跑完 run 期间的所有计时器，返回 source 这一路收到的最后一个阶段。 */
 async function lastPhase(source: string, run: () => Promise<unknown>): Promise<string> {
   const { SUMMARY_PROGRESS_EVENT } = await import("./api-mock");
