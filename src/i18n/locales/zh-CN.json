@@ -139,7 +139,7 @@
       },
       "mine": {
         "title": "我的模型",
-        "desc": "已经能用的模型。日报、周报和对话各用哪个，在 AI 设置 → 模型 里选。",
+        "desc": "已经能用的模型。日报、周报用哪个在 AI 设置 → 模型 里选，对话用哪个在对话输入框里选。",
         "testTip": "试一下日报、周报和对话选的模型能不能用。本地模型会先启动引擎。",
         "testing": "正在测试…",
         "local": "本机 · {{size}} GB",
@@ -156,9 +156,9 @@
         "deleteCloud": "删除这个配置",
         "deleteTitle": "删除「{{name}}」？",
         "deleteMessage": "模型文件会从这台电脑上删掉，再用要重新下载。",
-        "deleteMessageInUse": "{{tasks}}正在用这个模型。删除后要在 AI 设置 → 模型 里重新选。",
+        "deleteMessageInUse": "{{tasks}}正在用这个模型，删除后要重新选。",
         "deleteCloudMessage": "这个配置会被删掉，包括里面的 API Key。",
-        "deleteCloudMessageInUse": "{{tasks}}正在用这个配置。删除后要在 AI 设置 → 模型 里重新选。",
+        "deleteCloudMessageInUse": "{{tasks}}正在用这个配置，删除后要重新选。",
         "empty": "还没有能用的模型。选一种开始：",
         "emptyLocal": "下载本机模型",
         "emptyLocalDesc": "数据不出这台电脑。要先装上面的引擎，再下载一个模型，一共约 4 GB。",
@@ -185,7 +185,7 @@
       },
       "cloud": {
         "title": "云端 API",
-        "hint": "已添加的配置在上面「我的模型」里，点 ⋯ 编辑或删除。最多 {{max}} 个。",
+        "empty": "还没有云端 API，最多可以添加 {{max}} 个。",
         "add": "添加云端 API",
         "full": "已经有 {{max}} 个了，先删掉一个再添加。",
         "editing": "编辑「{{name}}」",
@@ -1329,7 +1329,7 @@
       "rowLabel": "时段"
     },
     "external": {
-      "sectionDesc": "配置云端模型用于总结与对话，不会上传截图。",
+      "sectionDesc": "配置云端模型用于总结与对话。",
       "enableLabel": "启用云端 API",
       "enableHint": "开启后，段总结与「对话」调下方配置的 API；截图永远不上传。",
       "providerLabel": "服务商",

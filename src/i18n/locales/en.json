@@ -139,7 +139,7 @@
       },
       "mine": {
         "title": "My models",
-        "desc": "Models you can use now. Choose which one each of Daily, Weekly and Chat uses in AI Settings → Models.",
+        "desc": "Models you can use now. Choose the model for Daily and Weekly in AI Settings → Models, and for Chat in the chat box.",
         "testTip": "Check that the models chosen for Daily, Weekly and Chat work. Local models start the engine first.",
         "testing": "Testing…",
         "local": "On this computer · {{size}} GB",
@@ -156,9 +156,9 @@
         "deleteCloud": "Delete this connection",
         "deleteTitle": "Delete “{{name}}”?",
         "deleteMessage": "The model file will be deleted from this computer. To use it again, download it again.",
-        "deleteMessageInUse": "In use by {{tasks}}. After you delete it, choose again in AI Settings → Models.",
+        "deleteMessageInUse": "In use by {{tasks}}. After you delete it, they need another model.",
         "deleteCloudMessage": "This connection will be deleted, including its API key.",
-        "deleteCloudMessageInUse": "In use by {{tasks}}. After you delete it, choose again in AI Settings → Models.",
+        "deleteCloudMessageInUse": "In use by {{tasks}}. After you delete it, they need another model.",
         "empty": "No models you can use yet. Pick one way to start:",
         "emptyLocal": "Download a local model",
         "emptyLocalDesc": "Your data stays on this computer. Install the engine above, then download a model. About 4 GB in all.",
@@ -185,7 +185,7 @@
       },
       "cloud": {
         "title": "Cloud API",
-        "hint": "Saved connections are in My models above. Click ⋯ to edit or delete one. Up to {{max}}.",
+        "empty": "No cloud API yet. You can add up to {{max}}.",
         "add": "Add cloud API",
         "full": "You already have {{max}}. Delete one before you add another.",
         "editing": "Edit “{{name}}”",
@@ -1334,7 +1334,7 @@
       "rowLabel": "Segments"
     },
     "external": {
-      "sectionDesc": "Configure cloud models for summaries and Chat. Screenshots are never uploaded.",
+      "sectionDesc": "Configure cloud models for summaries and Chat.",
       "enableLabel": "Enable cloud API",
       "enableHint": "When on, segment summaries and Chat call the API configured below; screenshots are never uploaded.",
       "providerLabel": "Provider",

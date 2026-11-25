@@ -908,11 +908,32 @@ export const mockSettings: Settings = {
   syncChatHistory: false,
   syncScreenMemory: false,
   ai: {
-    cloud: [],
+    // 让「云端 API」有几个标签可看；key 是假的，演示里的测试连接也是假的
+    cloud: [
+      {
+        id: "c1",
+        name: "openai · gpt-4o-mini",
+        dialect: "openai",
+        endpoint: "https://api.openai.com/v1",
+        model: "gpt-4o-mini",
+        apiKey: "sk-demo",
+        contextLength: null,
+      },
+      {
+        id: "c2",
+        name: "deepseek-chat",
+        dialect: "deepseek",
+        endpoint: "https://api.deepseek.com/v1",
+        model: "deepseek-chat",
+        apiKey: "sk-demo",
+        contextLength: null,
+      },
+    ],
     picks: {
-      daily: { kind: "local", file: "Qwen3.5-9B-Q4_K_M.gguf" },
+      // 演示里下载好的那个模型（mockLocalModels）
+      daily: { kind: "local", file: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" },
       weekly: { kind: "inherit" },
-      chat: { kind: "local", file: "Qwen3.5-9B-Q4_K_M.gguf" },
+      chat: { kind: "local", file: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" },
     },
     advanced: [],
     userBrief: "全栈开发者，主要做 React + Rust 项目。",

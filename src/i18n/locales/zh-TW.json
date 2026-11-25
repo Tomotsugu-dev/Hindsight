@@ -139,7 +139,7 @@
       },
       "mine": {
         "title": "我的模型",
-        "desc": "已經能用的模型。日報、週報和對話各用哪一個，在 AI 設定 → 模型 裡選。",
+        "desc": "已經能用的模型。日報、週報用哪一個在 AI 設定 → 模型 裡選，對話用哪一個在對話輸入框裡選。",
         "testTip": "試一下日報、週報和對話選的模型能不能用。本機模型會先啟動引擎。",
         "testing": "正在測試…",
         "local": "本機 · {{size}} GB",
@@ -156,9 +156,9 @@
         "deleteCloud": "刪除這個設定",
         "deleteTitle": "刪除「{{name}}」？",
         "deleteMessage": "模型檔案會從這台電腦上刪除，要再用得重新下載。",
-        "deleteMessageInUse": "{{tasks}}正在使用這個模型。刪除後要在 AI 設定 → 模型 裡重新選。",
+        "deleteMessageInUse": "{{tasks}}正在使用這個模型，刪除後要重新選。",
         "deleteCloudMessage": "這個設定會被刪除，包括裡面的 API Key。",
-        "deleteCloudMessageInUse": "{{tasks}}正在使用這個設定。刪除後要在 AI 設定 → 模型 裡重新選。",
+        "deleteCloudMessageInUse": "{{tasks}}正在使用這個設定，刪除後要重新選。",
         "empty": "還沒有能用的模型。選一種開始：",
         "emptyLocal": "下載本機模型",
         "emptyLocalDesc": "資料不離開這台電腦。要先裝好上面的引擎，再下載一個模型，總共約 4 GB。",
@@ -185,7 +185,7 @@
       },
       "cloud": {
         "title": "雲端 API",
-        "hint": "已新增的設定在上面「我的模型」裡，點 ⋯ 編輯或刪除。最多 {{max}} 個。",
+        "empty": "還沒有雲端 API，最多可以新增 {{max}} 個。",
         "add": "新增雲端 API",
         "full": "已經有 {{max}} 個了，先刪除一個再新增。",
         "editing": "編輯「{{name}}」",
@@ -1329,7 +1329,7 @@
       "rowLabel": "時段"
     },
     "external": {
-      "sectionDesc": "設定雲端模型用於總結與對話，不會上傳截圖。",
+      "sectionDesc": "設定雲端模型用於總結與對話。",
       "enableLabel": "啟用雲端 API",
       "enableHint": "開啟後，段總結與「對話」會呼叫下方設定的 API；截圖永遠不會上傳。",
       "providerLabel": "服務商",

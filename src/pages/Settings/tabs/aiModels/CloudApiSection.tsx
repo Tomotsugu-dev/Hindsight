@@ -1,7 +1,18 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Activity, Check, Download, Eye, EyeOff, Info, Loader2, Plus, XCircle } from "lucide-react";
+import {
+  Activity,
+  Check,
+  Cloud,
+  Download,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  Plus,
+  XCircle,
+} from "lucide-react";
 import { Button } from "../../../../components/Button/Button";
 import { IconButton } from "../../../../components/Button/IconButton";
 import { TextInput } from "../../../../components/TextInput/TextInput";
@@ -10,6 +21,7 @@ import { SimplePicker } from "../../../../components/SimplePicker/SimplePicker";
 import { api, type AiConfig, type CloudConnection } from "../../../../api/hindsight";
 import { useAiSettings } from "../../../AISettings/shared/useAiSettings";
 import { profileLabel } from "../../../../utils/profileLabel";
+import { isCloudConnectionReady } from "../../../Chat/chatRouting";
 import styles from "../../../AISettings/AISettings.module.css";
 import s from "./aiModels.module.css";
 
@@ -150,15 +162,15 @@ interface CloudApiSectionProps {
 /**
  * Add a cloud API connection, or change a saved one.
  *
- * The form is closed until the user adds one here or picks Edit in My models, where saved
- * connections are listed. Changes to a saved connection save as the user types.
+ * Saved connections show as tags. Clicking a tag opens its form below, and clicking it again
+ * closes the form. Edit in My models opens the same form. Changes to a saved connection save as
+ * the user types.
  */
 export function CloudApiSection({ editor, onEditorChange }: CloudApiSectionProps) {
   const { t } = useTranslation();
   const { ai, updateAi } = useAiSettings();
   if (!ai) return null;
 
-  const full = ai.cloud.length >= MAX_CONNECTIONS;
   const editing = editor.mode === "edit" ? ai.cloud.find((c) => c.id === editor.id) : undefined;
 
   return (
@@ -166,6 +178,7 @@ export function CloudApiSection({ editor, onEditorChange }: CloudApiSectionProps
       title={t("settings.aiModels.cloud.title")}
       description={t("aiSettings.external.sectionDesc")}
     >
+      <CloudTags connections={ai.cloud} editor={editor} onEditorChange={onEditorChange} />
       {editor.mode === "new" || editing ? (
         <CloudForm
           // 换一个配置就重来一遍：草稿、测试结果、拿到的模型列表都清掉
@@ -175,22 +188,72 @@ export function CloudApiSection({ editor, onEditorChange }: CloudApiSectionProps
           editing={editing ?? null}
           onClose={() => onEditorChange({ mode: "closed" })}
         />
-      ) : (
-        <div className={s.cloudBar}>
-          <p>{t("settings.aiModels.cloud.hint", { max: MAX_CONNECTIONS })}</p>
-          <Button
-            variant="outline"
-            tone="accent"
-            icon={Plus}
-            disabled={full}
-            title={full ? t("settings.aiModels.cloud.full", { max: MAX_CONNECTIONS }) : undefined}
-            onClick={() => onEditorChange({ mode: "new" })}
-          >
-            {t("settings.aiModels.cloud.add")}
-          </Button>
-        </div>
-      )}
+      ) : null}
     </Section>
+  );
+}
+
+/** The saved connections as tags, then a tag that adds one. The tag of the open form is pressed. */
+function CloudTags({
+  connections,
+  editor,
+  onEditorChange,
+}: {
+  connections: CloudConnection[];
+  editor: CloudEditor;
+  onEditorChange: (next: CloudEditor) => void;
+}) {
+  const { t } = useTranslation();
+  const full = connections.length >= MAX_CONNECTIONS;
+  const adding = editor.mode === "new";
+
+  return (
+    <div className={s.cloudTags}>
+      {connections.length === 0 ? (
+        <span className={s.cloudEmpty}>
+          {t("settings.aiModels.cloud.empty", { max: MAX_CONNECTIONS })}
+        </span>
+      ) : null}
+      {connections.map((conn) => {
+        const open = editor.mode === "edit" && editor.id === conn.id;
+        return (
+          <button
+            key={conn.id}
+            type="button"
+            className={s.tag}
+            aria-pressed={open}
+            title={conn.endpoint}
+            onClick={() =>
+              onEditorChange(open ? { mode: "closed" } : { mode: "edit", id: conn.id })
+            }
+          >
+            <Cloud aria-hidden />
+            <span className={s.tagText}>{profileLabel(conn)}</span>
+            {isCloudConnectionReady(conn) ? null : (
+              <span className={`${s.cap} ${s.capWarn}`}>
+                {t("settings.aiModels.mine.cloudIncomplete")}
+              </span>
+            )}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        className={`${s.tag} ${s.tagAdd}`}
+        aria-pressed={adding}
+        disabled={full && !adding}
+        title={full ? t("settings.aiModels.cloud.full", { max: MAX_CONNECTIONS }) : undefined}
+        onClick={() => onEditorChange(adding ? { mode: "closed" } : { mode: "new" })}
+      >
+        <Plus aria-hidden />
+        <span className={s.tagText}>{t("settings.aiModels.cloud.add")}</span>
+      </button>
+      {connections.length > 0 ? (
+        <span className={s.cloudCount}>
+          {connections.length} / {MAX_CONNECTIONS}
+        </span>
+      ) : null}
+    </div>
   );
 }
 

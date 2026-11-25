@@ -139,7 +139,7 @@
       },
       "mine": {
         "title": "Meus modelos",
-        "desc": "Modelos que você já pode usar. Escolha qual Diário, Semanal e Chat usam em Configurações de IA → Modelos.",
+        "desc": "Modelos que você já pode usar. Escolha o modelo do Diário e do Semanal em Configurações de IA → Modelos, e o do Chat na caixa de mensagem do chat.",
         "testTip": "Verifica se os modelos escolhidos para Diário, Semanal e Chat funcionam. Modelos locais iniciam o mecanismo antes.",
         "testing": "Testando…",
         "local": "Neste computador · {{size}} GB",
@@ -156,9 +156,9 @@
         "deleteCloud": "Excluir esta conexão",
         "deleteTitle": "Excluir “{{name}}”?",
         "deleteMessage": "O arquivo do modelo será excluído deste computador. Para usá-lo de novo, será preciso baixá-lo outra vez.",
-        "deleteMessageInUse": "Em uso em: {{tasks}}. Depois de excluí-lo, escolha outro em Configurações de IA → Modelos.",
+        "deleteMessageInUse": "Em uso em: {{tasks}}. Depois de excluí-lo, será preciso escolher outro modelo.",
         "deleteCloudMessage": "Esta conexão será excluída, junto com a chave de API.",
-        "deleteCloudMessageInUse": "Em uso em: {{tasks}}. Depois de excluí-la, escolha outra em Configurações de IA → Modelos.",
+        "deleteCloudMessageInUse": "Em uso em: {{tasks}}. Depois de excluí-la, será preciso escolher outro modelo.",
         "empty": "Ainda não há modelos que você possa usar. Escolha um jeito de começar:",
         "emptyLocal": "Baixar um modelo local",
         "emptyLocalDesc": "Seus dados não saem deste computador. Instale o mecanismo acima e depois baixe um modelo. Cerca de 4 GB no total.",
@@ -185,7 +185,7 @@
       },
       "cloud": {
         "title": "API na nuvem",
-        "hint": "As conexões salvas ficam acima, em Meus modelos. Clique em ⋯ para editar ou excluir. Até {{max}}.",
+        "empty": "Ainda não há nenhuma API na nuvem. Você pode adicionar até {{max}}.",
         "add": "Adicionar API na nuvem",
         "full": "Você já tem {{max}}. Exclua uma antes de adicionar outra.",
         "editing": "Editar “{{name}}”",
@@ -1334,7 +1334,7 @@
       "rowLabel": "Segmentos"
     },
     "external": {
-      "sectionDesc": "Configure modelos na nuvem para resumos e Chat. Capturas de tela nunca são enviadas.",
+      "sectionDesc": "Configure modelos na nuvem para resumos e Chat.",
       "enableLabel": "Ativar API na nuvem",
       "enableHint": "Quando ativado, resumos de segmentos e o Chat chamam a API configurada abaixo; capturas de tela nunca são enviadas.",
       "providerLabel": "Provedor",

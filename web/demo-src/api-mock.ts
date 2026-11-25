@@ -892,9 +892,27 @@ export const api = {
   deleteOcrRuntime: async (): Promise<void> => {},
   openEngineDir: async (): Promise<void> => {},
   testAiConnections: async (): Promise<TaskConnectionTest[]> => [
-    { task: "daily", kind: "local", model: "Qwen3.5-9B-Q4_K_M.gguf", ok: true, message: "" },
-    { task: "weekly", kind: "local", model: "Qwen3.5-9B-Q4_K_M.gguf", ok: true, message: "" },
-    { task: "chat", kind: "local", model: "Qwen3.5-9B-Q4_K_M.gguf", ok: true, message: "" },
+    {
+      task: "daily",
+      kind: "local",
+      model: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      ok: true,
+      message: "",
+    },
+    {
+      task: "weekly",
+      kind: "local",
+      model: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      ok: true,
+      message: "",
+    },
+    {
+      task: "chat",
+      kind: "local",
+      model: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      ok: true,
+      message: "",
+    },
   ],
   stopEngine: async (): Promise<void> => {},
 

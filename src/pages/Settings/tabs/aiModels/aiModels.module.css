@@ -430,20 +430,94 @@
   color: var(--text-muted);
 }
 
-.cloudBar {
+.cloudTags {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: calc(8px * var(--density)) calc(12px * var(--density));
+  gap: calc(8px * var(--density));
   padding: calc(12px * var(--density)) calc(16px * var(--density));
 }
 
-.cloudBar p {
-  flex: 1 1 calc(240px * var(--font-scale));
-  margin: 0;
+.cloudEmpty {
+  flex: 1 1 calc(200px * var(--font-scale));
   font-size: calc(var(--font-size-body-sm) * var(--font-scale));
   color: var(--text-muted);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+  min-width: 0;
+  max-width: 100%;
+  height: calc(30px * var(--density));
+  padding: 0 calc(12px * var(--density)) 0 calc(10px * var(--density));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font: inherit;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.tag svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.tag:hover:not(:disabled) {
+  background: var(--fill-subtle);
+}
+
+.tag:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.tag[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-600);
+}
+
+.tag[aria-pressed="true"] svg {
+  color: currentColor;
+}
+
+.tagText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagAdd {
+  border-style: dashed;
+  color: var(--color-accent);
+}
+
+.tagAdd svg {
+  color: currentColor;
+}
+
+.tagAdd:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.cloudCount {
+  margin-left: auto;
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
 }
 
 @media (max-width: 760px) {
