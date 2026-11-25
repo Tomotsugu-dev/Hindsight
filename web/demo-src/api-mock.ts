@@ -986,16 +986,12 @@ export const api = {
     summaryStopped = true;
   },
   getDaySummary: async (date: string): Promise<SegmentSummaryRow[]> => {
-    const key = `daily:${date}`;
-    // 段总结按当前 i18n 语言动态返回，这样切语言后日报立刻跟随，不需要清缓存。
-    if (state.daySummaries.has(key)) {
-      const segs = dailySegmentsForLocale(i18n.language || "zh-CN");
-      for (const s of segs) s.localDate = date;
-      return segs;
-    }
-    return structuredClone(state.daySummaries.get(key) ?? []);
+    const stored = state.daySummaries.get(`daily:${date}`) ?? [];
+    // The sample text follows the page language, so a language switch shows it at once
+    const samples = dailySegmentsForLocale(i18n.language || "zh-CN");
+    return stored.map((row) => withEdit({ ...samples[row.segmentIdx], localDate: date }));
   },
-  // 演示里不落盘：返回改好的行让页面显示，刷新后回到示例文字
+  // Like the app, an edit stays until the report or the segment runs again. A page reload drops it
   editSummarySegment: async (
     source: string,
     date: string,
@@ -1008,7 +1004,11 @@ export const api = {
         : await api.getDaySummary(date);
     const row = rows.find((r) => r.segmentIdx === segmentIdx);
     if (!row) throw "invalid input: summary segment not found";
-    return { ...row, content, status: "ok", error: null, generatedAt: new Date().toISOString() };
+    segmentEdits.set(`${source}:${date}:${segmentIdx}`, {
+      content,
+      generatedAt: new Date().toISOString(),
+    });
+    return withEdit(row);
   },
 
   // ─── Weekly summary ────────────────────────
@@ -1035,14 +1035,18 @@ export const api = {
       daysActivityOnly: 2,
     };
   },
-  getWeekSummary: async (weekStart: string): Promise<SegmentSummaryRow | null> =>
-    structuredClone(state.daySummaries.get(`weekly:${weekStart}`)?.[0] ?? null),
+  getWeekSummary: async (weekStart: string): Promise<SegmentSummaryRow | null> => {
+    const row = state.daySummaries.get(`weekly:${weekStart}`)?.[0];
+    return row ? withEdit(structuredClone(row)) : null;
+  },
   clearWeekSummary: async (weekStart: string): Promise<void> => {
     state.daySummaries.delete(`weekly:${weekStart}`);
+    dropEdits("weekly", weekStart);
   },
 
   clearDaySummary: async (date: string): Promise<void> => {
     state.daySummaries.delete(`daily:${date}`);
+    dropEdits("daily", date);
   },
   // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
   getAppBuckets: async (
@@ -1694,6 +1698,28 @@ const ENGINE_EVENT = "ai://engine-download-progress";
 /** Like the app, daily and weekly reports share one stop switch. */
 let summaryStopped = false;
 
+/**
+ * The visitor's edits of report segments, by `source:date:index`. They are kept apart from the
+ * stored rows because the daily sample text is made again in the page language on each read.
+ */
+const segmentEdits = new Map<string, { content: string; generatedAt: string }>();
+
+/** Returns `row` with the visitor's edit of it, if there is one. */
+function withEdit(row: SegmentSummaryRow): SegmentSummaryRow {
+  const edit = segmentEdits.get(`${row.source}:${row.localDate}:${row.segmentIdx}`);
+  return edit ? { ...row, ...edit, status: "ok", error: null } : row;
+}
+
+/** Drops the edits of one report, or of one segment of it. Like the app, a new run replaces them. */
+function dropEdits(source: string, date: string, segmentIdx?: number): void {
+  const prefix = `${source}:${date}:`;
+  for (const key of segmentEdits.keys()) {
+    const hit =
+      segmentIdx === undefined ? key.startsWith(prefix) : key === `${prefix}${segmentIdx}`;
+    if (hit) segmentEdits.delete(key);
+  }
+}
+
 /** Waits `ms` of a report run. Returns true, after sending `cancelled`, if the user stopped it. */
 async function summaryWaitOrStop(ms: number, date: string, source: string): Promise<boolean> {
   if (!(await sleepUntilStopped(ms, () => summaryStopped))) return false;
@@ -1706,6 +1732,7 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
   const segments = dailySegmentsForLocale(i18n.language || "zh-CN");
   for (const seg of segments) seg.localDate = date;
   summaryStopped = false;
+  dropEdits(source, date);
 
   await emit(SUMMARY_EVENT, {
     phase: "engine_starting",
@@ -1752,6 +1779,7 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
 async function simulateWeeklyProgress(monday: string): Promise<void> {
   const source = "weekly";
   summaryStopped = false;
+  dropEdits(source, monday);
   await emit(SUMMARY_EVENT, { phase: "engine_starting", date: monday, source });
   if (await summaryWaitOrStop(500, monday, source)) return;
   await emit(SUMMARY_EVENT, { phase: "summarizing", date: monday, source });
@@ -1790,6 +1818,7 @@ async function simulateSegmentRetry(
   segmentIdx: number,
   source: string,
 ): Promise<void> {
+  dropEdits(source, date, segmentIdx);
   await emit(SUMMARY_EVENT, {
     phase: "segment_started",
     date,

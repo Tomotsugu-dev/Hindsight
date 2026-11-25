@@ -152,6 +152,27 @@ it("keeps the sample AI settings in the page language after a save", async () =>
   await i18n.changeLanguage("zh-CN");
 });
 
+// 改过的段一直在：切走再回来时页面会重新读，读到的还是改过的文字；重新生成后回到示例
+it("keeps an edited report segment until the report runs again", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  const { api: mock } = await import("./api-mock");
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const before = await mock.getDaySummary(today);
+  await mock.editSummarySegment("daily", today, 1, "EDITMARK");
+  const reread = await mock.getDaySummary(today);
+  expect(reread[1].content).toBe("EDITMARK");
+  expect(reread[0].content).toBe(before[0].content);
+
+  vi.useFakeTimers();
+  const run = mock.generateDaySummary(today, true, null);
+  await vi.runAllTimersAsync();
+  await run;
+  vi.useRealTimers();
+  expect((await mock.getDaySummary(today))[1].content).toBe(before[1].content);
+});
+
 // 下完的模型出现在「我的模型」里，删掉后消失
 it("lists a downloaded model under My models until it is deleted", async () => {
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
