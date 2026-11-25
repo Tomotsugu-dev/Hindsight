@@ -1,0 +1,67 @@
+/* Sticks below the floating tab bar, which is fixed 16px from the top and about 40px tall. */
+.toc {
+  position: sticky;
+  top: 72px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  margin: 0;
+  padding: 0 calc(8px * var(--density)) calc(6px * var(--density));
+  font-size: calc(var(--font-size-caption) * var(--font-scale));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--density));
+  padding: calc(6px * var(--density)) calc(8px * var(--density));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: calc(var(--font-size-body-sm) * var(--font-scale));
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  color: var(--text-strong);
+  background: var(--fill-subtle);
+}
+
+.item[aria-current="location"] {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  font-weight: 600;
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.item svg {
+  flex-shrink: 0;
+}
+
+/* Long labels, such as in Spanish, wrap to a second line */
+.item span {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* Too narrow for two columns (only the web demo gets this narrow; the app window is at least 960px) */
+@media (max-width: 760px) {
+  .toc {
+    display: none;
+  }
+}
