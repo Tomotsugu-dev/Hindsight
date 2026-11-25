@@ -77,7 +77,7 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 /** OAuth 授权 URL 就绪事件——demo 里永不触发，仅满足消费方 import。 */
 export const OAUTH_URL_EVENT = "sync://oauth-url";
-/** Chat 问答落库完成广播——demo 里永不触发，仅满足消费方 import。 */
+/** Sent when an answer is stored or stopped. */
 export const CHAT_ANSWER_READY_EVENT = "chat:answer-ready";
 
 // ────────────────────────────────────────────
@@ -139,13 +139,18 @@ import {
   mockUnclassifiedApps,
   mockDayFor,
   dailySegmentsForLocale,
+  weeklyContentForLocale,
+  weekdaysForLocale,
+  DEMO_SUMMARY_MODEL,
   selfDeviceNameForLocale,
   userBriefForLocale,
+  isDemoUserBrief,
   DEMO_PROFILE_ID,
   demoProfileNameForLocale,
   isDemoProfileName,
 } from "./fixtures";
 import { persistence } from "./persistence";
+import { sayDesktopOnly } from "./desktop-only";
 
 // 演示数据里还是中文原名的默认分类、默认大类，按当前页面语言显示。真实应用第一次启动时
 // 由后端换一次名（ADR-0015）；demo 要在 /en/、/ja/ 这些页面之间切换，所以读的时候换。
@@ -258,6 +263,32 @@ const DEMO_SITE_ICON_URLS: SiteIconPaths = {
 };
 const demoSiteIcons: SiteIconPaths = {};
 
+/**
+ * Returns a copy of the settings with the sample values in the page language.
+ *
+ * The stored sample values are Chinese, and a save stores the values of the page that made it.
+ * So a sample value is changed to the page language whatever language it is in, and a value the
+ * visitor wrote is kept. The prompt language always follows the page.
+ */
+function settingsInPageLanguage(): Settings {
+  const s = structuredClone(state.settings);
+  s.downloadSiteIcons ??= false;
+  s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
+  const lng = (i18n.language || "zh-CN").toLowerCase();
+  s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
+  if (isDemoUserBrief(s.ai.userBrief)) s.ai.userBrief = userBriefForLocale(lng);
+  // A visitor's browser may still hold demo state in the old shape, without `profiles`
+  const demoProfile = s.ai.visibility?.profiles?.[DEMO_PROFILE_ID];
+  if (demoProfile && isDemoProfileName(demoProfile.name)) {
+    demoProfile.name = demoProfileNameForLocale(lng);
+  }
+  // The app does the same for the segments in App.tsx when the language changes
+  if (isDefaultSegments(s.ai.segments)) {
+    s.ai.segments = retranslateDefaultSegments(s.ai.segments, lng);
+  }
+  return s;
+}
+
 function persist() {
   const selfDevice = state.devices.find((d) => d.isSelf);
   persistence.save({
@@ -317,6 +348,7 @@ function rangeOffsets(from: string, to: string): number[] {
 // api 对象 —— 跟原 hindsight.ts 同样接口
 // ────────────────────────────────────────────
 
+// Type-checked against the real API at the end, so each call returns what the pages expect.
 export const api = {
   // ─── 时段数据 ──────────────────────────────
   getDayHours: async (dayOffset: number, deviceId?: string): Promise<HourSlot[]> => {
@@ -743,41 +775,13 @@ export const api = {
   enableGnomeExtension: async (): Promise<GnomeExtensionStatus> => "ready",
 
   // ─── Settings ──────────────────────────────
-  getSettings: async (): Promise<Settings> => {
-    // demo 的 AI 系统提示词语言 + "あなたについて / About you" 简介都按当前 i18n 切，
-    // 让 /en/、/ja/ 看到对应语言的默认值。
-    const s = structuredClone(state.settings);
-    s.downloadSiteIcons ??= false;
-    s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
-    const lng = (i18n.language || "zh-CN").toLowerCase();
-    s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
-    s.ai.userBrief = userBriefForLocale(lng);
-    // 演示配置没改过名就换成当前语言的名字
-    // A visitor's browser may still hold demo state in the old shape, without `profiles`
-    const demoProfile = s.ai.visibility?.profiles?.[DEMO_PROFILE_ID];
-    if (demoProfile && isDemoProfileName(demoProfile.name)) {
-      demoProfile.name = demoProfileNameForLocale(lng);
-    }
-    // 时段没改过就换成当前语言的默认名字；真实应用切语言时在 App.tsx 里做同样的事
-    if (isDefaultSegments(s.ai.segments)) {
-      s.ai.segments = retranslateDefaultSegments(s.ai.segments, lng);
-    }
-    // 清空 promptOverrides，确保 PromptTab fallback 到 DEFAULT_SYSTEM_PROMPTS[lang]
-    s.ai.promptOverrides = {
-      systemZh: "",
-      systemEn: "",
-      systemJa: "",
-      systemPt: "",
-      systemTw: "",
-      systemEs: "",
-    };
-    return s;
-  },
+  getSettings: async (): Promise<Settings> => settingsInPageLanguage(),
+  // Returns what getSettings returns: the page shows this copy after each save
   updateSettings: async (patch: SettingsPatch): Promise<Settings> => {
     state.settings = { ...state.settings, ...patch };
     if (patch.ai) state.settings.ai = { ...state.settings.ai, ...patch.ai };
     persist();
-    return structuredClone(state.settings);
+    return settingsInPageLanguage();
   },
   addIgnoreRule: async (
     processName: string,
@@ -809,7 +813,7 @@ export const api = {
     // eslint-disable-next-line no-console
     console.warn("[demo] purgeScreenshots 在 demo 模式下不会真的清除数据");
   },
-  openScreenshotsDir: async (): Promise<void> => {},
+  openScreenshotsDir: async (): Promise<void> => sayDesktopOnly(),
   getDataRoot: async (): Promise<string> => "C:\\Users\\demo\\AppData\\Roaming\\Hindsight",
   setDataRoot: async (_path: string): Promise<void> => {},
 
@@ -857,20 +861,10 @@ export const api = {
     };
   },
   syncStatus: async (): Promise<SyncStatus> => structuredClone(state.syncStatus),
-  syncNow: async (): Promise<void> => {
-    state.syncStatus.running = true;
-    setTimeout(() => {
-      state.syncStatus.running = false;
-      state.syncStatus.lastPushedAt = new Date().toISOString();
-    }, 1500);
-  },
+  syncNow: () => syncRound(),
   syncRetryFailed: async (): Promise<void> => {
     state.syncStatus.deadLetter = 0;
-    state.syncStatus.running = true;
-    setTimeout(() => {
-      state.syncStatus.running = false;
-      state.syncStatus.lastPushedAt = new Date().toISOString();
-    }, 1500);
+    await syncRound();
   },
 
   // ─── AI external endpoint ──────────────────
@@ -917,8 +911,11 @@ export const api = {
   stopEngine: async (): Promise<void> => {},
 
   // ─── Models ────────────────────────────────
-  listLocalModels: async (): Promise<ModelEntry[]> => structuredClone(mockLocalModels),
-  deleteModel: async (_filename: string): Promise<void> => {},
+  listLocalModels: async (): Promise<ModelEntry[]> => structuredClone(localModels),
+  deleteModel: async (filename: string): Promise<void> => {
+    const i = localModels.findIndex((m) => m.filename === filename);
+    if (i >= 0) localModels.splice(i, 1);
+  },
   listRecommendedModels: async (): Promise<RecommendedModel[]> =>
     structuredClone(mockRecommendedModels),
   downloadModel: async (
@@ -927,11 +924,26 @@ export const api = {
     expectedBytes: number,
     saveAs?: string | null,
   ): Promise<string> => {
-    await simulateModelDownload(saveAs ?? file, expectedBytes);
-    return `C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\${saveAs ?? file}`;
+    const filename = saveAs ?? file;
+    await simulateModelDownload(filename, expectedBytes);
+    const path = `C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\${filename}`;
+    if (!localModels.some((m) => m.filename === filename)) {
+      const isMmproj = /mmproj/i.test(filename);
+      localModels.push({
+        filename,
+        path,
+        sizeBytes: expectedBytes,
+        isMmproj,
+        supportsTools: isMmproj ? null : true,
+      });
+    }
+    return path;
   },
-  cancelModelDownload: async (_file: string): Promise<void> => {},
-  listPartialDownloads: async (): Promise<PartialDownload[]> => [],
+  cancelModelDownload: async (file: string): Promise<void> => {
+    downloadPauses.add(file);
+  },
+  listPartialDownloads: async (): Promise<PartialDownload[]> =>
+    Array.from(partialDownloads, ([filename, downloadedBytes]) => ({ filename, downloadedBytes })),
   setTaskModel: async (
     task: "daily" | "weekly" | "chat",
     model: ModelPick | null,
@@ -963,18 +975,16 @@ export const api = {
   ): Promise<void> => {
     await simulateSegmentRetry(date, segmentIdx, "daily");
   },
-  cancelDaySummary: async (): Promise<void> => {},
-  getDaySummary: async (date: string): Promise<SegmentSummaryRow[]> => {
-    const key = `daily:${date}`;
-    // 段总结按当前 i18n 语言动态返回，这样切语言后日报立刻跟随，不需要清缓存。
-    if (state.daySummaries.has(key)) {
-      const segs = dailySegmentsForLocale(i18n.language || "zh-CN");
-      for (const s of segs) s.localDate = date;
-      return segs;
-    }
-    return structuredClone(state.daySummaries.get(key) ?? []);
+  cancelDaySummary: async (): Promise<void> => {
+    summaryStopped = true;
   },
-  // 演示里不落盘：返回改好的行让页面显示，刷新后回到示例文字
+  getDaySummary: async (date: string): Promise<SegmentSummaryRow[]> => {
+    const stored = state.daySummaries.get(`daily:${date}`) ?? [];
+    // The sample text follows the page language, so a language switch shows it at once
+    const samples = dailySegmentsForLocale(i18n.language || "zh-CN");
+    return stored.map((row) => withEdit({ ...samples[row.segmentIdx], localDate: date }));
+  },
+  // Like the app, an edit stays until the report or the segment runs again. A page reload drops it
   editSummarySegment: async (
     source: string,
     date: string,
@@ -987,39 +997,48 @@ export const api = {
         : await api.getDaySummary(date);
     const row = rows.find((r) => r.segmentIdx === segmentIdx);
     if (!row) throw "invalid input: summary segment not found";
-    return { ...row, content, status: "ok", error: null, generatedAt: new Date().toISOString() };
+    segmentEdits.set(`${source}:${date}:${segmentIdx}`, {
+      content,
+      generatedAt: new Date().toISOString(),
+    });
+    return withEdit(row);
   },
 
   // ─── Weekly summary ────────────────────────
   generateWeekSummary: async (
-    _weekStart: string,
+    weekStart: string,
     _forceRefresh: boolean,
     _allowMissingDays: boolean = false,
   ): Promise<void> => {
-    // 简化：1.5s 后 emit done
-    await new Promise((r) => setTimeout(r, 1500));
+    await simulateWeeklyProgress(weekStart);
   },
   precheckWeekSummary: async (weekStart: string): Promise<WeekPrecheckResp> => {
+    const weekdays = weekdaysForLocale(i18n.language || "zh-CN");
+    // Local midnight. `new Date("YYYY-MM-DD")` is UTC midnight, the day before west of UTC.
+    const [y, m, d] = weekStart.split("-").map((s) => parseInt(s, 10));
     return {
-      days: Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(weekStart);
-        d.setDate(d.getDate() + i);
-        return {
-          date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-          weekday: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][i],
-          hasDaily: i < 5, // 前 5 天有日报
-          hasActivity: true,
-        };
-      }),
+      days: Array.from({ length: 7 }, (_, i) => ({
+        date: ymd(new Date(y, m - 1, d + i)),
+        weekday: weekdays[i],
+        hasDaily: i < 5, // 前 5 天有日报
+        hasActivity: true,
+      })),
       daysWithDaily: 5,
       daysActivityOnly: 2,
     };
   },
-  getWeekSummary: async (_weekStart: string): Promise<SegmentSummaryRow | null> => null,
-  clearWeekSummary: async (_weekStart: string): Promise<void> => {},
+  getWeekSummary: async (weekStart: string): Promise<SegmentSummaryRow | null> => {
+    const row = state.daySummaries.get(`weekly:${weekStart}`)?.[0];
+    return row ? withEdit(structuredClone(row)) : null;
+  },
+  clearWeekSummary: async (weekStart: string): Promise<void> => {
+    state.daySummaries.delete(`weekly:${weekStart}`);
+    dropEdits("weekly", weekStart);
+  },
 
   clearDaySummary: async (date: string): Promise<void> => {
     state.daySummaries.delete(`daily:${date}`);
+    dropEdits("daily", date);
   },
   // ─── 应用详情钻取（日 24 小时柱 / 周 7 天柱 / 月 30 天柱） ───
   getAppBuckets: async (
@@ -1049,10 +1068,9 @@ export const api = {
     question: string,
     conversationId: number | null,
     _locale?: string,
-    _askId?: string,
+    askId?: string,
     parentGuid?: string,
   ): Promise<ChatAskResult> => {
-    await sleep(900); // 模拟检索 + 推理耗时
     const now = localTs();
     let conv = chatConvs.find((c) => c.meta.id === conversationId);
     if (!conv) {
@@ -1072,7 +1090,6 @@ export const api = {
     // demo 里编辑分支因此可完整演示
     const tip = conv.messages[conv.messages.length - 1];
     const parent = parentGuid === "" ? null : (parentGuid ?? tip?.guid ?? null);
-    const answer = chatDemoAnswer(question);
     const userGuid = `demo-${chatNextMsgId}`;
     conv.messages.push({
       id: chatNextMsgId++,
@@ -1088,6 +1105,9 @@ export const api = {
       guid: userGuid,
       parentGuid: parent,
     });
+    // Like the app, the question stays in the chat when the answer is stopped
+    if (await waitForAnswer(askId)) return stopAnswer(conv.meta.id, askId);
+    const answer = chatDemoAnswer(question);
     conv.messages.push({
       id: chatNextMsgId,
       role: "assistant",
@@ -1102,6 +1122,7 @@ export const api = {
       guid: `demo-${chatNextMsgId++}`,
       parentGuid: userGuid,
     });
+    await answerReady(conv.meta.id, askId, true);
     return {
       conversationId: conv.meta.id,
       cancelled: false,
@@ -1116,14 +1137,18 @@ export const api = {
     };
   },
   chatInflight: async (_conversationId: number): Promise<string | null> => null,
-  chatCancel: async (_askId: string): Promise<boolean> => false,
+  chatCancel: async (askId: string): Promise<boolean> => {
+    if (!chatStops.has(askId)) return false;
+    chatStops.set(askId, true);
+    return true;
+  },
   chatRegenerate: async (
     conversationId: number,
     _locale?: string,
-    _askId?: string,
+    askId?: string,
     leafGuid?: string,
   ): Promise<ChatAskResult> => {
-    await sleep(900);
+    if (await waitForAnswer(askId)) return stopAnswer(conversationId, askId);
     const conv = chatConvs.find((c) => c.meta.id === conversationId);
     if (!conv) throw new Error("no question to answer again");
     // 与真实端同语义:沿指定叶子(缺省链尾)回溯 parent 找最近提问
@@ -1151,6 +1176,7 @@ export const api = {
       guid: `demo-${chatNextMsgId++}`,
       parentGuid: leaf.guid,
     });
+    await answerReady(conv.meta.id, askId, true);
     return {
       conversationId: conv.meta.id,
       cancelled: false,
@@ -1249,12 +1275,16 @@ export const api = {
     screenshots: 0,
     memorySessions: 0,
   }),
-  purgeCloudData: async (_keepLocal: boolean): Promise<void> => {},
-  forgetRemoteDevice: async (deviceId: string): Promise<void> => {
+  purgeCloudData: async (_keepLocal: boolean): Promise<number> => DEMO_CLOUD_FILES,
+  forgetRemoteDevice: async (deviceId: string): Promise<number> => {
     const i = state.devices.findIndex((d) => d.deviceId === deviceId && !d.isSelf);
     if (i >= 0) state.devices.splice(i, 1);
+    return DEMO_CLOUD_FILES;
   },
-};
+} satisfies typeof import("@app/api/hindsight").api;
+
+/** How many cloud files the demo says it removed. The done message shows it. */
+const DEMO_CLOUD_FILES = 36;
 
 // ────────────────────────────────────────────
 // Chat 演示状态 + 固定示例回答（按界面语言）
@@ -1267,6 +1297,51 @@ interface DemoConv {
 const chatConvs: DemoConv[] = [];
 let chatNextConvId = 1;
 let chatNextMsgId = 1;
+/** Ask ids of the answers being written. The value is true once the user stops one. */
+const chatStops = new Map<string, boolean>();
+
+/** Waits as long as a demo answer takes. Returns true if the user stopped it. */
+async function waitForAnswer(askId: string | undefined): Promise<boolean> {
+  if (!askId) {
+    await sleep(900);
+    return false;
+  }
+  chatStops.set(askId, false);
+  try {
+    return await sleepUntilStopped(900, () => chatStops.get(askId) === true);
+  } finally {
+    chatStops.delete(askId);
+  }
+}
+
+/** Sends the event the app sends when an answer is stored or stopped. The chat pages reload on it. */
+function answerReady(
+  conversationId: number,
+  askId: string | undefined,
+  ok: boolean,
+): Promise<void> {
+  return emit(CHAT_ANSWER_READY_EVENT, { conversationId, askId: askId ?? "", ok });
+}
+
+/** Ends a stopped question like the app: sends the event, then returns an empty answer. */
+async function stopAnswer(
+  conversationId: number,
+  askId: string | undefined,
+): Promise<ChatAskResult> {
+  await answerReady(conversationId, askId, false);
+  return {
+    conversationId,
+    cancelled: true,
+    text: "",
+    citations: [],
+    steps: 0,
+    degraded: false,
+    promptTokens: 0,
+    completionTokens: 0,
+    reasoningTokens: 0,
+    elapsedMs: 0,
+  };
+}
 
 // 给功能文档截图用的一问一答，每种界面语言一份：原样输入这个问题才会命中，
 // 其他问题仍是下面的占位回答。scripts/shots/features.mjs 里 chat 那张图问的就是它们，
@@ -1616,17 +1691,51 @@ const SUMMARY_EVENT = "ai://summary-progress";
 const MODEL_EVENT = "ai://model-download-progress";
 const ENGINE_EVENT = "ai://engine-download-progress";
 
+/** Like the app, daily and weekly reports share one stop switch. */
+let summaryStopped = false;
+
+/**
+ * The visitor's edits of report segments, by `source:date:index`. They are kept apart from the
+ * stored rows because the daily sample text is made again in the page language on each read.
+ */
+const segmentEdits = new Map<string, { content: string; generatedAt: string }>();
+
+/** Returns `row` with the visitor's edit of it, if there is one. */
+function withEdit(row: SegmentSummaryRow): SegmentSummaryRow {
+  const edit = segmentEdits.get(`${row.source}:${row.localDate}:${row.segmentIdx}`);
+  return edit ? { ...row, ...edit, status: "ok", error: null } : row;
+}
+
+/** Drops the edits of one report, or of one segment of it. Like the app, a new run replaces them. */
+function dropEdits(source: string, date: string, segmentIdx?: number): void {
+  const prefix = `${source}:${date}:`;
+  for (const key of segmentEdits.keys()) {
+    const hit =
+      segmentIdx === undefined ? key.startsWith(prefix) : key === `${prefix}${segmentIdx}`;
+    if (hit) segmentEdits.delete(key);
+  }
+}
+
+/** Waits `ms` of a report run. Returns true, after sending `cancelled`, if the user stopped it. */
+async function summaryWaitOrStop(ms: number, date: string, source: string): Promise<boolean> {
+  if (!(await sleepUntilStopped(ms, () => summaryStopped))) return false;
+  await emit(SUMMARY_EVENT, { phase: "cancelled", date, source });
+  return true;
+}
+
 async function simulateSummaryProgress(date: string, source: string): Promise<void> {
   // 5 段，每段 ~800ms：emit started → emit done。按当前 i18n locale 取段内容。
   const segments = dailySegmentsForLocale(i18n.language || "zh-CN");
   for (const seg of segments) seg.localDate = date;
+  summaryStopped = false;
+  dropEdits(source, date);
 
   await emit(SUMMARY_EVENT, {
     phase: "engine_starting",
     message: "加载段总结模型中…",
     source,
   });
-  await sleep(400);
+  if (await summaryWaitOrStop(400, date, source)) return;
 
   for (let i = 0; i < segments.length; i++) {
     await emit(SUMMARY_EVENT, {
@@ -1641,7 +1750,7 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
       segmentIdx: i,
       source,
     });
-    await sleep(700);
+    if (await summaryWaitOrStop(700, date, source)) return;
     state.daySummaries.set(`${source}:${date}`, segments.slice(0, i + 1));
     await emit(SUMMARY_EVENT, {
       phase: "segment_done",
@@ -1656,11 +1765,56 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
   await emit(SUMMARY_EVENT, { phase: "all_done", date, source });
 }
 
+/**
+ * Writes the sample weekly report for the week that starts on `monday`, and sends the same
+ * events as the app.
+ *
+ * Like the app, a week is one row: its date is the Monday, its label is the date range, and
+ * the weekly tab reads the row again when `segment_done` comes.
+ */
+async function simulateWeeklyProgress(monday: string): Promise<void> {
+  const source = "weekly";
+  summaryStopped = false;
+  dropEdits(source, monday);
+  await emit(SUMMARY_EVENT, { phase: "engine_starting", date: monday, source });
+  if (await summaryWaitOrStop(500, monday, source)) return;
+  await emit(SUMMARY_EVENT, { phase: "summarizing", date: monday, source });
+  if (await summaryWaitOrStop(1000, monday, source)) return;
+
+  const [y, m, d] = monday.split("-").map((s) => parseInt(s, 10));
+  const content = weeklyContentForLocale(i18n.language || "zh-CN");
+  state.daySummaries.set(`${source}:${monday}`, [
+    {
+      source,
+      localDate: monday,
+      segmentIdx: 0,
+      label: `${monday} ~ ${ymd(new Date(y, m - 1, d + 6))}`,
+      startHour: 0,
+      endHour: 0,
+      content,
+      model: DEMO_SUMMARY_MODEL,
+      status: "ok",
+      error: null,
+      generatedAt: new Date().toISOString(),
+    },
+  ]);
+  await emit(SUMMARY_EVENT, {
+    phase: "segment_done",
+    date: monday,
+    segmentIdx: 0,
+    status: "ok",
+    content,
+    source,
+  });
+  await emit(SUMMARY_EVENT, { phase: "all_done", date: monday, source });
+}
+
 async function simulateSegmentRetry(
   date: string,
   segmentIdx: number,
   source: string,
 ): Promise<void> {
+  dropEdits(source, date, segmentIdx);
   await emit(SUMMARY_EVENT, {
     phase: "segment_started",
     date,
@@ -1681,17 +1835,34 @@ async function simulateSegmentRetry(
   }
 }
 
+/** The models in My models. A download adds one, and Delete takes it out. */
+const localModels: ModelEntry[] = structuredClone(mockLocalModels);
+/** Files the user paused. */
+const downloadPauses = new Set<string>();
+/** Bytes each paused download got. The models page shows Resume for these. */
+const partialDownloads = new Map<string, number>();
+
+/**
+ * Sends download progress for `file`.
+ *
+ * Like the app, a paused download fails with a "download cancelled" error and keeps what it
+ * got, and the next download of the file goes on from there.
+ */
 async function simulateModelDownload(file: string, totalBytes: number): Promise<void> {
+  downloadPauses.delete(file);
   const steps = 20;
   const step = totalBytes / steps;
-  for (let i = 0; i <= steps; i++) {
-    await emit(MODEL_EVENT, {
-      file,
-      downloaded: Math.min(totalBytes, Math.round(step * i)),
-      total: totalBytes,
-    });
+  const from = Math.floor((partialDownloads.get(file) ?? 0) / step);
+  for (let i = from; i <= steps; i++) {
+    const downloaded = Math.min(totalBytes, Math.round(step * i));
+    if (downloadPauses.delete(file)) {
+      partialDownloads.set(file, downloaded);
+      throw `download cancelled: ${file}`;
+    }
+    await emit(MODEL_EVENT, { file, downloaded, total: totalBytes });
     await sleep(120);
   }
+  partialDownloads.delete(file);
 }
 
 async function simulateEngineDownload(): Promise<void> {
@@ -1735,4 +1906,22 @@ async function simulateEngineDownload(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Runs one pretend sync round. Like the app, it returns when the round is over. */
+async function syncRound(): Promise<void> {
+  state.syncStatus.syncInFlight = true;
+  await sleep(1500);
+  state.syncStatus.syncInFlight = false;
+  state.syncStatus.lastPushedAt = new Date().toISOString();
+}
+
+/** Waits `ms`, but returns early once `stopped()` is true. Returns whether it stopped. */
+async function sleepUntilStopped(ms: number, stopped: () => boolean): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (stopped()) return true;
+    await sleep(Math.min(50, end - Date.now()));
+  }
+  return stopped();
 }

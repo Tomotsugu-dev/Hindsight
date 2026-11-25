@@ -58,6 +58,7 @@ export default defineConfig({
       { find: "@tauri-apps/api/event", replacement: path.resolve(tauriMock, "event.ts") },
       { find: "@tauri-apps/api/window", replacement: path.resolve(tauriMock, "api-window.ts") },
       { find: "@tauri-apps/api/app", replacement: path.resolve(tauriMock, "api-app.ts") },
+      { find: "@tauri-apps/api/path", replacement: path.resolve(tauriMock, "api-path.ts") },
       { find: "@tauri-apps/plugin-dialog", replacement: path.resolve(tauriMock, "plugin-dialog.ts") },
       { find: "@tauri-apps/plugin-opener", replacement: path.resolve(tauriMock, "plugin-opener.ts") },
       { find: "@tauri-apps/plugin-os", replacement: path.resolve(tauriMock, "plugin-os.ts") },
