@@ -2,6 +2,8 @@
 //
 // Demo 里不能真打开系统保存对话框；用浏览器的下载机制兜底（用户主动点导出按钮时调用）。
 
+import { sayDesktopOnly } from "../desktop-only";
+
 export interface SaveDialogOptions {
   defaultPath?: string;
   filters?: Array<{ name: string; extensions: string[] }>;
@@ -26,9 +28,9 @@ export async function save(options?: SaveDialogOptions): Promise<string | null> 
   return options?.defaultPath ?? null;
 }
 
+/** Says the desktop app is needed, then returns null as if the visitor cancelled. */
 export async function open(_options?: OpenDialogOptions): Promise<string | string[] | null> {
-  // eslint-disable-next-line no-console
-  console.warn("[demo] open() 在 demo 模式下返回 null");
+  sayDesktopOnly();
   return null;
 }
 

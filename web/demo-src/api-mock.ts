@@ -150,6 +150,7 @@ import {
   isDemoProfileName,
 } from "./fixtures";
 import { persistence } from "./persistence";
+import { sayDesktopOnly } from "./desktop-only";
 
 // 演示数据里还是中文原名的默认分类、默认大类，按当前页面语言显示。真实应用第一次启动时
 // 由后端换一次名（ADR-0015）；demo 要在 /en/、/ja/ 这些页面之间切换，所以读的时候换。
@@ -812,7 +813,7 @@ export const api = {
     // eslint-disable-next-line no-console
     console.warn("[demo] purgeScreenshots 在 demo 模式下不会真的清除数据");
   },
-  openScreenshotsDir: async (): Promise<void> => {},
+  openScreenshotsDir: async (): Promise<void> => sayDesktopOnly(),
   getDataRoot: async (): Promise<string> => "C:\\Users\\demo\\AppData\\Roaming\\Hindsight",
   setDataRoot: async (_path: string): Promise<void> => {},
 
