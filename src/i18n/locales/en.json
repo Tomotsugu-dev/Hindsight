@@ -185,7 +185,7 @@
       },
       "cloud": {
         "title": "Cloud API",
-        "hint": "Saved connections are in My models above. Click ⋯ to edit or delete one. Up to {{max}}.",
+        "empty": "No cloud API yet. You can add up to {{max}}.",
         "add": "Add cloud API",
         "full": "You already have {{max}}. Delete one before you add another.",
         "editing": "Edit “{{name}}”",

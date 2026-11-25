@@ -185,7 +185,7 @@
       },
       "cloud": {
         "title": "API na nuvem",
-        "hint": "As conexões salvas ficam acima, em Meus modelos. Clique em ⋯ para editar ou excluir. Até {{max}}.",
+        "empty": "Ainda não há nenhuma API na nuvem. Você pode adicionar até {{max}}.",
         "add": "Adicionar API na nuvem",
         "full": "Você já tem {{max}}. Exclua uma antes de adicionar outra.",
         "editing": "Editar “{{name}}”",
