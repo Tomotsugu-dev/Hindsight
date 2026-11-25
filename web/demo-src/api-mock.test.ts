@@ -83,6 +83,25 @@ it("names the days of the weekly check in the page language", async () => {
   expect((await names("zh-CN"))[6]).toBe("周日");
 });
 
+// 「2026-11-23」是访客本地的日期。按 UTC 解析的话，UTC 以西的访客看到的日期整体早一天
+it("dates the weekly check from the visitor's own Monday", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.stubEnv("TZ", "America/New_York");
+  const { api: mock } = await import("./api-mock");
+
+  const days = (await mock.precheckWeekSummary("2026-11-23")).days;
+  vi.unstubAllEnvs();
+  expect(days.map((d) => d.date)).toEqual([
+    "2026-11-23",
+    "2026-11-24",
+    "2026-11-25",
+    "2026-11-26",
+    "2026-11-27",
+    "2026-11-28",
+    "2026-11-29",
+  ]);
+});
+
 /** 跑完 run 期间的所有计时器，返回 source 这一路收到的最后一个阶段。 */
 async function lastPhase(source: string, run: () => Promise<unknown>): Promise<string> {
   const { SUMMARY_PROGRESS_EVENT } = await import("./api-mock");

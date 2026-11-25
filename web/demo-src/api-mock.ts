@@ -1022,17 +1022,15 @@ export const api = {
   },
   precheckWeekSummary: async (weekStart: string): Promise<WeekPrecheckResp> => {
     const weekdays = weekdaysForLocale(i18n.language || "zh-CN");
+    // Local midnight. `new Date("YYYY-MM-DD")` is UTC midnight, the day before west of UTC.
+    const [y, m, d] = weekStart.split("-").map((s) => parseInt(s, 10));
     return {
-      days: Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(weekStart);
-        d.setDate(d.getDate() + i);
-        return {
-          date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-          weekday: weekdays[i],
-          hasDaily: i < 5, // 前 5 天有日报
-          hasActivity: true,
-        };
-      }),
+      days: Array.from({ length: 7 }, (_, i) => ({
+        date: ymd(new Date(y, m - 1, d + i)),
+        weekday: weekdays[i],
+        hasDaily: i < 5, // 前 5 天有日报
+        hasActivity: true,
+      })),
       daysWithDaily: 5,
       daysActivityOnly: 2,
     };
