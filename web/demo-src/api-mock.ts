@@ -57,7 +57,6 @@ import type {
   WeekPrecheckResp,
 } from "@app/api/hindsight";
 import { barMinutes } from "@app/lib/segments";
-import { DEFAULT_DOWNLOAD_SOURCES } from "@app/config/downloadSources";
 import { isDefaultSegments, retranslateDefaultSegments } from "@app/utils/defaultSegments";
 import youtubeIcon from "@app/assets/site-icons/youtube.svg";
 
@@ -149,7 +148,7 @@ import {
   demoProfileNameForLocale,
   isDemoProfileName,
 } from "./fixtures";
-import { persistence } from "./persistence";
+import { persistence, shapeOf } from "./persistence";
 import { sayDesktopOnly } from "./desktop-only";
 
 // 演示数据里还是中文原名的默认分类、默认大类，按当前页面语言显示。真实应用第一次启动时
@@ -181,8 +180,16 @@ interface MutableState {
   daySummaries: Map<string, SegmentSummaryRow[]>;
 }
 
+/** The shape of the demo's starting data. A save made for another shape is not used. */
+const SAVE_SHAPE = shapeOf({
+  categories: mockCategories,
+  settings: mockSettings,
+  selfDevice: mockDevices.find((d) => d.isSelf),
+  appGroups: mockAppGroups,
+});
+
 function loadState(): MutableState {
-  const saved = persistence.load();
+  const saved = persistence.load(SAVE_SHAPE);
   return {
     categories: (saved?.categories as Category[]) ?? structuredClone(mockCategories),
     settings: (saved?.settings as Settings) ?? structuredClone(mockSettings),
@@ -272,13 +279,10 @@ const demoSiteIcons: SiteIconPaths = {};
  */
 function settingsInPageLanguage(): Settings {
   const s = structuredClone(state.settings);
-  s.downloadSiteIcons ??= false;
-  s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
   const lng = (i18n.language || "zh-CN").toLowerCase();
   s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
   if (isDemoUserBrief(s.ai.userBrief)) s.ai.userBrief = userBriefForLocale(lng);
-  // A visitor's browser may still hold demo state in the old shape, without `profiles`
-  const demoProfile = s.ai.visibility?.profiles?.[DEMO_PROFILE_ID];
+  const demoProfile = s.ai.visibility.profiles[DEMO_PROFILE_ID];
   if (demoProfile && isDemoProfileName(demoProfile.name)) {
     demoProfile.name = demoProfileNameForLocale(lng);
   }
@@ -291,12 +295,15 @@ function settingsInPageLanguage(): Settings {
 
 function persist() {
   const selfDevice = state.devices.find((d) => d.isSelf);
-  persistence.save({
-    categories: state.categories,
-    settings: state.settings,
-    selfDevice,
-    appGroups: state.appGroups,
-  });
+  persistence.save(
+    {
+      categories: state.categories,
+      settings: state.settings,
+      selfDevice,
+      appGroups: state.appGroups,
+    },
+    SAVE_SHAPE,
+  );
 }
 
 /** Takes an app out of the group it is in. Returns it, or undefined if no group has it */
