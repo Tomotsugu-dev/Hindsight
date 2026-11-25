@@ -1630,8 +1630,8 @@
     "errors": {
       "runBusy": "Another AI generation task is already running. Wait for it to finish or stop it first.",
       "profileGone": "The selected profile no longer exists. Please choose another.",
-      "noModel": "No language model is configured. Add a cloud connection or select a local model in AI Settings.",
-      "cloudUnavailable": "The selected cloud connection is incomplete or unavailable. Check its endpoint and model in AI Settings.",
+      "noModel": "No model is chosen. Choose the model for Daily and Weekly in AI Settings → Models, and for Chat in the chat box. If there is no model to choose, add one in Settings → AI Models.",
+      "cloudUnavailable": "The chosen cloud API is incomplete or unavailable. Check its Base URL and model in Settings → AI Models → Cloud API.",
       "modelMissing": "The selected local model file could not be found. It may have been deleted or moved.",
       "engineMissing": "AI engine not installed. Download it in Settings → AI Models.",
       "llmEmptyReasoning": "The model exhausted its output limit while thinking. Lower or disable thinking mode, increase context length, or switch models.",

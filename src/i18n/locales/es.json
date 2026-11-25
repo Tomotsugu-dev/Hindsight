@@ -1630,8 +1630,8 @@
     "errors": {
       "runBusy": "Ya hay otra tarea de generación de IA en curso. Espera a que termine o detenla primero.",
       "profileGone": "El perfil seleccionado ya no existe. Selecciona otro.",
-      "noModel": "No hay ningún modelo de lenguaje configurado. Añade una conexión en la nube o elige un modelo local en los Ajustes de IA.",
-      "cloudUnavailable": "La conexión en la nube seleccionada está incompleta o no está disponible. Comprueba el endpoint y el modelo en los Ajustes de IA.",
+      "noModel": "No hay ningún modelo elegido. Elige el modelo de Diario y Semanal en Ajustes de IA → Modelos, y el de Chat en el cuadro de mensaje del chat. Si no hay ningún modelo para elegir, añade uno en Ajustes → Modelos de IA.",
+      "cloudUnavailable": "La API en la nube elegida está incompleta o no está disponible. Comprueba la Base URL y el modelo en Ajustes → Modelos de IA → API en la nube.",
       "modelMissing": "No se encontró el archivo del modelo local seleccionado. Puede haberse eliminado o movido.",
       "engineMissing": "El motor de IA no está instalado. Descárgalo en Ajustes → Modelos de IA.",
       "llmEmptyReasoning": "El modelo agotó el límite de salida al razonar. Reduce o desactiva el modo de razonamiento, amplía el contexto o cambia de modelo.",
