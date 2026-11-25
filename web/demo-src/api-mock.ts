@@ -347,6 +347,7 @@ function rangeOffsets(from: string, to: string): number[] {
 // api 对象 —— 跟原 hindsight.ts 同样接口
 // ────────────────────────────────────────────
 
+// Type-checked against the real API at the end, so each call returns what the pages expect.
 export const api = {
   // ─── 时段数据 ──────────────────────────────
   getDayHours: async (dayOffset: number, deviceId?: string): Promise<HourSlot[]> => {
@@ -1273,12 +1274,16 @@ export const api = {
     screenshots: 0,
     memorySessions: 0,
   }),
-  purgeCloudData: async (_keepLocal: boolean): Promise<void> => {},
-  forgetRemoteDevice: async (deviceId: string): Promise<void> => {
+  purgeCloudData: async (_keepLocal: boolean): Promise<number> => DEMO_CLOUD_FILES,
+  forgetRemoteDevice: async (deviceId: string): Promise<number> => {
     const i = state.devices.findIndex((d) => d.deviceId === deviceId && !d.isSelf);
     if (i >= 0) state.devices.splice(i, 1);
+    return DEMO_CLOUD_FILES;
   },
-};
+} satisfies typeof import("@app/api/hindsight").api;
+
+/** How many cloud files the demo says it removed. The done message shows it. */
+const DEMO_CLOUD_FILES = 36;
 
 // ────────────────────────────────────────────
 // Chat 演示状态 + 固定示例回答（按界面语言）
