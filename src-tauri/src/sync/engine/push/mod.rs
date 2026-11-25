@@ -373,6 +373,9 @@ async fn push_memory(inner: &Arc<Inner>, mem: &MemoryDb) -> Result<()> {
     if prev == watermark || watermark.is_empty() {
         return Ok(());
     }
+    // TODO: the fingerprint is written only after the last day, so one failed
+    // day makes the next round upload every day again. The first push sends
+    // every day, so a rate-limited server gets the same uploads each round.
     let days = memory::changed_days(mem, prev).await?;
     for day in &days {
         let Ok(date) = day.parse::<chrono::NaiveDate>() else {
