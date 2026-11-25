@@ -77,7 +77,7 @@ export const ENGINE_DOWNLOAD_EVENT = "ai://engine-download-progress";
 export const SUMMARY_PROGRESS_EVENT = "ai://summary-progress";
 /** OAuth 授权 URL 就绪事件——demo 里永不触发，仅满足消费方 import。 */
 export const OAUTH_URL_EVENT = "sync://oauth-url";
-/** Chat 问答落库完成广播——demo 里永不触发，仅满足消费方 import。 */
+/** Sent when an answer is stored or stopped. */
 export const CHAT_ANSWER_READY_EVENT = "chat:answer-ready";
 
 // ────────────────────────────────────────────
@@ -932,8 +932,11 @@ export const api = {
     await simulateModelDownload(saveAs ?? file, expectedBytes);
     return `C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\${saveAs ?? file}`;
   },
-  cancelModelDownload: async (_file: string): Promise<void> => {},
-  listPartialDownloads: async (): Promise<PartialDownload[]> => [],
+  cancelModelDownload: async (file: string): Promise<void> => {
+    downloadPauses.add(file);
+  },
+  listPartialDownloads: async (): Promise<PartialDownload[]> =>
+    Array.from(partialDownloads, ([filename, downloadedBytes]) => ({ filename, downloadedBytes })),
   setTaskModel: async (
     task: "daily" | "weekly" | "chat",
     model: ModelPick | null,
@@ -965,7 +968,9 @@ export const api = {
   ): Promise<void> => {
     await simulateSegmentRetry(date, segmentIdx, "daily");
   },
-  cancelDaySummary: async (): Promise<void> => {},
+  cancelDaySummary: async (): Promise<void> => {
+    summaryStopped = true;
+  },
   getDaySummary: async (date: string): Promise<SegmentSummaryRow[]> => {
     const key = `daily:${date}`;
     // 段总结按当前 i18n 语言动态返回，这样切语言后日报立刻跟随，不需要清缓存。
@@ -1053,10 +1058,9 @@ export const api = {
     question: string,
     conversationId: number | null,
     _locale?: string,
-    _askId?: string,
+    askId?: string,
     parentGuid?: string,
   ): Promise<ChatAskResult> => {
-    await sleep(900); // 模拟检索 + 推理耗时
     const now = localTs();
     let conv = chatConvs.find((c) => c.meta.id === conversationId);
     if (!conv) {
@@ -1076,7 +1080,6 @@ export const api = {
     // demo 里编辑分支因此可完整演示
     const tip = conv.messages[conv.messages.length - 1];
     const parent = parentGuid === "" ? null : (parentGuid ?? tip?.guid ?? null);
-    const answer = chatDemoAnswer(question);
     const userGuid = `demo-${chatNextMsgId}`;
     conv.messages.push({
       id: chatNextMsgId++,
@@ -1092,6 +1095,9 @@ export const api = {
       guid: userGuid,
       parentGuid: parent,
     });
+    // Like the app, the question stays in the chat when the answer is stopped
+    if (await waitForAnswer(askId)) return stopAnswer(conv.meta.id, askId);
+    const answer = chatDemoAnswer(question);
     conv.messages.push({
       id: chatNextMsgId,
       role: "assistant",
@@ -1106,6 +1112,7 @@ export const api = {
       guid: `demo-${chatNextMsgId++}`,
       parentGuid: userGuid,
     });
+    await answerReady(conv.meta.id, askId, true);
     return {
       conversationId: conv.meta.id,
       cancelled: false,
@@ -1120,14 +1127,18 @@ export const api = {
     };
   },
   chatInflight: async (_conversationId: number): Promise<string | null> => null,
-  chatCancel: async (_askId: string): Promise<boolean> => false,
+  chatCancel: async (askId: string): Promise<boolean> => {
+    if (!chatStops.has(askId)) return false;
+    chatStops.set(askId, true);
+    return true;
+  },
   chatRegenerate: async (
     conversationId: number,
     _locale?: string,
-    _askId?: string,
+    askId?: string,
     leafGuid?: string,
   ): Promise<ChatAskResult> => {
-    await sleep(900);
+    if (await waitForAnswer(askId)) return stopAnswer(conversationId, askId);
     const conv = chatConvs.find((c) => c.meta.id === conversationId);
     if (!conv) throw new Error("no question to answer again");
     // 与真实端同语义:沿指定叶子(缺省链尾)回溯 parent 找最近提问
@@ -1155,6 +1166,7 @@ export const api = {
       guid: `demo-${chatNextMsgId++}`,
       parentGuid: leaf.guid,
     });
+    await answerReady(conv.meta.id, askId, true);
     return {
       conversationId: conv.meta.id,
       cancelled: false,
@@ -1271,6 +1283,51 @@ interface DemoConv {
 const chatConvs: DemoConv[] = [];
 let chatNextConvId = 1;
 let chatNextMsgId = 1;
+/** Ask ids of the answers being written. The value is true once the user stops one. */
+const chatStops = new Map<string, boolean>();
+
+/** Waits as long as a demo answer takes. Returns true if the user stopped it. */
+async function waitForAnswer(askId: string | undefined): Promise<boolean> {
+  if (!askId) {
+    await sleep(900);
+    return false;
+  }
+  chatStops.set(askId, false);
+  try {
+    return await sleepUntilStopped(900, () => chatStops.get(askId) === true);
+  } finally {
+    chatStops.delete(askId);
+  }
+}
+
+/** Sends the event the app sends when an answer is stored or stopped. The chat pages reload on it. */
+function answerReady(
+  conversationId: number,
+  askId: string | undefined,
+  ok: boolean,
+): Promise<void> {
+  return emit(CHAT_ANSWER_READY_EVENT, { conversationId, askId: askId ?? "", ok });
+}
+
+/** Ends a stopped question like the app: sends the event, then returns an empty answer. */
+async function stopAnswer(
+  conversationId: number,
+  askId: string | undefined,
+): Promise<ChatAskResult> {
+  await answerReady(conversationId, askId, false);
+  return {
+    conversationId,
+    cancelled: true,
+    text: "",
+    citations: [],
+    steps: 0,
+    degraded: false,
+    promptTokens: 0,
+    completionTokens: 0,
+    reasoningTokens: 0,
+    elapsedMs: 0,
+  };
+}
 
 // 给功能文档截图用的一问一答，每种界面语言一份：原样输入这个问题才会命中，
 // 其他问题仍是下面的占位回答。scripts/shots/features.mjs 里 chat 那张图问的就是它们，
@@ -1620,17 +1677,28 @@ const SUMMARY_EVENT = "ai://summary-progress";
 const MODEL_EVENT = "ai://model-download-progress";
 const ENGINE_EVENT = "ai://engine-download-progress";
 
+/** Like the app, daily and weekly reports share one stop switch. */
+let summaryStopped = false;
+
+/** Waits `ms` of a report run. Returns true, after sending `cancelled`, if the user stopped it. */
+async function summaryWaitOrStop(ms: number, date: string, source: string): Promise<boolean> {
+  if (!(await sleepUntilStopped(ms, () => summaryStopped))) return false;
+  await emit(SUMMARY_EVENT, { phase: "cancelled", date, source });
+  return true;
+}
+
 async function simulateSummaryProgress(date: string, source: string): Promise<void> {
   // 5 段，每段 ~800ms：emit started → emit done。按当前 i18n locale 取段内容。
   const segments = dailySegmentsForLocale(i18n.language || "zh-CN");
   for (const seg of segments) seg.localDate = date;
+  summaryStopped = false;
 
   await emit(SUMMARY_EVENT, {
     phase: "engine_starting",
     message: "加载段总结模型中…",
     source,
   });
-  await sleep(400);
+  if (await summaryWaitOrStop(400, date, source)) return;
 
   for (let i = 0; i < segments.length; i++) {
     await emit(SUMMARY_EVENT, {
@@ -1645,7 +1713,7 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
       segmentIdx: i,
       source,
     });
-    await sleep(700);
+    if (await summaryWaitOrStop(700, date, source)) return;
     state.daySummaries.set(`${source}:${date}`, segments.slice(0, i + 1));
     await emit(SUMMARY_EVENT, {
       phase: "segment_done",
@@ -1669,10 +1737,11 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
  */
 async function simulateWeeklyProgress(monday: string): Promise<void> {
   const source = "weekly";
+  summaryStopped = false;
   await emit(SUMMARY_EVENT, { phase: "engine_starting", date: monday, source });
-  await sleep(500);
+  if (await summaryWaitOrStop(500, monday, source)) return;
   await emit(SUMMARY_EVENT, { phase: "summarizing", date: monday, source });
-  await sleep(1000);
+  if (await summaryWaitOrStop(1000, monday, source)) return;
 
   const [y, m, d] = monday.split("-").map((s) => parseInt(s, 10));
   const content = weeklyContentForLocale(i18n.language || "zh-CN");
@@ -1727,17 +1796,32 @@ async function simulateSegmentRetry(
   }
 }
 
+/** Files the user paused. */
+const downloadPauses = new Set<string>();
+/** Bytes each paused download got. The models page shows Resume for these. */
+const partialDownloads = new Map<string, number>();
+
+/**
+ * Sends download progress for `file`.
+ *
+ * Like the app, a paused download fails with a "download cancelled" error and keeps what it
+ * got, and the next download of the file goes on from there.
+ */
 async function simulateModelDownload(file: string, totalBytes: number): Promise<void> {
+  downloadPauses.delete(file);
   const steps = 20;
   const step = totalBytes / steps;
-  for (let i = 0; i <= steps; i++) {
-    await emit(MODEL_EVENT, {
-      file,
-      downloaded: Math.min(totalBytes, Math.round(step * i)),
-      total: totalBytes,
-    });
+  const from = Math.floor((partialDownloads.get(file) ?? 0) / step);
+  for (let i = from; i <= steps; i++) {
+    const downloaded = Math.min(totalBytes, Math.round(step * i));
+    if (downloadPauses.delete(file)) {
+      partialDownloads.set(file, downloaded);
+      throw `download cancelled: ${file}`;
+    }
+    await emit(MODEL_EVENT, { file, downloaded, total: totalBytes });
     await sleep(120);
   }
+  partialDownloads.delete(file);
 }
 
 async function simulateEngineDownload(): Promise<void> {
@@ -1781,4 +1865,14 @@ async function simulateEngineDownload(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Waits `ms`, but returns early once `stopped()` is true. Returns whether it stopped. */
+async function sleepUntilStopped(ms: number, stopped: () => boolean): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (stopped()) return true;
+    await sleep(Math.min(50, end - Date.now()));
+  }
+  return stopped();
 }

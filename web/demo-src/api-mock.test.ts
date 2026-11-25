@@ -65,3 +65,83 @@ it("finishes a weekly report and keeps it for that week", async () => {
   await mock.clearWeekSummary("2026-11-23");
   expect(await mock.getWeekSummary("2026-11-23")).toBeNull();
 });
+
+/** 跑完 run 期间的所有计时器，返回 source 这一路收到的最后一个阶段。 */
+async function lastPhase(source: string, run: () => Promise<unknown>): Promise<string> {
+  const { SUMMARY_PROGRESS_EVENT } = await import("./api-mock");
+  const { listen } = await import("./tauri/event");
+  const phases: string[] = [];
+  const unlisten = await listen<{ phase: string; source: string }>(SUMMARY_PROGRESS_EVENT, (e) => {
+    if (e.payload.source === source) phases.push(e.payload.phase);
+  });
+  const done = run();
+  await vi.runAllTimersAsync();
+  await done;
+  unlisten();
+  return phases[phases.length - 1];
+}
+
+// 停止要真的停：日报、周报共用一个停止开关，收尾发 cancelled，不再写后面的段
+it("stops a daily or weekly report when asked", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.useFakeTimers();
+  const { api: mock } = await import("./api-mock");
+
+  const daily = await lastPhase("daily", async () => {
+    const run = mock.generateDaySummary("2026-11-20", true, null);
+    await mock.cancelDaySummary();
+    await run;
+  });
+  const weekly = await lastPhase("weekly", async () => {
+    const run = mock.generateWeekSummary("2026-11-16", false, true);
+    await mock.cancelDaySummary();
+    await run;
+  });
+  vi.useRealTimers();
+
+  expect(daily).toBe("cancelled");
+  expect(weekly).toBe("cancelled");
+  expect(await mock.getWeekSummary("2026-11-16")).toBeNull();
+});
+
+// 和应用一样：停止后问题留在会话里，回答不存
+it("keeps the question but not the answer when a chat is stopped", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.useFakeTimers();
+  const { api: mock } = await import("./api-mock");
+
+  const run = mock.chatAsk("stop me", null, "en", "ask-1");
+  expect(await mock.chatCancel("ask-1")).toBe(true);
+  await vi.runAllTimersAsync();
+  const result = await run;
+  vi.useRealTimers();
+
+  expect(result.cancelled).toBe(true);
+  const messages = await mock.chatGetMessages(result.conversationId);
+  expect(messages.map((m) => m.role)).toEqual(["user"]);
+  expect(await mock.chatCancel("ask-1")).toBe(false);
+});
+
+// 暂停的下载留下半成品，界面据此显示「继续」；再下从断点接着下
+it("pauses a model download and keeps what it got", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.useFakeTimers();
+  const { api: mock } = await import("./api-mock");
+
+  const run = mock.downloadModel("demo/repo", "paused.gguf", 2000);
+  const failed = run.catch((e: unknown) => String(e));
+  await vi.advanceTimersByTimeAsync(500);
+  await mock.cancelModelDownload("paused.gguf");
+  await vi.runAllTimersAsync();
+  const error = await failed;
+
+  expect(error).toMatch(/^download cancelled/);
+  const partial = (await mock.listPartialDownloads()).find((p) => p.filename === "paused.gguf");
+  expect(partial?.downloadedBytes).toBeGreaterThan(0);
+
+  const resumed = mock.downloadModel("demo/repo", "paused.gguf", 2000);
+  await vi.runAllTimersAsync();
+  await resumed;
+  vi.useRealTimers();
+  expect((await mock.listPartialDownloads()).some((p) => p.filename === "paused.gguf")).toBe(false);
+});
