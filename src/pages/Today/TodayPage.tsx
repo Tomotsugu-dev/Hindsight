@@ -254,6 +254,7 @@ export default function TodayPage() {
         headLeftExtras={
           <ViewToggle
             view={view}
+            bar="hour"
             onChange={(v) => withViewTransition(() => setStatsView("today", v))}
           />
         }

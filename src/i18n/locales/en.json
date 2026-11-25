@@ -752,8 +752,10 @@
       "barTitle": "{{hour}}:00 — {{minutes}} min",
       "viewToggle": {
         "bars": "Hours",
+        "days": "Days",
         "pie": "Share",
         "ariaBars": "Switch to 24-hour distribution view",
+        "ariaDays": "Switch to daily activity view",
         "ariaPie": "Switch to super-category share view"
       }
     },

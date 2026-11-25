@@ -752,8 +752,10 @@
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
       "viewToggle": {
         "bars": "时段",
+        "days": "每日",
         "pie": "占比",
         "ariaBars": "切换到 24 小时分布视图",
+        "ariaDays": "切换到每日分布视图",
         "ariaPie": "切换到大类占比视图"
       }
     },

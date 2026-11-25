@@ -752,8 +752,10 @@
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
       "viewToggle": {
         "bars": "時間",
+        "days": "日別",
         "pie": "割合",
         "ariaBars": "24 時間分布表示に切り替え",
+        "ariaDays": "日別の分布表示に切り替え",
         "ariaPie": "大分類割合表示に切り替え"
       }
     },
