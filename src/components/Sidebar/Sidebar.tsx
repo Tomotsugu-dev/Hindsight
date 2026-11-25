@@ -114,7 +114,10 @@ export function Sidebar() {
     const measure = () => {
       let maxLabel = 0;
       for (const el of nav.querySelectorAll<HTMLElement>("[data-sb-label]")) {
-        maxLabel = Math.max(maxLabel, el.scrollWidth);
+        // A badge such as "New" does not shrink, so the label gets only what is left
+        const badge = el.parentElement?.querySelector<HTMLElement>("[data-sb-badge]");
+        const gap = badge ? parseFloat(getComputedStyle(el.parentElement!).columnGap) || 0 : 0;
+        maxLabel = Math.max(maxLabel, el.scrollWidth + (badge ? badge.offsetWidth + gap : 0));
       }
       if (maxLabel === 0) return;
       const width = Math.min(220, Math.max(150, Math.ceil(maxLabel) + 86));
@@ -123,7 +126,7 @@ export function Sidebar() {
     measure();
     // 首屏 Inter / CJK 字体异步加载，加载完字宽会变 → 再量一次
     void document.fonts?.ready.then(measure).catch(() => {});
-  }, [i18n.language]);
+  }, [i18n.language, pluginsSeen]);
 
   return (
     <aside className={styles.sidebar} data-part="sidebar">
