@@ -161,6 +161,8 @@ async fn condense_question(
     today: NaiveDate,
 ) -> (Option<String>, crate::ai::features::chat::llm::TokenUsage) {
     let mut ctx = String::new();
+    // TODO: 标签「用户: 」「助手: 」「新问题: 」写死中文，英文提问也带着，改写出的问题可能变成中文。
+    // 下面说「沿用本地后端 transcript 的既有约定」也不对了：那边已改成 `<user>` 这类标签。
     for h in history.iter().rev().take(6).rev() {
         match h.role.as_str() {
             // 标签沿用本地后端 transcript 的既有约定(跨语言可读,改写提示词已声明规则)。
