@@ -23,3 +23,8 @@ export function activeSection(
   }
   return active;
 }
+
+/** Returns whether a scroll area is at its end. A page too short to scroll has no end to reach. */
+export function scrolledToEnd(scrollTop: number, clientHeight: number, scrollHeight: number) {
+  return scrollHeight > clientHeight + 2 && scrollTop + clientHeight >= scrollHeight - 2;
+}
