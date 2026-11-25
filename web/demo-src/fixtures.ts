@@ -844,6 +844,11 @@ export function userBriefForLocale(locale: string): string {
   return "Full-stack engineer, mostly working on React + Rust projects.";
 }
 
+/** Returns whether `text` is one of the sample briefs above, that is, the visitor kept it. */
+export function isDemoUserBrief(text: string): boolean {
+  return ["ja", "zh", "en"].some((lng) => userBriefForLocale(lng) === text);
+}
+
 /** 本机设备的默认名字（mockDevices 里写的是中文）。按当前 i18n 切；用户改过名就不会走到这里。 */
 export function selfDeviceNameForLocale(locale: string): string {
   const lng = (locale || "").toLowerCase();

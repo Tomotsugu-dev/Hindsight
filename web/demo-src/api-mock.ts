@@ -143,6 +143,7 @@ import {
   DEMO_SUMMARY_MODEL,
   selfDeviceNameForLocale,
   userBriefForLocale,
+  isDemoUserBrief,
   DEMO_PROFILE_ID,
   demoProfileNameForLocale,
   isDemoProfileName,
@@ -259,6 +260,32 @@ const DEMO_SITE_ICON_URLS: SiteIconPaths = {
   "outlook.live.com": LOCAL_ICON("sites/outlook"),
 };
 const demoSiteIcons: SiteIconPaths = {};
+
+/**
+ * Returns a copy of the settings with the sample values in the page language.
+ *
+ * The stored sample values are Chinese, and a save stores the values of the page that made it.
+ * So a sample value is changed to the page language whatever language it is in, and a value the
+ * visitor wrote is kept. The prompt language always follows the page.
+ */
+function settingsInPageLanguage(): Settings {
+  const s = structuredClone(state.settings);
+  s.downloadSiteIcons ??= false;
+  s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
+  const lng = (i18n.language || "zh-CN").toLowerCase();
+  s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
+  if (isDemoUserBrief(s.ai.userBrief)) s.ai.userBrief = userBriefForLocale(lng);
+  // A visitor's browser may still hold demo state in the old shape, without `profiles`
+  const demoProfile = s.ai.visibility?.profiles?.[DEMO_PROFILE_ID];
+  if (demoProfile && isDemoProfileName(demoProfile.name)) {
+    demoProfile.name = demoProfileNameForLocale(lng);
+  }
+  // The app does the same for the segments in App.tsx when the language changes
+  if (isDefaultSegments(s.ai.segments)) {
+    s.ai.segments = retranslateDefaultSegments(s.ai.segments, lng);
+  }
+  return s;
+}
 
 function persist() {
   const selfDevice = state.devices.find((d) => d.isSelf);
@@ -745,41 +772,13 @@ export const api = {
   enableGnomeExtension: async (): Promise<GnomeExtensionStatus> => "ready",
 
   // ─── Settings ──────────────────────────────
-  getSettings: async (): Promise<Settings> => {
-    // demo 的 AI 系统提示词语言 + "あなたについて / About you" 简介都按当前 i18n 切，
-    // 让 /en/、/ja/ 看到对应语言的默认值。
-    const s = structuredClone(state.settings);
-    s.downloadSiteIcons ??= false;
-    s.downloadSources = { ...DEFAULT_DOWNLOAD_SOURCES, ...s.downloadSources };
-    const lng = (i18n.language || "zh-CN").toLowerCase();
-    s.ai.promptLanguage = lng.startsWith("ja") ? "ja" : lng.startsWith("zh") ? "zh" : "en";
-    s.ai.userBrief = userBriefForLocale(lng);
-    // 演示配置没改过名就换成当前语言的名字
-    // A visitor's browser may still hold demo state in the old shape, without `profiles`
-    const demoProfile = s.ai.visibility?.profiles?.[DEMO_PROFILE_ID];
-    if (demoProfile && isDemoProfileName(demoProfile.name)) {
-      demoProfile.name = demoProfileNameForLocale(lng);
-    }
-    // 时段没改过就换成当前语言的默认名字；真实应用切语言时在 App.tsx 里做同样的事
-    if (isDefaultSegments(s.ai.segments)) {
-      s.ai.segments = retranslateDefaultSegments(s.ai.segments, lng);
-    }
-    // 清空 promptOverrides，确保 PromptTab fallback 到 DEFAULT_SYSTEM_PROMPTS[lang]
-    s.ai.promptOverrides = {
-      systemZh: "",
-      systemEn: "",
-      systemJa: "",
-      systemPt: "",
-      systemTw: "",
-      systemEs: "",
-    };
-    return s;
-  },
+  getSettings: async (): Promise<Settings> => settingsInPageLanguage(),
+  // Returns what getSettings returns: the page shows this copy after each save
   updateSettings: async (patch: SettingsPatch): Promise<Settings> => {
     state.settings = { ...state.settings, ...patch };
     if (patch.ai) state.settings.ai = { ...state.settings.ai, ...patch.ai };
     persist();
-    return structuredClone(state.settings);
+    return settingsInPageLanguage();
   },
   addIgnoreRule: async (
     processName: string,

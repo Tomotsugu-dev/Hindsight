@@ -122,6 +122,36 @@ it("keeps the question but not the answer when a chat is stopped", async () => {
   expect(await mock.chatCancel("ask-1")).toBe(false);
 });
 
+// 演示的默认设置存的是中文。英文页面保存一次设置（比如确认隐私）后，示例值仍是英文；
+// 访客自己写的内容原样保留
+it("keeps the sample AI settings in the page language after a save", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  const { api: mock } = await import("./api-mock");
+  const { DEMO_PROFILE_ID } = await import("./fixtures");
+  const i18n = (await import("@app/i18n")).default;
+  await i18n.changeLanguage("en");
+
+  const shown = await mock.getSettings();
+  const saved = await mock.updateSettings({ chatPrivacyAcknowledged: true });
+  expect(saved.ai.userBrief).toBe(shown.ai.userBrief);
+  expect(saved.ai.segments).toEqual(shown.ai.segments);
+  expect(saved.ai.promptLanguage).toBe("en");
+  expect(saved.ai.visibility?.profiles?.[DEMO_PROFILE_ID]?.name).toBe(
+    shown.ai.visibility?.profiles?.[DEMO_PROFILE_ID]?.name,
+  );
+
+  const edited = await mock.updateSettings({
+    ai: {
+      ...saved.ai,
+      userBrief: "My own words",
+      promptOverrides: { ...saved.ai.promptOverrides, systemEn: "My prompt" },
+    },
+  });
+  expect(edited.ai.userBrief).toBe("My own words");
+  expect(edited.ai.promptOverrides.systemEn).toBe("My prompt");
+  await i18n.changeLanguage("zh-CN");
+});
+
 // 暂停的下载留下半成品，界面据此显示「继续」；再下从断点接着下
 it("pauses a model download and keeps what it got", async () => {
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
