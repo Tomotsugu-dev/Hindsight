@@ -812,6 +812,29 @@ export function dailySegmentsForLocale(locale: string): SegmentSummaryRow[] {
   return buildSegments(lng, SEG_CONTENT_EN);
 }
 
+const WEEKLY_CONTENT = {
+  zh: "本周的重心是网页 demo。先在 VS Code 里排查 Today 页的渲染性能，之后换到 Cursor，把真正的 React demo 嵌进官网首页，最后选了 iframe 方案。\n\n沟通集中在 Telegram，大多是和产品同事对齐 demo 的准备，每次都很短。晚上主要在 Obsidian 整理笔记，休息时多是 Steam 和 YouTube。\n\n下周可以把上午的整块时间留给写代码，消息集中到午饭后再回。",
+  tw: "本週的重心是網頁 demo。先在 VS Code 裡排查 Today 頁的渲染效能，之後換到 Cursor，把真正的 React demo 嵌進官網首頁，最後選了 iframe 方案。\n\n溝通集中在 Telegram，大多是和產品同事對齊 demo 的準備，每次都很短。晚上主要在 Obsidian 整理筆記，休息時多是 Steam 和 YouTube。\n\n下週可以把上午的整塊時間留給寫程式，訊息集中到午飯後再回。",
+  en: "This week centered on the web demo. First came a rendering performance issue on the Today page in VS Code. Then the work moved to Cursor, to embed a real React demo in the landing page; the final choice was an iframe.\n\nMessages stayed in Telegram, mostly short syncs with the product team about the demo. Evenings went to notes in Obsidian, and breaks went to Steam and YouTube.\n\nNext week, keep the mornings for coding and answer messages after lunch.",
+  ja: "今週の中心は Web デモでした。まず VS Code で Today ページのレンダリング性能を調べ、その後 Cursor に移って本物の React デモをランディングページに埋め込み、最終的に iframe 方式に決めました。\n\nやり取りは Telegram に集中し、主にプロダクトチームとのデモ準備の短い確認でした。夜は Obsidian でメモを整理し、休憩中は Steam と YouTube が中心でした。\n\n来週は午前中をまとめてコーディングに使い、メッセージは昼食後にまとめて返すとよさそうです。",
+  pt: "Esta semana girou em torno do demo web. Primeiro, investiguei no VS Code um problema de desempenho de renderização na página Today. Depois passei para o Cursor para incorporar um demo real em React na landing page; a escolha final foi um iframe.\n\nAs conversas ficaram no Telegram, quase sempre alinhamentos rápidos com o time de produto sobre o demo. As noites foram para notas no Obsidian, e as pausas, para Steam e YouTube.\n\nNa próxima semana, vale reservar as manhãs para programar e responder mensagens depois do almoço.",
+  es: "Esta semana giró en torno al demo web. Primero investigué en VS Code un problema de rendimiento de renderizado en la página Today. Después pasé a Cursor para incrustar un demo real de React en la landing page; al final elegimos un iframe.\n\nLas conversaciones se quedaron en Telegram, casi siempre charlas breves con el equipo de producto sobre el demo. Las noches fueron para notas en Obsidian, y los descansos, para Steam y YouTube.\n\nLa próxima semana conviene reservar las mañanas para programar y responder mensajes después de comer.",
+};
+
+/** Returns the sample weekly report text in the given UI language. Falls back to English. */
+export function weeklyContentForLocale(locale: string): string {
+  const lng = (locale || "").toLowerCase();
+  if (/^zh[-_]?(tw|hk|mo|hant)/.test(lng)) return WEEKLY_CONTENT.tw;
+  if (lng.startsWith("zh")) return WEEKLY_CONTENT.zh;
+  if (lng.startsWith("ja")) return WEEKLY_CONTENT.ja;
+  if (lng.startsWith("pt")) return WEEKLY_CONTENT.pt;
+  if (lng.startsWith("es")) return WEEKLY_CONTENT.es;
+  return WEEKLY_CONTENT.en;
+}
+
+/** The model name shown on the sample reports. */
+export { SEG_MODEL as DEMO_SUMMARY_MODEL };
+
 /** AI 设置里的 "About you / あなたについて / 关于你" 用户简介。按当前 i18n 切。 */
 export function userBriefForLocale(locale: string): string {
   const lng = (locale || "").toLowerCase();

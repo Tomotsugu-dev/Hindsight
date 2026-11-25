@@ -34,3 +34,34 @@ it("puts an unmerged app in a group of its own, with the category of the group i
   const vscode = groups.find((g) => g.id === "g-vscode");
   expect(vscode?.members.some((m) => m.processName === "Code")).toBe(false);
 });
+
+// 周报页收到 all_done 才停止转圈；收到 segment_done 后按周一再取一次正文
+it("finishes a weekly report and keeps it for that week", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.useFakeTimers();
+  const { api: mock, SUMMARY_PROGRESS_EVENT } = await import("./api-mock");
+  const { listen } = await import("./tauri/event");
+  const phases: string[] = [];
+  const unlisten = await listen<{ phase: string; source: string }>(SUMMARY_PROGRESS_EVENT, (e) => {
+    if (e.payload.source === "weekly") phases.push(e.payload.phase);
+  });
+
+  const run = mock.generateWeekSummary("2026-11-23", false, true);
+  await vi.runAllTimersAsync();
+  await run;
+  unlisten();
+  vi.useRealTimers();
+
+  expect(phases[phases.length - 1]).toBe("all_done");
+  const row = await mock.getWeekSummary("2026-11-23");
+  expect(row).toMatchObject({
+    source: "weekly",
+    localDate: "2026-11-23",
+    label: "2026-11-23 ~ 2026-11-29",
+    status: "ok",
+  });
+  expect(row?.content).not.toBe("");
+
+  await mock.clearWeekSummary("2026-11-23");
+  expect(await mock.getWeekSummary("2026-11-23")).toBeNull();
+});

@@ -139,6 +139,8 @@ import {
   mockUnclassifiedApps,
   mockDayFor,
   dailySegmentsForLocale,
+  weeklyContentForLocale,
+  DEMO_SUMMARY_MODEL,
   selfDeviceNameForLocale,
   userBriefForLocale,
   DEMO_PROFILE_ID,
@@ -992,12 +994,11 @@ export const api = {
 
   // ─── Weekly summary ────────────────────────
   generateWeekSummary: async (
-    _weekStart: string,
+    weekStart: string,
     _forceRefresh: boolean,
     _allowMissingDays: boolean = false,
   ): Promise<void> => {
-    // 简化：1.5s 后 emit done
-    await new Promise((r) => setTimeout(r, 1500));
+    await simulateWeeklyProgress(weekStart);
   },
   precheckWeekSummary: async (weekStart: string): Promise<WeekPrecheckResp> => {
     return {
@@ -1015,8 +1016,11 @@ export const api = {
       daysActivityOnly: 2,
     };
   },
-  getWeekSummary: async (_weekStart: string): Promise<SegmentSummaryRow | null> => null,
-  clearWeekSummary: async (_weekStart: string): Promise<void> => {},
+  getWeekSummary: async (weekStart: string): Promise<SegmentSummaryRow | null> =>
+    structuredClone(state.daySummaries.get(`weekly:${weekStart}`)?.[0] ?? null),
+  clearWeekSummary: async (weekStart: string): Promise<void> => {
+    state.daySummaries.delete(`weekly:${weekStart}`);
+  },
 
   clearDaySummary: async (date: string): Promise<void> => {
     state.daySummaries.delete(`daily:${date}`);
@@ -1654,6 +1658,48 @@ async function simulateSummaryProgress(date: string, source: string): Promise<vo
   }
 
   await emit(SUMMARY_EVENT, { phase: "all_done", date, source });
+}
+
+/**
+ * Writes the sample weekly report for the week that starts on `monday`, and sends the same
+ * events as the app.
+ *
+ * Like the app, a week is one row: its date is the Monday, its label is the date range, and
+ * the weekly tab reads the row again when `segment_done` comes.
+ */
+async function simulateWeeklyProgress(monday: string): Promise<void> {
+  const source = "weekly";
+  await emit(SUMMARY_EVENT, { phase: "engine_starting", date: monday, source });
+  await sleep(500);
+  await emit(SUMMARY_EVENT, { phase: "summarizing", date: monday, source });
+  await sleep(1000);
+
+  const [y, m, d] = monday.split("-").map((s) => parseInt(s, 10));
+  const content = weeklyContentForLocale(i18n.language || "zh-CN");
+  state.daySummaries.set(`${source}:${monday}`, [
+    {
+      source,
+      localDate: monday,
+      segmentIdx: 0,
+      label: `${monday} ~ ${ymd(new Date(y, m - 1, d + 6))}`,
+      startHour: 0,
+      endHour: 0,
+      content,
+      model: DEMO_SUMMARY_MODEL,
+      status: "ok",
+      error: null,
+      generatedAt: new Date().toISOString(),
+    },
+  ]);
+  await emit(SUMMARY_EVENT, {
+    phase: "segment_done",
+    date: monday,
+    segmentIdx: 0,
+    status: "ok",
+    content,
+    source,
+  });
+  await emit(SUMMARY_EVENT, { phase: "all_done", date: monday, source });
 }
 
 async function simulateSegmentRetry(
