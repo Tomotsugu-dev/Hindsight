@@ -1931,7 +1931,8 @@
     },
     "model": {
       "noToolUseModels": "已下載的本機模型均不支援工具調用，請在「設定 → AI 模型」下載帶 Tool-use 標記的模型。",
-      "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
+      "empty": "沒有可用模型：請設定雲端 API 或下載本機模型",
+      "manage": "管理模型"
     },
     "tokens": {
       "prompt": "本輪傳送給模型的 token(上行)",

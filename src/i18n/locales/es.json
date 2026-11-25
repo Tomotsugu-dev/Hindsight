@@ -1936,7 +1936,8 @@
     },
     "model": {
       "noToolUseModels": "Ninguno de los modelos locales descargados admite Tool-use. Descarga uno con la insignia Tool-use en Ajustes → Modelos de IA.",
-      "empty": "No hay modelos disponibles: configura una API en la nube o descarga un modelo local"
+      "empty": "No hay modelos disponibles: configura una API en la nube o descarga un modelo local",
+      "manage": "Gestionar modelos"
     },
     "tokens": {
       "prompt": "Tokens enviados al modelo en este turno (upstream)",

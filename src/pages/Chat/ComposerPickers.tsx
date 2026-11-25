@@ -5,6 +5,7 @@ import { Brain, Cloud, HardDrive, ListFilter, Settings2 } from "lucide-react";
 import { api, type ReasoningLevel } from "../../api/hindsight";
 import { InlinePicker } from "../../components/InlinePicker/InlinePicker";
 import { routeName, shortModelName } from "../../components/ReportModel/reportModelOptions";
+import { ROUTES } from "../../config/nav";
 import { logError } from "../../lib/logger";
 import {
   hasLevels,
@@ -80,6 +81,7 @@ function ProfilePicker({ state }: { state: AiProfilesState }) {
  */
 function ModelPicker() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { settings, reload } = useSettings();
   const [localFiles, setLocalFiles] = useState<string[]>([]);
   const [toollessOnly, setToollessOnly] = useState(false);
@@ -151,6 +153,11 @@ function ModelPicker() {
       }
       onOpen={refreshLocal}
       up
+      action={{
+        label: t("chat.model.manage"),
+        icon: Settings2,
+        onClick: () => void navigate(ROUTES.settingsAiModels),
+      }}
     />
   );
 }

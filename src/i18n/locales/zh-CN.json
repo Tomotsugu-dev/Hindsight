@@ -1931,7 +1931,8 @@
     },
     "model": {
       "noToolUseModels": "已下载的本地模型均不支持工具调用，请在「设置 → AI 模型」下载带 Tool-use 标记的模型。",
-      "empty": "没有可用模型：请配置云端 API 或下载本地模型"
+      "empty": "没有可用模型：请配置云端 API 或下载本地模型",
+      "manage": "管理模型"
     },
     "tokens": {
       "prompt": "本轮发送给模型的 token(上行)",

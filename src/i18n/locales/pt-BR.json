@@ -1936,7 +1936,8 @@
     },
     "model": {
       "noToolUseModels": "Nenhum dos modelos locais baixados suporta Tool-use. Baixe um com o selo Tool-use em Configurações → Modelos de IA.",
-      "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
+      "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local",
+      "manage": "Gerenciar modelos"
     },
     "tokens": {
       "prompt": "Tokens enviados ao modelo neste turno (upstream)",

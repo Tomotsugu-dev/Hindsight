@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { Brain, Cloud, HardDrive, Link2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Brain, Cloud, HardDrive, Link2, Settings2 } from "lucide-react";
+import { ROUTES } from "../../config/nav";
 import { hasLevels, thinkingLabelKey } from "../../lib/thinkingModes";
 import { useReportModel, type ReportModule } from "../../state/reportModel";
 import { InlinePicker } from "../InlinePicker/InlinePicker";
@@ -20,6 +22,7 @@ export function ReportModelPickers({
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const state = useReportModel(module);
   if (!state) return null;
 
@@ -48,6 +51,11 @@ export function ReportModelPickers({
         note={models.length === 0 ? t("chat.model.empty") : undefined}
         disabled={disabled}
         onOpen={state.refreshLocal}
+        action={{
+          label: t("chat.model.manage"),
+          icon: Settings2,
+          onClick: () => void navigate(ROUTES.settingsAiModels),
+        }}
       />
       <InlinePicker
         value={state.thinking}
