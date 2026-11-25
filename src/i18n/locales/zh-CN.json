@@ -1329,7 +1329,7 @@
       "rowLabel": "时段"
     },
     "external": {
-      "sectionDesc": "配置云端模型用于总结与对话，不会上传截图。",
+      "sectionDesc": "配置云端模型用于总结与对话。",
       "enableLabel": "启用云端 API",
       "enableHint": "开启后，段总结与「对话」调下方配置的 API；截图永远不上传。",
       "providerLabel": "服务商",

@@ -1334,7 +1334,7 @@
       "rowLabel": "Segments"
     },
     "external": {
-      "sectionDesc": "Configure cloud models for summaries and Chat. Screenshots are never uploaded.",
+      "sectionDesc": "Configure cloud models for summaries and Chat.",
       "enableLabel": "Enable cloud API",
       "enableHint": "When on, segment summaries and Chat call the API configured below; screenshots are never uploaded.",
       "providerLabel": "Provider",

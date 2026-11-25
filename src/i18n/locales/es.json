@@ -1334,7 +1334,7 @@
       "rowLabel": "Tramos"
     },
     "external": {
-      "sectionDesc": "Configura modelos en la nube para resúmenes y Chat. Las capturas de pantalla nunca se envían.",
+      "sectionDesc": "Configura modelos en la nube para resúmenes y Chat.",
       "enableLabel": "Activar la API en la nube",
       "enableHint": "Al activarla, los resúmenes por tramos y el Chat llaman a la API configurada abajo; las capturas de pantalla nunca se envían.",
       "providerLabel": "Proveedor",

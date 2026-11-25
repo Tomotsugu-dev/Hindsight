@@ -1334,7 +1334,7 @@
       "rowLabel": "Segmentos"
     },
     "external": {
-      "sectionDesc": "Configure modelos na nuvem para resumos e Chat. Capturas de tela nunca são enviadas.",
+      "sectionDesc": "Configure modelos na nuvem para resumos e Chat.",
       "enableLabel": "Ativar API na nuvem",
       "enableHint": "Quando ativado, resumos de segmentos e o Chat chamam a API configurada abaixo; capturas de tela nunca são enviadas.",
       "providerLabel": "Provedor",

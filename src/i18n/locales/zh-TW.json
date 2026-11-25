@@ -1329,7 +1329,7 @@
       "rowLabel": "時段"
     },
     "external": {
-      "sectionDesc": "設定雲端模型用於總結與對話，不會上傳截圖。",
+      "sectionDesc": "設定雲端模型用於總結與對話。",
       "enableLabel": "啟用雲端 API",
       "enableHint": "開啟後，段總結與「對話」會呼叫下方設定的 API；截圖永遠不會上傳。",
       "providerLabel": "服務商",
