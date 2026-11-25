@@ -106,9 +106,101 @@
       "appearance": "Aparência",
       "data": "Dados",
       "privacy": "Privacidade",
-      "engine": "Motor de IA",
+      "aiModels": "Modelos de IA",
       "plugins": "Plugins",
       "about": "Sobre"
+    },
+    "aiModels": {
+      "toc": {
+        "title": "Nesta página",
+        "runtime": "Ambiente",
+        "mine": "Meus modelos",
+        "catalog": "Baixar modelos",
+        "cloud": "API na nuvem"
+      },
+      "runtime": {
+        "title": "Ambiente de execução",
+        "desc": "Os programas de que este computador precisa para rodar modelos."
+      },
+      "engine": {
+        "meta": "{{version}} · {{accel}} · {{size}} MB",
+        "running": "Em execução",
+        "stopped": "Parado",
+        "more": "Mais ações do mecanismo de IA local",
+        "openDir": "Abrir pasta de instalação",
+        "uninstall": "Desinstalar mecanismo"
+      },
+      "ocr": {
+        "more": "Mais ações do componente de reconhecimento de texto",
+        "uninstall": "Desinstalar componente de reconhecimento de texto"
+      },
+      "source": {
+        "customDesc": "Baixa dos endereços que você digitou."
+      },
+      "mine": {
+        "title": "Meus modelos",
+        "desc": "Modelos que você já pode usar. Escolha qual Diário, Semanal e Chat usam em Configurações de IA → Modelos.",
+        "testTip": "Verifica se os modelos escolhidos para Diário, Semanal e Chat funcionam. Modelos locais iniciam o mecanismo antes.",
+        "testing": "Testando…",
+        "local": "Neste computador · {{size}} GB",
+        "imported": "Neste computador · Arquivo importado · {{size}} GB",
+        "withMmproj": "Com projetor de visão",
+        "cloud": "Nuvem · {{host}}",
+        "cloudIncomplete": "Incompleto",
+        "unused": "Sem uso",
+        "listSep": ", ",
+        "more": "Mais ações de {{name}}",
+        "reveal": "Mostrar na pasta",
+        "delete": "Excluir arquivo do modelo",
+        "edit": "Editar",
+        "deleteCloud": "Excluir esta conexão",
+        "deleteTitle": "Excluir “{{name}}”?",
+        "deleteMessage": "O arquivo do modelo será excluído deste computador. Para usá-lo de novo, será preciso baixá-lo outra vez.",
+        "deleteMessageInUse": "Em uso em: {{tasks}}. Depois de excluí-lo, escolha outro em Configurações de IA → Modelos.",
+        "deleteCloudMessage": "Esta conexão será excluída, junto com a chave de API.",
+        "deleteCloudMessageInUse": "Em uso em: {{tasks}}. Depois de excluí-la, escolha outra em Configurações de IA → Modelos.",
+        "empty": "Ainda não há modelos que você possa usar. Escolha um jeito de começar:",
+        "emptyLocal": "Baixar um modelo local",
+        "emptyLocalDesc": "Seus dados não saem deste computador. Instale o mecanismo acima e depois baixe um modelo. Cerca de 4 GB no total.",
+        "emptyLocalAction": "Ir para a lista de downloads",
+        "emptyCloud": "Conectar uma API na nuvem",
+        "emptyCloudDesc": "Nada para baixar, e as respostas vêm mais rápido. Você precisa de uma chave de API do provedor, e sua atividade é enviada ao provedor.",
+        "emptyCloudAction": "Preencher dados da API"
+      },
+      "catalog": {
+        "title": "Baixar modelos locais",
+        "desc": "Todos rodam no mecanismo local. Quando o download termina, o modelo aparece em Meus modelos.",
+        "all": "Todos {{count}}",
+        "vision": "Vê imagens",
+        "reasoning": "Raciocina",
+        "small": "Menos de 5 GB",
+        "brandAll": "Todas as marcas",
+        "sortDefault": "Ordem recomendada",
+        "paused": "Pausado · {{size}} GB baixados",
+        "allDone": "Todos os modelos recomendados já foram baixados.",
+        "noMatch": "Nenhum modelo corresponde.",
+        "showMore": "Mostrar mais {{count}}",
+        "showLess": "Mostrar menos",
+        "notFound": "Não encontrou o que queria?"
+      },
+      "cloud": {
+        "title": "API na nuvem",
+        "hint": "As conexões salvas ficam acima, em Meus modelos. Clique em ⋯ para editar ou excluir. Até {{max}}.",
+        "add": "Adicionar API na nuvem",
+        "full": "Você já tem {{max}}. Exclua uma antes de adicionar outra.",
+        "editing": "Editar “{{name}}”",
+        "test": "Testar",
+        "done": "Concluir"
+      },
+      "caps": {
+        "TEXT": "Texto",
+        "VISION": "Visão",
+        "CODE": "Código",
+        "FAST": "Rápido",
+        "BALANCED": "Equilibrado",
+        "REASONING": "Raciocina",
+        "DEFAULT": "Recomendado"
+      }
     },
     "appearance": {
       "sectionTitle": "Tema",
@@ -191,7 +283,7 @@
         "backfillProgress": "Reconhecendo… faltam {{n}} quadros",
         "backfillBackground": "Registrado; a indexação continua em segundo plano (você pode sair desta página)",
         "backfillDone": "Concluído: {{ok}} reconhecidos, {{failed}} ignorados",
-        "backfillRuntimeMissing": "O componente de reconhecimento de texto (OCR) precisa de atualização (~40MB): vá em Configurações → Motor de IA e clique no botão de download.",
+        "backfillRuntimeMissing": "O componente de reconhecimento de texto (OCR) precisa de atualização (~40MB): vá em Configurações → Modelos de IA e clique no botão de download.",
         "ocrConfirmTitle": "Componente de reconhecimento de texto (OCR) necessário",
         "ocrConfirmResident": "Ativar a indexação de texto requer baixar o componente de reconhecimento (~40MB). Ele é ativado automaticamente quando o download terminar.",
         "ocrConfirmBackfill": "O preenchimento requer baixar o componente de reconhecimento (~40MB). Ele começa automaticamente quando o download terminar.",
@@ -1061,21 +1153,14 @@
     "tabs": {
       "models": "Modelos",
       "general": "Geral",
-      "prompt": "Prompt",
-      "external": "API na nuvem"
+      "prompt": "Prompt"
     },
     "engine": {
       "sectionTitle": "Mecanismo de IA local",
-      "sectionDesc": "O Hindsight vem com o mecanismo de inferência llama.cpp e executa tudo localmente — as capturas de tela nunca são enviadas para nenhum serviço externo.",
       "loading": "Carregando…",
       "installed": "Instalado",
       "notInstalled": "Não instalado",
-      "versionAria": "Versão {{version}}",
-      "versionStaleAria": "Versão {{version}} (mais recente {{latest}})",
-      "versionLabel": "Versão {{version}}",
-      "versionStaleLabel": " · mais recente {{latest}}",
       "versionUnknown": "?",
-      "detected": "Detectado {{accel}}",
       "accel": {
         "cuda12": "CUDA 12.4",
         "cuda13": "CUDA 13.1",
@@ -1097,20 +1182,11 @@
         "downloading": "Baixando…",
         "updating": "Atualizando…",
         "updateToLatest": "Atualizar para a mais recente",
-        "redownload": "Baixar novamente",
         "downloadEngine": "Baixar mecanismo llama",
         "testConnection": "Testar conexão",
-        "testTooltipReady": "Inicia o mecanismo (se não estiver em execução) e verifica acessando o endpoint local /v1/models",
         "testTooltipNotInstalled": "Não instalado",
         "releaseVram": "Liberar VRAM",
         "releaseVramTooltip": "Para o mecanismo e libera a memória da GPU agora. Ele será iniciado novamente de forma automática na próxima geração de resumo.",
-        "releaseVramTooltipNotInstalled": "O mecanismo não está instalado",
-        "releaseVramTooltipNotRunning": "O mecanismo não está em execução — nada para liberar",
-        "openFolderTooltipInstalled": "Mostrar a pasta de instalação no gerenciador de arquivos",
-        "openFolderTooltipNotInstalled": "Não instalado",
-        "uninstallTooltipInstalled": "Desinstalar o mecanismo de IA local",
-        "uninstallTooltipNotInstalled": "Não instalado",
-        "uninstall": "Desinstalar llama",
         "approxSize": "~{{size}} MB"
       },
       "runtimeBadge": "runtime v{{version}}",
@@ -1160,42 +1236,31 @@
       "recommendedHint": "Recomendado: slots {{slots}} · ctx {{ctx}} · lote {{batch}}"
     },
     "models": {
-      "sectionTitle": "Modelos",
-      "sectionDesc": "LLM usado para inferência local; os arquivos GGUF são baixados do HuggingFace.",
+      "manageHint": "Baixe modelos locais e adicione APIs na nuvem em Configurações → Modelos de IA.",
+      "manageLink": "Abrir",
       "reports": {
         "title": "Modelos de relatórios",
         "description": "Também usado nos relatórios automáticos. Os níveis de raciocínio dependem do provedor.",
         "inUse": "Em uso: {{model}}"
       },
       "toolbar": {
-        "statusAll": "Todos",
-        "statusInstalled": "Baixados",
-        "statusNotInstalled": "Não baixados",
-        "brandAll": "Todos",
-        "sortDefault": "Ordem padrão",
         "sortSizeAsc": "Tamanho ↑",
         "sortSizeDesc": "Tamanho ↓",
         "sortName": "Nome A-Z",
         "sortReleased": "Data de lançamento"
       },
       "cloud": {
-        "cardTitle": "Nuvem · {{provider}}",
         "modelUnset": "(modelo não definido)",
         "summaryConfirmTitle": "Enviar dados de resumo para a nuvem?",
-        "summaryConfirmMessage": "Ao usar um modelo na nuvem, nomes de aplicativos, categorias e a linha do tempo de atividades serão enviados a {{provider}}. Capturas de tela nunca são enviadas.",
         "summaryConfirmAccept": "Entendo, continuar"
       },
       "card": {
-        "hfTooltipPrefix": "HuggingFace · ",
-        "hfTooltipAria": "HuggingFace {{repo}}",
-        "approxSize": "~{{size}} GB",
         "download": "Baixar",
         "downloading": "Baixando…",
         "installedBadge": "Baixado",
         "pause": "Pausar",
         "pauseTooltip": "Pausa o download atual. Os bytes parciais são mantidos; ao retomar mais tarde, continua de onde você parou.",
         "resume": "Retomar",
-        "resumeTooltip": "Retomar a partir de {{size}} MB já baixados.",
         "capsTooltips": {
           "TEXT": "Gera texto",
           "VISION": "Lê imagens",
@@ -1206,25 +1271,15 @@
           "R1": "DeepSeek R1",
           "DEFAULT": "Recomendado"
         },
-        "step2": "Texto",
-        "step2ToggleOnTooltip": "Usar nos relatórios diários",
-        "step2ToggleOffTooltip": "Remover seleção de relatório diário",
-        "uninstall": "Desinstalar",
-        "uninstallTooltipInstalled": "Excluir arquivos locais (principal + mmproj)",
-        "uninstallTooltipNotInstalled": "Não instalado",
         "progressMain": "pesos principais",
         "progressMmproj": "projetor de visão",
         "progressUnit": "MB",
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "Desinstalar {{name}}? Isto excluirá os pesos principais{{extra}} — não pode ser desfeito.",
-      "uninstallConfirmTitle": "Desinstalar {{name}}?",
-      "uninstallConfirmMessage": "Isto excluirá os pesos principais{{extra}}. A ação não pode ser desfeita.",
-      "uninstallConfirmExtra": " e o projetor mmproj",
       "expand": {
         "more": "Mostrar mais modelos ({{count}})",
-        "collapse": "Recolher",
-        "busyTooltip": "Só é possível recolher após os downloads terminarem"
+        "collapse": "Recolher"
       },
       "custom": {
         "expand": "Modelo HuggingFace personalizado",
@@ -1246,10 +1301,7 @@
         "dialogTitle": "Selecionar arquivo(s) de modelo GGUF"
       },
       "local": {
-        "title": "Modelos locais (fora da lista recomendada)",
-        "pairedMmproj": "Projetor de visão: {{name}}",
         "orphanMmproj": "Este é um arquivo de projeção visual (mmproj) e não pode ser usado como modelo sozinho. Para importar um modelo, escolha o arquivo GGUF principal, bem maior, do mesmo repositório.",
-        "toolsTip": "O template de conversa deste modelo declara chamadas de ferramentas — utilizável no Chat.",
         "noTools": "Sem chamadas de ferramentas",
         "noToolsTip": "O template de conversa deste modelo não declara chamadas de ferramentas, então não pode ser usado no Chat; os resumos não são afetados."
       }
@@ -1282,7 +1334,6 @@
       "rowLabel": "Segmentos"
     },
     "external": {
-      "sectionTitle": "API na nuvem (opcional)",
       "sectionDesc": "Configure modelos na nuvem para resumos e Chat. Capturas de tela nunca são enviadas.",
       "enableLabel": "Ativar API na nuvem",
       "enableHint": "Quando ativado, resumos de segmentos e o Chat chamam a API configurada abaixo; capturas de tela nunca são enviadas.",
@@ -1314,13 +1365,9 @@
       "kimiBaseUrlNote": "As chaves de api.moonshot.cn (China) e api.moonshot.ai (global) não são intercambiáveis — use o site onde sua chave foi emitida.",
       "groupTextTitle": "API de texto",
       "groupTextHint": "Resumos de segmento · Chat",
-      "testTextButton": "Testar API de texto",
       "testStepConn": "Rede e autenticação",
       "testStepChat": "Modelo {{model}} responde",
-      "profilesLabel": "Perfis salvos",
-      "saveProfile": "Salvar perfil atual",
       "saveProfileHint": "Guarda o endpoint, a chave de API e o modelo atuais como um perfil para troca com um clique",
-      "deleteProfileAria": "Excluir perfil {{name}}",
       "fetchModels": "Buscar modelos disponíveis no endpoint",
       "modelsFetched": "{{count}} modelos obtidos — digite no campo de modelo para pesquisar"
     },
@@ -1354,7 +1401,6 @@
       "saving": "Salvando fontes de download…",
       "saveFailed": "Não foi possível salvar as fontes de download. Tente novamente.",
       "invalidUrl": "Informe um endereço HTTP ou HTTPS sem dados de login, parâmetros ou fragmentos.",
-      "change": "Alterar fonte de download",
       "nugetLabel": "URL de download de pacotes NuGet",
       "nugetHelp": "Informe o endereço base dos pacotes NuGet (PackageBaseAddress) para os componentes de OCR do Windows."
     }
@@ -1587,7 +1633,7 @@
       "noModel": "Nenhum modelo de linguagem configurado. Adicione uma conexão na nuvem ou escolha um modelo local nos Ajustes de IA.",
       "cloudUnavailable": "A conexão na nuvem selecionada está incompleta ou indisponível. Verifique o endpoint e o modelo nos Ajustes de IA.",
       "modelMissing": "O arquivo do modelo local selecionado não foi encontrado. Ele pode ter sido excluído ou movido.",
-      "engineMissing": "O motor de IA não está instalado. Baixe-o em Configurações → Motor de IA.",
+      "engineMissing": "O motor de IA não está instalado. Baixe-o em Configurações → Modelos de IA.",
       "llmEmptyReasoning": "O modelo esgotou o limite de saída durante o raciocínio. Reduza ou desative o modo de raciocínio, aumente o contexto ou troque de modelo.",
       "llmEmptyEos": "O modelo parou sem gerar saída. Tente trocar de modelo nos Ajustes de IA.",
       "llmEmptyTruncated": "A saída do modelo foi truncada antes de gerar texto útil. Reduza o raciocínio, aumente o contexto ou troque de modelo.",
@@ -1789,7 +1835,7 @@
       },
       "cloudOffer": {
         "title": "Gerar com sua API na nuvem?",
-        "message": "O motor local não está instalado. Use a API na nuvem configurada ({{provider}} · {{model}}) — nomes de apps, categorias e linha do tempo serão enviados ao provedor — ou baixe o motor local em Configurações → Motor de IA.",
+        "message": "O motor local não está instalado. Use a API na nuvem configurada ({{provider}} · {{model}}) — nomes de apps, categorias e linha do tempo serão enviados ao provedor — ou baixe o motor local em Configurações → Modelos de IA.",
         "confirm": "Usar API na nuvem"
       },
       "ocrLoading": "Carregando modelo OCR…",
@@ -1876,7 +1922,7 @@
       "running": "Construindo índice… {{count}} restantes",
       "alreadyRunning": "A indexação está em execução em segundo plano, {{count}} restantes",
       "failed": "Falha na indexação: {{msg}}",
-      "runtimeMissing": "O componente de reconhecimento de texto (OCR) precisa de atualização (~40MB): vá em Configurações → Motor de IA e clique no botão de download.",
+      "runtimeMissing": "O componente de reconhecimento de texto (OCR) precisa de atualização (~40MB): vá em Configurações → Modelos de IA e clique no botão de download.",
       "ocrConfirmTitle": "Componente de reconhecimento de texto (OCR) necessário",
       "ocrConfirmMessage": "Construir o índice de texto requer baixar o componente de reconhecimento (~40MB). A indexação começa automaticamente quando o download terminar.",
       "ocrConfirmAccept": "Baixar e iniciar",
@@ -1889,7 +1935,7 @@
       "collapse": "Recolher fontes"
     },
     "model": {
-      "noToolUseModels": "Nenhum dos modelos locais baixados suporta Tool-use. Baixe um com o selo Tool-use em Configurações de IA → Modelos.",
+      "noToolUseModels": "Nenhum dos modelos locais baixados suporta Tool-use. Baixe um com o selo Tool-use em Configurações → Modelos de IA.",
       "empty": "Nenhum modelo disponível: configure uma API na nuvem ou baixe um modelo local"
     },
     "tokens": {

@@ -21,6 +21,8 @@ export const ROUTES = {
   plugin: "/plugins",
   /** The plugin market and installed plugins */
   settingsPlugins: "/settings/plugins",
+  /** The local engine, local models and cloud API connections */
+  settingsAiModels: "/settings/models",
 } as const;
 
 // 注：label 已改为 labelKey（i18n 翻译键），渲染时由组件通过 t() 解析

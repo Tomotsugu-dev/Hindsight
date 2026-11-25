@@ -1,0 +1,22 @@
+/* The sections on the left, the table of contents on the right. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  gap: calc(20px * var(--density));
+  align-items: start;
+}
+
+/* One section the table of contents jumps to. The margin keeps its title clear of the floating tab bar. */
+.anchor {
+  display: flex;
+  flex-direction: column;
+  gap: calc(24px * var(--density));
+  scroll-margin-top: 64px;
+}
+
+/* Same width as PageToc hides itself */
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

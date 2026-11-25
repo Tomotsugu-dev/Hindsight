@@ -1,17 +1,23 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Check, Cloud, Download, Eye, EyeOff, Info, Loader2, Plus, X, XCircle } from "lucide-react";
-import { Button } from "../../../components/Button/Button";
-import { IconButton } from "../../../components/Button/IconButton";
-import { TextInput } from "../../../components/TextInput/TextInput";
-import { Section } from "../../../components/FormLayout/Section";
-import { Row } from "../../../components/FormLayout/Row";
-import { SimplePicker } from "../../../components/SimplePicker/SimplePicker";
-import { api, type AiConfig, type CloudConnection } from "../../../api/hindsight";
-import { useAiSettings } from "../shared/useAiSettings";
-import { profileLabel } from "../../../utils/profileLabel";
-import styles from "../AISettings.module.css";
+import { Activity, Check, Download, Eye, EyeOff, Info, Loader2, Plus, XCircle } from "lucide-react";
+import { Button } from "../../../../components/Button/Button";
+import { IconButton } from "../../../../components/Button/IconButton";
+import { TextInput } from "../../../../components/TextInput/TextInput";
+import { Section } from "../../../../components/FormLayout/Section";
+import { SimplePicker } from "../../../../components/SimplePicker/SimplePicker";
+import { api, type AiConfig, type CloudConnection } from "../../../../api/hindsight";
+import { useAiSettings } from "../../../AISettings/shared/useAiSettings";
+import { profileLabel } from "../../../../utils/profileLabel";
+import styles from "../../../AISettings/AISettings.module.css";
+import s from "./aiModels.module.css";
+
+/** At most this many connections can be saved. */
+const MAX_CONNECTIONS = 10;
+
+/** What the cloud form shows: nothing, a new connection, or a saved one. */
+export type CloudEditor = { mode: "closed" } | { mode: "new" } | { mode: "edit"; id: string };
 
 type ProviderKey =
   | "openai"
@@ -136,35 +142,70 @@ function TestStepRow({ status, label, msg }: { status: StepStatus; label: string
   );
 }
 
-export default function ExternalApiTab() {
+interface CloudApiSectionProps {
+  editor: CloudEditor;
+  onEditorChange: (next: CloudEditor) => void;
+}
+
+/**
+ * Add a cloud API connection, or change a saved one.
+ *
+ * The form is closed until the user adds one here or picks Edit in My models, where saved
+ * connections are listed. Changes to a saved connection save as the user types.
+ */
+export function CloudApiSection({ editor, onEditorChange }: CloudApiSectionProps) {
+  const { t } = useTranslation();
   const { ai, updateAi } = useAiSettings();
   if (!ai) return null;
 
+  const full = ai.cloud.length >= MAX_CONNECTIONS;
+  const editing = editor.mode === "edit" ? ai.cloud.find((c) => c.id === editor.id) : undefined;
+
   return (
-    <div className={styles.content}>
-      <CloudConnectionsSection ai={ai} updateAi={updateAi} />
-    </div>
+    <Section
+      title={t("settings.aiModels.cloud.title")}
+      description={t("aiSettings.external.sectionDesc")}
+    >
+      {editor.mode === "new" || editing ? (
+        <CloudForm
+          // 换一个配置就重来一遍：草稿、测试结果、拿到的模型列表都清掉
+          key={editing?.id ?? "new"}
+          ai={ai}
+          updateAi={updateAi}
+          editing={editing ?? null}
+          onClose={() => onEditorChange({ mode: "closed" })}
+        />
+      ) : (
+        <div className={s.cloudBar}>
+          <p>{t("settings.aiModels.cloud.hint", { max: MAX_CONNECTIONS })}</p>
+          <Button
+            variant="outline"
+            tone="accent"
+            icon={Plus}
+            disabled={full}
+            title={full ? t("settings.aiModels.cloud.full", { max: MAX_CONNECTIONS }) : undefined}
+            onClick={() => onEditorChange({ mode: "new" })}
+          >
+            {t("settings.aiModels.cloud.add")}
+          </Button>
+        </div>
+      )}
+    </Section>
   );
 }
 
-interface CloudConnectionsSectionProps {
+interface CloudFormProps {
   ai: AiConfig;
   updateAi: (patch: Partial<AiConfig>) => void;
+  /** The saved connection being changed; null for a new one. */
+  editing: CloudConnection | null;
+  onClose: () => void;
 }
 
-function CloudConnectionsSection({ ai, updateAi }: CloudConnectionsSectionProps) {
+function CloudForm({ ai, updateAi, editing, onClose }: CloudFormProps) {
   const { t } = useTranslation();
-  const [selectedId, setSelectedId] = useState<string | null>(() => ai.cloud[0]?.id ?? null);
-  const [draft, setDraft] = useState<DraftFields>(() => {
-    const first = ai.cloud[0];
-    if (!first) return EMPTY_DRAFT;
-    return {
-      dialect: toProviderKey(first.dialect),
-      endpoint: first.endpoint,
-      apiKey: first.apiKey,
-      model: first.model,
-    };
-  });
+  const fieldId = useId();
+  const [draft, setDraft] = useState<DraftFields>(EMPTY_DRAFT);
   const [showKey, setShowKey] = useState(false);
   const [textTest, setTextTest] = useState<ApiTestState>(TEST_IDLE);
   const [modelList, setModelList] = useState<string[]>([]);
@@ -175,7 +216,7 @@ function CloudConnectionsSection({ ai, updateAi }: CloudConnectionsSectionProps)
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const [modelMenuStyle, setModelMenuStyle] = useState<CSSProperties | null>(null);
 
-  const selectedConn = selectedId ? (ai.cloud.find((c) => c.id === selectedId) ?? null) : null;
+  const selectedConn = editing;
 
   useLayoutEffect(() => {
     if (!modelMenuOpen || !modelInputRef.current) return;
@@ -231,16 +272,9 @@ function CloudConnectionsSection({ ai, updateAi }: CloudConnectionsSectionProps)
     }
   };
 
-  const selectConnection = (c: CloudConnection) => {
-    setSelectedId(c.id);
-    setTextTest(TEST_IDLE);
-    setModelList([]);
-    setModelFetch("idle");
-  };
-
   const saveAsConnection = () => {
     const endpoint = activeFields.endpoint.trim();
-    if (!endpoint || ai.cloud.length >= 10) return;
+    if (!endpoint || ai.cloud.length >= MAX_CONNECTIONS) return;
     const id = newConnectionId(ai.cloud);
     const conn: CloudConnection = {
       id,
@@ -256,17 +290,8 @@ function CloudConnectionsSection({ ai, updateAi }: CloudConnectionsSectionProps)
       contextLength: null,
     };
     updateAi({ cloud: [...ai.cloud, conn] });
-    setSelectedId(id);
-    setDraft(EMPTY_DRAFT);
-  };
-
-  const deleteConnection = (id: string) => {
-    const nextCloud = ai.cloud.filter((c) => c.id !== id);
-    updateAi({ cloud: nextCloud });
-    if (selectedId === id) {
-      setSelectedId(nextCloud[0]?.id ?? null);
-      if (nextCloud.length === 0) setDraft(EMPTY_DRAFT);
-    }
+    // 存好的配置在「我的模型」里列出来，表单收起
+    onClose();
   };
 
   const sameAsAnySaved = ai.cloud.some(
@@ -387,234 +412,211 @@ function CloudConnectionsSection({ ai, updateAi }: CloudConnectionsSectionProps)
   const modelHint = EXTERNAL_PROVIDER_PRESETS[activeFields.dialect].modelHint;
 
   return (
-    <>
-      <Section
-        title={t("aiSettings.external.sectionTitle")}
-        icon={Cloud}
-        description={t("aiSettings.external.sectionDesc")}
-      >
-        {ai.cloud.length > 0 && (
-          <Row label={t("aiSettings.external.profilesLabel")} block>
-            <div className={styles.profileChipRow}>
-              {ai.cloud.map((c) => (
-                <span key={c.id} className={styles.profileChip}>
-                  <button
-                    type="button"
-                    className={styles.profileChipBody}
-                    onClick={() => selectConnection(c)}
-                    title={c.endpoint}
-                  >
-                    {selectedConn?.id === c.id ? "✓ " : ""}
-                    {profileLabel(c)}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.profileChipDel}
-                    onClick={() => deleteConnection(c.id)}
-                    aria-label={t("aiSettings.external.deleteProfileAria", {
-                      name: profileLabel(c),
-                    })}
-                  >
-                    <X size={10} strokeWidth={2.5} />
-                  </button>
-                </span>
-              ))}
-              {ai.cloud.length < 10 && selectedConn && (
-                <button
-                  type="button"
-                  className={styles.profileChip}
-                  onClick={() => {
-                    setSelectedId(null);
-                    setDraft(EMPTY_DRAFT);
-                    setTextTest(TEST_IDLE);
-                  }}
-                >
-                  <Plus size={12} strokeWidth={2.2} />
-                </button>
-              )}
-            </div>
-          </Row>
-        )}
+    <div className={s.panel}>
+      <h3 className={s.panelTitle}>
+        {editing
+          ? t("settings.aiModels.cloud.editing", { name: profileLabel(editing) })
+          : t("settings.aiModels.cloud.add")}
+      </h3>
+      <p className={s.note}>
+        <Info size={13} strokeWidth={1.85} />
+        {t("aiSettings.external.privacyNote")}
+      </p>
 
-        <Row label={t("aiSettings.external.providerLabel")}>
+      <div className={s.field}>
+        <span className={s.label}>{t("aiSettings.external.providerLabel")}</span>
+        <div>
           <SimplePicker<ProviderKey>
             value={activeFields.dialect}
             options={providerOptions}
             onChange={onProviderChange}
           />
-        </Row>
+        </div>
+      </div>
 
-        <Row
-          label={t("aiSettings.external.baseUrlLabel")}
-          description={
-            activeFields.dialect === "kimi" || activeFields.dialect === "kimi-cn"
-              ? t("aiSettings.external.kimiBaseUrlNote")
-              : undefined
-          }
-          block
-        >
+      <div className={s.field}>
+        <label className={s.label} htmlFor={`${fieldId}-url`}>
+          {t("aiSettings.external.baseUrlLabel")}
+        </label>
+        <TextInput
+          id={`${fieldId}-url`}
+          className={styles.externalField}
+          value={activeFields.endpoint}
+          onChange={(e) => updateFields({ endpoint: e.target.value })}
+          placeholder={t("aiSettings.external.baseUrlPlaceholder")}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+        />
+        {activeFields.dialect === "kimi" || activeFields.dialect === "kimi-cn" ? (
+          <span className={s.help}>{t("aiSettings.external.kimiBaseUrlNote")}</span>
+        ) : null}
+      </div>
+
+      <div className={s.field}>
+        <label className={s.label} htmlFor={`${fieldId}-key`}>
+          {t("aiSettings.external.apiKeyLabel")}
+        </label>
+        <div className={styles.externalKeyRow}>
           <TextInput
+            id={`${fieldId}-key`}
+            type={showKey ? "text" : "password"}
             className={styles.externalField}
-            value={activeFields.endpoint}
-            onChange={(e) => updateFields({ endpoint: e.target.value })}
-            placeholder={t("aiSettings.external.baseUrlPlaceholder")}
+            value={activeFields.apiKey}
+            onChange={(e) => updateFields({ apiKey: e.target.value })}
+            placeholder={t("aiSettings.external.apiKeyPlaceholder")}
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
           />
-        </Row>
+          <IconButton
+            variant="soft"
+            icon={showKey ? EyeOff : Eye}
+            onClick={() => setShowKey((v) => !v)}
+            label={
+              showKey ? t("aiSettings.external.apiKeyHide") : t("aiSettings.external.apiKeyShow")
+            }
+          />
+        </div>
+      </div>
 
-        <Row label={t("aiSettings.external.apiKeyLabel")} block>
+      <div className={s.field}>
+        <label className={s.label} htmlFor={`${fieldId}-model`}>
+          {t("aiSettings.external.modelLabel")}
+        </label>
+        <div className={styles.modelComboWrap}>
           <div className={styles.externalKeyRow}>
-            <TextInput
-              type={showKey ? "text" : "password"}
-              className={styles.externalField}
-              value={activeFields.apiKey}
-              onChange={(e) => updateFields({ apiKey: e.target.value })}
-              placeholder={t("aiSettings.external.apiKeyPlaceholder")}
+            <input
+              ref={modelInputRef}
+              id={`${fieldId}-model`}
+              type="text"
+              className={styles.externalInput}
+              value={activeFields.model}
+              onChange={(e) => {
+                updateFields({ model: e.target.value });
+                if (modelList.length > 0) setModelMenuOpen(true);
+              }}
+              onFocus={() => {
+                if (modelList.length > 0) setModelMenuOpen(true);
+              }}
+              onBlur={() => setModelMenuOpen(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setModelMenuOpen(false);
+              }}
+              placeholder={modelHint}
               spellCheck={false}
               autoCapitalize="off"
               autoCorrect="off"
             />
             <IconButton
               variant="soft"
-              icon={showKey ? EyeOff : Eye}
-              onClick={() => setShowKey((v) => !v)}
-              label={
-                showKey ? t("aiSettings.external.apiKeyHide") : t("aiSettings.external.apiKeyShow")
-              }
+              icon={Download}
+              onClick={() => void fetchModels()}
+              loading={modelFetch === "running"}
+              label={t("aiSettings.external.fetchModels")}
             />
           </div>
-        </Row>
+          {modelMenuOpen &&
+            (() => {
+              const q = activeFields.model.trim().toLowerCase();
+              const hits = q
+                ? modelList
+                    .filter((m) => m.toLowerCase().includes(q))
+                    .sort((a, b) => {
+                      const rank = (name: string) =>
+                        name.toLowerCase() === q ? 0 : name.toLowerCase().startsWith(q) ? 1 : 2;
+                      return rank(a) - rank(b) || a.localeCompare(b);
+                    })
+                : modelList;
+              if (hits.length === 0) return null;
+              return createPortal(
+                <div
+                  ref={modelMenuRef}
+                  className={styles.modelSuggestMenu}
+                  role="listbox"
+                  style={modelMenuStyle ?? { visibility: "hidden" }}
+                >
+                  {hits.slice(0, 100).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="option"
+                      aria-selected={m === activeFields.model}
+                      className={styles.modelSuggestOption}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        updateFields({ model: m });
+                        setModelMenuOpen(false);
+                      }}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>,
+                document.body,
+              );
+            })()}
+        </div>
+        {modelFetch === "ok" && <span className={styles.externalTestOk}>{modelFetchMsg}</span>}
+        {modelFetch === "fail" && (
+          <span className={styles.externalTestFail}>
+            <XCircle size={13} strokeWidth={2} />
+            {modelFetchMsg}
+          </span>
+        )}
+      </div>
 
-        <Row label={t("aiSettings.external.modelLabel")} block>
-          <div className={styles.modelComboWrap}>
-            <div className={styles.externalKeyRow}>
-              <input
-                ref={modelInputRef}
-                type="text"
-                className={styles.externalInput}
-                value={activeFields.model}
-                onChange={(e) => {
-                  updateFields({ model: e.target.value });
-                  if (modelList.length > 0) setModelMenuOpen(true);
-                }}
-                onFocus={() => {
-                  if (modelList.length > 0) setModelMenuOpen(true);
-                }}
-                onBlur={() => setModelMenuOpen(false)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setModelMenuOpen(false);
-                }}
-                placeholder={modelHint}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-              />
-              <IconButton
-                variant="soft"
-                icon={Download}
-                onClick={() => void fetchModels()}
-                loading={modelFetch === "running"}
-                label={t("aiSettings.external.fetchModels")}
-              />
-            </div>
-            {modelMenuOpen &&
-              (() => {
-                const q = activeFields.model.trim().toLowerCase();
-                const hits = q
-                  ? modelList
-                      .filter((m) => m.toLowerCase().includes(q))
-                      .sort((a, b) => {
-                        const rank = (s: string) =>
-                          s.toLowerCase() === q ? 0 : s.toLowerCase().startsWith(q) ? 1 : 2;
-                        return rank(a) - rank(b) || a.localeCompare(b);
-                      })
-                  : modelList;
-                if (hits.length === 0) return null;
-                return createPortal(
-                  <div
-                    ref={modelMenuRef}
-                    className={styles.modelSuggestMenu}
-                    role="listbox"
-                    style={modelMenuStyle ?? { visibility: "hidden" }}
-                  >
-                    {hits.slice(0, 100).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        role="option"
-                        aria-selected={m === activeFields.model}
-                        className={styles.modelSuggestOption}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          updateFields({ model: m });
-                          setModelMenuOpen(false);
-                        }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>,
-                  document.body,
-                );
-              })()}
-          </div>
-          {modelFetch === "ok" && <span className={styles.externalTestOk}>{modelFetchMsg}</span>}
-          {modelFetch === "fail" && (
-            <span className={styles.externalTestFail}>
-              <XCircle size={13} strokeWidth={2} />
-              {modelFetchMsg}
-            </span>
-          )}
-        </Row>
+      {textTest.conn !== "idle" ? (
+        <div className={styles.externalTestSteps}>
+          <TestStepRow
+            status={textTest.conn}
+            label={t("aiSettings.external.testStepConn")}
+            msg={textTest.connMsg}
+          />
+          <TestStepRow
+            status={textTest.chat}
+            label={t("aiSettings.external.testStepChat", {
+              model: activeFields.model.trim() || "?",
+            })}
+            msg={textTest.chatMsg}
+          />
+        </div>
+      ) : null}
 
-        <div className={styles.externalActionRow}>
-          {!selectedConn && (
-            <Button
-              variant="solid"
-              tone="accent"
-              icon={Plus}
-              onClick={saveAsConnection}
-              disabled={!activeFields.endpoint.trim() || ai.cloud.length >= 10 || sameAsAnySaved}
-              title={t("aiSettings.external.saveProfileHint")}
-            >
-              {t("aiSettings.external.saveProfile")}
-            </Button>
-          )}
+      <div className={s.actions}>
+        {editing ? null : (
+          <Button variant="ghost" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          icon={Activity}
+          onClick={() => void runApiTest()}
+          loading={textTest.running}
+        >
+          {textTest.running
+            ? t("aiSettings.external.testRunning")
+            : t("settings.aiModels.cloud.test")}
+        </Button>
+        {editing ? (
+          <Button variant="solid" tone="accent" onClick={onClose}>
+            {t("settings.aiModels.cloud.done")}
+          </Button>
+        ) : (
           <Button
             variant="solid"
             tone="accent"
-            onClick={() => void runApiTest()}
-            loading={textTest.running}
+            onClick={saveAsConnection}
+            disabled={
+              !activeFields.endpoint.trim() || ai.cloud.length >= MAX_CONNECTIONS || sameAsAnySaved
+            }
+            title={t("aiSettings.external.saveProfileHint")}
           >
-            {textTest.running
-              ? t("aiSettings.external.testRunning")
-              : t("aiSettings.external.testTextButton")}
+            {t("common.save")}
           </Button>
-        </div>
-        {textTest.conn !== "idle" ? (
-          <div className={styles.externalTestSteps}>
-            <TestStepRow
-              status={textTest.conn}
-              label={t("aiSettings.external.testStepConn")}
-              msg={textTest.connMsg}
-            />
-            <TestStepRow
-              status={textTest.chat}
-              label={t("aiSettings.external.testStepChat", {
-                model: activeFields.model.trim() || "?",
-              })}
-              msg={textTest.chatMsg}
-            />
-          </div>
-        ) : null}
-      </Section>
-
-      <p className={styles.externalPrivacyNote}>
-        <Info size={12} strokeWidth={1.85} />
-        {t("aiSettings.external.privacyNote")}
-      </p>
-    </>
+        )}
+      </div>
+    </div>
   );
 }

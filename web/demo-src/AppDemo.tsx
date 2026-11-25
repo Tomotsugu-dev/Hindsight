@@ -45,11 +45,9 @@ const HistoryPage = routeChunks.history.Component;
 const HistoryStatsTab = routeChunks.historyStats.Component;
 const SearchPage = routeChunks.search.Component;
 const AISettingsPage = routeChunks.aiSettings.Component;
-const EngineTab = routeChunks.aiEngine.Component;
 const ModelsTab = routeChunks.aiModels.Component;
 const AiGeneralTab = routeChunks.aiGeneral.Component;
 const PromptTab = routeChunks.aiPrompt.Component;
-const ExternalApiTab = routeChunks.aiExternal.Component;
 const DevicesPage = routeChunks.devices.Component;
 const CategoriesPage = routeChunks.categories.Component;
 const ListTab = routeChunks.categoriesList.Component;
@@ -61,6 +59,7 @@ const AppearanceTab = routeChunks.settingsAppearance.Component;
 const DataTab = routeChunks.settingsData.Component;
 const PrivacyTab = routeChunks.settingsPrivacy.Component;
 const PluginsTab = routeChunks.settingsPlugins.Component;
+const AiModelsTab = routeChunks.settingsAiModels.Component;
 const AboutTab = routeChunks.settingsAbout.Component;
 
 /** 通过容器事件委托捕获任意站内 <Link>/<NavLink> 的 hover/focus，无需改动主仓库组件即可预加载 */
@@ -124,7 +123,7 @@ function DemoLayout() {
               <Route path="models" element={<ModelsTab />} />
               <Route path="general" element={<AiGeneralTab />} />
               <Route path="prompt" element={<PromptTab />} />
-              <Route path="external" element={<ExternalApiTab />} />
+              <Route path="external" element={<Navigate to={ROUTES.settingsAiModels} replace />} />
             </Route>
             <Route path={ROUTES.devices} element={<DevicesPage />} />
             <Route path={ROUTES.categories} element={<CategoriesPage />}>
@@ -142,7 +141,8 @@ function DemoLayout() {
               <Route path="appearance" element={<AppearanceTab />} />
               <Route path="data" element={<DataTab />} />
               <Route path="privacy" element={<PrivacyTab />} />
-              <Route path="engine" element={<EngineTab />} />
+              <Route path="models" element={<AiModelsTab />} />
+              <Route path="engine" element={<Navigate to={ROUTES.settingsAiModels} replace />} />
               <Route path="plugins" element={<PluginsTab />} />
               <Route path="about" element={<AboutTab />} />
             </Route>

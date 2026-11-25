@@ -106,9 +106,101 @@
       "appearance": "外觀",
       "data": "資料",
       "privacy": "隱私",
-      "engine": "AI 引擎",
+      "aiModels": "AI 模型",
       "plugins": "外掛",
       "about": "關於"
+    },
+    "aiModels": {
+      "toc": {
+        "title": "本頁",
+        "runtime": "執行環境",
+        "mine": "我的模型",
+        "catalog": "下載模型",
+        "cloud": "雲端 API"
+      },
+      "runtime": {
+        "title": "執行環境",
+        "desc": "在這台電腦上執行模型要用到的程式。"
+      },
+      "engine": {
+        "meta": "{{version}} · {{accel}} · {{size}} MB",
+        "running": "執行中",
+        "stopped": "未執行",
+        "more": "本地 AI 引擎的更多操作",
+        "openDir": "開啟安裝資料夾",
+        "uninstall": "解除安裝引擎"
+      },
+      "ocr": {
+        "more": "文字辨識元件的更多操作",
+        "uninstall": "解除安裝文字辨識元件"
+      },
+      "source": {
+        "customDesc": "從你填寫的位址下載。"
+      },
+      "mine": {
+        "title": "我的模型",
+        "desc": "已經能用的模型。日報、週報和對話各用哪一個，在 AI 設定 → 模型 裡選。",
+        "testTip": "試一下日報、週報和對話選的模型能不能用。本機模型會先啟動引擎。",
+        "testing": "正在測試…",
+        "local": "本機 · {{size}} GB",
+        "imported": "本機 · 匯入的檔案 · {{size}} GB",
+        "withMmproj": "含視覺投影",
+        "cloud": "雲端 · {{host}}",
+        "cloudIncomplete": "尚未填完",
+        "unused": "未使用",
+        "listSep": "、",
+        "more": "{{name}} 的更多操作",
+        "reveal": "在資料夾中顯示",
+        "delete": "刪除模型檔案",
+        "edit": "編輯",
+        "deleteCloud": "刪除這個設定",
+        "deleteTitle": "刪除「{{name}}」？",
+        "deleteMessage": "模型檔案會從這台電腦上刪除，要再用得重新下載。",
+        "deleteMessageInUse": "{{tasks}}正在使用這個模型。刪除後要在 AI 設定 → 模型 裡重新選。",
+        "deleteCloudMessage": "這個設定會被刪除，包括裡面的 API Key。",
+        "deleteCloudMessageInUse": "{{tasks}}正在使用這個設定。刪除後要在 AI 設定 → 模型 裡重新選。",
+        "empty": "還沒有能用的模型。選一種開始：",
+        "emptyLocal": "下載本機模型",
+        "emptyLocalDesc": "資料不離開這台電腦。要先裝好上面的引擎，再下載一個模型，總共約 4 GB。",
+        "emptyLocalAction": "前往下載清單",
+        "emptyCloud": "連接雲端 API",
+        "emptyCloudDesc": "不用下載，回答更快。需要服務商的 API Key，活動記錄會傳給服務商。",
+        "emptyCloudAction": "填寫 API"
+      },
+      "catalog": {
+        "title": "下載本機模型",
+        "desc": "這些模型都能在本地引擎上執行。下載完會出現在「我的模型」裡。",
+        "all": "全部 {{count}}",
+        "vision": "能看圖",
+        "reasoning": "會思考",
+        "small": "小於 5 GB",
+        "brandAll": "全部廠商",
+        "sortDefault": "推薦順序",
+        "paused": "已暫停 · 已下載 {{size}} GB",
+        "allDone": "推薦的模型都下載好了。",
+        "noMatch": "沒有符合條件的模型。",
+        "showMore": "顯示其餘 {{count}} 個",
+        "showLess": "收起",
+        "notFound": "找不到想要的？"
+      },
+      "cloud": {
+        "title": "雲端 API",
+        "hint": "已新增的設定在上面「我的模型」裡，點 ⋯ 編輯或刪除。最多 {{max}} 個。",
+        "add": "新增雲端 API",
+        "full": "已經有 {{max}} 個了，先刪除一個再新增。",
+        "editing": "編輯「{{name}}」",
+        "test": "測試",
+        "done": "完成"
+      },
+      "caps": {
+        "TEXT": "文字",
+        "VISION": "視覺",
+        "CODE": "程式碼",
+        "FAST": "快",
+        "BALANCED": "均衡",
+        "REASONING": "會思考",
+        "DEFAULT": "推薦"
+      }
     },
     "appearance": {
       "sectionTitle": "主題",
@@ -191,7 +283,7 @@
         "backfillProgress": "辨識中…剩餘 {{n}} 張",
         "backfillBackground": "已登記，背景索引中（可離開本頁）",
         "backfillDone": "完成：辨識 {{ok}} 張，跳過 {{failed}} 張",
-        "backfillRuntimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 設定 → AI 引擎 頁點下載按鈕。",
+        "backfillRuntimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 設定 → AI 模型 頁點下載按鈕。",
         "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
         "ocrConfirmResident": "開啟文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開啟。",
         "ocrConfirmBackfill": "回填需要下載文字辨識元件（約 40MB），下載完成後自動開始回填。",
@@ -1056,21 +1148,14 @@
     "tabs": {
       "models": "模型",
       "general": "常規",
-      "prompt": "提示詞",
-      "external": "雲端 API"
+      "prompt": "提示詞"
     },
     "engine": {
       "sectionTitle": "本地 AI 引擎",
-      "sectionDesc": "Hindsight 自帶 llama.cpp 推理引擎，在你機器上本地跑——截圖不上傳任何外部服務。",
       "loading": "載入中…",
       "installed": "已安裝",
       "notInstalled": "未安裝",
-      "versionAria": "版本 {{version}}",
-      "versionStaleAria": "版本 {{version}}（最新 {{latest}}）",
-      "versionLabel": "版本 {{version}}",
-      "versionStaleLabel": " · 最新 {{latest}}",
       "versionUnknown": "?",
-      "detected": "檢測到 {{accel}}",
       "accel": {
         "cuda12": "CUDA 12.4",
         "cuda13": "CUDA 13.1",
@@ -1092,20 +1177,11 @@
         "downloading": "下載中…",
         "updating": "更新中…",
         "updateToLatest": "更新到最新",
-        "redownload": "重新下載",
         "downloadEngine": "下載 llama 引擎",
         "testConnection": "測試連線",
-        "testTooltipReady": "啟動引擎（如未執行）並向本地 /v1/models 發請求驗證",
         "testTooltipNotInstalled": "尚未安裝",
         "releaseVram": "釋放視訊記憶體",
         "releaseVramTooltip": "停止引擎，立即釋放視訊記憶體。下次跑總結時會自動重啟。",
-        "releaseVramTooltipNotInstalled": "引擎尚未安裝",
-        "releaseVramTooltipNotRunning": "引擎未執行，無視訊記憶體可釋放",
-        "openFolderTooltipInstalled": "在檔案管理器開啟安裝目錄",
-        "openFolderTooltipNotInstalled": "尚未安裝",
-        "uninstallTooltipInstalled": "解除安裝本地 AI 引擎",
-        "uninstallTooltipNotInstalled": "尚未安裝",
-        "uninstall": "解除安裝 llama",
         "approxSize": "約 {{size}} MB"
       },
       "progress": {
@@ -1155,42 +1231,31 @@
       "recommendedHint": "推薦：slots {{slots}} · ctx {{ctx}} · batch {{batch}}"
     },
     "models": {
-      "sectionTitle": "模型",
-      "sectionDesc": "本地推理用的 LLM；GGUF 檔案下載自 HuggingFace。",
+      "manageHint": "下載本機模型、新增雲端 API 在「設定 → AI 模型」。",
+      "manageLink": "前往",
       "reports": {
         "title": "日報與週報模型",
         "description": "自動總結同步使用此設定；思考模式檔位因服務商而異。",
         "inUse": "目前：{{model}}"
       },
       "toolbar": {
-        "statusAll": "所有",
-        "statusInstalled": "已下載",
-        "statusNotInstalled": "未下載",
-        "brandAll": "所有",
-        "sortDefault": "預設順序",
         "sortSizeAsc": "體積 ↑",
         "sortSizeDesc": "體積 ↓",
         "sortName": "名稱 A-Z",
         "sortReleased": "發布時間"
       },
       "cloud": {
-        "cardTitle": "雲端 · {{provider}}",
         "modelUnset": "（未填模型）",
         "summaryConfirmTitle": "把總結資料傳送到雲端？",
-        "summaryConfirmMessage": "使用雲端模型時，會將應用程式名、分類和活動時間線傳送至 {{provider}}，不會上傳截圖。",
         "summaryConfirmAccept": "我瞭解，繼續"
       },
       "card": {
-        "hfTooltipPrefix": "HuggingFace · ",
-        "hfTooltipAria": "HuggingFace {{repo}}",
-        "approxSize": "~{{size}} GB",
         "download": "下載",
         "downloading": "下載中…",
         "installedBadge": "已下載",
         "pause": "暫停",
         "pauseTooltip": "暫停當前下載。已下位元組保留，下次「繼續」從斷點接著下。",
         "resume": "繼續",
-        "resumeTooltip": "從已下的 {{size}} MB 繼續。",
         "capsTooltips": {
           "TEXT": "文本生成",
           "VISION": "視覺能力",
@@ -1201,25 +1266,15 @@
           "R1": "DeepSeek R1",
           "DEFAULT": "推薦首選"
         },
-        "step2": "Text",
-        "step2ToggleOnTooltip": "設為日報模型",
-        "step2ToggleOffTooltip": "取消日報模型選擇",
-        "uninstall": "解除安裝",
-        "uninstallTooltipInstalled": "刪除本地檔案（main + mmproj）",
-        "uninstallTooltipNotInstalled": "尚未安裝",
         "progressMain": "主權重",
         "progressMmproj": "vision 投影",
         "progressUnit": "MB",
         "progressUnknownTotal": "?"
       },
       "uninstallConfirm": "解除安裝 {{name}}？將刪除 main 權重{{extra}}兩個檔案，無法撤銷。",
-      "uninstallConfirmTitle": "解除安裝 {{name}}？",
-      "uninstallConfirmMessage": "將刪除 main 權重{{extra}}檔案，操作無法撤銷。",
-      "uninstallConfirmExtra": " + mmproj 投影",
       "expand": {
         "more": "檢視更多模型 ({{count}})",
-        "collapse": "收起",
-        "busyTooltip": "下載完成後才能摺疊"
+        "collapse": "收起"
       },
       "custom": {
         "expand": "自定義 HuggingFace 模型",
@@ -1241,10 +1296,7 @@
         "dialogTitle": "選擇 GGUF 模型檔案"
       },
       "local": {
-        "title": "本機模型（不在推薦清單中）",
-        "pairedMmproj": "視覺投影：{{name}}",
         "orphanMmproj": "這是視覺投影檔案（mmproj），不能單獨作為模型使用。如需匯入模型，請選擇同倉庫中體積更大的主模型 GGUF 檔案。",
-        "toolsTip": "該模型的對話模板聲明了工具調用，可用於對話問答。",
         "noTools": "不支援工具調用",
         "noToolsTip": "該模型的對話模板未聲明工具調用，不能用於對話問答；總結不受影響。"
       }
@@ -1277,7 +1329,6 @@
       "rowLabel": "時段"
     },
     "external": {
-      "sectionTitle": "雲端 API（可選）",
       "sectionDesc": "設定雲端模型用於總結與對話，不會上傳截圖。",
       "enableLabel": "啟用雲端 API",
       "enableHint": "開啟後，段總結與「對話」會呼叫下方設定的 API；截圖永遠不會上傳。",
@@ -1309,13 +1360,9 @@
       "kimiBaseUrlNote": "國內站 api.moonshot.cn 與國際站 api.moonshot.ai 的 Key 不通用——按你申請 Key 的站點填。",
       "groupTextTitle": "文本 API",
       "groupTextHint": "段總結 · 「對話」ChatBot",
-      "testTextButton": "測試文本 API",
       "testStepConn": "網路與認證",
       "testStepChat": "模型 {{model}} 可用",
-      "profilesLabel": "已儲存的配置",
-      "saveProfile": "儲存目前配置",
       "saveProfileHint": "將目前服務位址、API Key 與模型儲存為一組設定，隨時切換",
-      "deleteProfileAria": "刪除配置 {{name}}",
       "fetchModels": "從伺服端拉取可用模型",
       "modelsFetched": "已拉取 {{count}} 個模型，可在輸入框內搜尋選擇"
     },
@@ -1349,7 +1396,6 @@
       "saving": "正在儲存下載來源…",
       "saveFailed": "無法儲存下載來源，請重試。",
       "invalidUrl": "請輸入有效的 HTTP 或 HTTPS 網址，不要包含登入資訊、查詢參數或片段。",
-      "change": "變更下載來源",
       "nugetLabel": "NuGet 套件下載網址",
       "nugetHelp": "填寫 NuGet 的套件下載基礎網址（PackageBaseAddress），用於 Windows OCR 元件。"
     }
@@ -1582,7 +1628,7 @@
       "noModel": "尚未設定語言模型。請在 AI 設定裡新增雲端連線，或選擇一個本機模型。",
       "cloudUnavailable": "選中的雲端連線設定不完整或無法使用。請在 AI 設定裡檢查端點網址與模型名稱。",
       "modelMissing": "找不到選中的本機模型檔案，可能已被刪除或移動。",
-      "engineMissing": "AI 引擎尚未下載，請前往「設定 → AI 引擎」下載。",
+      "engineMissing": "AI 引擎尚未下載，請前往「設定 → AI 模型」下載。",
       "llmEmptyReasoning": "模型思考耗盡了輸出額度，未能產生正文。請調低或關閉思考模式、調大上下文，或更換模型重試。",
       "llmEmptyEos": "模型未輸出內容即結束，可能與目前引擎不相容。請在「AI 設定」中更換模型。",
       "llmEmptyTruncated": "模型輸出在產生正文前被截斷。請調低思考模式、調大上下文，或更換模型重試。",
@@ -1784,7 +1830,7 @@
       },
       "cloudOffer": {
         "title": "改用雲端 API 生成？",
-        "message": "本機引擎尚未安裝。可改用已設定的雲端 API（{{provider}} · {{model}}）產生，應用程式名、分類與活動時間線將傳送至該服務商；也可前往「設定 → AI 引擎」下載本機引擎。",
+        "message": "本機引擎尚未安裝。可改用已設定的雲端 API（{{provider}} · {{model}}）產生，應用程式名、分類與活動時間線將傳送至該服務商；也可前往「設定 → AI 模型」下載本機引擎。",
         "confirm": "使用雲端生成"
       },
       "ocrLoading": "載入 OCR 模型中…",
@@ -1871,7 +1917,7 @@
       "running": "正在建立索引…剩餘 {{count}} 張",
       "alreadyRunning": "索引任務已在背景執行，剩餘 {{count}} 張",
       "failed": "回填失敗：{{msg}}",
-      "runtimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 設定 → AI 引擎 頁點下載按鈕。",
+      "runtimeMissing": "文字辨識（OCR）元件需要更新（約 40MB）：請到 設定 → AI 模型 頁點下載按鈕。",
       "ocrConfirmTitle": "需要下載文字辨識（OCR）元件",
       "ocrConfirmMessage": "建立文字索引需要下載文字辨識元件（約 40MB），下載完成後自動開始索引。",
       "ocrConfirmAccept": "下載並開始",
@@ -1884,7 +1930,7 @@
       "collapse": "收起來源"
     },
     "model": {
-      "noToolUseModels": "已下載的本機模型均不支援工具調用，請在「AI 設定 → 模型」下載帶 Tool-use 標記的模型。",
+      "noToolUseModels": "已下載的本機模型均不支援工具調用，請在「設定 → AI 模型」下載帶 Tool-use 標記的模型。",
       "empty": "沒有可用模型：請設定雲端 API 或下載本機模型"
     },
     "tokens": {

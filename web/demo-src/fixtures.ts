@@ -1023,8 +1023,9 @@ export const mockLocalModels: ModelEntry[] = [
     supportsTools: true,
   },
   {
-    filename: "mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
-    path: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
+    // 推荐模型的 mmproj 落盘时带主文件名前缀，同 mmprojSaveAs
+    filename: "Qwen2.5-VL-3B-Instruct-Q4_K_M__mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
+    path: "C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\Qwen2.5-VL-3B-Instruct-Q4_K_M__mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
     sizeBytes: 1_300_000_000,
     isMmproj: true,
     supportsTools: null,
