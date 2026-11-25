@@ -17,6 +17,7 @@ import { IconButton } from "../../components/Button/IconButton";
 import type { Category } from "../../api/hindsight";
 import { EXCLUDED_CATEGORY_ID, PRIVATE_CATEGORY_ID } from "../../utils/privateCategory";
 import { AppList } from "./parts";
+import { useNameEditing } from "./useNameEditing";
 import styles from "./Categories.module.css";
 
 interface Props {
@@ -63,10 +64,7 @@ export const CategoryRow = memo(function CategoryRow({
 }: Props) {
   const { t } = useTranslation();
   const { update, remove } = useCategories();
-  // 新建行一挂载就进改名态：默认名是「新分类」，直接打字即可覆盖。
-  // 用 useState 的惰性初值而不是 effect —— 新分类是全新 mount（key = 新 id），
-  // 初值就够；后续 justCreated 转 false 也不该把用户正在编辑的输入框收掉。
-  const [editingName, setEditingName] = useState(() => justCreated === true);
+  const [editingName, setEditingName] = useNameEditing(justCreated === true);
   const [draftName, setDraftName] = useState(category.name);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);

@@ -16,6 +16,7 @@ import { AppearancePicker } from "../../components/AppearancePicker/AppearancePi
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import type { Category, SuperCategory } from "../../api/hindsight";
 import { CategoryRow } from "./CategoryRow";
+import { useNameEditing } from "./useNameEditing";
 import styles from "./SuperCategoriesTable.module.css";
 
 interface SuperRowProps {
@@ -76,7 +77,7 @@ function SuperRow_({
   const Icon = resolveCategoryIcon(sup.icon);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [editingName, setEditingName] = useState(() => justCreated === true);
+  const [editingName, setEditingName] = useNameEditing(justCreated === true);
   const [draftName, setDraftName] = useState(sup.name);
   const inputRef = useRef<HTMLInputElement>(null);
   // 本地 ref → super card DOM；onMouseDown 时把 rect 给父

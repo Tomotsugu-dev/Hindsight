@@ -75,6 +75,9 @@
       "signedOut": "未登入",
       "aria": "管理裝置與雲同步",
       "title": "裝置 / 雲同步"
+    },
+    "language": {
+      "switchTo": "切換到「{{language}}」"
     }
   },
   "windowControls": {
@@ -752,8 +755,10 @@
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
       "viewToggle": {
         "bars": "時段",
+        "days": "每日",
         "pie": "佔比",
         "ariaBars": "切換到 24 小時分佈檢視",
+        "ariaDays": "切換到每日分佈檢視",
         "ariaPie": "切換到大類佔比檢視"
       }
     },

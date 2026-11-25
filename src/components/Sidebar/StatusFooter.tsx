@@ -110,7 +110,7 @@ export function StatusFooter({ captureStatus = "ok", onToggleCapture }: StatusFo
         className={`${styles.row} ${styles.langRow}`}
         type="button"
         onClick={() => setLocale(nextOption.value)}
-        title={`Switch to ${nextOption.label}`}
+        title={t("sidebar.language.switchTo", { language: nextOption.label })}
       >
         <span className={styles.swap} aria-hidden>
           {/* 当前语言态 */}

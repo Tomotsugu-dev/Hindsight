@@ -75,6 +75,9 @@
       "signedOut": "Desconectado",
       "aria": "Gerenciar dispositivos e sincronização na nuvem",
       "title": "Dispositivos / Sincronização na nuvem"
+    },
+    "language": {
+      "switchTo": "Mudar para {{language}}"
     }
   },
   "windowControls": {
@@ -752,8 +755,10 @@
       "barTitle": "{{hour}}:00 — {{minutes}} min",
       "viewToggle": {
         "bars": "Horas",
+        "days": "Dias",
         "pie": "Proporção",
         "ariaBars": "Mudar para a visão de distribuição de 24 horas",
+        "ariaDays": "Mudar para a visão de atividade diária",
         "ariaPie": "Mudar para a visão de proporção por supercategoria"
       }
     },

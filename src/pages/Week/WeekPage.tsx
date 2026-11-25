@@ -248,6 +248,7 @@ export default function WeekPage() {
         headLeftExtras={
           <ViewToggle
             view={view}
+            bar="day"
             onChange={(v) => withViewTransition(() => setStatsView("week", v))}
           />
         }

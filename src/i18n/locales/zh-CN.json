@@ -75,6 +75,9 @@
       "signedOut": "未登录",
       "aria": "管理设备与云同步",
       "title": "设备 / 云同步"
+    },
+    "language": {
+      "switchTo": "切换到「{{language}}」"
     }
   },
   "windowControls": {
@@ -752,8 +755,10 @@
       "barTitle": "{{hour}}:00 — {{minutes}} 分",
       "viewToggle": {
         "bars": "时段",
+        "days": "每日",
         "pie": "占比",
         "ariaBars": "切换到 24 小时分布视图",
+        "ariaDays": "切换到每日分布视图",
         "ariaPie": "切换到大类占比视图"
       }
     },
