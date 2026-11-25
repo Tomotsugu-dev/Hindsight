@@ -152,6 +152,23 @@ it("keeps the sample AI settings in the page language after a save", async () =>
   await i18n.changeLanguage("zh-CN");
 });
 
+// 下完的模型出现在「我的模型」里，删掉后消失
+it("lists a downloaded model under My models until it is deleted", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  vi.useFakeTimers();
+  const { api: mock } = await import("./api-mock");
+
+  const run = mock.downloadModel("demo/repo", "new-model.gguf", 1000);
+  await vi.runAllTimersAsync();
+  const path = await run;
+  vi.useRealTimers();
+
+  const listed = (await mock.listLocalModels()).find((m) => m.filename === "new-model.gguf");
+  expect(listed).toMatchObject({ path, sizeBytes: 1000, isMmproj: false });
+  await mock.deleteModel("new-model.gguf");
+  expect((await mock.listLocalModels()).some((m) => m.filename === "new-model.gguf")).toBe(false);
+});
+
 // 暂停的下载留下半成品，界面据此显示「继续」；再下从断点接着下
 it("pauses a model download and keeps what it got", async () => {
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });

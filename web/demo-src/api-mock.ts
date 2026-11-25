@@ -918,8 +918,11 @@ export const api = {
   stopEngine: async (): Promise<void> => {},
 
   // ─── Models ────────────────────────────────
-  listLocalModels: async (): Promise<ModelEntry[]> => structuredClone(mockLocalModels),
-  deleteModel: async (_filename: string): Promise<void> => {},
+  listLocalModels: async (): Promise<ModelEntry[]> => structuredClone(localModels),
+  deleteModel: async (filename: string): Promise<void> => {
+    const i = localModels.findIndex((m) => m.filename === filename);
+    if (i >= 0) localModels.splice(i, 1);
+  },
   listRecommendedModels: async (): Promise<RecommendedModel[]> =>
     structuredClone(mockRecommendedModels),
   downloadModel: async (
@@ -928,8 +931,20 @@ export const api = {
     expectedBytes: number,
     saveAs?: string | null,
   ): Promise<string> => {
-    await simulateModelDownload(saveAs ?? file, expectedBytes);
-    return `C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\${saveAs ?? file}`;
+    const filename = saveAs ?? file;
+    await simulateModelDownload(filename, expectedBytes);
+    const path = `C:\\Users\\demo\\AppData\\Roaming\\Hindsight\\ai\\models\\${filename}`;
+    if (!localModels.some((m) => m.filename === filename)) {
+      const isMmproj = /mmproj/i.test(filename);
+      localModels.push({
+        filename,
+        path,
+        sizeBytes: expectedBytes,
+        isMmproj,
+        supportsTools: isMmproj ? null : true,
+      });
+    }
+    return path;
   },
   cancelModelDownload: async (file: string): Promise<void> => {
     downloadPauses.add(file);
@@ -1795,6 +1810,8 @@ async function simulateSegmentRetry(
   }
 }
 
+/** The models in My models. A download adds one, and Delete takes it out. */
+const localModels: ModelEntry[] = structuredClone(mockLocalModels);
 /** Files the user paused. */
 const downloadPauses = new Set<string>();
 /** Bytes each paused download got. The models page shows Resume for these. */
