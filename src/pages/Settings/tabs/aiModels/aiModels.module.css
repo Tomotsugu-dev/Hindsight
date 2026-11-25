@@ -289,9 +289,11 @@
   font-weight: var(--font-weight-600);
 }
 
+/* A button that wraps to a second line stays on the right, under the others */
 .foot {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: calc(8px * var(--density)) calc(12px * var(--density));
   padding: calc(10px * var(--density)) calc(16px * var(--density));
