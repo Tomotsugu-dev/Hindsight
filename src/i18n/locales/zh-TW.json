@@ -75,6 +75,9 @@
       "signedOut": "未登入",
       "aria": "管理裝置與雲同步",
       "title": "裝置 / 雲同步"
+    },
+    "language": {
+      "switchTo": "切換到「{{language}}」"
     }
   },
   "windowControls": {

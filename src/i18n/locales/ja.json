@@ -75,6 +75,9 @@
       "signedOut": "未ログイン",
       "aria": "デバイスとクラウド同期を管理",
       "title": "デバイス / クラウド同期"
+    },
+    "language": {
+      "switchTo": "「{{language}}」に切り替え"
     }
   },
   "windowControls": {

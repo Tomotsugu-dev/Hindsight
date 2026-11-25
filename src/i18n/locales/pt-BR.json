@@ -75,6 +75,9 @@
       "signedOut": "Desconectado",
       "aria": "Gerenciar dispositivos e sincronização na nuvem",
       "title": "Dispositivos / Sincronização na nuvem"
+    },
+    "language": {
+      "switchTo": "Mudar para {{language}}"
     }
   },
   "windowControls": {
