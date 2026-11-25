@@ -3,6 +3,7 @@
 // 真 invoke 走 Tauri IPC；demo 里所有数据从 api-mock 走，
 // 这里只是兜底——如果某组件绕过 api 直接调用 invoke，我们记一条 warn 不让它崩。
 import { pluginCommands } from "../plugins-mock";
+import { sayDesktopOnly } from "../desktop-only";
 
 export async function invoke<T = unknown>(
   cmd: string,
@@ -10,6 +11,7 @@ export async function invoke<T = unknown>(
 ): Promise<T> {
   // 外观页会列主题库：demo 里没有自定义主题
   if (cmd === "theme_list") return [] as T;
+  if (cmd === "theme_open_folder") return sayDesktopOnly() as T;
   // src/api/plugins.ts 直接调 invoke
   const plugin = pluginCommands[cmd];
   if (plugin) return plugin(args ?? {}) as T;

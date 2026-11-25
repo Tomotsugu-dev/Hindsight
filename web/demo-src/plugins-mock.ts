@@ -2,6 +2,7 @@
 // 装了什么只记在内存里，刷新页面就复原。插件本身在 demo 里跑不起来，所以装上后没有页面，
 // 侧栏里也不出现。
 import { emit } from "./tauri/event";
+import { sayDesktopOnly } from "./desktop-only";
 import type { InstalledPlugin, Market, OnlinePlugin } from "@app/api/plugins";
 
 // 照 plugins.json 抄的，图标是官方仓库 icons/ 里的两张（放在 public/icons/plugins/）。
@@ -151,4 +152,5 @@ export const pluginCommands: Record<string, (args: Record<string, unknown>) => u
       [...installed.keys()].map((id) => [id, ONLINE.find((p) => p.id === id)?.icon_url ?? ""]),
     ),
   plugin_pages: () => [],
+  plugin_open_zips_folder: () => sayDesktopOnly(),
 };
