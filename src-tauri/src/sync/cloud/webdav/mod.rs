@@ -1593,4 +1593,173 @@ mod tests {
 
         probe_cleanup(&base, &user, &pass).await;
     }
+
+    // ─────────────── #280：服务器限流时回什么 ───────────────
+
+    /// 一次请求的结果和引擎对它的归类：成功；服务器回的状态码加响应体开头；或者不是
+    /// 服务器回的错误（超时、连接断开）。归成 `Transient` 的失败，outbox 行会加一次重试。
+    fn outcome<T>(r: &Result<T>) -> String {
+        match r {
+            Ok(_) => "ok".to_string(),
+            Err(e) => {
+                let kind = failure_kind(e);
+                match e {
+                    Error::WebDavHttp { status, body, .. } => {
+                        let head: String = body.chars().take(300).collect();
+                        format!("HTTP {status} → {kind:?}  body: {head:?}")
+                    }
+                    other => format!("不是状态码 → {kind:?}  {other:?}"),
+                }
+            }
+        }
+    }
+
+    /// 跑一次请求，打印结果和耗时。
+    async fn timed<T>(label: &str, request: impl std::future::Future<Output = Result<T>>) {
+        let started = Instant::now();
+        let r = request.await;
+        println!(
+            "{label}: {}  ({:.1}s)",
+            outcome(&r),
+            started.elapsed().as_secs_f64()
+        );
+    }
+
+    /// 把账号打到被限流，记下封锁期间 push 和 pull 用到的每种请求回什么、引擎归成哪一类。
+    /// 只打印，不断言：要看的就是服务器实际的回应。跑完这个账号的 WebDAV 会被封一段时间。
+    ///   cargo test webdav::tests::probe_what_a_blocked -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "打真服务器：会触发限流，账号的 WebDAV 要被封一段时间"]
+    async fn probe_what_a_blocked_server_answers() {
+        const KB: usize = 1024;
+        const MB: usize = 1024 * KB;
+        /// 连续请求的上限：到这个数还没被封就停。
+        const FLOOD_MAX: u32 = 2000;
+        let body = |bytes: usize| vec![b'x'; bytes];
+
+        let (url, user, pass) = probe_account();
+        let base = probe_setup(&url, "blocked", &user, &pass).await;
+        println!("[probe] base: {base}");
+        let dav = HttpDav::new(&base).unwrap();
+        dav.set_credentials(user.clone(), pass.clone());
+
+        // 封锁之前：各种大小的上传正常时的结果和耗时
+        dav.mkcol("").await.unwrap();
+        dav.mkcol("dir").await.unwrap();
+        dav.put("seed.json", body(KB)).await.unwrap();
+        for (name, size) in [("0B", 0), ("300KB", 300 * KB), ("1MB", MB), ("8MB", 8 * MB)] {
+            let path = format!("before-{name}.bin");
+            timed(&format!("[before] put {name}"), dav.put(&path, body(size))).await;
+        }
+
+        // 连续列目录，直到第一个失败
+        let started = Instant::now();
+        let mut blocked = false;
+        for n in 1..=FLOOD_MAX {
+            let r = dav.propfind("").await;
+            if r.is_err() {
+                println!(
+                    "[flood] request {n} failed after {:.0}s: {}",
+                    started.elapsed().as_secs_f64(),
+                    outcome(&r)
+                );
+                blocked = true;
+                break;
+            }
+            if n % 100 == 0 {
+                println!(
+                    "[flood] {n} requests ok, {:.0}s",
+                    started.elapsed().as_secs_f64()
+                );
+            }
+        }
+        if !blocked {
+            println!("[flood] {FLOOD_MAX} requests and no block");
+            probe_cleanup(&base, &user, &pass).await;
+            return;
+        }
+
+        // 封锁期间：每种请求
+        timed("[blocked] propfind", dav.propfind("")).await;
+        timed("[blocked] get", dav.get("seed.json")).await;
+        timed("[blocked] put new 1KB", dav.put("new.json", body(KB))).await;
+        timed(
+            "[blocked] put overwrite 1KB",
+            dav.put("seed.json", body(KB)),
+        )
+        .await;
+        for i in 1..=3 {
+            let path = format!("blocked-300KB-{i}.bin");
+            timed("[blocked] put new 300KB", dav.put(&path, body(300 * KB))).await;
+        }
+        timed(
+            "[blocked] put new 1MB",
+            dav.put("blocked-1MB.bin", body(MB)),
+        )
+        .await;
+        timed(
+            "[blocked] put new 8MB",
+            dav.put("blocked-8MB.bin", body(8 * MB)),
+        )
+        .await;
+        timed(
+            "[blocked] put, parent missing",
+            dav.put("nodir/f.json", body(KB)),
+        )
+        .await;
+        timed("[blocked] mkcol new", dav.mkcol("dir2")).await;
+        timed("[blocked] mkcol existing", dav.mkcol("dir")).await;
+        timed("[blocked] mkcol, parent missing", dav.mkcol("nodir/sub")).await;
+        timed("[blocked] delete", dav.delete("before-0B.bin")).await;
+
+        // 封锁期间：push 上传一个文件、pull 列一次的整条路径
+        let pool = fresh_test_pool().await;
+        save_test_credentials(&pool, &user, &pass).await;
+        let client = WebDavClient::connect(&base, pool, "probe-a".to_string()).unwrap();
+        assert!(client.ensure_credential().await.unwrap());
+        timed(
+            "[blocked] push: upsert_by_name, day file",
+            client.upsert_by_name(
+                "device.probe-a.activities.2026-11-12.ndjson",
+                &body(300 * KB),
+            ),
+        )
+        .await;
+        timed(
+            "[blocked] pull: list",
+            client.list(&[(Dataset::Core, EPOCH)]),
+        )
+        .await;
+        println!("[probe] done; the probe directory stays until the block lifts: {base}");
+    }
+
+    /// 封锁什么时候解除：每两分钟列一次探测目录，到不再失败为止，最多一小时。设了
+    /// `HINDSIGHT_PROBE_BASE`（上一个探测打印的目录）就在解除后把它删掉。
+    ///   cargo test webdav::tests::probe_when_the_block -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "打真服务器：最多跑一小时"]
+    async fn probe_when_the_block_lifts() {
+        let (url, user, pass) = probe_account();
+        // 探测目录下没有 `hindsight/`：没被封时列它回 404
+        let parent = format!("{}/hindsight-probe/", url.trim_end_matches('/'));
+        let dav = HttpDav::new(&parent).unwrap();
+        dav.set_credentials(user.clone(), pass.clone());
+
+        let started = Instant::now();
+        for _ in 0..30 {
+            let r = dav.propfind("").await;
+            let minutes = started.elapsed().as_secs_f64() / 60.0;
+            if matches!(r, Ok(_) | Err(Error::WebDavHttp { status: 404, .. })) {
+                println!("[lift] {minutes:.0} min: not blocked");
+                if let Ok(base) = std::env::var("HINDSIGHT_PROBE_BASE") {
+                    probe_cleanup(&base, &user, &pass).await;
+                    println!("[lift] removed {base}");
+                }
+                return;
+            }
+            println!("[lift] {minutes:.0} min: {}", outcome(&r));
+            tokio::time::sleep(Duration::from_secs(120)).await;
+        }
+        println!("[lift] still blocked after an hour");
+    }
 }
