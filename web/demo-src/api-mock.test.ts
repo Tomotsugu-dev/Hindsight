@@ -66,6 +66,23 @@ it("finishes a weekly report and keeps it for that week", async () => {
   expect(await mock.getWeekSummary("2026-11-23")).toBeNull();
 });
 
+// 周报的每日检查和正文一样用页面的语言；星期名照应用里的表
+it("names the days of the weekly check in the page language", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+  const { api: mock } = await import("./api-mock");
+  const i18n = (await import("@app/i18n")).default;
+
+  const names = async (lng: string) => {
+    await i18n.changeLanguage(lng);
+    return (await mock.precheckWeekSummary("2026-11-23")).days.map((d) => d.weekday);
+  };
+  expect(await names("en")).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  expect(await names("ja")).toEqual(["月", "火", "水", "木", "金", "土", "日"]);
+  expect((await names("es"))[2]).toBe("Mié");
+  expect((await names("pt"))[0]).toBe("Seg");
+  expect((await names("zh-CN"))[6]).toBe("周日");
+});
+
 /** 跑完 run 期间的所有计时器，返回 source 这一路收到的最后一个阶段。 */
 async function lastPhase(source: string, run: () => Promise<unknown>): Promise<string> {
   const { SUMMARY_PROGRESS_EVENT } = await import("./api-mock");

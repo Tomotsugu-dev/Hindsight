@@ -140,6 +140,7 @@ import {
   mockDayFor,
   dailySegmentsForLocale,
   weeklyContentForLocale,
+  weekdaysForLocale,
   DEMO_SUMMARY_MODEL,
   selfDeviceNameForLocale,
   userBriefForLocale,
@@ -1020,13 +1021,14 @@ export const api = {
     await simulateWeeklyProgress(weekStart);
   },
   precheckWeekSummary: async (weekStart: string): Promise<WeekPrecheckResp> => {
+    const weekdays = weekdaysForLocale(i18n.language || "zh-CN");
     return {
       days: Array.from({ length: 7 }, (_, i) => {
         const d = new Date(weekStart);
         d.setDate(d.getDate() + i);
         return {
           date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-          weekday: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][i],
+          weekday: weekdays[i],
           hasDaily: i < 5, // 前 5 天有日报
           hasActivity: true,
         };

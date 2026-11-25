@@ -832,6 +832,22 @@ export function weeklyContentForLocale(locale: string): string {
   return WEEKLY_CONTENT.en;
 }
 
+/** Short day names, Monday first. Same tables as `weekday_short` in the app. */
+const WEEKDAYS: Record<string, string[]> = {
+  en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  ja: ["月", "火", "水", "木", "金", "土", "日"],
+  es: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
+  pt: ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"],
+  zh: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+};
+
+/** Returns the short day names in the given UI language. Falls back to Chinese, like the app. */
+export function weekdaysForLocale(locale: string): string[] {
+  const lng = (locale || "").toLowerCase();
+  const key = ["en", "ja", "es", "pt"].find((k) => lng.startsWith(k)) ?? "zh";
+  return WEEKDAYS[key];
+}
+
 /** The model name shown on the sample reports. */
 export { SEG_MODEL as DEMO_SUMMARY_MODEL };
 
