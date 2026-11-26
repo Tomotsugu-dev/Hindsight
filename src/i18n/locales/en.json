@@ -1438,7 +1438,8 @@
         "synced": "Synced · {{when}}",
         "waitingFirst": "Waiting for first sync",
         "deadLetter": "· {{count}} failed",
-        "paused": "Sync is paused"
+        "paused": "Paused",
+        "pausedPending": "Paused · {{count}} pending"
       },
       "editCreds": "Edit credentials",
       "actions": {
@@ -1447,10 +1448,8 @@
         "syncNowTitle": "Sync now",
         "retryFailed": "Retry",
         "retryFailedTitle": "Upload the failed records again now, without waiting for the automatic retry",
-        "pause": "Pause sync",
-        "pauseTitle": "Pause background sync on this device. Sync now still works",
-        "resume": "Resume sync",
-        "resumeTitle": "Resume background sync and sync once right away",
+        "pause": "Pause",
+        "resume": "Resume",
         "signOut": "Sign out",
         "signIn": "Sign in again",
         "signOutTitle": "Sign out of this account",

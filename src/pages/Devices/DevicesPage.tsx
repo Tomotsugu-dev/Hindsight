@@ -392,29 +392,33 @@ function CloudSyncCard({
                   })
                 : t("devices.cloud.desc.choosePrompt")}
           </div>
-          {signedIn && paused && (
-            <div className={styles.syncStats}>
-              <span className={styles.syncStatPending}>{t("devices.cloud.stats.paused")}</span>
-            </div>
-          )}
           {signedIn && sync && (
             <div className={styles.syncStats}>
-              {sync.pending > 0 ? (
-                <>
+              {paused ? (
+                <span className={styles.syncStatus}>
+                  <span className={`${styles.syncDot} ${styles.syncDotPaused}`} aria-hidden />
+                  <span className={styles.syncStatPaused}>
+                    {sync.pending > 0
+                      ? t("devices.cloud.stats.pausedPending", { count: sync.pending })
+                      : t("devices.cloud.stats.paused")}
+                  </span>
+                </span>
+              ) : sync.pending > 0 ? (
+                <span className={styles.syncStatus}>
                   <span className={`${styles.syncDot} ${styles.syncDotPending}`} aria-hidden />
                   <span className={styles.syncStatPending}>
                     {t("devices.cloud.stats.pending", { count: sync.pending })}
                   </span>
-                </>
+                </span>
               ) : sync.lastPushedAt ? (
-                <>
+                <span className={styles.syncStatus}>
                   <span className={styles.syncDot} aria-hidden />
                   <span className={styles.syncStatOk}>
                     {t("devices.cloud.stats.synced", {
                       when: fmtRelative(sync.lastPushedAt),
                     })}
                   </span>
-                </>
+                </span>
               ) : (
                 <span>{t("devices.cloud.stats.waitingFirst")}</span>
               )}
@@ -432,12 +436,20 @@ function CloudSyncCard({
                     onClick={onRetryFailed}
                     disabled={syncing}
                     title={t("devices.cloud.actions.retryFailedTitle")}
-                    className={styles.retryButton}
+                    className={styles.statButton}
                   >
                     {t("devices.cloud.actions.retryFailed")}
                   </Button>
                 </>
               )}
+              <Button
+                size="xs"
+                icon={paused ? Play : Pause}
+                onClick={onTogglePause}
+                className={styles.statButton}
+              >
+                {paused ? t("devices.cloud.actions.resume") : t("devices.cloud.actions.pause")}
+              </Button>
             </div>
           )}
           {!signedIn && canSignIn && !setupOpen && !onWebdav && (
@@ -474,16 +486,6 @@ function CloudSyncCard({
                 title={t("devices.cloud.actions.syncNowTitle")}
               >
                 {syncing ? t("devices.cloud.actions.syncing") : t("devices.cloud.actions.syncNow")}
-              </Button>
-              <Button
-                size="sm"
-                icon={paused ? Play : Pause}
-                onClick={onTogglePause}
-                title={t(
-                  paused ? "devices.cloud.actions.resumeTitle" : "devices.cloud.actions.pauseTitle",
-                )}
-              >
-                {paused ? t("devices.cloud.actions.resume") : t("devices.cloud.actions.pause")}
               </Button>
               {/* 凭证失效时同时给两个按钮：
                   - 退出登录：清掉本机 auth_state，回到未登录状态（不动云端数据 / 本机数据）

@@ -1433,7 +1433,8 @@
         "synced": "已同步 · {{when}}",
         "waitingFirst": "等待首次同步",
         "deadLetter": "· {{count}} 条失败",
-        "paused": "同步已暂停"
+        "paused": "已暂停",
+        "pausedPending": "已暂停 · 待发送 {{count}}"
       },
       "editCreds": "改凭证",
       "actions": {
@@ -1442,10 +1443,8 @@
         "syncNowTitle": "立即同步",
         "retryFailed": "重试",
         "retryFailedTitle": "不等自动重试，立刻重新上传失败的记录",
-        "pause": "暂停同步",
-        "pauseTitle": "暂停这台设备的后台同步。「立即同步」照常能用",
-        "resume": "恢复同步",
-        "resumeTitle": "恢复后台同步，马上同步一次",
+        "pause": "暂停",
+        "resume": "恢复",
         "signOut": "退出",
         "signIn": "重新登录",
         "signOutTitle": "退出当前账号",
