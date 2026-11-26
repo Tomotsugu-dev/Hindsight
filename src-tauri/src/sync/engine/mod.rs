@@ -273,7 +273,9 @@ impl SyncEngine {
         s
     }
 
-    /// Runs a round of push and pull now, without waiting for the background loop.
+    /// Syncs now, without waiting for the background loop.
+    ///
+    /// Pushes until no outbox row is left to upload, then pulls once.
     ///
     /// # Errors
     ///
@@ -293,7 +295,7 @@ impl SyncEngine {
         let _in_flight = InFlightGuard::set(&self.inner.sync_in_flight);
         // Clear the previous error, or the UI keeps showing it after a success.
         self.inner.status.write().await.last_error = None;
-        if let Err(e) = push::flush_push(&self.inner).await {
+        if let Err(e) = drain_push(&self.inner).await {
             record_round_failure(&self.inner, "push", &e).await;
             return Err(e);
         }
@@ -385,6 +387,14 @@ async fn run_loop(inner: Arc<Inner>) {
         drop(_in_flight);
         tokio::time::sleep(inner.cloud().push_interval()).await;
     }
+}
+
+/// Pushes round after round until a round removes no outbox row.
+///
+/// That happens when nothing is left to upload, or the rest waits for a retry.
+async fn drain_push(inner: &Arc<Inner>) -> Result<()> {
+    while push::flush_push(inner).await? > 0 {}
+    Ok(())
 }
 
 /// Returns the datasets that sync this round, for push and pull alike. Core,

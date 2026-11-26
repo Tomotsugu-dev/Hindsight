@@ -3064,3 +3064,18 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
         webdav_progress
     );
 }
+
+/// 「立即同步」一直推到没有待上传：积下的行比一轮能读的（200 行）多，也一次传完。
+#[tokio::test]
+async fn sync_now_pushes_until_nothing_is_left() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive).await;
+    let start = Local::now() - Duration::hours(1);
+    for i in 0..450 {
+        insert_sealed(&a, "Code", start + Duration::seconds(i), 1).await;
+    }
+
+    a.engine.sync_now().await.unwrap();
+
+    assert_eq!(a.engine.status().await.pending, 0);
+}
