@@ -10,8 +10,9 @@ import {
 import { pickReleaseNotesForLang } from "../../lib/releaseNotes";
 import { Button } from "../Button/Button";
 import { MarkdownText } from "../MarkdownText/MarkdownText";
-// Backdrop, title, notes text and the row of buttons look the same as ConfirmDialog, so reuse
-// its styles.
+import { ScrollIndicator } from "../ScrollIndicator/ScrollIndicator";
+// Backdrop, title, the scrolling notes and the row of buttons look the same as ConfirmDialog,
+// so reuse its styles.
 import confirmStyles from "../ConfirmDialog/ConfirmDialog.module.css";
 import styles from "./ReleaseNotesDialog.module.css";
 
@@ -97,12 +98,14 @@ export function ReleaseNotesDialog({ version, onClose }: ReleaseNotesDialogProps
               </button>
             ))}
           </div>
-          <div
-            ref={notesRef}
-            className={`${confirmStyles.message} ${confirmStyles.messageRich} ${styles.notes}`}
-          >
-            <h3 className={styles.notesVersion}>{selected}</h3>
-            {text === null ? null : <MarkdownText text={text} />}
+          <div className={`${confirmStyles.messageWrap} ${styles.notes}`}>
+            <div ref={notesRef} className={confirmStyles.messageScroll}>
+              <div className={`${confirmStyles.message} ${confirmStyles.messageRich}`}>
+                <h3 className={styles.notesVersion}>{selected}</h3>
+                {text === null ? null : <MarkdownText text={text} />}
+              </div>
+            </div>
+            <ScrollIndicator targetRef={notesRef} className={confirmStyles.messageTrack} />
           </div>
         </div>
         <div className={confirmStyles.actions}>

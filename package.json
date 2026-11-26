@@ -19,6 +19,7 @@
     "format:check": "prettier --check src",
     "test": "vitest run",
     "test:categories-browser": "node --test scripts/tests/category-app-picker.test.mjs",
+    "test:tabs-browser": "node --test scripts/tests/tab-nav-pill.test.mjs",
     "test:watch": "vitest",
     "preview": "vite preview",
     "build:demo": "vite build --config web/vite.config.ts",
