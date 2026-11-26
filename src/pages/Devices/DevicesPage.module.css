@@ -169,6 +169,8 @@
   color: var(--text-faint);
   letter-spacing: 0.01em;
   padding-top: 2px;
+  /* A long line moves its button to the next line, instead of breaking the text. */
+  flex-wrap: wrap;
 }
 
 .syncStatErr {
@@ -176,7 +178,15 @@
   font-weight: var(--font-weight-medium);
 }
 
-.retryButton {
+/* The dot and its text: they wrap as one, so the dot never ends up alone on a line. */
+.syncStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--density));
+}
+
+/* Retry, Pause and Resume: small buttons after the status. */
+.statButton {
   margin-left: calc(4px * var(--density));
 }
 
@@ -208,6 +218,18 @@
     0 0 0 1px color-mix(in oklab, var(--status-pending) 22%, transparent),
     0 0 4px color-mix(in oklab, var(--status-pending) 50%, transparent);
   animation: syncDotPulse 1.6s ease-in-out infinite;
+}
+
+/* Paused: gray, like the cloud in the sidebar. The user chose it, so it is not a warning.
+   The dot rule comes after `.syncDot`, so that its color wins. */
+.syncStatPaused {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-600);
+}
+
+.syncDotPaused {
+  background: var(--text-faint);
+  box-shadow: none;
 }
 
 @keyframes syncDotPulse {

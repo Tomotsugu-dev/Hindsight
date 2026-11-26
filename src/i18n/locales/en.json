@@ -74,7 +74,10 @@
       "connected": "Connected",
       "signedOut": "Not signed in",
       "aria": "Manage devices & cloud sync",
-      "title": "Devices / Cloud Sync"
+      "title": "Devices / Cloud Sync",
+      "paused": "Paused",
+      "pause": "Pause sync",
+      "resume": "Resume sync"
     },
     "language": {
       "switchTo": "Switch to {{language}}"
@@ -1434,7 +1437,9 @@
         "pending": "{{count}} pending",
         "synced": "Synced · {{when}}",
         "waitingFirst": "Waiting for first sync",
-        "deadLetter": "· {{count}} failed"
+        "deadLetter": "· {{count}} failed",
+        "paused": "Paused",
+        "pausedPending": "Paused · {{count}} pending"
       },
       "editCreds": "Edit credentials",
       "actions": {
@@ -1443,6 +1448,8 @@
         "syncNowTitle": "Sync now",
         "retryFailed": "Retry",
         "retryFailedTitle": "Upload the failed records again now, without waiting for the automatic retry",
+        "pause": "Pause",
+        "resume": "Resume",
         "signOut": "Sign out",
         "signIn": "Sign in again",
         "signOutTitle": "Sign out of this account",

@@ -74,7 +74,10 @@
       "connected": "已連線",
       "signedOut": "未登入",
       "aria": "管理裝置與雲同步",
-      "title": "裝置 / 雲同步"
+      "title": "裝置 / 雲同步",
+      "paused": "已暫停",
+      "pause": "暫停同步",
+      "resume": "恢復同步"
     },
     "language": {
       "switchTo": "切換到「{{language}}」"
@@ -1429,7 +1432,9 @@
         "pending": "待發送 {{count}}",
         "synced": "已同步 · {{when}}",
         "waitingFirst": "等待首次同步",
-        "deadLetter": "· {{count}} 條失敗"
+        "deadLetter": "· {{count}} 條失敗",
+        "paused": "已暫停",
+        "pausedPending": "已暫停 · 待發送 {{count}}"
       },
       "editCreds": "改憑證",
       "actions": {
@@ -1438,6 +1443,8 @@
         "syncNowTitle": "立即同步",
         "retryFailed": "重試",
         "retryFailedTitle": "不等自動重試，立刻重新上傳失敗的紀錄",
+        "pause": "暫停",
+        "resume": "恢復",
         "signOut": "退出",
         "signIn": "重新登入",
         "signOutTitle": "退出當前賬號",

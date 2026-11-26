@@ -146,8 +146,31 @@
   app-region: no-drag;
 }
 
-.accountRow:hover {
+/* The row holds two buttons, so each shows its own hover. */
+.cloudButton {
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration-base) var(--ease-out);
+}
+
+.cloudButton:hover {
   background: var(--hover-bg);
+}
+
+.cloudButton:focus-visible,
+.accountLink:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.accountLink {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.accountLink:hover:not(.textOn) {
   color: var(--text-strong);
 }
 

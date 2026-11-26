@@ -24,3 +24,12 @@ pub async fn sync_now(engine: State<'_, Arc<SyncEngine>>) -> Result<(), String> 
 pub async fn sync_retry_failed(engine: State<'_, Arc<SyncEngine>>) -> Result<(), String> {
     engine.retry_failed().await.map_err(Into::into)
 }
+
+/// Pauses or resumes background sync on this device: the cloud in the sidebar.
+#[tauri::command]
+pub async fn set_sync_paused(
+    engine: State<'_, Arc<SyncEngine>>,
+    paused: bool,
+) -> Result<(), String> {
+    engine.set_sync_paused(paused).await.map_err(Into::into)
+}

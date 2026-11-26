@@ -1044,6 +1044,7 @@ export const mockAuthState: AuthState = {
 
 export const mockSyncStatus: SyncStatus = {
   running: false,
+  paused: false,
   syncInFlight: false,
   lastPushedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
   lastError: null,

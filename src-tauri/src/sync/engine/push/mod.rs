@@ -38,21 +38,27 @@ use crate::sync::file_name::{Dataset, FileKind, FileName};
 
 const PUSH_BATCH_SIZE: usize = 200;
 
-pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<()> {
+/// Pushes one round and returns how many outbox rows it removed.
+///
+/// Those are the rows uploaded, plus the rows dropped because they will never be
+/// uploaded.
+pub(super) async fn flush_push(inner: &Arc<Inner>) -> Result<usize> {
     // 串行门：与另一个 flush_push（「立即同步」vs 后台 tick）以及 purge 类命令互斥。
     // 并发 push 的危害：慢的一方用旧表内容覆盖 Drive、而新行的 outbox 已被快的一方
     // 删掉 → 那批数据到不了云端；与 purge 并发：读完 outbox 后表被清 → 空内容上云。
     let _gate = inner.flush_gate.lock().await;
     // Not signed in is not a failure: there is nothing to push.
     if !inner.cloud().ensure_credential().await? {
-        return Ok(());
+        return Ok(0);
     }
     let round = push_round(inner).await;
     let ended = inner.cloud().end_push_round().await;
-    round.and(ended)
+    let removed = round?;
+    ended?;
+    Ok(removed)
 }
 
-async fn push_round(inner: &Arc<Inner>) -> Result<()> {
+async fn push_round(inner: &Arc<Inner>) -> Result<usize> {
     // TODO(ADR-0003, ADR-0004): remove once active devices have upgraded past the
     // releases that stopped publishing these files.
     if !inner
@@ -78,7 +84,7 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
 
     let rows = io::read_due_outbox(&inner.pool, PUSH_BATCH_SIZE).await?;
     if rows.is_empty() {
-        return Ok(());
+        return Ok(0);
     }
 
     // 把 outbox 行分组到"脏文件"
@@ -98,14 +104,15 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     if !dropped_ids.is_empty() {
         io::delete_outbox_rows(&inner.pool, &dropped_ids).await?;
     }
+    let dropped = dropped_ids.len();
     if groups.is_empty() {
-        return Ok(());
+        return Ok(dropped);
     }
 
     let self_id = inner.self_id.as_str();
     if self_id.is_empty() {
         log::debug!("sync push 跳过：self_id 为空（device 未初始化）");
-        return Ok(());
+        return Ok(dropped);
     }
     let mut succeeded_ids: Vec<i64> = Vec::new();
     let mut failed_ids: Vec<i64> = Vec::new();
@@ -163,7 +170,7 @@ async fn push_round(inner: &Arc<Inner>) -> Result<()> {
     }
 
     log::info!("sync push 成功，共 {} 行 outbox 出队", succeeded_ids.len());
-    Ok(())
+    Ok(succeeded_ids.len() + dropped)
 }
 
 /// Cloud files this device no longer publishes, by kind: `app_categories`

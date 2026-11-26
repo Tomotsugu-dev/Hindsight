@@ -1,6 +1,9 @@
 //! Sync engine: once signed in, runs push and pull in the background on a
 //! timer. The backend sets the intervals.
 //!
+//! When the user pauses sync, the background loop neither pushes nor pulls.
+//! "Sync now" still works.
+//!
 //! - push: rewrites the files this device changed in the cloud, each one whole.
 //! - pull: merges the files other devices wrote to the cloud into the local
 //!   database.
@@ -78,6 +81,8 @@ async fn record_round_failure(inner: &Inner, round: &str, e: &Error) {
 pub struct SyncStatus {
     /// Whether the background sync loop is running.
     pub running: bool,
+    /// Whether the user paused background sync on this device.
+    pub paused: bool,
     /// Whether a sync round is running right now. The Devices page restores its
     /// "Syncing…" button state from this after a page switch, since component
     /// state is lost on unmount.
@@ -133,6 +138,9 @@ pub(super) struct Inner {
     /// shows "Syncing…" from it, and "Sync now" refuses to start while it is set.
     /// It is only a flag; `flush_gate` does the mutual exclusion.
     pub(super) sync_in_flight: std::sync::atomic::AtomicBool,
+    /// Wakes the background loop while it waits for the next round, so that
+    /// resuming sync starts a round at once.
+    pub(super) wake: tokio::sync::Notify,
     /// Set once this run has deleted, or found absent, this device's cloud copies
     /// of the files it no longer publishes. Push checks it once per launch.
     /// TODO(ADR-0003, ADR-0004): remove together with the cleanup in push.
@@ -193,6 +201,7 @@ impl SyncEngine {
                 handle: Mutex::new(None),
                 status: RwLock::new(SyncStatus::default()),
                 sync_in_flight: std::sync::atomic::AtomicBool::new(false),
+                wake: tokio::sync::Notify::new(),
                 flush_gate: Mutex::new(()),
                 legacy_cloud_files_checked: std::sync::atomic::AtomicBool::new(false),
             }),
@@ -264,6 +273,9 @@ impl SyncEngine {
     pub async fn status(&self) -> SyncStatus {
         let mut s = self.inner.status.read().await.clone();
         s.running = self.is_running().await;
+        s.paused = crate::repo::settings::load(&self.inner.pool)
+            .await
+            .is_ok_and(|c| c.sync_paused);
         s.sync_in_flight = self
             .inner
             .sync_in_flight
@@ -273,7 +285,10 @@ impl SyncEngine {
         s
     }
 
-    /// Runs a round of push and pull now, without waiting for the background loop.
+    /// Syncs now, without waiting for the background loop.
+    ///
+    /// Pushes until no outbox row is left to upload, then pulls once. It works
+    /// while sync is paused too.
     ///
     /// # Errors
     ///
@@ -293,7 +308,7 @@ impl SyncEngine {
         let _in_flight = InFlightGuard::set(&self.inner.sync_in_flight);
         // Clear the previous error, or the UI keeps showing it after a success.
         self.inner.status.write().await.last_error = None;
-        if let Err(e) = push::flush_push(&self.inner).await {
+        if let Err(e) = drain_push(&self.inner).await {
             record_round_failure(&self.inner, "push", &e).await;
             return Err(e);
         }
@@ -315,6 +330,22 @@ impl SyncEngine {
     pub async fn retry_failed(&self) -> Result<()> {
         io::retry_now(&self.inner.pool).await?;
         self.sync_now().await
+    }
+
+    /// Pauses or resumes background sync on this device, also across restarts.
+    ///
+    /// Pausing clears the last error. Resuming starts a round at once, without
+    /// waiting for the next one.
+    pub async fn set_sync_paused(&self, paused: bool) -> Result<()> {
+        let mut cfg = crate::repo::settings::load(&self.inner.pool).await?;
+        cfg.sync_paused = paused;
+        crate::repo::settings::save(&self.inner.pool, &cfg).await?;
+        if paused {
+            self.clear_last_error().await;
+        } else {
+            self.inner.wake.notify_one();
+        }
+        Ok(())
     }
 }
 
@@ -357,34 +388,52 @@ impl Paused<'_> {
 async fn run_loop(inner: Arc<Inner>) {
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
-        let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
-        // TODO: a push or pull that succeeds does not clear `last_error`. A
-        // `[TRANSIENT]` error stays on the Devices page until a push uploads
-        // something.
-        if let Err(e) = push::flush_push(&inner).await {
-            record_round_failure(&inner, "push", &e).await;
-        }
-
-        // Check the interval on every round: the backend may have changed between rounds.
-        let pull_every = chrono::Duration::from_std(inner.cloud().pull_interval())
-            .expect("a backend's pull interval is minutes, not centuries");
-        let now = Utc::now();
-        let should_pull = match last_pull {
-            None => true,
-            Some(t) => now - t >= pull_every,
-        };
-        if should_pull {
-            if let Err(e) = pull::flush_pull(&inner).await {
-                record_round_failure(&inner, "pull", &e).await;
+        // While paused, this round neither pushes nor pulls.
+        let paused = crate::repo::settings::load(&inner.pool)
+            .await
+            .is_ok_and(|c| c.sync_paused);
+        if !paused {
+            let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
+            // TODO: a push or pull that succeeds does not clear `last_error`. A
+            // `[TRANSIENT]` error stays on the Devices page until a push uploads
+            // something.
+            if let Err(e) = push::flush_push(&inner).await {
+                record_round_failure(&inner, "push", &e).await;
             }
-            last_pull = Some(now);
-        }
 
-        // Waiting for the next round is not syncing. Without this, the Devices
-        // page would always show "Syncing…", and "Sync now" would always refuse.
-        drop(_in_flight);
-        tokio::time::sleep(inner.cloud().push_interval()).await;
+            // Check the interval on every round: the backend may have changed between rounds.
+            let pull_every = chrono::Duration::from_std(inner.cloud().pull_interval())
+                .expect("a backend's pull interval is minutes, not centuries");
+            let now = Utc::now();
+            let should_pull = match last_pull {
+                None => true,
+                Some(t) => now - t >= pull_every,
+            };
+            if should_pull {
+                if let Err(e) = pull::flush_pull(&inner).await {
+                    record_round_failure(&inner, "pull", &e).await;
+                }
+                last_pull = Some(now);
+            }
+
+            // Waiting for the next round is not syncing. Without this, the Devices
+            // page would always show "Syncing…", and "Sync now" would always refuse.
+            drop(_in_flight);
+        }
+        // Sleep until the next round, or until resuming sync wakes the loop.
+        tokio::select! {
+            _ = tokio::time::sleep(inner.cloud().push_interval()) => {}
+            _ = inner.wake.notified() => {}
+        }
     }
+}
+
+/// Pushes round after round until a round removes no outbox row.
+///
+/// That happens when nothing is left to upload, or the rest waits for a retry.
+async fn drain_push(inner: &Arc<Inner>) -> Result<()> {
+    while push::flush_push(inner).await? > 0 {}
+    Ok(())
 }
 
 /// Returns the datasets that sync this round, for push and pull alike. Core,

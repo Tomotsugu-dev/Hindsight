@@ -12,7 +12,9 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Pause,
   Pencil,
+  Play,
   RefreshCw,
   RotateCcw,
   Server,
@@ -25,6 +27,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useDeviceFilter, type Device } from "../../state/deviceFilter";
 import { useCaptureStatus } from "../../hooks/useCaptureStatus";
 import { useSettings } from "../../state/settings";
+import { loadSyncStatus, setSyncPaused, useSyncPaused } from "../../state/syncPaused";
 import { AppearancePicker } from "../../components/AppearancePicker/AppearancePicker";
 import { ForgetRemoteDeviceDialog } from "../../components/ForgetRemoteDeviceDialog/ForgetRemoteDeviceDialog";
 import { resolveCategoryIcon } from "../../config/categoryIcons";
@@ -178,6 +181,7 @@ function CloudSyncCard({
   const { settings, update } = useSettings();
   const { reload: reloadDevices } = useDeviceFilter();
   const [sync, setSync] = useState<SyncStatus | null>(null);
+  const paused = useSyncPaused();
   const [busy, setBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,8 +200,7 @@ function CloudSyncCard({
 
   useEffect(() => {
     const fetchSync = () => {
-      api
-        .syncStatus()
+      loadSyncStatus()
         .then(setSync)
         .catch(() => {});
     };
@@ -224,8 +227,7 @@ function CloudSyncCard({
     setChooserOpen(true);
   };
   const refreshSync = () => {
-    api
-      .syncStatus()
+    loadSyncStatus()
       .then(setSync)
       .catch(() => {});
   };
@@ -298,7 +300,7 @@ function CloudSyncCard({
     } catch (e) {
       // 失败的一轮已被引擎分好类记进 lastError，交给下面按前缀显示提示；
       // 没记下来的（比如「同步已在进行中」）才原样显示。
-      const status = await api.syncStatus().catch(() => null);
+      const status = await loadSyncStatus().catch(() => null);
       if (status) setSync(status);
       if (!status?.lastError) setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -307,6 +309,13 @@ function CloudSyncCard({
   };
   const onSyncNow = () => runSync(api.syncNow);
   const onRetryFailed = () => runSync(api.syncRetryFailed);
+  // Pausing clears the last error, so the status is read again afterwards.
+  const onTogglePause = () => {
+    setError(null);
+    setSyncPaused(!paused)
+      .then(refreshSync)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
 
   // 派生值放到早返回之前，确保所有 hook 调用顺序在每次渲染都一致（rules-of-hooks）。
   // 「同步中」= 本地 promise 在途(点击瞬间即时反馈)|| 引擎标志(跳页重挂后
@@ -385,22 +394,31 @@ function CloudSyncCard({
           </div>
           {signedIn && sync && (
             <div className={styles.syncStats}>
-              {sync.pending > 0 ? (
-                <>
+              {paused ? (
+                <span className={styles.syncStatus}>
+                  <span className={`${styles.syncDot} ${styles.syncDotPaused}`} aria-hidden />
+                  <span className={styles.syncStatPaused}>
+                    {sync.pending > 0
+                      ? t("devices.cloud.stats.pausedPending", { count: sync.pending })
+                      : t("devices.cloud.stats.paused")}
+                  </span>
+                </span>
+              ) : sync.pending > 0 ? (
+                <span className={styles.syncStatus}>
                   <span className={`${styles.syncDot} ${styles.syncDotPending}`} aria-hidden />
                   <span className={styles.syncStatPending}>
                     {t("devices.cloud.stats.pending", { count: sync.pending })}
                   </span>
-                </>
+                </span>
               ) : sync.lastPushedAt ? (
-                <>
+                <span className={styles.syncStatus}>
                   <span className={styles.syncDot} aria-hidden />
                   <span className={styles.syncStatOk}>
                     {t("devices.cloud.stats.synced", {
                       when: fmtRelative(sync.lastPushedAt),
                     })}
                   </span>
-                </>
+                </span>
               ) : (
                 <span>{t("devices.cloud.stats.waitingFirst")}</span>
               )}
@@ -418,12 +436,20 @@ function CloudSyncCard({
                     onClick={onRetryFailed}
                     disabled={syncing}
                     title={t("devices.cloud.actions.retryFailedTitle")}
-                    className={styles.retryButton}
+                    className={styles.statButton}
                   >
                     {t("devices.cloud.actions.retryFailed")}
                   </Button>
                 </>
               )}
+              <Button
+                size="xs"
+                icon={paused ? Play : Pause}
+                onClick={onTogglePause}
+                className={styles.statButton}
+              >
+                {paused ? t("devices.cloud.actions.resume") : t("devices.cloud.actions.pause")}
+              </Button>
             </div>
           )}
           {!signedIn && canSignIn && !setupOpen && !onWebdav && (

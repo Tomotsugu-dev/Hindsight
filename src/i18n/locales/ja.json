@@ -74,7 +74,10 @@
       "connected": "接続済み",
       "signedOut": "未ログイン",
       "aria": "デバイスとクラウド同期を管理",
-      "title": "デバイス / クラウド同期"
+      "title": "デバイス / クラウド同期",
+      "paused": "一時停止中",
+      "pause": "同期を一時停止",
+      "resume": "同期を再開"
     },
     "language": {
       "switchTo": "「{{language}}」に切り替え"
@@ -1429,7 +1432,9 @@
         "pending": "保留中 {{count}} 件",
         "synced": "同期済み · {{when}}",
         "waitingFirst": "初回同期を待機中",
-        "deadLetter": "· 失敗 {{count}} 件"
+        "deadLetter": "· 失敗 {{count}} 件",
+        "paused": "一時停止中",
+        "pausedPending": "一時停止中 · 保留中 {{count}} 件"
       },
       "editCreds": "認証情報を編集",
       "actions": {
@@ -1438,6 +1443,8 @@
         "syncNowTitle": "今すぐ同期",
         "retryFailed": "再試行",
         "retryFailedTitle": "自動の再試行を待たずに、失敗した記録を今すぐ再アップロード",
+        "pause": "一時停止",
+        "resume": "再開",
         "signOut": "ログアウト",
         "signIn": "再ログイン",
         "signOutTitle": "現在のアカウントからログアウト",

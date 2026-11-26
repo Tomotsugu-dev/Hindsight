@@ -74,7 +74,10 @@
       "connected": "Conectado",
       "signedOut": "Sin sesión",
       "aria": "Gestionar dispositivos y sincronización en la nube",
-      "title": "Dispositivos / Sincronización en la nube"
+      "title": "Dispositivos / Sincronización en la nube",
+      "paused": "En pausa",
+      "pause": "Pausar la sincronización",
+      "resume": "Reanudar la sincronización"
     },
     "language": {
       "switchTo": "Cambiar a {{language}}"
@@ -1434,7 +1437,9 @@
         "pending": "{{count}} pendiente(s)",
         "synced": "Sincronizado · {{when}}",
         "waitingFirst": "Esperando la primera sincronización",
-        "deadLetter": "· {{count}} con fallo"
+        "deadLetter": "· {{count}} con fallo",
+        "paused": "En pausa",
+        "pausedPending": "En pausa · {{count}} pendiente(s)"
       },
       "editCreds": "Editar las credenciales",
       "actions": {
@@ -1443,6 +1448,8 @@
         "syncNowTitle": "Sincronizar ahora",
         "retryFailed": "Reintentar",
         "retryFailedTitle": "Volver a subir ahora los registros fallidos, sin esperar al reintento automático",
+        "pause": "Pausar",
+        "resume": "Reanudar",
         "signOut": "Cerrar sesión",
         "signIn": "Volver a iniciar sesión",
         "signOutTitle": "Cerrar la sesión de esta cuenta",
