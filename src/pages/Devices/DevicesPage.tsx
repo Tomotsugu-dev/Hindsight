@@ -383,6 +383,11 @@ function CloudSyncCard({
                   })
                 : t("devices.cloud.desc.choosePrompt")}
           </div>
+          {signedIn && sync?.paused && (
+            <div className={styles.syncStats}>
+              <span className={styles.syncStatPending}>{t("devices.cloud.stats.paused")}</span>
+            </div>
+          )}
           {signedIn && sync && (
             <div className={styles.syncStats}>
               {sync.pending > 0 ? (

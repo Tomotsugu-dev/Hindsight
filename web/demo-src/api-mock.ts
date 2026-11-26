@@ -873,6 +873,9 @@ export const api = {
     state.syncStatus.deadLetter = 0;
     await syncRound();
   },
+  setSyncPaused: async (paused: boolean): Promise<void> => {
+    state.syncStatus.paused = paused;
+  },
 
   // ─── AI external endpoint ──────────────────
   testAiEndpoint: async (_endpoint: string, _apiKey?: string): Promise<TestAiEndpointResp> => ({

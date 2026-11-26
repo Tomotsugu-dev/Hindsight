@@ -74,7 +74,10 @@
       "connected": "Conectado",
       "signedOut": "Sin sesión",
       "aria": "Gestionar dispositivos y sincronización en la nube",
-      "title": "Dispositivos / Sincronización en la nube"
+      "title": "Dispositivos / Sincronización en la nube",
+      "paused": "En pausa",
+      "pause": "Pausar la sincronización",
+      "resume": "Reanudar la sincronización"
     },
     "language": {
       "switchTo": "Cambiar a {{language}}"
@@ -1434,7 +1437,8 @@
         "pending": "{{count}} pendiente(s)",
         "synced": "Sincronizado · {{when}}",
         "waitingFirst": "Esperando la primera sincronización",
-        "deadLetter": "· {{count}} con fallo"
+        "deadLetter": "· {{count}} con fallo",
+        "paused": "La sincronización está en pausa. Haz clic en la nube de la barra lateral para reanudarla."
       },
       "editCreds": "Editar las credenciales",
       "actions": {

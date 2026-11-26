@@ -43,11 +43,16 @@ export function Sidebar() {
 
   // 云同步登录状态：周期性刷新 + 窗口聚焦时立刻刷一次
   const [auth, setAuth] = useState<AuthState | null>(null);
+  const [paused, setPaused] = useState(false);
   useEffect(() => {
     const fetch = () => {
       api
         .authStatus()
         .then(setAuth)
+        .catch(() => {});
+      api
+        .syncStatus()
+        .then((s) => setPaused(s.paused))
         .catch(() => {});
     };
     fetch();
@@ -60,12 +65,33 @@ export function Sidebar() {
     };
   }, []);
   const signedIn = auth?.signedIn ?? false;
+  // A pause only shows while signed in: signed out, there is no sync to pause.
+  const syncPaused = signedIn && paused;
   // 同步行文案：登录后显示账号（Google 的邮箱，WebDAV 的用户名；缺省 fallback 已连接），
   // 未登录显示"未登录"
   const account = auth?.backend === "webdav" ? auth.webdavUser : auth?.email;
-  const syncLabel = signedIn
-    ? (account ?? t("sidebar.sync.connected"))
-    : t("sidebar.sync.signedOut");
+  const syncLabel = !signedIn
+    ? t("sidebar.sync.signedOut")
+    : syncPaused
+      ? t("sidebar.sync.paused")
+      : (account ?? t("sidebar.sync.connected"));
+  const cloudTitle = !signedIn
+    ? t("sidebar.sync.title")
+    : syncPaused
+      ? t("sidebar.sync.resume")
+      : t("sidebar.sync.pause");
+  // The cloud pauses or resumes background sync; signed out, it opens the Devices page.
+  const onCloudClick = () => {
+    if (!signedIn) {
+      void navigate(ROUTES.devices);
+      return;
+    }
+    const next = !paused;
+    api
+      .setSyncPaused(next)
+      .then(() => setPaused(next))
+      .catch(() => {});
+  };
 
   const captureUI: "ok" | "idle" | "error" = !status
     ? "ok"
@@ -135,23 +161,40 @@ export function Sidebar() {
         <span className={styles.logoText}>Hindsight</span>
       </div>
 
-      {/* Logo 下方独立一行：账户/云同步入口（沿用 footer .row 同款样式） */}
-      <button
-        className={styles.accountRow}
-        type="button"
-        onClick={() => navigate(ROUTES.devices)}
-        aria-label={t("sidebar.sync.aria")}
-        title={t("sidebar.sync.title")}
-      >
-        <span className={styles.iconWrap} aria-hidden>
+      {/* Logo 下方独立一行：账户/云同步入口（沿用 footer .row 同款样式）。
+          Two targets: the cloud pauses or resumes sync, the label opens the Devices page. */}
+      <div className={styles.accountRow}>
+        <button
+          type="button"
+          className={`${styles.iconWrap} ${styles.cloudButton}`}
+          onClick={onCloudClick}
+          aria-label={cloudTitle}
+          aria-pressed={signedIn ? syncPaused : undefined}
+          title={cloudTitle}
+        >
           {signedIn ? (
-            <Cloud size={18} strokeWidth={1.75} className={`${styles.cloud} ${styles.cloudOn}`} />
+            <Cloud
+              size={18}
+              strokeWidth={1.75}
+              className={syncPaused ? styles.cloud : `${styles.cloud} ${styles.cloudOn}`}
+              aria-hidden
+            />
           ) : (
-            <CloudOff size={18} strokeWidth={1.75} className={styles.cloud} />
+            <CloudOff size={18} strokeWidth={1.75} className={styles.cloud} aria-hidden />
           )}
-        </span>
-        <span className={`${styles.text} ${signedIn ? styles.textOn : ""}`}>{syncLabel}</span>
-      </button>
+        </button>
+        <button
+          type="button"
+          className={`${styles.text} ${styles.accountLink} ${
+            signedIn && !syncPaused ? styles.textOn : ""
+          }`}
+          onClick={() => navigate(ROUTES.devices)}
+          aria-label={t("sidebar.sync.aria")}
+          title={t("sidebar.sync.title")}
+        >
+          {syncLabel}
+        </button>
+      </div>
 
       <nav className={styles.nav} ref={navRef}>
         <div

@@ -74,7 +74,10 @@
       "connected": "已連線",
       "signedOut": "未登入",
       "aria": "管理裝置與雲同步",
-      "title": "裝置 / 雲同步"
+      "title": "裝置 / 雲同步",
+      "paused": "已暫停",
+      "pause": "暫停同步",
+      "resume": "恢復同步"
     },
     "language": {
       "switchTo": "切換到「{{language}}」"
@@ -1429,7 +1432,8 @@
         "pending": "待發送 {{count}}",
         "synced": "已同步 · {{when}}",
         "waitingFirst": "等待首次同步",
-        "deadLetter": "· {{count}} 條失敗"
+        "deadLetter": "· {{count}} 條失敗",
+        "paused": "同步已暫停，點側邊欄的雲圖示恢復"
       },
       "editCreds": "改憑證",
       "actions": {
