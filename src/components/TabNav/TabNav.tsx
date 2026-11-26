@@ -42,30 +42,33 @@ interface PillStyle {
 export function TabNav({ tabs, groups, ariaLabel }: TabNavProps) {
   // 内部统一成"组"形式：传 groups 用它；只传 tabs 包成单组数组
   const tabGroups: TabDef[][] = groups ?? (tabs ? [tabs] : []);
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
   const [pill, setPill] = useState<PillStyle>({ left: 0, width: 0, visible: false });
   const [animated, setAnimated] = useState(false);
 
-  /** 路由或语言变化时重新测量当前激活 tab 的位置
-   *  —— 切换语言会改 tab 文字宽度，必须重测，否则 pill 留在旧尺寸 */
+  /** Places the pill under the active tab when the route changes, and again whenever a tab
+   *  changes size: a new language, a badge that goes away, or a theme with another font size. */
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
 
-    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!active) {
-      setPill((p) => ({ ...p, visible: false }));
-      return;
-    }
+    const place = () => {
+      const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!active) {
+        setPill((p) => ({ ...p, visible: false }));
+        return;
+      }
+      setPill({ left: active.offsetLeft, width: active.offsetWidth, visible: true });
+    };
 
-    setPill({
-      left: active.offsetLeft,
-      width: active.offsetWidth,
-      visible: true,
-    });
-  }, [location.pathname, i18n.language]);
+    place();
+    // A tab before the active one moves it without changing its size, so watch every tab
+    const observer = new ResizeObserver(place);
+    for (const tab of nav.querySelectorAll("a")) observer.observe(tab);
+    return () => observer.disconnect();
+  }, [location.pathname]);
 
   /** 第一次定位完成后再开启过渡，避免初始从 0 滑过来 */
   useEffect(() => {
