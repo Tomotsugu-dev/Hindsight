@@ -113,6 +113,9 @@ pub struct Settings {
     pub sync_chat_history: bool,
     /// 屏幕记忆全文(OCR 出的屏幕逐字文本,敏感度最高)。
     pub sync_screen_memory: bool,
+    /// Background sync is paused on this device. "Sync now" still works.
+    /// Only the `set_sync_paused` command writes it. It is not in `SettingsPatch`.
+    pub sync_paused: bool,
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
@@ -169,6 +172,7 @@ impl Default for Settings {
             sync_ai_summaries: false,
             sync_chat_history: false,
             sync_screen_memory: false,
+            sync_paused: false,
             ai: AiConfig::default(),
             ignore_rules: Vec::new(),
         }
@@ -591,6 +595,8 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         sync_screen_memory: patch
             .sync_screen_memory
             .unwrap_or(current.sync_screen_memory),
+        // Not in the patch: only `set_sync_paused` writes it. Saving the settings page keeps it.
+        sync_paused: current.sync_paused,
         ai: patch
             .ai
             .map(|new_ai| crate::ai::config::sanitize(new_ai, &current.ai))
@@ -748,6 +754,7 @@ mod tests {
             sync_ai_summaries: true,
             sync_chat_history: true,
             sync_screen_memory: true,
+            sync_paused: true,
             ai: AiConfig {
                 cloud: vec![crate::ai::config::CloudConnection {
                     id: "c1".into(),
@@ -873,6 +880,8 @@ mod tests {
         assert!(s.work_ranges.is_empty());
         // 升级上来的用户没打开过，就不能去请求网站（ADR-0014）
         assert!(!s.download_site_icons);
+        // 升级上来的用户没暂停过，后台同步照旧
+        assert!(!s.sync_paused);
         // 整个 ai 块缺失 → 嵌套结构整组回 Default（models_path 除外，会被回填）
         assert!(s.ai.cloud.is_empty());
         assert_eq!(s.ai.picks, AiConfig::default().picks);
@@ -1148,6 +1157,18 @@ mod tests {
         assert_eq!(s.last_update_check_at, None, "Some(None) 应显式清空时间戳");
         assert_eq!(s.google_client_id, "abc");
         assert_eq!(s.capture_interval_seconds, 45);
+    }
+
+    /// 设置页整包保存时，暂停同步不能被改回去。
+    #[test]
+    fn apply_patch_keeps_sync_paused() {
+        let current = Settings {
+            sync_paused: true,
+            ..Settings::default()
+        };
+        let mut p = empty_patch();
+        p.capture_enabled = Some(false);
+        assert!(apply_patch(current, p).sync_paused);
     }
 
     /// 字符串类输入的净化：interval 收敛到合法枚举集合（打错字回 weekly 而不是
