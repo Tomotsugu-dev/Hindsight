@@ -357,6 +357,20 @@ impl Paused<'_> {
 async fn run_loop(inner: Arc<Inner>) {
     let mut last_pull: Option<DateTime<Utc>> = None;
     loop {
+        // When auto sync is off, skip the whole round: no push and no pull, just
+        // sleep for the usual interval. Manual "Sync now" goes through
+        // [`SyncEngine::sync_now`], not this loop, so it is unaffected.
+        let auto_enabled = crate::repo::settings::load(&inner.pool)
+            .await
+            .map(|cfg| cfg.sync_auto_enabled)
+            // On a read failure default to true: better to keep syncing than to
+            // silently stop.
+            .unwrap_or(true);
+        if !auto_enabled {
+            tokio::time::sleep(inner.cloud().push_interval()).await;
+            continue;
+        }
+
         let _in_flight = InFlightGuard::set(&inner.sync_in_flight);
         // TODO: a push or pull that succeeds does not clear `last_error`. A
         // `[TRANSIENT]` error stays on the Devices page until a push uploads

@@ -113,6 +113,11 @@ pub struct Settings {
     pub sync_chat_history: bool,
     /// 屏幕记忆全文(OCR 出的屏幕逐字文本,敏感度最高)。
     pub sync_screen_memory: bool,
+    /// Whether the background sync loop pushes and pulls on a timer. When false,
+    /// syncing is manual only: the Devices page "Sync now" button still runs a
+    /// full push + pull, but the timer loop skips its round. Defaults to true so
+    /// older settings JSON (missing this key) keeps the old behaviour.
+    pub sync_auto_enabled: bool,
     /// AI 总结相关配置（端点、模型、时段划分、过滤分类等）。
     /// 嵌套结构而不是平铺，因为是独立子系统，前端读取也整组。
     pub ai: AiConfig,
@@ -169,6 +174,7 @@ impl Default for Settings {
             sync_ai_summaries: false,
             sync_chat_history: false,
             sync_screen_memory: false,
+            sync_auto_enabled: true,
             ai: AiConfig::default(),
             ignore_rules: Vec::new(),
         }
@@ -234,6 +240,7 @@ pub struct SettingsPatch {
     pub sync_ai_summaries: Option<bool>,
     pub sync_chat_history: Option<bool>,
     pub sync_screen_memory: Option<bool>,
+    pub sync_auto_enabled: Option<bool>,
     /// AI 配置整组覆盖；前端要么不传（保留旧值），要么传完整新值
     pub ai: Option<AiConfig>,
 }
@@ -591,6 +598,9 @@ pub fn apply_patch(current: Settings, patch: SettingsPatch) -> Settings {
         sync_screen_memory: patch
             .sync_screen_memory
             .unwrap_or(current.sync_screen_memory),
+        sync_auto_enabled: patch
+            .sync_auto_enabled
+            .unwrap_or(current.sync_auto_enabled),
         ai: patch
             .ai
             .map(|new_ai| crate::ai::config::sanitize(new_ai, &current.ai))
@@ -748,6 +758,7 @@ mod tests {
             sync_ai_summaries: true,
             sync_chat_history: true,
             sync_screen_memory: true,
+            sync_auto_enabled: true,
             ai: AiConfig {
                 cloud: vec![crate::ai::config::CloudConnection {
                     id: "c1".into(),

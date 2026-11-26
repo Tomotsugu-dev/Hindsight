@@ -1492,6 +1492,10 @@
           "other": "Could not connect: {{message}}"
         }
       },
+      "autoSync": {
+        "title": "Automatic sync",
+        "desc": "When on, changes sync in the background on a timer. Turn it off to sync only when you click “Sync now”."
+      },
       "datasets": {
         "title": "What to sync",
         "hint": "By default only basic data (usage stats, categories) is synced. The items below contain more sensitive information and must be enabled individually; screenshot images themselves never leave this device.",

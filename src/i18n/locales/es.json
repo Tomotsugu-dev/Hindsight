@@ -1492,6 +1492,10 @@
           "other": "No se pudo conectar: {{message}}"
         }
       },
+      "autoSync": {
+        "title": "Sincronización automática",
+        "desc": "Activada, los cambios se sincronizan en segundo plano con un temporizador. Desactívala para sincronizar solo al pulsar «Sincronizar ahora»."
+      },
       "datasets": {
         "title": "Qué sincronizar",
         "hint": "De forma predeterminada solo se sincronizan los datos básicos (estadísticas de uso, categorías). Los elementos de abajo contienen información más sensible y hay que activarlos uno a uno; las imágenes de las capturas nunca salen de este dispositivo.",

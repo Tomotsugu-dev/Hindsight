@@ -564,6 +564,24 @@ function CloudSyncCard({
         </div>
       )}
 
+      {/* ── Auto-sync switch: shown only when signed in. Off = no timer-driven
+          push/pull in the background; only the manual "Sync now" button syncs. ── */}
+      {signedIn && (
+        <div className={styles.datasetBlock}>
+          <div className={styles.datasetHeader}>{t("devices.cloud.autoSync.title")}</div>
+          <div className={styles.datasetRow}>
+            <div className={styles.datasetText}>
+              <span className={styles.datasetDesc}>{t("devices.cloud.autoSync.desc")}</span>
+            </div>
+            <Toggle
+              checked={settings.syncAutoEnabled}
+              onChange={(next) => update({ syncAutoEnabled: next })}
+              ariaLabel={t("devices.cloud.autoSync.title")}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── 同步内容:可选上云三挡(仅登录后显示;开启前弹琥珀警告)── */}
       {signedIn && (
         <div className={styles.datasetBlock}>

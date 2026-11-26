@@ -635,6 +635,9 @@ export interface Settings {
   syncChatHistory: boolean;
   /** 屏幕记忆全文（OCR 屏幕逐字文本，敏感度最高）。 */
   syncScreenMemory: boolean;
+  /** Whether cloud sync runs in the background on a timer. false = manual only,
+   *  triggered solely by the "Sync now" button. */
+  syncAutoEnabled: boolean;
   /** AI 总结相关配置（端点、模型、时段、过滤、抽帧参数）。
    *  嵌套结构而不是平铺，跟后端 Settings.ai 对齐；
    *  更新某个子字段时调用方必须 spread 旧 ai：
