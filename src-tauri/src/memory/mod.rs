@@ -35,9 +35,15 @@ pub fn memory_db_path() -> Result<PathBuf> {
 }
 
 impl MemoryDb {
-    /// 打开(或新建)记忆库并确保 schema 就绪。幂等,启动与 worker 双方都可调。
+    /// Opens or creates the memory database and makes sure its tables exist.
+    /// Calling it again is safe.
+    ///
+    /// `synchronous = NORMAL` for the same reason as the main database: see
+    /// [`crate::storage::DbPool::open`].
     pub async fn open_at(path: &std::path::Path) -> Result<Self> {
         let conn = Connection::open(path).await?;
+        conn.call(|c| c.execute_batch("PRAGMA synchronous = NORMAL;").db())
+            .await?;
         let db = Self(conn);
         db.init_schema().await?;
         Ok(db)
@@ -270,5 +276,29 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    /// 记忆库按 WAL + NORMAL 打开，和主库一样。
+    #[tokio::test]
+    async fn open_at_uses_wal_and_normal_sync() {
+        let dir =
+            std::env::temp_dir().join(format!("hindsight-memory-open-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let db = MemoryDb::open_at(&dir.join("memory.sqlite")).await.unwrap();
+        let (mode, sync): (String, i64) =
+            db.0.call(|c| {
+                let mode = c.query_row("PRAGMA journal_mode", [], |r| r.get(0)).db()?;
+                let sync = c.query_row("PRAGMA synchronous", [], |r| r.get(0)).db()?;
+                Ok((mode, sync))
+            })
+            .await
+            .unwrap();
+        assert_eq!(mode, "wal");
+        assert_eq!(sync, 1, "1 = NORMAL");
+        db.0.close().await.unwrap();
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
