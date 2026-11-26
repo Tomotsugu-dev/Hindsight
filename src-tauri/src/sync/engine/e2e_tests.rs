@@ -3065,6 +3065,72 @@ async fn site_rules_pull_cursors_are_separate_when_switching_back_to_drive() {
     );
 }
 
+// ─── 暂停同步 ───
+
+/// 暂停时后台循环不推也不拉：A 的待上传原样留着，B 的数据也没拉下来。
+#[tokio::test]
+async fn paused_loop_neither_pushes_nor_pulls() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    insert_sealed(&b, "Chrome", Local::now(), 60).await;
+    b.engine.sync_now().await.unwrap();
+
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.set_sync_paused(true).await.unwrap();
+    a.engine.start().await;
+    // 没暂停的话，循环一启动就跑第一轮，这段时间足够推完、拉完
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    a.engine.stop().await;
+
+    assert_eq!(a.engine.status().await.pending, 1);
+    assert_eq!(count_for_device(&a, "device-b").await, 0);
+}
+
+/// 恢复以后马上同步一轮，不等满推送间隔（5 分钟）。
+#[tokio::test]
+async fn resuming_syncs_at_once() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive).await;
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.set_sync_paused(true).await.unwrap();
+    a.engine.start().await;
+    // 等被跳过的第一轮跑完、循环睡下
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    a.engine.set_sync_paused(false).await.unwrap();
+    let pushed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while a.engine.status().await.pending > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    a.engine.stop().await;
+
+    assert!(pushed.is_ok(), "恢复后应马上推完，不该等到下一轮");
+}
+
+/// 暂停时「立即同步」照常推送和拉取。
+#[tokio::test]
+async fn sync_now_works_while_paused() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    let b = make_device("device-b", drive.clone()).await;
+    insert_sealed(&b, "Chrome", Local::now(), 60).await;
+    b.engine.sync_now().await.unwrap();
+
+    insert_sealed(&a, "Code", Local::now(), 30).await;
+    a.engine.set_sync_paused(true).await.unwrap();
+    a.engine.sync_now().await.unwrap();
+
+    assert_eq!(a.engine.status().await.pending, 0, "A 的待上传应推完");
+    assert_eq!(
+        count_for_device(&a, "device-b").await,
+        1,
+        "B 的数据应拉下来"
+    );
+}
+
 /// 「立即同步」一直推到没有待上传：积下的行比一轮能读的（200 行）多，也一次传完。
 #[tokio::test]
 async fn sync_now_pushes_until_nothing_is_left() {
@@ -3078,4 +3144,48 @@ async fn sync_now_pushes_until_nothing_is_left() {
     a.engine.sync_now().await.unwrap();
 
     assert_eq!(a.engine.status().await.pending, 0);
+}
+
+/// 暂停时清掉设备页上留着的报错。
+#[tokio::test]
+async fn pausing_clears_the_last_error() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive).await;
+    a.engine.inner.status.write().await.last_error = Some("[SERVER_BUSY] 503".into());
+
+    a.engine.set_sync_paused(true).await.unwrap();
+
+    assert_eq!(a.engine.status().await.last_error, None);
+}
+
+/// 重启以后仍然是暂停。
+#[tokio::test]
+async fn sync_paused_survives_a_restart() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive.clone()).await;
+    a.engine.set_sync_paused(true).await.unwrap();
+
+    // 在同一个数据库上重新建引擎，相当于重启
+    let restarted = SyncEngine::with_backend(
+        a.pool.clone(),
+        Some(a.mem.clone()),
+        CloudBackend::from(DriveClient::with_fake_drive(drive, a.pool.clone())),
+        a.self_id.clone(),
+    );
+
+    assert!(restarted.status().await.paused);
+}
+
+/// 退出登录以后，暂停状态保留。
+#[tokio::test]
+async fn sign_out_keeps_sync_paused() {
+    let drive = Arc::new(InMemoryDriveStore::new());
+    let a = make_device("device-a", drive).await;
+    a.engine.set_sync_paused(true).await.unwrap();
+
+    crate::sync::backend_switch::sign_out(&a.pool)
+        .await
+        .unwrap();
+
+    assert!(a.engine.status().await.paused);
 }
