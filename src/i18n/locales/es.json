@@ -1438,7 +1438,7 @@
         "synced": "Sincronizado · {{when}}",
         "waitingFirst": "Esperando la primera sincronización",
         "deadLetter": "· {{count}} con fallo",
-        "paused": "La sincronización está en pausa. Haz clic en la nube de la barra lateral para reanudarla."
+        "paused": "La sincronización está en pausa"
       },
       "editCreds": "Editar las credenciales",
       "actions": {
@@ -1447,6 +1447,10 @@
         "syncNowTitle": "Sincronizar ahora",
         "retryFailed": "Reintentar",
         "retryFailedTitle": "Volver a subir ahora los registros fallidos, sin esperar al reintento automático",
+        "pause": "Pausar sincronización",
+        "pauseTitle": "Pausa la sincronización en segundo plano en este dispositivo. «Sincronizar ahora» sigue funcionando",
+        "resume": "Reanudar sincronización",
+        "resumeTitle": "Reanuda la sincronización en segundo plano y sincroniza una vez ahora",
         "signOut": "Cerrar sesión",
         "signIn": "Volver a iniciar sesión",
         "signOutTitle": "Cerrar la sesión de esta cuenta",

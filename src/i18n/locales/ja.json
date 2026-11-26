@@ -1433,7 +1433,7 @@
         "synced": "同期済み · {{when}}",
         "waitingFirst": "初回同期を待機中",
         "deadLetter": "· 失敗 {{count}} 件",
-        "paused": "同期は一時停止中です。サイドバーの雲アイコンをクリックすると再開します。"
+        "paused": "同期は一時停止中です"
       },
       "editCreds": "認証情報を編集",
       "actions": {
@@ -1442,6 +1442,10 @@
         "syncNowTitle": "今すぐ同期",
         "retryFailed": "再試行",
         "retryFailedTitle": "自動の再試行を待たずに、失敗した記録を今すぐ再アップロード",
+        "pause": "同期を一時停止",
+        "pauseTitle": "このデバイスのバックグラウンド同期を一時停止します。「今すぐ同期」は使えます",
+        "resume": "同期を再開",
+        "resumeTitle": "バックグラウンド同期を再開し、すぐに一度同期します",
         "signOut": "ログアウト",
         "signIn": "再ログイン",
         "signOutTitle": "現在のアカウントからログアウト",

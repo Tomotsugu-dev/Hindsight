@@ -11,6 +11,7 @@ import { api, type AuthState } from "../../api/hindsight";
 import { usePluginPages } from "../../state/pluginPages";
 import { usePluginIcons } from "../../state/pluginIcons";
 import { usePluginsSeen } from "../../state/pluginsSeen";
+import { loadSyncStatus, setSyncPaused, useSyncPaused } from "../../state/syncPaused";
 import logoUrl from "../../assets/logo.png";
 import styles from "./Sidebar.module.css";
 
@@ -43,17 +44,14 @@ export function Sidebar() {
 
   // 云同步登录状态：周期性刷新 + 窗口聚焦时立刻刷一次
   const [auth, setAuth] = useState<AuthState | null>(null);
-  const [paused, setPaused] = useState(false);
+  const paused = useSyncPaused();
   useEffect(() => {
     const fetch = () => {
       api
         .authStatus()
         .then(setAuth)
         .catch(() => {});
-      api
-        .syncStatus()
-        .then((s) => setPaused(s.paused))
-        .catch(() => {});
+      loadSyncStatus().catch(() => {});
     };
     fetch();
     const interval = window.setInterval(fetch, 60_000);
@@ -86,11 +84,7 @@ export function Sidebar() {
       void navigate(ROUTES.devices);
       return;
     }
-    const next = !paused;
-    api
-      .setSyncPaused(next)
-      .then(() => setPaused(next))
-      .catch(() => {});
+    setSyncPaused(!paused).catch(() => {});
   };
 
   const captureUI: "ok" | "idle" | "error" = !status

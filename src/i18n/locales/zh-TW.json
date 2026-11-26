@@ -1433,7 +1433,7 @@
         "synced": "已同步 · {{when}}",
         "waitingFirst": "等待首次同步",
         "deadLetter": "· {{count}} 條失敗",
-        "paused": "同步已暫停，點側邊欄的雲圖示恢復"
+        "paused": "同步已暫停"
       },
       "editCreds": "改憑證",
       "actions": {
@@ -1442,6 +1442,10 @@
         "syncNowTitle": "立即同步",
         "retryFailed": "重試",
         "retryFailedTitle": "不等自動重試，立刻重新上傳失敗的紀錄",
+        "pause": "暫停同步",
+        "pauseTitle": "暫停這台裝置的背景同步。「立即同步」照常能用",
+        "resume": "恢復同步",
+        "resumeTitle": "恢復背景同步，馬上同步一次",
         "signOut": "退出",
         "signIn": "重新登入",
         "signOutTitle": "退出當前賬號",
