@@ -339,6 +339,10 @@ pub fn run() {
             commands::settings::update_settings,
             commands::settings::add_ignore_rule,
             commands::settings::remove_ignore_rule,
+            // --- ui_state: the main window's UI state ---
+            commands::ui_state::get_ui_state,
+            commands::ui_state::set_ui_state,
+            commands::ui_state::import_ui_state,
             // --- 托盘菜单文案随 UI 语言同步 ---
             bootstrap::set_tray_labels,
             bootstrap::set_plugins_badge,
