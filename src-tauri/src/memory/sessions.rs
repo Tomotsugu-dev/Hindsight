@@ -141,9 +141,11 @@ async fn open_session(db: &MemoryDb, frame: &PendingFrame, norm_title: &str) -> 
     Ok(id)
 }
 
-/// 追加一张截图带来的新行：会话文字接上这几行，`session_frames` 记下它们从第几行开始、
-/// 来自哪张截图，再推进 ended_ts。
-/// 文本 UPDATE 触发 FTS 同步(见 mod.rs 的 triggers)。
+/// Appends the new lines that one screenshot brought: adds them to the session text, records in
+/// `session_frames` the line they start at and the screenshot they came from, then moves
+/// `ended_ts` forward.
+///
+/// Updating the text updates the FTS index too (see the triggers in mod.rs).
 async fn append_lines(
     db: &MemoryDb,
     session_id: i64,

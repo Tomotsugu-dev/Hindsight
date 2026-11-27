@@ -86,11 +86,13 @@ impl MemoryDb {
         Ok(db)
     }
 
-    /// 在后台跑启动维护：把旧库迁移成新结构（[`migrations`]），再按需 VACUUM（[`compact`]）。
-    /// 只等它开始，不等它做完。
+    /// Starts the maintenance work in the background: moves an old database to the new layout
+    /// ([`migrations`]), then runs VACUUM if needed ([`compact`]). Waits only until it starts,
+    /// not until it ends.
     ///
-    /// 连接一次只跑一个任务，按排队顺序跑。维护开始以后才返回，之后的读写都排在它后面，
-    /// 读不到迁移到一半的表。
+    /// The connection runs one task at a time, in the order they were queued. This returns only
+    /// after the maintenance has started, so later reads and writes queue up behind it and never
+    /// see half-moved tables.
     async fn start_maintenance(&self) {
         let (started_tx, started) = tokio::sync::oneshot::channel();
         let conn = self.0.clone();
@@ -107,7 +109,8 @@ impl MemoryDb {
                 log::warn!("memory: maintenance failed: {e}");
             }
         });
-        // 连接已经关了的话任务不会开始，这里收到的是错误，照样返回。
+        // If the connection is already closed, the task never starts and this gets an error.
+        // Return anyway.
         let _ = started.await;
     }
 

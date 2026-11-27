@@ -217,8 +217,11 @@ pub struct ChatFilePayload {
     pub messages: Vec<ChatMessagePayload>,
 }
 
-/// text_sessions 行(屏幕记忆全文;不含 session_frames——证据帧路径只在源设备有意义)。
-/// LWW 键 = guid,时间戳 = endedTs(会话在源设备随折叠增长,取新)。
+/// A `text_sessions` row: the full screen memory text. It does not carry `session_frames`,
+/// because screenshot paths only mean something on the device that took them.
+///
+/// Last write wins, keyed by `guid`, with `endedTs` as the time. A session keeps growing on its
+/// source device as new lines are folded in, so the newer copy is kept.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemorySessionPayload {

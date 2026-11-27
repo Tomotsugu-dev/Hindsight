@@ -5,7 +5,8 @@
 //!   and which session the text went into.
 //! - `text_sessions`: the text OCR found, called sessions. The text of screenshots taken one
 //!   after another in the same window becomes one row, without repeated lines.
-//! - `session_frames`：会话里每张截图带来的那几行，从会话文字的第几行开始（ADR-0021）。
+//! - `session_frames`: one row per screenshot in a session, with the line number in the session
+//!   text where that screenshot's lines start (ADR-0021).
 //!
 //! When SQL needs a list, the whole list goes in as one JSON array parameter, and `json_each`
 //! expands it.
@@ -209,11 +210,13 @@ const SESSIONS_FROM: &str = "origin_device IS NULL AND julianday(started_ts) >= 
 const SESSIONS_ACROSS: &str = "origin_device IS NULL
     AND julianday(started_ts) < julianday(?1) AND julianday(ended_ts) > julianday(?1)";
 
-/// 删掉本机从 `at` 起识别出的屏幕文字，返回删了几段：
+/// Deletes the screen text this device found from `at` on, and returns how many sessions were
+/// deleted:
 ///
-/// - `at` 及以后登记的截图删掉，还没识别的就不再识别；
-/// - `at` 及以后开始的段整段删；
-/// - 跨过 `at` 的段，见 [`cut_sessions_across`]。
+/// - Screenshots registered at or after `at` are deleted. Those not read by OCR yet will not be
+///   read.
+/// - Sessions that start at or after `at` are deleted whole.
+/// - For sessions that span `at`, see [`cut_sessions_across`].
 async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> Result<u64> {
     let at_s = at.to_rfc3339();
     let (sessions, days) = mem
@@ -261,11 +264,14 @@ async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> 
     Ok(sessions)
 }
 
-/// 跨过 `at` 的段：删掉 `at` 及以后的截图带来的那几段行，后面的行往前挪，起始行号跟着改，
-/// 结束时刻改成 `at`。
+/// Cuts the sessions that span `at`: deletes the runs of lines from screenshots taken at or after
+/// `at`, moves the later lines up, updates the start line numbers to match, and sets the end time
+/// to `at`.
 ///
-/// 不能从第一张 `at` 及以后的截图起整个截掉：识别失败的截图重试时排在后面，它带来的行可能比
-/// 前面的截图还早。截图已经不在 `frames` 里的那一段，拍摄时间不知道，留着。
+/// It cannot just cut everything from the first screenshot taken at or after `at`. A screenshot
+/// that failed OCR is retried later, so its lines can sit after the lines of screenshots taken
+/// after it. A run whose screenshot is no longer in `frames` has no known capture time, so it is
+/// kept.
 fn cut_sessions_across(tx: &Connection, at_s: &str) -> DbResult<()> {
     let sessions: Vec<(i64, String)> = {
         let mut stmt = tx
@@ -281,7 +287,8 @@ fn cut_sessions_across(tx: &Connection, at_s: &str) -> DbResult<()> {
         rows
     };
     for (id, text) in sessions {
-        // 各段行：起始行号、截图、截图是不是 `at` 及以后拍的
+        // Runs of lines: start line number, screenshot, and whether the screenshot was taken at
+        // or after `at`
         let runs: Vec<(i64, Option<i64>, bool)> = {
             let mut stmt = tx
                 .prepare(
@@ -308,7 +315,7 @@ fn cut_sessions_across(tx: &Connection, at_s: &str) -> DbResult<()> {
             runs.get(i)
                 .map_or(lines.len(), |r| (r.0.max(0) as usize).min(lines.len()))
         };
-        // 第一段之前的行不属于任何截图，照样留着
+        // Lines before the first run belong to no screenshot, so keep them
         let mut kept: Vec<&str> = lines[..start_of(0)].to_vec();
         let mut kept_runs = Vec::new();
         for (i, &(_, frame_id, late)) in runs.iter().enumerate() {

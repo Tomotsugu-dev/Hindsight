@@ -1,7 +1,8 @@
-//! 屏幕记忆库的磁盘空间回收（ADR-0021）。
+//! Gives the free space in the screen memory database back to the disk (ADR-0021).
 //!
-//! SQLite 删除数据或重建表后只会在文件内留下空闲页，不会自动缩小文件；
-//! 本模块在空闲页占比超阈值且磁盘空间充足时执行 `VACUUM` 回收空间。
+//! When SQLite deletes data or rebuilds a table, it only leaves free pages in the file. It does
+//! not make the file smaller by itself. This module runs `VACUUM` to get the space back when the
+//! share of free pages is over a limit and the disk has enough space.
 
 use std::path::Path;
 use std::time::Instant;
@@ -12,11 +13,13 @@ use crate::storage::{DbResult, SqliteResultExt};
 
 const BYTES_PER_MIB: u64 = 1024 * 1024;
 
-/// 按需压缩屏幕记忆库并回收磁盘空间，返回是否执行了 `VACUUM`。
+/// Compacts the screen memory database when needed to free disk space, and returns whether
+/// `VACUUM` ran.
 ///
-/// 当空闲页超过总页数的 1/4，且库所在磁盘的可用空间不少于当前库文件大小的 2 倍时，
-/// 执行 `VACUUM` 并截断 WAL；否则跳过。不单独持久化压缩状态，迁移后、上次中断后或
-/// 清除大量数据后均由同一条件触发。
+/// It runs `VACUUM` and truncates the WAL when more than a quarter of the pages are free, and the
+/// disk that holds the database has free space of at least twice the database file size.
+/// Otherwise it does nothing. No compaction state is saved: the same rule starts it after the
+/// migration, after an interrupted run, or after a large purge.
 pub fn compact(conn: &Connection) -> DbResult<bool> {
     compact_with(conn, || {
         conn.path()
@@ -24,8 +27,9 @@ pub fn compact(conn: &Connection) -> DbResult<bool> {
     })
 }
 
-/// [`compact`] 的内部实现；仅在空闲页超过阈值时才调用 `available_disk_bytes` 查询剩余磁盘空间，
-/// 便于单元测试注入磁盘容量。
+/// Does the work of [`compact`], with the free disk space passed in so that tests can set it.
+///
+/// It calls `available_disk_bytes` only when the free pages are over the limit.
 fn compact_with(
     conn: &Connection,
     available_disk_bytes: impl FnOnce() -> Option<u64>,
@@ -55,8 +59,9 @@ fn compact_with(
     }
 
     let started = Instant::now();
-    // WAL 模式下 VACUUM 写入的新页会先落在 WAL 文件中；执行 TRUNCATE checkpoint 合并并截断 WAL，
-    // 避免 WAL 长期占用接近整库大小的空间。
+    // In WAL mode, VACUUM first writes the new pages into the WAL file. A TRUNCATE checkpoint
+    // moves them into the database and cuts the WAL to zero bytes. Without it, the WAL keeps
+    // taking about as much space as the whole database.
     conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
         .db()?;
     let compacted_bytes = read_pragma("page_count")? * page_size;
@@ -69,9 +74,10 @@ fn compact_with(
     Ok(true)
 }
 
-/// 查询 `path` 所在磁盘分区的可用空间（字节）。
+/// Returns the free space, in bytes, of the disk partition that holds `path`.
 ///
-/// `sysinfo` 仅提供挂载点列表，因此取挂载点为 `path` 前缀且路径最长的分区（最长前缀匹配）。
+/// `sysinfo` only gives a list of mount points. So this takes the partition whose mount point is
+/// the longest one that `path` starts with.
 fn available_disk_bytes_at(path: &Path) -> Option<u64> {
     let disks = sysinfo::Disks::new_with_refreshed_list();
     disks

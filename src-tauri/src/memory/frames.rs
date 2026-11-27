@@ -19,7 +19,9 @@ pub struct PendingFrame {
 }
 
 impl PendingFrame {
-    /// 拍摄那天的本地日期：`ts` 是本地时区的 RFC 3339，前 10 个字符就是日期。
+    /// Returns the local date the screenshot was taken on.
+    ///
+    /// `ts` is RFC 3339 in the local time zone, so its first 10 characters are the date.
     pub fn local_date(&self) -> &str {
         self.ts.get(..10).unwrap_or(&self.ts)
     }
