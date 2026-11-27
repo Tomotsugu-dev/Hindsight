@@ -911,8 +911,7 @@ export const api = {
   /** The main window's UI state (ADR-0020): every key and its value. */
   getUiState: () => invoke<Record<string, string>>("get_ui_state"),
   /** Saves the value of `key`; `null` deletes the key. */
-  setUiState: (key: string, value: string | null) =>
-    invoke<void>("set_ui_state", { key, value }),
+  setUiState: (key: string, value: string | null) => invoke<void>("set_ui_state", { key, value }),
   /** Imports the values from localStorage, and returns every key and its value after the import. */
   importUiState: (entries: Record<string, string>) =>
     invoke<Record<string, string>>("import_ui_state", { entries }),
