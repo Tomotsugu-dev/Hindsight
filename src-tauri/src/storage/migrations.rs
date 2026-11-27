@@ -1083,12 +1083,21 @@ const CATEGORY_ICONS_SQL: &str = r#"
     UPDATE categories SET icon = 'ChartOff' WHERE id = 'hidden' AND icon = 'EyeOff';
 "#;
 
+/// v49: the main window's UI state, such as the language and the theme (ADR-0020). Only on this
+/// machine; not synced.
+const UI_STATE_TABLE_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS ui_state (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+"#;
+
 /// 跑全部待应用的 schema 迁移。幂等：已应用的版本号在 `schema_version` 表里查到就跳过。
 /// 启动期失败应中止应用启动（返回 `Err`，bootstrap.rs 用 `expect` 让 panic 立刻可见）。
 pub async fn run(pool: &DbPool) -> Result<()> {
     // v1..v10 是 MIGRATIONS 静态数组，v11+ 平台/运行时拼装放 extras。
     // 顺序就是版本顺序（idx + static_count + 1 = version）。
-    let extras: [&'static str; 38] = [
+    let extras: [&'static str; 39] = [
         CROSS_OS_CLEANUP_SQL,                  // v11
         V12_PLACEHOLDER,                       // v12（occupied，no-op）
         BACKFILL_OUTBOX_SQL,                   // v13
@@ -1127,6 +1136,7 @@ pub async fn run(pool: &DbPool) -> Result<()> {
         DAILY_USAGE_SQL,                       // v46
         PRIVATE_CATEGORY_SQL,                  // v47
         CATEGORY_ICONS_SQL,                    // v48
+        UI_STATE_TABLE_SQL,                    // v49
     ];
     pool.0
         .call(move |conn| {
@@ -1437,7 +1447,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            48
+            49
         );
 
         let tables = table_names(&pool).await;
@@ -1463,6 +1473,7 @@ mod tests {
             "plugins",
             "daily_usage",
             "daily_usage_stale",
+            "ui_state",
         ] {
             assert!(tables.iter().any(|x| x == t), "缺表 {t}(现有:{tables:?})");
         }
@@ -1810,7 +1821,7 @@ mod tests {
         run(&pool).await.unwrap();
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            48
+            49
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM categories WHERE id = 'code'").await,
@@ -1866,7 +1877,7 @@ mod tests {
 
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM schema_version").await,
-            48
+            49
         );
         // 正常数据完好,且被 v26 回填了 remote_id
         assert_eq!(

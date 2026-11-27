@@ -15,6 +15,7 @@ pub mod settings;
 pub mod site_rules;
 pub mod sql;
 pub mod super_categories;
+pub mod ui_state;
 
 #[cfg(test)]
 pub mod test_util;
