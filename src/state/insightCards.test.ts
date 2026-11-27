@@ -1,19 +1,19 @@
-// 和 statsView.test.ts 一样手工桩 localStorage；存的值在模块导入时读一次，
+// 和 statsView.test.ts 一样，store 是保存的界面状态；存的值在模块导入时读一次，
 // 所以每个用例 resetModules 后重新 import，走的是重启后恢复的那条路。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = new Map<string, string>();
-vi.stubGlobal("localStorage", {
-  getItem: (k: string) => store.get(k) ?? null,
-  setItem: (k: string, v: string) => void store.set(k, v),
-  removeItem: (k: string) => void store.delete(k),
-});
 
 const cardsKey = (scope: string) => `hindsight.stats.cards.${scope}`;
 const modeKey = (scope: string) => `hindsight.stats.mode.${scope}`;
 
 async function freshImport() {
   vi.resetModules();
+  const { initUiState } = await import("./uiState");
+  initUiState(Object.fromEntries(store), (k, v) => {
+    if (v === null) store.delete(k);
+    else store.set(k, v);
+  });
   return import("./insightCards");
 }
 

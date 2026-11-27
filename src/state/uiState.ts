@@ -22,8 +22,9 @@ export function getUiState(key: string): string | null {
   return values.get(key) ?? null;
 }
 
-/** Keeps the value of `key` and saves it; `null` deletes the key. */
+/** Keeps the value of `key` and saves it; `null` deletes the key. An unchanged value is not saved. */
 export function setUiState(key: string, value: string | null): void {
+  if ((values.get(key) ?? null) === value) return;
   if (value === null) values.delete(key);
   else values.set(key, value);
   save(key, value);

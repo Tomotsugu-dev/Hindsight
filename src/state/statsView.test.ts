@@ -1,20 +1,19 @@
-// node 环境手工桩 localStorage（同 theme.test.ts；vitest 配置保持纯函数策略）。
-// 存的值在模块导入时按 scope 各读一次，所以用 resetModules + 动态 import 让
-// 每个用例拿到一份「按当前存储值重新初始化」的 store——这正是切页往返 / 重启后
-// 恢复各页视图走的路径。
+// store 是保存的界面状态。存的值在模块导入时按 scope 各读一次，所以用 resetModules +
+// 动态 import 让每个用例拿到一份「按当前存储值重新初始化」的 store——这正是切页往返 /
+// 重启后恢复各页视图走的路径。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = new Map<string, string>();
-vi.stubGlobal("localStorage", {
-  getItem: (k: string) => store.get(k) ?? null,
-  setItem: (k: string, v: string) => void store.set(k, v),
-  removeItem: (k: string) => void store.delete(k),
-});
 
 const key = (scope: string) => `hindsight.stats.view.${scope}`;
 
 async function freshImport() {
   vi.resetModules();
+  const { initUiState } = await import("./uiState");
+  initUiState(Object.fromEntries(store), (k, v) => {
+    if (v === null) store.delete(k);
+    else store.set(k, v);
+  });
   return import("./statsView");
 }
 

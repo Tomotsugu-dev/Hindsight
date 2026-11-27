@@ -5,7 +5,7 @@ import { I18nextProvider, initReactI18next } from "react-i18next";
 import { beforeAll, expect, it, vi } from "vitest";
 import zhCN from "../../i18n/locales/zh-CN.json";
 
-// 真的 i18n 入口一加载就读 localStorage，node 环境没有；设置也不从后端读
+// 用测试自己的 i18n 实例，不加载真的 i18n 入口；设置也不从后端读
 vi.mock("../../i18n/index", () => ({ LOCALE_STORAGE_KEY: "locale" }));
 vi.mock("../../state/settings", () => ({ useSettings: () => ({ settings: null }) }));
 
