@@ -208,8 +208,8 @@ mod tests {
         mem.0
             .call(|conn| {
                 conn.execute(
-                    "INSERT INTO frames(path, ts, local_date, ocr_state, attempts)
-                     VALUES('/tmp/fake2.png', '2026-07-30T10:00:00+08:00', '2026-07-30', 0, 0)",
+                    "INSERT INTO frames(path, ts, ocr_state, attempts)
+                     VALUES('/tmp/fake2.png', '2026-07-30T10:00:00+08:00', 0, 0)",
                     [],
                 )
                 .db()?;
@@ -246,8 +246,8 @@ mod tests {
         mem.0
             .call(|conn| {
                 conn.execute(
-                    "INSERT INTO frames(path, ts, local_date, ocr_state, attempts)
-                     VALUES('/tmp/never-drains.png', '2026-07-30T10:00:00+08:00', '2026-07-30', 0, 0)",
+                    "INSERT INTO frames(path, ts, ocr_state, attempts)
+                     VALUES('/tmp/never-drains.png', '2026-07-30T10:00:00+08:00', 0, 0)",
                     [],
                 )
                 .db()?;
@@ -306,8 +306,8 @@ mod tests {
         mem.0
             .call(|conn| {
                 conn.execute(
-                    "INSERT INTO frames(path, ts, local_date, ocr_state, attempts)
-                     VALUES('/tmp/fake.png', '2026-07-30T10:00:00+08:00', '2026-07-30', 0, 0)",
+                    "INSERT INTO frames(path, ts, ocr_state, attempts)
+                     VALUES('/tmp/fake.png', '2026-07-30T10:00:00+08:00', 0, 0)",
                     [],
                 )
                 .db()?;

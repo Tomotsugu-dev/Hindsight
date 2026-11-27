@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::sync::LazyLock;
 
 use chrono::NaiveDate;
-use rusqlite::{params, OptionalExtension};
+use rusqlite::params;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -14,11 +14,11 @@ use crate::ai::model::ToolSpec;
 use crate::ai::tools::kinds::params::spec;
 use crate::ai::tools::kinds::Tool;
 use crate::ai::tools::lang::text::{load, Text};
-use crate::ai::tools::{
-    like_pattern, truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput,
-};
+use crate::ai::tools::{truncate, ChatLang, Citation, ToolCtx, ToolError, ToolOutput};
 use crate::error::Result;
-use crate::memory::search::{find_sessions, session_apps};
+use crate::memory::search::{
+    find_sessions, first_line_containing, screenshot_of_line, session_apps,
+};
 use crate::memory::snippet::snippet;
 use crate::storage::{Connection, DbResult, SqliteResultExt};
 
@@ -285,36 +285,34 @@ struct Line {
 ///
 /// 关键词都只在标题里时，用这一段的第一行。
 fn line_of(conn: &rusqlite::Connection, session: i64, keywords: &[String]) -> DbResult<Line> {
-    let first_line = |pattern: &str| {
-        conn.query_row(
-            "SELECT text, first_path, first_ts FROM session_lines
-             WHERE session_id = ?1 AND text LIKE ?2 ESCAPE '\\'
-             ORDER BY line_no LIMIT 1",
-            params![session, pattern],
-            |r| Ok((r.get::<_, String>(0)?, r.get(1)?, r.get(2)?)),
+    let text: String = conn
+        .query_row(
+            "SELECT text FROM text_sessions WHERE id = ?1",
+            params![session],
+            |r| r.get(0),
         )
-        .optional()
-        .db()
-    };
+        .db()?;
     for k in keywords {
-        if let Some((text, path, ts)) = first_line(&like_pattern(k))? {
+        if let Some((line_no, line)) = first_line_containing(&text, k) {
             let after = SNIPPET_MAX_CHARS.saturating_sub(SNIPPET_BEFORE_CHARS + k.chars().count());
             return Ok(Line {
-                text: snippet(&text, k, SNIPPET_BEFORE_CHARS, after),
-                shot: Some((path, ts)),
+                text: snippet(line, k, SNIPPET_BEFORE_CHARS, after),
+                shot: screenshot_of_line(conn, session, line_no)?,
             });
         }
     }
-    Ok(match first_line("%")? {
-        Some((text, path, ts)) => Line {
-            text: snippet(&text, "", 0, SNIPPET_MAX_CHARS),
-            shot: Some((path, ts)),
+    Ok(
+        match text.split('\n').next().filter(|line| !line.is_empty()) {
+            Some(line) => Line {
+                text: snippet(line, "", 0, SNIPPET_MAX_CHARS),
+                shot: screenshot_of_line(conn, session, 0)?,
+            },
+            None => Line {
+                text: String::new(),
+                shot: None,
+            },
         },
-        None => Line {
-            text: String::new(),
-            shot: None,
-        },
-    })
+    )
 }
 
 /// 写成给模型看的文字，列出来的每个窗口配一条证据：片段那一行第一次出现时的截图。
@@ -422,11 +420,16 @@ mod tests {
                 )
                 .db()?;
                 let id = c.last_insert_rowid();
-                for (n, line) in lines.iter().enumerate() {
+                for n in 0..lines.len() {
                     c.execute(
-                        "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                         VALUES (?1, ?2, ?3, ?4, ?5)",
-                        params![id, n as i64, line, format!("shots/{id}-{n}.jpg"), ts],
+                        "INSERT INTO frames(path, ts) VALUES (?1, ?2)",
+                        params![format!("shots/{id}-{n}.jpg"), ts],
+                    )
+                    .db()?;
+                    c.execute(
+                        "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+                         VALUES (?1, ?2, last_insert_rowid())",
+                        params![id, n as i64],
                     )
                     .db()?;
                 }

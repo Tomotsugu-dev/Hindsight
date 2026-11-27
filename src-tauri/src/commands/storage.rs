@@ -156,7 +156,7 @@ pub(crate) async fn purge_local_data_impl(
             .call(|conn| {
                 let tx = conn.transaction().db()?;
                 tx.execute_batch(
-                    "DELETE FROM session_lines;
+                    "DELETE FROM session_frames;
                      DELETE FROM text_sessions;
                      DELETE FROM frames;
                      DELETE FROM chat_messages;

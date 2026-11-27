@@ -217,7 +217,7 @@ pub struct ChatFilePayload {
     pub messages: Vec<ChatMessagePayload>,
 }
 
-/// text_sessions 行(屏幕记忆全文;不含 session_lines——证据帧路径只在源设备有意义)。
+/// text_sessions 行(屏幕记忆全文;不含 session_frames——证据帧路径只在源设备有意义)。
 /// LWW 键 = guid,时间戳 = endedTs(会话在源设备随折叠增长,取新)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

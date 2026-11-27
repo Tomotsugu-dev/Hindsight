@@ -507,12 +507,11 @@ async fn clear_data_clears_memory_db() {
         .0
         .call(|conn| {
             conn.execute_batch(
-                "INSERT INTO frames(path, ts, local_date, app_id, title, ocr_state)
-                 VALUES ('2026-07-05/a.jpg', '2026-07-05T10:00:00+09:00', '2026-07-05', 'code', '标题甲', 1);
+                "INSERT INTO frames(id, path, ts, app_id, title, ocr_state)
+                 VALUES (1, '2026-07-05/a.jpg', '2026-07-05T10:00:00+09:00', 'code', '标题甲', 1);
                  INSERT INTO text_sessions(id, local_date, started_ts, ended_ts, app_id, title, text)
                  VALUES (1, '2026-07-05', 't0', 't1', 'code', '标题甲', '秘密订单编号八八四二');
-                 INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                 VALUES (1, 0, '秘密订单编号八八四二', '2026-07-05/a.jpg', '2026-07-05T10:00:00+09:00');",
+                 INSERT INTO session_frames(session_id, first_line_no, frame_id) VALUES (1, 0, 1);",
             )
             .db()?;
             Ok(())
@@ -539,7 +538,7 @@ async fn clear_data_clears_memory_db() {
             for table in [
                 "frames",
                 "text_sessions",
-                "session_lines",
+                "session_frames",
                 "chat_conversations",
                 "chat_messages",
             ] {

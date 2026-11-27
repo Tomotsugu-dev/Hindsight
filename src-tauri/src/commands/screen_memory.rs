@@ -2,11 +2,10 @@
 //!
 //! 定时触发与调试页观测后续接。
 
-use rusqlite::{params, OptionalExtension};
+use rusqlite::params;
 use tauri::State;
 
-use crate::ai::tools::like_pattern;
-use crate::memory::search::find_sessions;
+use crate::memory::search::{find_sessions, first_line_containing, screenshot_of_line};
 use crate::memory::snippet::snippet;
 use crate::memory::{digest, MemoryDb};
 use crate::storage::{DbPool, DbResult, SqliteResultExt};
@@ -148,54 +147,55 @@ pub async fn memory_search(
         .map_err(|e| e.to_string())
 }
 
-/// 搜一页:全部命中的段数,和从 `offset` 起的 `limit` 段。
+/// Returns one page of search results: the total number of matching sessions and the sessions on
+/// this page, sorted by start time, newest first.
 ///
-/// 每段的片段和证据帧跟着第一个出现在文字里的词:帧是这个词所在行第一次出现时的截图。
-/// 词都只在标题里时,片段从头截,没有帧。
+/// Every word in `words` must appear in the session text or the window title. Each result gets a
+/// snippet and a screenshot by these rules:
+/// - Find the first search word that appears in the text, and the line it is on. The snippet is
+///   cut around that word, and the screenshot is the frame that line comes from.
+/// - If only the window title matches (the text has none of the words), the snippet starts at the
+///   beginning of the text, and no screenshot is returned.
+/// - If the frame record no longer exists, no screenshot is returned either.
 fn search_page(
     conn: &rusqlite::Connection,
     words: &[String],
     limit: usize,
     offset: usize,
 ) -> DbResult<MemorySearchResp> {
-    let spans = find_sessions(conn, words, None, None)?;
-    let total = spans.len() as u64;
+    let sessions = find_sessions(conn, words, None, None)?;
+    let total = sessions.len() as u64;
     let mut hits = Vec::new();
-    for s in spans.into_iter().skip(offset).take(limit) {
+    for session in sessions.into_iter().skip(offset).take(limit) {
         let text: String = conn
             .query_row(
                 "SELECT text FROM text_sessions WHERE id = ?1",
-                params![s.id],
+                params![session.id],
                 |r| r.get(0),
             )
             .db()?;
-        let mut word = "";
-        let mut frame: Option<(String, String)> = None;
-        for w in words {
-            frame = conn
-                .query_row(
-                    "SELECT first_path, first_ts FROM session_lines
-                     WHERE session_id = ?1 AND text LIKE ?2 ESCAPE '\\'
-                     ORDER BY line_no LIMIT 1",
-                    params![s.id, like_pattern(w)],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()
-                .db()?;
-            if frame.is_some() {
-                word = w;
-                break;
-            }
-        }
+        let body_match = words.iter().find_map(|w| {
+            first_line_containing(&text, w).map(|(line_no, _)| (w.as_str(), line_no))
+        });
+        let (anchor_word, frame) = match body_match {
+            Some((word, line_no)) => (word, screenshot_of_line(conn, session.id, line_no)?),
+            None => ("", None),
+        };
+        let (frame_path, frame_ts) = frame.unzip();
         hits.push(MemorySearchHit {
-            session_id: s.id,
-            app: s.app_id,
-            title: s.title,
-            started_ts: s.started_ts,
-            ended_ts: s.ended_ts,
-            snippet: snippet(&text, word, SNIPPET_BEFORE_CHARS, SNIPPET_AFTER_CHARS),
-            frame_path: frame.as_ref().map(|(p, _)| p.clone()),
-            frame_ts: frame.map(|(_, t)| t),
+            session_id: session.id,
+            app: session.app_id,
+            title: session.title,
+            started_ts: session.started_ts,
+            ended_ts: session.ended_ts,
+            snippet: snippet(
+                &text,
+                anchor_word,
+                SNIPPET_BEFORE_CHARS,
+                SNIPPET_AFTER_CHARS,
+            ),
+            frame_path,
+            frame_ts,
         });
     }
     Ok(MemorySearchResp { total, hits })
@@ -369,11 +369,16 @@ mod tests {
             )
             .db()?;
             let id = c.last_insert_rowid();
-            for (n, line) in lines.iter().enumerate() {
+            for n in 0..lines.len() {
                 c.execute(
-                    "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![id, n as i64, line, format!("shots/{id}-{n}.jpg"), ts],
+                    "INSERT INTO frames(path, ts) VALUES (?1, ?2)",
+                    params![format!("shots/{id}-{n}.jpg"), ts],
+                )
+                .db()?;
+                c.execute(
+                    "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+                     VALUES (?1, ?2, last_insert_rowid())",
+                    params![id, n as i64],
                 )
                 .db()?;
             }

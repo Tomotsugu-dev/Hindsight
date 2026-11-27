@@ -14,9 +14,15 @@ pub const MAX_ATTEMPTS: i64 = 3;
 pub struct PendingFrame {
     pub path: String,
     pub ts: String,
-    pub local_date: String,
     pub app_id: Option<String>,
     pub title: Option<String>,
+}
+
+impl PendingFrame {
+    /// 拍摄那天的本地日期：`ts` 是本地时区的 RFC 3339，前 10 个字符就是日期。
+    pub fn local_date(&self) -> &str {
+        self.ts.get(..10).unwrap_or(&self.ts)
+    }
 }
 
 /// 采集侧登记:截图落盘成功后调一次。幂等(同路径重复登记忽略)。
@@ -24,15 +30,13 @@ pub async fn register(
     db: &MemoryDb,
     path: String,
     ts: String,
-    local_date: String,
     app_id: Option<String>,
     title: Option<String>,
 ) -> Result<()> {
     db.0.call(move |conn| {
         conn.execute(
-            "INSERT OR IGNORE INTO frames(path, ts, local_date, app_id, title)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![path, ts, local_date, app_id, title],
+            "INSERT OR IGNORE INTO frames(path, ts, app_id, title) VALUES (?1, ?2, ?3, ?4)",
+            params![path, ts, app_id, title],
         )
         .db()?;
         Ok(())
@@ -66,7 +70,7 @@ pub async fn take_pending(db: &MemoryDb, limit: i64) -> Result<Vec<PendingFrame>
         db.0.call(move |conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT path, ts, local_date, app_id, title FROM frames
+                    "SELECT path, ts, app_id, title FROM frames
                      WHERE ocr_state = 0 OR (ocr_state = 2 AND attempts < ?1)
                      ORDER BY ocr_state ASC, ts ASC LIMIT ?2",
                 )
@@ -76,9 +80,8 @@ pub async fn take_pending(db: &MemoryDb, limit: i64) -> Result<Vec<PendingFrame>
                     Ok(PendingFrame {
                         path: r.get(0)?,
                         ts: r.get(1)?,
-                        local_date: r.get(2)?,
-                        app_id: r.get(3)?,
-                        title: r.get(4)?,
+                        app_id: r.get(2)?,
+                        title: r.get(3)?,
                     })
                 })
                 .db()?
@@ -129,23 +132,15 @@ mod tests {
             &db,
             "2026-07-05/a.jpg".into(),
             "2026-07-05T10:00:00+09:00".into(),
-            "2026-07-05".into(),
             Some("code".into()),
             Some("main.rs".into()),
         )
         .await
         .unwrap();
         // 幂等:重复登记不报错不重复
-        register(
-            &db,
-            "2026-07-05/a.jpg".into(),
-            "x".into(),
-            "x".into(),
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+        register(&db, "2026-07-05/a.jpg".into(), "x".into(), None, None)
+            .await
+            .unwrap();
 
         let pending = take_pending(&db, 10).await.unwrap();
         assert_eq!(pending.len(), 1);
@@ -158,7 +153,7 @@ mod tests {
     #[tokio::test]
     async fn failed_frame_retries_then_gives_up() {
         let db = MemoryDb::open_in_memory().await.unwrap();
-        register(&db, "f.jpg".into(), "t".into(), "d".into(), None, None)
+        register(&db, "f.jpg".into(), "t".into(), None, None)
             .await
             .unwrap();
         for _ in 0..MAX_ATTEMPTS {

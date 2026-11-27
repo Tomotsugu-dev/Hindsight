@@ -19,7 +19,6 @@ use crate::storage::{DbResult, SqliteResultExt};
 ///
 /// Returns `Ok(true)` if it migrated, and `Ok(false)` if the database already has the new layout.
 /// If it fails, the transaction rolls back, and the database stays as it was.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn to_session_frames(conn: &mut Connection) -> DbResult<bool> {
     let tx = conn.transaction().db()?;
     // A database that still has session_lines has the old layout and needs the migration.

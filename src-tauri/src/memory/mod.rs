@@ -81,7 +81,32 @@ impl MemoryDb {
             .await?;
         let db = Self(conn);
         db.init_schema().await?;
+        db.start_maintenance().await;
         Ok(db)
+    }
+
+    /// 在后台跑启动维护：把旧库迁移成新结构（[`migrations`]）。
+    /// 只等它开始，不等它做完。
+    ///
+    /// 连接一次只跑一个任务，按排队顺序跑。维护开始以后才返回，之后的读写都排在它后面，
+    /// 读不到迁移到一半的表。
+    async fn start_maintenance(&self) {
+        let (started_tx, started) = tokio::sync::oneshot::channel();
+        let conn = self.0.clone();
+        tokio::spawn(async move {
+            let done = conn
+                .call(move |c| {
+                    let _ = started_tx.send(());
+                    migrations::to_session_frames(c)?;
+                    Ok(())
+                })
+                .await;
+            if let Err(e) = done {
+                log::warn!("memory: maintenance failed: {e}");
+            }
+        });
+        // 连接已经关了的话任务不会开始，这里收到的是错误，照样返回。
+        let _ = started.await;
     }
 
     /// 按当前账号的默认路径打开。
@@ -111,24 +136,11 @@ impl MemoryDb {
                 let prev_version: i64 = conn
                     .query_row("PRAGMA user_version", [], |r| r.get(0))
                     .db()?;
+                conn.execute_batch("PRAGMA journal_mode = WAL;").db()?;
+                conn.execute_batch(FRAMES_TABLE).db()?;
+                conn.execute_batch(SESSION_FRAMES_TABLE).db()?;
                 conn.execute_batch(
-                    "PRAGMA journal_mode = WAL;
-
-                    -- 每个落盘帧一条(采集侧登记,消化 worker 消费)
-                    CREATE TABLE IF NOT EXISTS frames (
-                        path        TEXT PRIMARY KEY,   -- 截图相对路径(相对截图根目录)
-                        ts          TEXT NOT NULL,      -- 拍摄时刻(RFC3339)
-                        local_date  TEXT NOT NULL,      -- 本地日期(YYYY-MM-DD)
-                        app_id      TEXT,
-                        title       TEXT,
-                        ocr_state   INTEGER NOT NULL DEFAULT 0,  -- 0待 1完 2失败
-                        attempts    INTEGER NOT NULL DEFAULT 0,  -- 失败重试计数
-                        session_id  INTEGER             -- L3 文本会话归属
-                    );
-                    CREATE INDEX IF NOT EXISTS idx_frames_state
-                        ON frames(ocr_state, ts);
-
-                    -- L3 文本会话(折叠后的检索单元)
+                    "-- L3 文本会话(折叠后的检索单元)
                     CREATE TABLE IF NOT EXISTS text_sessions (
                         id INTEGER PRIMARY KEY,
                         local_date TEXT NOT NULL,
@@ -136,19 +148,9 @@ impl MemoryDb {
                         ended_ts   TEXT NOT NULL,
                         app_id TEXT,
                         title  TEXT,
-                        text   TEXT NOT NULL DEFAULT '',  -- session_lines 的物化拼接
+                        text   TEXT NOT NULL DEFAULT '',  -- 会话里的各行，按行号用换行连起来
                         guid   TEXT,                      -- 跨设备全局 id(可选上云用)
                         origin_device TEXT                -- NULL=本机;非 NULL=来自该设备
-                    );
-
-                    -- 行级留痕:每个唯一行 + 首次出现帧(证据卡精确到帧)
-                    CREATE TABLE IF NOT EXISTS session_lines (
-                        session_id INTEGER NOT NULL,
-                        line_no    INTEGER NOT NULL,
-                        text       TEXT NOT NULL,
-                        first_path TEXT NOT NULL,
-                        first_ts   TEXT NOT NULL,
-                        PRIMARY KEY (session_id, line_no)
                     );
 
                     -- 全文索引:挂在会话文本上,trigram 支持中日文子串、语言无关
@@ -311,6 +313,101 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    fn columns(conn: &rusqlite::Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")
+            .unwrap();
+        stmt.query_map([table], |r| r.get(0))
+            .unwrap()
+            .map(|name| name.unwrap())
+            .collect()
+    }
+
+    /// 新库直接是 ADR-0021 的结构：frames 有 id、没有 local_date，没有 session_lines。
+    #[tokio::test]
+    async fn new_database_has_the_new_layout() {
+        let db = MemoryDb::open_in_memory().await.unwrap();
+        db.0.call(|conn| {
+            assert_eq!(
+                columns(conn, "frames"),
+                [
+                    "id",
+                    "path",
+                    "ts",
+                    "app_id",
+                    "title",
+                    "ocr_state",
+                    "attempts",
+                    "session_id"
+                ]
+            );
+            assert_eq!(
+                columns(conn, "session_frames"),
+                ["session_id", "first_line_no", "frame_id"]
+            );
+            assert!(columns(conn, "session_lines").is_empty());
+            // 新库上迁移什么都不做
+            assert!(!migrations::to_session_frames(conn).unwrap());
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// 打开旧库后马上读写：排在迁移后面，读到的已经是新结构。
+    #[tokio::test]
+    async fn calls_after_open_wait_for_the_migration() {
+        let dir = std::env::temp_dir().join(format!(
+            "hindsight-memory-migrate-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("memory.sqlite");
+        {
+            let old = rusqlite::Connection::open(&path).unwrap();
+            old.execute_batch(
+                "CREATE TABLE frames (
+                     path TEXT PRIMARY KEY, ts TEXT NOT NULL, local_date TEXT NOT NULL,
+                     app_id TEXT, title TEXT,
+                     ocr_state INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
+                     session_id INTEGER);
+                 CREATE TABLE session_lines (
+                     session_id INTEGER NOT NULL, line_no INTEGER NOT NULL, text TEXT NOT NULL,
+                     first_path TEXT NOT NULL, first_ts TEXT NOT NULL,
+                     PRIMARY KEY (session_id, line_no));
+                 INSERT INTO frames VALUES
+                     ('/shots/a.jpg', '2026-11-20T09:00:00+09:00', '2026-11-20', 'editor', 't', 1, 0, 1),
+                     ('/shots/b.jpg', '2026-11-20T09:00:05+09:00', '2026-11-20', 'editor', 't', 0, 0, NULL);
+                 INSERT INTO session_lines VALUES
+                     (1, 0, 'alpha line', '/shots/a.jpg', '2026-11-20T09:00:00+09:00');",
+            )
+            .unwrap();
+        }
+
+        let db = MemoryDb::open_at(&path).await.unwrap();
+        // 第一个调用：取待识别截图，用的是新结构的列
+        let pending = frames::take_pending(&db, 10).await.unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].local_date(), "2026-11-20");
+        let (lines_left, runs) =
+            db.0.call(|conn| {
+                Ok((
+                    columns(conn, "session_lines").len(),
+                    conn.query_row("SELECT COUNT(*) FROM session_frames", [], |r| {
+                        r.get::<_, i64>(0)
+                    })?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(lines_left, 0);
+        assert_eq!(runs, 1);
+        db.0.close().await.unwrap();
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// 记忆库按 WAL + NORMAL 打开，和主库一样。

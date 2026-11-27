@@ -5,8 +5,7 @@
 //!   and which session the text went into.
 //! - `text_sessions`: the text OCR found, called sessions. The text of screenshots taken one
 //!   after another in the same window becomes one row, without repeated lines.
-//! - `session_lines`: each line of OCR text in a session, with the screenshot where the line
-//!   first appeared.
+//! - `session_frames`：会话里每张截图带来的那几行，从会话文字的第几行开始（ADR-0021）。
 //!
 //! When SQL needs a list, the whole list goes in as one JSON array parameter, and `json_each`
 //! expands it.
@@ -214,7 +213,7 @@ const SESSIONS_ACROSS: &str = "origin_device IS NULL
 ///
 /// - `at` 及以后登记的截图删掉，还没识别的就不再识别；
 /// - `at` 及以后开始的段整段删；
-/// - 跨过 `at` 的段，删掉 `at` 及以后才第一次出现的行，剩下的行重新拼，结束时刻改成 `at`。
+/// - 跨过 `at` 的段，见 [`cut_sessions_across`]。
 async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> Result<u64> {
     let at_s = at.to_rfc3339();
     let (sessions, days) = mem
@@ -229,7 +228,7 @@ async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> 
             )?;
             tx.execute(
                 &format!(
-                    "DELETE FROM session_lines
+                    "DELETE FROM session_frames
                       WHERE session_id IN (SELECT id FROM text_sessions WHERE {SESSIONS_FROM})"
                 ),
                 [&at_s],
@@ -241,27 +240,7 @@ async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> 
                     [&at_s],
                 )
                 .db()?;
-            tx.execute(
-                &format!(
-                    "DELETE FROM session_lines
-                      WHERE julianday(first_ts) >= julianday(?1)
-                        AND session_id IN (SELECT id FROM text_sessions WHERE {SESSIONS_ACROSS})"
-                ),
-                [&at_s],
-            )
-            .db()?;
-            tx.execute(
-                &format!(
-                    "UPDATE text_sessions
-                        SET text = COALESCE((SELECT group_concat(l.text, char(10) ORDER BY l.line_no)
-                                               FROM session_lines l
-                                              WHERE l.session_id = text_sessions.id), ''),
-                            ended_ts = ?1
-                      WHERE {SESSIONS_ACROSS}"
-                ),
-                [&at_s],
-            )
-            .db()?;
+            cut_sessions_across(&tx, &at_s)?;
             tx.execute(
                 "DELETE FROM frames WHERE julianday(ts) >= julianday(?1)",
                 [&at_s],
@@ -280,6 +259,87 @@ async fn truncate_memory(pool: &DbPool, mem: &MemoryDb, at: DateTime<Local>) -> 
         })
         .await?;
     Ok(sessions)
+}
+
+/// 跨过 `at` 的段：删掉 `at` 及以后的截图带来的那几段行，后面的行往前挪，起始行号跟着改，
+/// 结束时刻改成 `at`。
+///
+/// 不能从第一张 `at` 及以后的截图起整个截掉：识别失败的截图重试时排在后面，它带来的行可能比
+/// 前面的截图还早。截图已经不在 `frames` 里的那一段，拍摄时间不知道，留着。
+fn cut_sessions_across(tx: &Connection, at_s: &str) -> DbResult<()> {
+    let sessions: Vec<(i64, String)> = {
+        let mut stmt = tx
+            .prepare(&format!(
+                "SELECT id, text FROM text_sessions WHERE {SESSIONS_ACROSS}"
+            ))
+            .db()?;
+        let rows = stmt
+            .query_map([at_s], |r| Ok((r.get(0)?, r.get(1)?)))
+            .db()?
+            .collect::<rusqlite::Result<_>>()
+            .db()?;
+        rows
+    };
+    for (id, text) in sessions {
+        // 各段行：起始行号、截图、截图是不是 `at` 及以后拍的
+        let runs: Vec<(i64, Option<i64>, bool)> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT sf.first_line_no, sf.frame_id,
+                            COALESCE(julianday(f.ts) >= julianday(?2), 0)
+                       FROM session_frames sf LEFT JOIN frames f ON f.id = sf.frame_id
+                      WHERE sf.session_id = ?1 ORDER BY sf.first_line_no",
+                )
+                .db()?;
+            let rows = stmt
+                .query_map(rusqlite::params![id, at_s], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })
+                .db()?
+                .collect::<rusqlite::Result<_>>()
+                .db()?;
+            rows
+        };
+        if !runs.iter().any(|&(_, _, late)| late) {
+            continue;
+        }
+        let lines: Vec<&str> = text.split('\n').collect();
+        let start_of = |i: usize| {
+            runs.get(i)
+                .map_or(lines.len(), |r| (r.0.max(0) as usize).min(lines.len()))
+        };
+        // 第一段之前的行不属于任何截图，照样留着
+        let mut kept: Vec<&str> = lines[..start_of(0)].to_vec();
+        let mut kept_runs = Vec::new();
+        for (i, &(_, frame_id, late)) in runs.iter().enumerate() {
+            let (start, end) = (start_of(i), start_of(i + 1).max(start_of(i)));
+            if !late {
+                kept_runs.push((kept.len() as i64, frame_id));
+                kept.extend_from_slice(&lines[start..end]);
+            }
+        }
+        tx.execute("DELETE FROM session_frames WHERE session_id = ?1", [id])
+            .db()?;
+        for (first_line_no, frame_id) in kept_runs {
+            tx.execute(
+                "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![id, first_line_no, frame_id],
+            )
+            .db()?;
+        }
+        tx.execute(
+            "UPDATE text_sessions SET text = ?2 WHERE id = ?1",
+            rusqlite::params![id, kept.join("\n")],
+        )
+        .db()?;
+    }
+    tx.execute(
+        &format!("UPDATE text_sessions SET ended_ts = ?1 WHERE {SESSIONS_ACROSS}"),
+        [at_s],
+    )
+    .db()?;
+    Ok(())
 }
 
 /// 把本机跨过 `at` 的行的结束时刻改成 `at`，给它们的日子写 outbox。
@@ -453,10 +513,10 @@ async fn delete_memory(mem: &MemoryDb, to_delete: &ToDelete) -> Result<u64> {
         .call(move |conn| {
             let params = [&processes, &screenshots];
             let tx = conn.transaction().db()?;
-            // `session_lines` first: it has no foreign key, so its rows cannot be found once the
+            // `session_frames` first: it has no foreign key, so its rows cannot be found once the
             // session is gone.
             tx.execute(
-                &format!("DELETE FROM session_lines WHERE session_id IN ({SESSIONS_TO_DELETE})"),
+                &format!("DELETE FROM session_frames WHERE session_id IN ({SESSIONS_TO_DELETE})"),
                 params,
             )
             .db()?;
@@ -681,18 +741,18 @@ mod tests {
                 )
                 .db()?;
                 let sid = conn.last_insert_rowid();
-                conn.execute(
-                    "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                     VALUES(?1, 0, ?2, ?3, '2026-05-15T10:00:00Z')",
-                    rusqlite::params![sid, txt, sr2],
-                )
-                .db()?;
-                // frames.path 是主键:共享截图的测试里两个应用指向同一张图,
+                // frames.path 是唯一的:共享截图的测试里两个应用指向同一张图,
                 // 现实中该图只会有一条帧记录,这里用 OR IGNORE 如实模拟
                 conn.execute(
-                    "INSERT OR IGNORE INTO frames(path, ts, local_date, app_id, title, ocr_state)
-                     VALUES(?1,'2026-05-15T10:00:00Z','2026-05-15',?2,'t',1)",
+                    "INSERT OR IGNORE INTO frames(path, ts, app_id, title, ocr_state)
+                     VALUES(?1,'2026-05-15T10:00:00Z',?2,'t',1)",
                     rusqlite::params![sr2, p2],
+                )
+                .db()?;
+                conn.execute(
+                    "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+                     VALUES(?1, 0, (SELECT id FROM frames WHERE path = ?2))",
+                    rusqlite::params![sid, sr2],
                 )
                 .db()?;
                 Ok(())
@@ -1059,9 +1119,9 @@ mod tests {
         mem.0
             .call(|conn| {
                 conn.execute_batch(
-                    "INSERT INTO frames(path, ts, local_date, app_id, title, ocr_state, session_id)
-                     VALUES ('a.png', '2026-11-05T10:00:00Z', '2026-11-05', 'Firefox', 't', 1, 1),
-                            ('b.png', '2026-11-05T10:01:00Z', '2026-11-05', 'Firefox', 't', 1, 1);",
+                    "INSERT INTO frames(path, ts, app_id, title, ocr_state, session_id)
+                     VALUES ('a.png', '2026-11-05T10:00:00Z', 'Firefox', 't', 1, 1),
+                            ('b.png', '2026-11-05T10:01:00Z', 'Firefox', 't', 1, 1);",
                 )
                 .db()
             })
@@ -1462,11 +1522,17 @@ mod tests {
                 )
                 .db()?;
                 let sid = conn.last_insert_rowid();
-                for (no, (line, ts)) in lines.iter().enumerate() {
+                // 每行来自自己的一张截图，拍摄时间就是这一行给的时间
+                for (no, (_, ts)) in lines.iter().enumerate() {
                     conn.execute(
-                        "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                         VALUES(?1, ?2, ?3, 'x.jpg', ?4)",
-                        rusqlite::params![sid, no as i64, line, ts],
+                        "INSERT INTO frames(path, ts) VALUES(?1, ?2)",
+                        rusqlite::params![format!("{sid}-{no}.jpg"), ts],
+                    )
+                    .db()?;
+                    conn.execute(
+                        "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+                         VALUES(?1, ?2, last_insert_rowid())",
+                        rusqlite::params![sid, no as i64],
                     )
                     .db()?;
                 }
@@ -1482,8 +1548,7 @@ mod tests {
         mem.0
             .call(move |conn| {
                 conn.execute(
-                    "INSERT INTO frames(path, ts, local_date, app_id, title)
-                     VALUES(?1, ?2, substr(?2, 1, 10), 'Player', 't')",
+                    "INSERT INTO frames(path, ts, app_id, title) VALUES(?1, ?2, 'Player', 't')",
                     rusqlite::params![path, ts],
                 )
                 .db()?;
@@ -1537,7 +1602,7 @@ mod tests {
         let lines: i64 = mem
             .0
             .call(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM session_lines", [], |r| r.get(0))
+                conn.query_row("SELECT COUNT(*) FROM session_frames", [], |r| r.get(0))
                     .db()
             })
             .await
@@ -1583,6 +1648,53 @@ mod tests {
         assert_eq!(DateTime::parse_from_rfc3339(&ended).unwrap(), at(CUT));
         assert_eq!(fts_hits(&mem, "睡着以后才出现的字幕").await, 0);
         assert_eq!(fts_hits(&mem, "睡前看到的第二行字").await, 1);
+    }
+
+    /// 重试的截图排在后面：它的行比截断点早就留着，后面的行往前挪，每行还对应原来的截图。
+    #[tokio::test]
+    async fn truncate_at_keeps_earlier_lines_of_a_retried_screenshot() {
+        let pool = fresh_test_pool().await;
+        let mem = MemoryDb::open_in_memory().await.unwrap();
+        let sid = seed_text(
+            &mem,
+            None,
+            "2026-11-20T20:50:00+09:00",
+            "2026-11-20T21:20:00+09:00",
+            &[
+                ("睡前看到的第一行字", "2026-11-20T20:50:00+09:00"),
+                ("睡着以后才出现的字幕", "2026-11-20T21:05:00+09:00"),
+                ("重试才识别出的睡前的字", "2026-11-20T20:55:00+09:00"),
+            ],
+        )
+        .await;
+
+        truncate_at(&pool, Some(&mem), Path::new(""), TEST_SELF_ID, at(CUT))
+            .await
+            .unwrap();
+
+        let (text, frames) = mem
+            .0
+            .call(move |conn| {
+                let text: String = conn
+                    .query_row("SELECT text FROM text_sessions WHERE id = ?1", [sid], |r| {
+                        r.get(0)
+                    })
+                    .db()?;
+                let frames = (0..2)
+                    .map(|n| crate::memory::search::screenshot_of_line(conn, sid, n))
+                    .collect::<DbResult<Vec<_>>>()?;
+                Ok((text, frames))
+            })
+            .await
+            .unwrap();
+        assert_eq!(text, "睡前看到的第一行字\n重试才识别出的睡前的字");
+        assert_eq!(
+            frames,
+            [
+                Some((format!("{sid}-0.jpg"), "2026-11-20T20:50:00+09:00".into())),
+                Some((format!("{sid}-2.jpg"), "2026-11-20T20:55:00+09:00".into())),
+            ]
+        );
     }
 
     /// 别的设备同步过来的文字不动，哪怕在截断点之后。

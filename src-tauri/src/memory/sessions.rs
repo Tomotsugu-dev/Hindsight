@@ -122,7 +122,7 @@ impl Folder {
 
 async fn open_session(db: &MemoryDb, frame: &PendingFrame, norm_title: &str) -> Result<i64> {
     let (local_date, ts, app_id, title) = (
-        frame.local_date.clone(),
+        frame.local_date().to_string(),
         frame.ts.clone(),
         frame.app_id.clone(),
         norm_title.to_string(),
@@ -141,7 +141,8 @@ async fn open_session(db: &MemoryDb, frame: &PendingFrame, norm_title: &str) -> 
     Ok(id)
 }
 
-/// 追加新行:写 session_lines(行级留痕)+ 增量拼接会话文本 + 推进 ended_ts。
+/// 追加一张截图带来的新行：会话文字接上这几行，`session_frames` 记下它们从第几行开始、
+/// 来自哪张截图，再推进 ended_ts。
 /// 文本 UPDATE 触发 FTS 同步(见 mod.rs 的 triggers)。
 async fn append_lines(
     db: &MemoryDb,
@@ -154,14 +155,12 @@ async fn append_lines(
     let (fresh, path, ts) = (fresh.to_vec(), frame_path.to_string(), frame_ts.to_string());
     db.0.call(move |conn| {
         let tx = conn.transaction().db()?;
-        for (i, line) in fresh.iter().enumerate() {
-            tx.execute(
-                "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![session_id, start_no + i as i64, line, path, ts],
-            )
-            .db()?;
-        }
+        tx.execute(
+            "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+             VALUES (?1, ?2, (SELECT id FROM frames WHERE path = ?3))",
+            params![session_id, start_no, path],
+        )
+        .db()?;
         let joined = fresh.join("\n");
         tx.execute(
             "UPDATE text_sessions SET
@@ -200,7 +199,6 @@ mod tests {
         PendingFrame {
             path: path.into(),
             ts: ts.into(),
-            local_date: "2026-07-05".into(),
             app_id: Some("code".into()),
             title: Some(title.into()),
         }
@@ -239,11 +237,11 @@ mod tests {
             .await
             .unwrap();
 
-        // 占住下一个 line_no 的主键,制造落库失败
+        // 占住下一段的主键(从第 1 行起),制造落库失败
         db.0.call(move |conn| {
             conn.execute(
-                "INSERT INTO session_lines(session_id, line_no, text, first_path, first_ts)
-                 VALUES(?1, 1, '占位', '/x', 't')",
+                "INSERT INTO session_frames(session_id, first_line_no, frame_id)
+                 VALUES(?1, 1, NULL)",
                 [sid],
             )
             .db()?;
@@ -265,7 +263,7 @@ mod tests {
         // 清掉占位(= 故障恢复),重试同一帧
         db.0.call(move |conn| {
             conn.execute(
-                "DELETE FROM session_lines WHERE session_id = ?1 AND line_no = 1 AND text = '占位'",
+                "DELETE FROM session_frames WHERE session_id = ?1 AND first_line_no = 1",
                 [sid],
             )
             .db()?;
@@ -293,6 +291,14 @@ mod tests {
     async fn union_folds_and_keeps_provenance() {
         let db = MemoryDb::open_in_memory().await.unwrap();
         let mut folder = Folder::default();
+        for (path, ts) in [
+            ("a.jpg", "2026-07-05T10:00:00+09:00"),
+            ("b.jpg", "2026-07-05T10:00:30+09:00"),
+        ] {
+            super::super::frames::register(&db, path.into(), ts.into(), None, None)
+                .await
+                .unwrap();
+        }
 
         // 帧1:两行;帧2:一行重复 + 一行新(滚动) → 同会话,并集 3 行
         let s1 = folder
@@ -316,15 +322,18 @@ mod tests {
         assert_eq!(text.lines().count(), 3);
 
         // 行级留痕:旧行首现于帧a,新行首现于帧b
+        let (first, third) = (
+            super::super::search::first_line_containing(&text, "第一行")
+                .unwrap()
+                .0,
+            super::super::search::first_line_containing(&text, "第三行")
+                .unwrap()
+                .0,
+        );
         db.0.call(move |conn| {
-            let p: String = conn
-                .query_row(
-                    "SELECT first_path FROM session_lines WHERE session_id=?1 AND text LIKE '第三行%'",
-                    [s1],
-                    |r| r.get(0),
-                )
-                .db()?;
-            assert_eq!(p, "b.jpg");
+            let frame = |n| super::super::search::screenshot_of_line(conn, s1, n);
+            assert_eq!(frame(first)?.unwrap().0, "a.jpg");
+            assert_eq!(frame(third)?.unwrap().0, "b.jpg");
             Ok(())
         })
         .await

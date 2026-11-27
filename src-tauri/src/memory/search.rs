@@ -1,7 +1,7 @@
 //! 搜屏幕文字：找出文字连同标题里有全部关键词的段。搜索页和对话的工具都用它。
 
 use chrono::NaiveDate;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::ai::tools::{fts_literal, like_pattern};
 use crate::storage::{DbResult, SqliteResultExt};
@@ -121,6 +121,47 @@ pub fn session_apps(conn: &Connection) -> DbResult<Vec<String>> {
         .collect::<rusqlite::Result<Vec<_>>>()
         .db()?;
     Ok(apps)
+}
+
+/// Finds the first line of the session text `text` that contains `word`, ignoring ASCII case, and
+/// returns `(line number, line text)`.
+///
+/// The session text is its lines joined in order with `\n`. So after splitting, the 0-based index
+/// is the line number, which is used to find the screenshot of the line. Returns `None` if no line
+/// matches.
+pub fn first_line_containing<'a>(text: &'a str, word: &str) -> Option<(i64, &'a str)> {
+    let word = word.to_ascii_lowercase();
+    text.split('\n')
+        .enumerate()
+        .find(|(_, line)| line.to_ascii_lowercase().contains(&word))
+        .map(|(i, line)| (i as i64, line))
+}
+
+/// Finds the screenshot that line `line_no` of session `session_id` comes from, and returns
+/// `Some((screenshot path, capture time))`.
+///
+/// `session_frames` stores the line number where each screenshot's lines start. So this takes the
+/// last row with `first_line_no <= line_no`. Returns `None` if the session has no screenshot
+/// records (for example, a text-only session synced from another device) or the frame no longer
+/// exists.
+pub fn screenshot_of_line(
+    conn: &Connection,
+    session_id: i64,
+    line_no: i64,
+) -> DbResult<Option<(String, String)>> {
+    let frame: Option<(Option<String>, Option<String>)> = conn
+        .query_row(
+            "SELECT f.path, f.ts
+               FROM (SELECT frame_id FROM session_frames
+                      WHERE session_id = ?1 AND first_line_no <= ?2
+                      ORDER BY first_line_no DESC LIMIT 1) s
+               LEFT JOIN frames f ON f.id = s.frame_id",
+            rusqlite::params![session_id, line_no],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .db()?;
+    Ok(frame.and_then(|(path, ts)| path.zip(ts)))
 }
 
 #[cfg(test)]
