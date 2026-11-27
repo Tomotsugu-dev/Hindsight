@@ -26,11 +26,10 @@ pub(super) async fn ctx_with(mem_sql: &'static str, main_sql: &'static str) -> T
                  ended_ts TEXT, app_id TEXT, title TEXT, text TEXT DEFAULT '');
              CREATE VIRTUAL TABLE text_sessions_fts USING fts5(
                  text, content='text_sessions', content_rowid='id', tokenize='trigram');
-             CREATE TABLE session_lines (
-                 session_id INTEGER, line_no INTEGER, text TEXT,
-                 first_path TEXT, first_ts TEXT);
+             CREATE TABLE session_frames (
+                 session_id INTEGER, first_line_no INTEGER, frame_id INTEGER);
              CREATE TABLE frames (
-                 path TEXT PRIMARY KEY, ts TEXT, local_date TEXT,
+                 id INTEGER PRIMARY KEY, path TEXT UNIQUE, ts TEXT,
                  ocr_state INTEGER NOT NULL DEFAULT 0);
              {mem_sql}
              INSERT INTO text_sessions_fts(rowid, text)

@@ -524,13 +524,12 @@ async fn digest_one(mem: &MemoryDb, pipe: &mut Pipeline, frame: &PendingFrame) -
 /// 历史回填:把主库 activities 里已有截图的活动行派生成帧登记(一次性,幂等)。
 /// 只回填 retention 窗口内仍存在的档案;调用方决定何时触发(首次启用/设置页按钮)。
 pub async fn backfill_from_activities(pool: &DbPool, mem: &MemoryDb) -> Result<u64> {
-    let rows: Vec<(String, String, String, String, String)> = pool
+    let rows: Vec<(String, String, String, String)> = pool
         .0
         .call(|conn| {
             let mut stmt = conn
                 .prepare(
-                    "SELECT screenshot_path, MIN(started_at), MIN(local_date),
-                            process_name, window_title
+                    "SELECT screenshot_path, MIN(started_at), process_name, window_title
                      FROM activities
                      WHERE screenshot_path IS NOT NULL AND screenshot_path != ''
                      GROUP BY screenshot_path",
@@ -542,8 +541,7 @@ pub async fn backfill_from_activities(pool: &DbPool, mem: &MemoryDb) -> Result<u
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, String>(2)?,
-                        r.get::<_, String>(3)?,
-                        r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                        r.get::<_, Option<String>>(3)?.unwrap_or_default(),
                     ))
                 })
                 .db()?
@@ -554,8 +552,8 @@ pub async fn backfill_from_activities(pool: &DbPool, mem: &MemoryDb) -> Result<u
         .await?;
 
     let mut n = 0u64;
-    for (path, started_at, local_date, app, title) in rows {
-        frames::register(mem, path, started_at, local_date, Some(app), Some(title)).await?;
+    for (path, started_at, app, title) in rows {
+        frames::register(mem, path, started_at, Some(app), Some(title)).await?;
         n += 1;
     }
     Ok(n)
@@ -608,7 +606,6 @@ mod tests {
             mem,
             path.to_string(),
             ts.to_string(),
-            "2026-07-05".to_string(),
             Some("code".to_string()),
             Some(title.to_string()),
         )
@@ -653,14 +650,17 @@ mod tests {
                 let s = conn
                     .query_row("SELECT COUNT(*) FROM text_sessions", [], |r| r.get(0))
                     .db()?;
-                let l = conn
-                    .query_row("SELECT COUNT(*) FROM session_lines", [], |r| r.get(0))
-                    .db()?;
+                let l = conn.query_row(LINE_COUNT, [], |r| r.get(0)).db()?;
                 Ok((s, l))
             })
             .await
             .unwrap()
     }
+
+    /// 所有段的文字一共几行。段文字是各行用换行连起来的。
+    const LINE_COUNT: &str =
+        "SELECT COALESCE(SUM(length(text) - length(replace(text, char(10), '')) + 1), 0)
+                                FROM text_sessions WHERE text != ''";
 
     // ───────────────────── 批处理主循环 ─────────────────────
 
@@ -1589,9 +1589,7 @@ mod tests {
                 let s = conn
                     .query_row("SELECT COUNT(*) FROM text_sessions", [], |r| r.get(0))
                     .db()?;
-                let l = conn
-                    .query_row("SELECT COUNT(*) FROM session_lines", [], |r| r.get(0))
-                    .db()?;
+                let l = conn.query_row(LINE_COUNT, [], |r| r.get(0)).db()?;
                 let h = conn
                     .query_row(
                         "SELECT COUNT(*) FROM text_sessions_fts WHERE text_sessions_fts MATCH ?1",

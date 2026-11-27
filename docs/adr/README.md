@@ -27,3 +27,4 @@ Each ADR records one decision: the problem, what we chose, and why. Start a new 
 | [0018](0018-sync-engine-by-file-kind.md) | Sync engine split by file kind: one module per kind under `push/` and `pull/` | 🟢 | ✅ | [中文](zh/0018-sync-engine-by-file-kind.md) |
 | [0019](0019-private-category.md) | Private category: apps and websites in it are not recorded at all | 🟡 | ⬜ | [中文](zh/0019-private-category.md) |
 | [0020](0020-ui-state-in-database.md) | Move the UI state from localStorage to the main database | 🟢 | ✅ | [中文](zh/0020-ui-state-in-database.md) |
+| [0021](0021-memory-session-frames.md) | Remove repeated data from the screen memory: `session_lines` becomes `session_frames` | 🟢 | ✅ | [中文](zh/0021-memory-session-frames.md) |

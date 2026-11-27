@@ -745,7 +745,6 @@ async fn tick(inner: &Inner) -> Result<()> {
                 mem,
                 path.clone(),
                 now.to_rfc3339(),
-                now.format("%Y-%m-%d").to_string(),
                 Some(info.app_name.clone()),
                 Some(info.title.clone()),
             )
