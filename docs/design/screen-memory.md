@@ -228,14 +228,16 @@ PreventUserIdleDisplaySleep / Windows CallNtPowerInformation 的 ES_DISPLAY_REQU
 
 实际 schema 已到 v3:`text_sessions` 增加 `guid`(跨设备全局 id)与 `origin_device`
 (NULL=本机产出,非 NULL=同步自该设备);另有 Chat 会话历史两表
-(`chat_conversations` / `chat_messages`,含 guid 与软删墓碑)。以下为设计基线:
+(`chat_conversations` / `chat_messages`,含 guid 与软删墓碑)。ADR-0021 起 `frames` 加整数主键 `id`、
+删掉 `local_date`;`session_lines` 换成 `session_frames`,文字只存在 `text_sessions.text`。各列的现状见
+[database.md](database.md)。以下为设计基线:
 
 ```sql
 -- 每个保留帧一条(通过 L1 的帧)
 CREATE TABLE frames (
-    path        TEXT PRIMARY KEY,   -- 截图路径(与主库对齐)
-    ts          TEXT NOT NULL,      -- 拍摄时刻
-    local_date  TEXT NOT NULL,
+    id          INTEGER PRIMARY KEY, -- session_frames 用它指向截图
+    path        TEXT UNIQUE,        -- 截图路径(与主库对齐)
+    ts          TEXT NOT NULL,      -- 拍摄时刻;前 10 个字符就是本地日期
     app_id      TEXT, title TEXT,   -- L0 快照
     ocr_state   INTEGER NOT NULL DEFAULT 0,  -- 0待 1完 2失败
     attempts    INTEGER NOT NULL DEFAULT 0,  -- 失败重试计数(上限 3)
@@ -249,22 +251,21 @@ CREATE TABLE text_sessions (
     started_ts TEXT NOT NULL, ended_ts TEXT NOT NULL,
     app_id TEXT, title TEXT,
     simhash INTEGER,
-    text TEXT NOT NULL              -- 会话合并文本(= session_lines 物化拼接)
+    text TEXT NOT NULL              -- 会话里的各行,按行号用换行连起来;文字只存这一份
 );
 CREATE VIRTUAL TABLE text_sessions_fts USING fts5(
     text, content='text_sessions', content_rowid='id',
     tokenize='trigram'              -- 中日文子串搜索,语言无关
 );
 
--- L3 行级留痕:每个唯一行 + 首次出现帧(搜索命中 → 精确到帧的证据卡)
-CREATE TABLE session_lines (
-    session_id INTEGER NOT NULL,
-    line_no    INTEGER NOT NULL,    -- 会话内序
-    text       TEXT NOT NULL,       -- 标准化后 ≥6 字符
-    first_path TEXT NOT NULL,       -- 首现帧
-    first_ts   TEXT NOT NULL,
-    PRIMARY KEY (session_id, line_no)
-);
+-- L3 行级留痕:会话里每张截图带来的那几行,从会话文字的第几行开始(搜索命中 → 精确到帧的证据卡)
+-- 第 k 行来自 first_line_no ≤ k 中最大的那一条
+CREATE TABLE session_frames (
+    session_id    INTEGER NOT NULL,
+    first_line_no INTEGER NOT NULL,  -- 这张截图的行从第几行开始
+    frame_id      INTEGER,           -- frames.id;NULL = 没有这张截图的 frames 记录
+    PRIMARY KEY (session_id, first_line_no)
+) WITHOUT ROWID;
 
 -- 附着留痕(L1 账本;迁移自主库 screenshot_dedup_map)
 CREATE TABLE attach_map (

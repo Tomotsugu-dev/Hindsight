@@ -3,7 +3,7 @@
 Hindsight keeps two SQLite files under the data directory (`~/Library/Application Support/Hindsight/` on macOS):
 
 - `hindsight.<uid>.sqlite` — the main database: activities, classification, sync, devices, settings. Covered below.
-- `hindsight-memory.<uid>.sqlite` — screen memory: screenshot frames, OCR text sessions, FTS index, chat history. `frames`, `text_sessions` and `session_lines` are covered under *Memory database* below.
+- `hindsight-memory.<uid>.sqlite` — screen memory: screenshot frames, OCR text sessions, FTS index, chat history. `frames`, `text_sessions` and `session_frames` are covered under *Memory database* below.
 
 Each table below sits under the heading of the file it lives in.
 
@@ -300,9 +300,11 @@ Foreign keys: none.
 
 # Memory database (`hindsight-memory.<uid>.sqlite`)
 
-Created by `init_schema` in `src-tauri/src/memory/mod.rs`: one idempotent `CREATE ... IF NOT EXISTS` batch plus per-column `ALTER TABLE` back-fills, with `PRAGMA user_version` (currently 5) as a generation marker rather than a migration ladder. Runs in WAL mode. Paths in this database are relative to the screenshot root, the same form as `activities.screenshot_path`; `app_id` columns hold the process name, the same key as `activities.process_name`.
+Created by `init_schema` in `src-tauri/src/memory/mod.rs`: one idempotent `CREATE ... IF NOT EXISTS` batch plus per-column `ALTER TABLE` back-fills, with `PRAGMA user_version` (currently 5) as a generation marker rather than a migration ladder. Runs in WAL mode. Paths in this database are full screenshot paths, the same value as `activities.screenshot_path`; `app_id` columns hold the process name, the same key as `activities.process_name`.
 
-The three tables of the OCR pipeline are documented, in pipeline order: `frames` (screenshots waiting for OCR) → `text_sessions` (the OCR text, folded and searchable) → `session_lines` (that text line by line). `frame_insights`, the chat tables and `scheduled_ocr_marks` are not covered yet.
+After `init_schema`, the open queues a maintenance task first on the connection and returns without waiting for it (ADR-0021). The task moves an old database from `session_lines` to `session_frames` when `session_lines` still exists, then runs `VACUUM` when more than a quarter of the pages are free and the disk has room. Calls made after the open queue behind it.
+
+The three tables of the OCR pipeline are documented, in pipeline order: `frames` (screenshots waiting for OCR) → `text_sessions` (the OCR text, folded and searchable) → `session_frames` (which screenshot each line of that text came from). `frame_insights`, the chat tables and `scheduled_ocr_marks` are not covered yet.
 
 ## frames
 
@@ -310,16 +312,16 @@ The screenshot ledger: one row per screenshot file on disk. The capture side reg
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| path | TEXT | Primary key | Screenshot path relative to the screenshot root, the same value as `activities.screenshot_path` |
-| ts | TEXT | NOT NULL | Capture time, RFC3339 |
-| local_date | TEXT | NOT NULL | Calendar date on this device, `YYYY-MM-DD` |
+| id | INTEGER | Primary key | What `session_frames.frame_id` points to. Explicit, because `VACUUM` can renumber the hidden rowid |
+| path | TEXT | UNIQUE | Full screenshot path, the same value as `activities.screenshot_path`. Nullable so that a later change can clear it when the image file expires; never NULL today |
+| ts | TEXT | NOT NULL | Capture time, RFC3339 in the local time zone. Its first 10 characters are the local date, `YYYY-MM-DD` |
 | app_id | TEXT | | Process name of the foreground app at capture time. Nullable in the schema, never NULL in practice |
 | title | TEXT | | Foreground window title |
 | ocr_state | INTEGER | NOT NULL, DEFAULT 0 | 0 pending, 1 done, 2 failed |
 | attempts | INTEGER | NOT NULL, DEFAULT 0 | Failed OCR attempts so far; the worker retries up to a budget |
 | session_id | INTEGER | | The `text_sessions.id` this frame was folded into. NULL exactly while the frame is pending or failed. No foreign key |
 
-Indexes: `(ocr_state, ts)`, which is how the worker picks the oldest pending frame.
+Indexes: `(ocr_state, ts)`, which is how the worker picks the oldest pending frame; `(path)` UNIQUE.
 Foreign keys: none.
 
 ## text_sessions
@@ -336,7 +338,7 @@ Synced only when screen-memory sync is enabled, as `device.<id>.memory.<date>.nd
 | ended_ts | TEXT | NOT NULL | Capture time of the last frame, RFC3339 |
 | app_id | TEXT | | Process name of the foreground app |
 | title | TEXT | | Window title the session was folded under |
-| text | TEXT | NOT NULL, DEFAULT `''` | Materialised concatenation of the session's `session_lines`; the FTS index is built on this column |
+| text | TEXT | NOT NULL, DEFAULT `''` | The session's lines joined with `\n`, so split line k is line number k. The only copy of the text; the FTS index is built on this column |
 | guid | TEXT | UNIQUE index | Global id for cross-device merging. Added later and back-filled with random hex, so it is never NULL in practice |
 | origin_device | TEXT | | NULL when produced on this device; otherwise the id of the device it was pulled from. Added later |
 
@@ -345,18 +347,16 @@ Foreign keys: none.
 
 Full-text search: `text_sessions_fts` is an FTS5 external-content table over `text` with the trigram tokenizer, so CJK substrings match without word segmentation. Three triggers keep it in step (`text_sessions_ai` after insert, `text_sessions_au` after update of `text`, `text_sessions_ad` after delete), which is why callers only ever touch `text_sessions` itself. FTS5 keeps its own shadow tables (`text_sessions_fts_data`, `_idx`, `_config`, `_docsize`); they are not part of the schema you write to.
 
-## session_lines
+## session_frames
 
-One row per unique OCR line within a text session, together with the first screenshot the line appeared in, so an evidence card can open the exact frame rather than the whole session. Local only, never synced. Roughly forty lines per session, so this is the table with the most rows in either file.
+One row per screenshot that added lines to a text session: the line number in `text_sessions.text` where that screenshot's new lines start. Its lines end where the next row of the same session starts, so line k came from the row with the largest `first_line_no ≤ k`. This lets a search hit open the screenshot the matching line came from, rather than the whole session. Local only, never synced. Replaced `session_lines` in ADR-0021, which kept a copy of every line with its screenshot path and time.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| session_id | INTEGER | NOT NULL, part of primary key | The owning `text_sessions.id`. **No foreign key**, so deleting a session does not cascade; callers must delete the lines first or they become orphans |
-| line_no | INTEGER | NOT NULL, part of primary key | Position of the line within the session |
-| text | TEXT | NOT NULL | The line as OCR read it |
-| first_path | TEXT | NOT NULL | Screenshot path where the line first appeared |
-| first_ts | TEXT | NOT NULL | Capture time of that screenshot, RFC3339 |
+| session_id | INTEGER | NOT NULL, part of primary key | The owning `text_sessions.id`. **No foreign key**, so deleting a session does not cascade; callers must delete these rows too or they become orphans |
+| first_line_no | INTEGER | NOT NULL, part of primary key | Line number in the session text where this screenshot's lines start |
+| frame_id | INTEGER | | The `frames.id` of the screenshot. NULL when there was no `frames` row for it; the lines stay searchable but show no screenshot. No foreign key |
 
-Indexes: primary key `(session_id, line_no)`.
+Indexes: primary key `(session_id, first_line_no)`; the table is `WITHOUT ROWID`, so it is stored in primary key order and needs no separate index.
 Foreign keys: none.
 
