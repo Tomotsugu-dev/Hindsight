@@ -35,7 +35,7 @@ const THEMES_URL = "https://hindsight.kyosweb.com/themes/";
 
 export default function AppearanceTab() {
   const { t, i18n } = useTranslation();
-  // 主题是纯前端偏好（localStorage），不走后端 settings；本地 state 仅用于高亮选中项
+  // 主题是纯前端偏好（界面状态），不走后端 settings；本地 state 仅用于高亮选中项
   const [theme, setTheme] = useState<ThemeChoice>(getStoredTheme);
   /** 主题库里的主题；还没读完时是 null */
   const [library, setLibrary] = useState<InstalledTheme[] | null>(null);
@@ -77,7 +77,7 @@ export default function AppearanceTab() {
   };
 
   const chooseBuiltIn = (next: AppTheme) => {
-    setStoredTheme(next); // 立即写 <html> 的三个属性 + localStorage
+    setStoredTheme(next); // 立即写 <html> 的三个属性并保存
     setTheme(next);
   };
 

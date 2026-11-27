@@ -2,7 +2,6 @@
 // Rust, and the result back. The page in the main window and the page's own window both use it.
 // See docs/design/plugins/en/runtime.md.
 import { invoke } from "@tauri-apps/api/core";
-import { DEVICE_SELECTED_KEY } from "../state/deviceFilterKey";
 
 /** A `hindsight.call()` from a plugin, see `_page.js` and `_worker.js` in file_reader.rs. */
 export type PluginRequest = { id: number; method: string; params?: unknown };
@@ -32,10 +31,7 @@ export function forwardCalls(frame: HTMLIFrameElement, pluginId: string, url: st
     if (!isRequest(event.data)) return;
     const { id, method, params } = event.data;
     const reply = (message: object) => frame.contentWindow?.postMessage(message, origin);
-    // The device selected in the main window. Same origin as the main window, so this window
-    // reads the same value. It is not in params, so the plugin cannot change it
-    const device = localStorage.getItem(DEVICE_SELECTED_KEY);
-    invoke("plugin_call", { pluginId, method, params: params ?? null, device }).then(
+    invoke("plugin_call", { pluginId, method, params: params ?? null }).then(
       (result) => reply({ id, result }),
       (error) => reply({ id, error: String(error) }),
     );

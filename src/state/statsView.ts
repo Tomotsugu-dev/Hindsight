@@ -1,6 +1,6 @@
 /**
  * 「时段 / 占比」图表视图偏好的全局状态：Today/Week/Month 三页**各记各的**，
- * 按 scope 分成三个独立键，各自持久化到 localStorage。占比视图停在哪一层也记在这里。
+ * 按 scope 分成三个独立键，各自保存在界面状态里。占比视图停在哪一层也记在这里。
  *
  * 提到 module level 的理由：原来 view 是各页 useState("bars") 的本地状态，
  * 切侧边栏让页面 unmount → 状态丢失，切回来复位成 "bars"，用户上次选的
@@ -9,14 +9,14 @@
  * 三页互不影响（在 Today 切占比不带动 Week/Month）。
  */
 
-import { logWarn } from "../lib/logger";
+import { getUiState, setUiState } from "./uiState";
 
 export type StatsView = "bars" | "pie";
 /** 占比视图的哪一层：只有大类的环，或者往下滚出来的小类同心环 */
 export type PieDepth = "supers" | "cats";
 /** Which level the bar charts color by. Same values as {@link PieDepth}, but stored apart from it. */
 export type BarLevel = PieDepth;
-/** 三个统计页各自的偏好槽；决定 localStorage 键与快照读写的粒度。 */
+/** 三个统计页各自的偏好槽；决定保存的键与快照读写的粒度。 */
 export type StatsViewScope = "today" | "week" | "month";
 
 const KEY_PREFIX = "hindsight.stats.view.";
@@ -39,21 +39,12 @@ function readStored<T extends string>(
   isValid: (v: unknown) => v is T,
   fallback: T,
 ): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return isValid(raw) ? raw : fallback;
-  } catch (e) {
-    logWarn("statsView.read", e);
-    return fallback;
-  }
+  const raw = getUiState(key);
+  return isValid(raw) ? raw : fallback;
 }
 
 function writeStored(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch (e) {
-    logWarn("statsView.write", e);
-  }
+  setUiState(key, value);
 }
 
 const views: Record<StatsViewScope, StatsView> = {

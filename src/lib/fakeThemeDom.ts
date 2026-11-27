@@ -1,6 +1,7 @@
-// 测试用：theme.ts 用到的 localStorage、<html> 的 dataset 和 style、adoptedStyleSheets。
+// 测试用：theme.ts 用到的界面状态、<html> 的 dataset 和 style、adoptedStyleSheets。
 // vitest 跑在 node 环境（纯函数策略），不为这几样挂 jsdom。只给测试 import。
 import { vi } from "vitest";
+import { getUiState, initUiState, setUiState } from "../state/uiState";
 
 /** 假的 CSSStyleSheet：只记下 replaceSync 收到的文字。 */
 export class FakeSheet {
@@ -12,7 +13,14 @@ export class FakeSheet {
 
 /** 装上假的全局对象，返回测试要看的几样。 */
 export function installFakeThemeDom() {
-  const store = new Map<string, string>();
+  initUiState({}, () => {});
+  /** 保存的界面状态，用法和 Map 一样 */
+  const store = {
+    get: (key: string) => getUiState(key) ?? undefined,
+    set: (key: string, value: string) => setUiState(key, value),
+    has: (key: string) => getUiState(key) !== null,
+    clear: () => initUiState({}, () => {}),
+  };
   /** <html> 的 style 上设了的变量 */
   const tokens = new Map<string, string>();
   const doc = {
@@ -28,11 +36,6 @@ export function installFakeThemeDom() {
     },
     adoptedStyleSheets: [] as FakeSheet[],
   };
-  vi.stubGlobal("localStorage", {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-  });
   vi.stubGlobal("document", doc);
   vi.stubGlobal("CSSStyleSheet", FakeSheet);
   return {

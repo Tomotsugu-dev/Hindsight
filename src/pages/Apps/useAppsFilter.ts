@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getUiState, setUiState } from "../../state/uiState";
 
 /** 排序方式枚举：default = 保持入参顺序（PairingSection 现有的 device-sort + 未指派靠前）。 */
 export type AppsSortBy = "default" | "duration_desc" | "duration_asc" | "name_asc" | "name_desc";
@@ -33,7 +34,7 @@ export const DEFAULT_APPS_FILTER: AppsFilter = {
 
 const STORAGE_KEY = "hindsight.apps.filter";
 
-/** 存储结构版本。老用户的 localStorage 里存着 `unassignedOnly: false`，
+/** 存储结构版本。老用户保存的筛选里存着 `unassignedOnly: false`，
  *  光改默认值对他们不生效——而列表最乱的恰恰是这批人。带版本号做一次性
  *  迁移：读到旧版就把开关拉起来一次，之后完全尊重用户自己的选择。 */
 const FILTER_SCHEMA_VERSION = 2;
@@ -43,12 +44,12 @@ interface StoredFilter extends Partial<AppsFilter> {
 }
 
 /**
- * Type-safe revival from localStorage：未知字段 / 坏值都回默认。
+ * Type-safe revival from the UI state：未知字段 / 坏值都回默认。
  * 故意不抛错——损坏的 JSON 不应让用户的整个 /apps 页崩溃，silently reset 更友好。
  */
 function loadFromStorage(): AppsFilter {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = getUiState(STORAGE_KEY);
     if (!raw) return DEFAULT_APPS_FILTER;
     const parsed = JSON.parse(raw) as StoredFilter;
     // 旧版存档：把"只看未指派"打开一次(见 FILTER_SCHEMA_VERSION)
@@ -70,23 +71,19 @@ function loadFromStorage(): AppsFilter {
 }
 
 function saveToStorage(filter: AppsFilter): void {
-  try {
-    // 带上版本号,否则每次读都会被当成旧版存档、把用户关掉的开关又打开
-    const payload: StoredFilter = { ...filter, v: FILTER_SCHEMA_VERSION };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // localStorage 满 / 隐私模式 / 等：忽略，session 内仍然有效
-  }
+  // 带上版本号,否则每次读都会被当成旧版存档、把用户关掉的开关又打开
+  const payload: StoredFilter = { ...filter, v: FILTER_SCHEMA_VERSION };
+  setUiState(STORAGE_KEY, JSON.stringify(payload));
 }
 
 /**
- * 管理 `/apps` 页的筛选 + 排序状态，自动持久化到 localStorage。
+ * 管理 `/apps` 页的筛选 + 排序状态，自动保存到界面状态。
  * 沿用 [`deviceFilter.tsx`] 同款"读取在 lazy initializer / 写入在 setter"模式。
  */
 export function useAppsFilter() {
   const [filter, setFilter] = useState<AppsFilter>(() => loadFromStorage());
 
-  // 任何子字段变更都触发整体保存——简化心智模型，多写一次 localStorage 几乎零成本
+  // 任何子字段变更都触发整体保存——简化心智模型；值没变时 setUiState 不会保存
   useEffect(() => {
     saveToStorage(filter);
   }, [filter]);

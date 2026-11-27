@@ -20,6 +20,8 @@ if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__) {
 
 // 必须是第一个 import：要在 i18n 启动前设好语言
 import "./lang-from-query";
+// Before any page module: some read the UI state as they load
+import "./ui-state-demo";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { ErrorBoundary } from "@app/components/ErrorBoundary/ErrorBoundary";

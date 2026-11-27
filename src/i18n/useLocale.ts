@@ -1,6 +1,7 @@
 // 读写当前 locale 的 hook
-// - 切换时同时调 i18n.changeLanguage 和写入 localStorage
+// - 切换时同时调 i18n.changeLanguage 和保存到界面状态
 import { useTranslation } from "react-i18next";
+import { setUiState } from "../state/uiState";
 import { LOCALE_STORAGE_KEY } from "./index";
 
 export type Locale = "zh-CN" | "zh-TW" | "en" | "ja" | "pt-BR" | "es";
@@ -23,7 +24,7 @@ export function useLocale(): [Locale, (next: Locale) => void] {
 
   const setLocale = (next: Locale) => {
     void i18n.changeLanguage(next);
-    localStorage.setItem(LOCALE_STORAGE_KEY, next);
+    setUiState(LOCALE_STORAGE_KEY, next);
   };
 
   return [locale, setLocale];

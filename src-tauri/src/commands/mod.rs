@@ -24,3 +24,4 @@ pub mod storage;
 pub mod super_categories;
 pub mod sync;
 pub mod themes;
+pub mod ui_state;

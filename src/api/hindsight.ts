@@ -908,6 +908,13 @@ export const api = {
     invoke<string | null>("get_app_icon_data_url", { processName }),
   getSettings: () => invoke<Settings>("get_settings"),
   updateSettings: (patch: SettingsPatch) => invoke<Settings>("update_settings", { patch }),
+  /** The main window's UI state (ADR-0020): every key and its value. */
+  getUiState: () => invoke<Record<string, string>>("get_ui_state"),
+  /** Saves the value of `key`; `null` deletes the key. */
+  setUiState: (key: string, value: string | null) => invoke<void>("set_ui_state", { key, value }),
+  /** Imports the values from localStorage, and returns every key and its value after the import. */
+  importUiState: (entries: Record<string, string>) =>
+    invoke<Record<string, string>>("import_ui_state", { entries }),
   /** 新增忽略规则（幂等：等价规则已存在时不重复添加）。titleKeyword=null = 忽略整个应用。 */
   addIgnoreRule: (processName: string, titleKeyword: string | null) =>
     invoke<IgnoreRulesResult>("add_ignore_rule", { processName, titleKeyword }),

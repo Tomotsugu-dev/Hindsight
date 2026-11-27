@@ -10,6 +10,7 @@ import {
 import { useSettings } from "../../state/settings";
 import { useAiProfiles } from "../../state/aiProfiles";
 import { logError } from "../../lib/logger";
+import { getUiState, setUiState } from "../../state/uiState";
 import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import { chatLocalModelName, chatUsesCloud } from "./chatRouting";
@@ -17,20 +18,19 @@ import { ChatPrivacyDialog } from "./ChatPrivacyDialog";
 import BackfillBanner from "../../components/BackfillBanner/BackfillBanner";
 import styles from "./ChatPage.module.css";
 
-// 最后打开的会话,存 localStorage:跳页回来、甚至 webview 销毁重建(macOS 关窗
+// 最后打开的会话,存在界面状态里:跳页回来、甚至 webview 销毁重建(macOS 关窗
 // 收托盘)后都自动恢复原会话——配合 chatInflight 查询,"关窗等答案再打开"能
 // 直接回到生成中的现场。删除/失效由列表加载时校验回退。
 const LAST_CONVERSATION_KEY = "hindsight.chat.lastConversation";
 
 function readLastActive(): number | null {
-  const raw = localStorage.getItem(LAST_CONVERSATION_KEY);
+  const raw = getUiState(LAST_CONVERSATION_KEY);
   const n = raw === null ? NaN : Number(raw);
   return Number.isInteger(n) ? n : null;
 }
 
 function writeLastActive(id: number | null) {
-  if (id === null) localStorage.removeItem(LAST_CONVERSATION_KEY);
-  else localStorage.setItem(LAST_CONVERSATION_KEY, String(id));
+  setUiState(LAST_CONVERSATION_KEY, id === null ? null : String(id));
 }
 
 /**

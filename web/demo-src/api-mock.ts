@@ -150,6 +150,7 @@ import {
 } from "./fixtures";
 import { persistence, shapeOf } from "./persistence";
 import { sayDesktopOnly } from "./desktop-only";
+import { readDemoUiState, saveDemoUiState } from "./ui-state-demo";
 
 // 演示数据里还是中文原名的默认分类、默认大类，按当前页面语言显示。真实应用第一次启动时
 // 由后端换一次名（ADR-0015）；demo 要在 /en/、/ja/ 这些页面之间切换，所以读的时候换。
@@ -790,6 +791,11 @@ export const api = {
     persist();
     return settingsInPageLanguage();
   },
+  // The demo keeps the UI state in localStorage and never imports, see ui-state-demo.ts
+  getUiState: async (): Promise<Record<string, string>> => readDemoUiState(),
+  setUiState: async (key: string, value: string | null): Promise<void> =>
+    saveDemoUiState(key, value),
+  importUiState: async (): Promise<Record<string, string>> => readDemoUiState(),
   addIgnoreRule: async (
     processName: string,
     titleKeyword: string | null,

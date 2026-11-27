@@ -1,4 +1,4 @@
-// node 环境手工桩:theme.ts 只用到 localStorage 与 documentElement 的 dataset、style,
+// node 环境手工桩:theme.ts 只用到界面状态与 documentElement 的 dataset、style,
 // 不必为此挂 jsdom(vitest 配置保持纯函数策略)。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installFakeThemeDom } from "./fakeThemeDom";
@@ -198,21 +198,5 @@ describe("自定义主题", () => {
     expect(tokens.size).toBe(0);
     expect(sheets()).toEqual([]);
     expect(onChange).toHaveBeenCalledTimes(1);
-  });
-
-  it("副本存不下时照样套用，但不留副本", () => {
-    store.set("hindsight.theme.custom", JSON.stringify({ ...ocean, id: "old" }));
-    const setItem = vi.spyOn(localStorage, "setItem").mockImplementation((k, v) => {
-      if (k === "hindsight.theme.custom") throw new Error("QuotaExceededError");
-      store.set(k, v);
-    });
-    try {
-      setCustomTheme(ocean);
-    } finally {
-      setItem.mockRestore();
-    }
-    expect(dataset.theme).toBe("custom");
-    expect(getStoredTheme()).toBe("custom:ocean");
-    expect(store.has("hindsight.theme.custom")).toBe(false);
   });
 });

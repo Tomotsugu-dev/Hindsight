@@ -1,6 +1,7 @@
-// App themes are a frontend-only preference stored in localStorage. Three
+// App themes are a frontend-only preference kept in the UI state. Three
 // attributes on <html> select token overrides without backend settings:
 // data-theme picks the palette, data-layout and data-mode pick the look.
+import { getUiState, setUiState } from "../state/uiState";
 
 export type AppTheme = "default" | "minimal" | "flat" | "dark";
 
@@ -54,7 +55,7 @@ export function customIdOf(choice: ThemeChoice): string | null {
 
 /** Read the saved theme; missing or invalid values use the default minimal theme. */
 export function getStoredTheme(): ThemeChoice {
-  const v = localStorage.getItem(STORAGE_KEY);
+  const v = getUiState(STORAGE_KEY);
   if (v === "default" || v === "flat" || v === "dark") return v;
   if (v !== null && v.length > CUSTOM_PREFIX.length && v.startsWith(CUSTOM_PREFIX)) {
     return v as ThemeChoice;
@@ -64,7 +65,7 @@ export function getStoredTheme(): ThemeChoice {
 
 /** 读自定义主题的副本；没有或格式不对时返回 null。 */
 export function getStoredCustomTheme(): CustomTheme | null {
-  const raw = localStorage.getItem(CUSTOM_KEY);
+  const raw = getUiState(CUSTOM_KEY);
   if (raw === null) return null;
   try {
     const v: unknown = JSON.parse(raw);
@@ -74,7 +75,7 @@ export function getStoredCustomTheme(): CustomTheme | null {
   }
 }
 
-/** 读出来的值是不是 CustomTheme：localStorage 里的副本、官网主题预览读到的文件都用它检查。 */
+/** 读出来的值是不是 CustomTheme：保存的副本、官网主题预览读到的文件都用它检查。 */
 export function isCustomTheme(v: unknown): v is CustomTheme {
   if (typeof v !== "object" || v === null) return false;
   const t = v as Record<string, unknown>;
@@ -139,28 +140,23 @@ export function applyCustomTheme(theme: CustomTheme): void {
 
 /** 保存并立即应用。 */
 export function setStoredTheme(theme: AppTheme): void {
-  localStorage.setItem(STORAGE_KEY, theme);
-  localStorage.removeItem(CUSTOM_KEY);
+  setUiState(STORAGE_KEY, theme);
+  setUiState(CUSTOM_KEY, null);
   applyTheme(theme);
   notify();
 }
 
 /** 选中自定义主题：保存选择和副本，立即应用。 */
 export function setCustomTheme(theme: CustomTheme): void {
-  localStorage.setItem(STORAGE_KEY, customChoice(theme.id));
-  try {
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(theme));
-  } catch {
-    // 存不下（theme.css 很大）：不留旧副本，启动时先显示简约，读完主题库再换
-    localStorage.removeItem(CUSTOM_KEY);
-  }
+  setUiState(STORAGE_KEY, customChoice(theme.id));
+  setUiState(CUSTOM_KEY, JSON.stringify(theme));
   applyCustomTheme(theme);
   notify();
 }
 
 /** 返回访客选过主题没有。没选过时 getStoredTheme 给的简约只是默认值。 */
 export function hasStoredTheme(): boolean {
-  return localStorage.getItem(STORAGE_KEY) !== null;
+  return getUiState(STORAGE_KEY) !== null;
 }
 
 /** 套用内置主题但不保存，并让图表重新取色。 */
@@ -175,7 +171,7 @@ export function showTheme(theme: AppTheme): void {
  * 主题修好或放回来后，下一次读主题库就会换回去。
  */
 export function showFallbackTheme(): void {
-  localStorage.removeItem(CUSTOM_KEY);
+  setUiState(CUSTOM_KEY, null);
   // 已经是简约时不再通知，免得每次获得焦点图表都重画一遍
   if (document.documentElement.dataset.theme !== "custom") return;
   applyTheme("minimal");
@@ -194,7 +190,7 @@ export function restoreTheme(): void {
   if (saved?.id === id) {
     applyCustomTheme(saved);
   } else {
-    localStorage.removeItem(CUSTOM_KEY);
+    setUiState(CUSTOM_KEY, null);
     applyTheme("minimal");
   }
 }

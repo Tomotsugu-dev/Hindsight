@@ -14,7 +14,7 @@ vi.mock("../api/hindsight", () => ({
       translate(categories, superCategories),
   },
 }));
-// 真的 i18n 一加载就读 localStorage，node 环境没有
+// 用假的 i18n：测试只要两组固定的译名
 vi.mock("../i18n", () => ({
   default: {
     t: (key: string) => (key === "categories.defaults" ? { code: "Coding" } : { work: "Work" }),

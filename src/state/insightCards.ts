@@ -8,6 +8,7 @@
 import { useSyncExternalStore } from "react";
 import { logWarn } from "../lib/logger";
 import type { CardId } from "../utils/insightCards";
+import { getUiState, setUiState } from "./uiState";
 import type { InsightMode, InsightScope } from "../utils/insightWindows";
 
 export type { CardId };
@@ -82,22 +83,8 @@ export function parseCards(scope: InsightScope, raw: string | null): readonly Ca
   return normalizeCards(scope, cards);
 }
 
-function read(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch (e) {
-    logWarn("insightCards.read", e);
-    return null;
-  }
-}
-
-function write(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch (e) {
-    logWarn("insightCards.write", e);
-  }
-}
+const read = getUiState;
+const write = setUiState;
 
 const readMode = (scope: "week" | "month"): InsightMode =>
   read(MODE_KEY + scope) === "rolling" ? "rolling" : "same";

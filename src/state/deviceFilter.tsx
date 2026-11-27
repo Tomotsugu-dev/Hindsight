@@ -10,6 +10,7 @@ import {
 import { api, type DeviceRow } from "../api/hindsight";
 import { logError } from "../lib/logger";
 import { DEVICE_SELECTED_KEY } from "./deviceFilterKey";
+import { getUiState, setUiState } from "./uiState";
 
 export interface Device {
   id: string;
@@ -54,7 +55,7 @@ function rowToDevice(row: DeviceRow): Device {
 export function DeviceFilterProvider({ children }: { children: ReactNode }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selected, setSelectedState] = useState<DeviceFilterValue>(
-    () => (localStorage.getItem(DEVICE_SELECTED_KEY) as DeviceFilterValue) ?? "self",
+    () => (getUiState(DEVICE_SELECTED_KEY) as DeviceFilterValue) ?? "self",
   );
 
   const reload = useCallback(async () => {
@@ -75,7 +76,7 @@ export function DeviceFilterProvider({ children }: { children: ReactNode }) {
 
   const setSelected = useCallback((id: DeviceFilterValue) => {
     setSelectedState(id);
-    localStorage.setItem(DEVICE_SELECTED_KEY, id);
+    setUiState(DEVICE_SELECTED_KEY, id);
   }, []);
 
   // 兼容老的 "self" 字面值：第一次加载到真实 selfId 后把 "self" 替换为真实 UUID

@@ -2,7 +2,6 @@
 // launcher. See docs/design/plugins/en/runtime.md.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { DEVICE_SELECTED_KEY } from "../state/deviceFilterKey";
 import { isRequest } from "../plugin-page/forwarder";
 import { type BackgroundPlugin, diffFrames } from "./frames";
 
@@ -40,10 +39,7 @@ window.addEventListener("message", (event) => {
   // "*": the iframe always holds Hindsight's launcher, and plugin code cannot navigate it.
   // If the plugin was turned off in the meantime, contentWindow is null and the reply is dropped
   const reply = (message: object) => frame.contentWindow?.postMessage(message, "*");
-  // The device selected in the main window, read on every call, so a change there applies to
-  // the next call. It is not in params, so the plugin cannot change it
-  const device = localStorage.getItem(DEVICE_SELECTED_KEY);
-  invoke("plugin_call", { pluginId, method, params: params ?? null, device }).then(
+  invoke("plugin_call", { pluginId, method, params: params ?? null }).then(
     (result) => reply({ id, result }),
     (error) => reply({ id, error: String(error) }),
   );
