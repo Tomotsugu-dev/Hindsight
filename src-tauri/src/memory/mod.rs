@@ -6,6 +6,7 @@
 //!
 //! 本模块只提供连接与 schema;帧登记见 [`frames`],L3 折叠与 FTS 见 [`sessions`]。
 
+pub mod compact;
 pub mod digest;
 pub mod frames;
 pub mod migrations;
@@ -85,7 +86,7 @@ impl MemoryDb {
         Ok(db)
     }
 
-    /// 在后台跑启动维护：把旧库迁移成新结构（[`migrations`]）。
+    /// 在后台跑启动维护：把旧库迁移成新结构（[`migrations`]），再按需 VACUUM（[`compact`]）。
     /// 只等它开始，不等它做完。
     ///
     /// 连接一次只跑一个任务，按排队顺序跑。维护开始以后才返回，之后的读写都排在它后面，
@@ -98,6 +99,7 @@ impl MemoryDb {
                 .call(move |c| {
                     let _ = started_tx.send(());
                     migrations::to_session_frames(c)?;
+                    compact::compact(c)?;
                     Ok(())
                 })
                 .await;
