@@ -200,8 +200,7 @@ pub async fn plugin_background_list(
 
 /// The only entry to the plugin API: plugin `plugin_id` calls `method`.
 ///
-/// `plugin_id` and `device` (the device selected in the main window) are filled in by
-/// Hindsight's forwarder. The plugin does not report them itself.
+/// `plugin_id` is filled in by Hindsight's forwarder. The plugin does not report it itself.
 ///
 /// See [`api::call`].
 #[tauri::command]
@@ -211,7 +210,6 @@ pub async fn plugin_call(
     plugin_id: String,
     method: String,
     params: serde_json::Value,
-    device: Option<String>,
 ) -> Result<Box<serde_json::value::RawValue>, String> {
     log::debug!("plugins: {plugin_id} calls {method}");
     let notify = |title: &str, body: &str, sound: bool| {
@@ -235,7 +233,7 @@ pub async fn plugin_call(
         notify,
         island,
     };
-    api::call(host, &plugin_id, &method, params, device)
+    api::call(host, &plugin_id, &method, params)
         .await
         .map_err(Into::into)
 }

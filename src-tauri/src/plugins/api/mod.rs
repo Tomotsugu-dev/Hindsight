@@ -15,6 +15,7 @@ use serde_json::Value;
 use crate::error::{Error, Result};
 use crate::island::content::Content;
 use crate::repo::plugins::{self as repo, Plugin};
+use crate::repo::ui_state;
 use crate::storage::DbPool;
 use categories::{apps, sites, CategoryRef, SuperCategoryRef};
 
@@ -34,9 +35,6 @@ pub struct Host<'a, N, I> {
 
 /// Runs one call from plugin `plugin_id`.
 ///
-/// - `device`: the device selected in the main window, which the forwarder reads from
-///   localStorage. It is a device id or `"all"`, and `None` if nothing was ever selected.
-///
 /// # Errors
 ///
 /// - The plugin is not installed, or it is turned off: [`Error::PluginNotEnabled`]
@@ -51,7 +49,6 @@ pub async fn call(
     plugin_id: &str,
     method: &str,
     params: Value,
-    device: Option<String>,
 ) -> Result<Box<RawValue>> {
     let Host {
         pool,
@@ -70,6 +67,7 @@ pub async fn call(
     }
     let value = match method {
         Method::DayByCategory => {
+            let device = ui_state::selected_device(pool).await?;
             stats::day_by_category(pool, &plugin, params, device, self_id).await?
         }
         Method::ListCategories => serde_json::to_value(CategoryRef::list(pool).await?)?,
@@ -185,6 +183,7 @@ fn check_granted(plugin: &Plugin, permission: &str) -> Result<()> {
 mod tests {
     use super::*;
     use crate::plugins::test_util::{plugin_row, plugin_with_permissions, TempDir};
+    use crate::repo::reports::test_seed::{insert_activity, seed_solo_group};
     use crate::repo::test_util::fresh_test_pool;
 
     /// 主界面没选过设备，通知和岛都什么都不做。
@@ -202,7 +201,7 @@ mod tests {
             notify: |_: &str, _: &str, _: bool| Ok(()),
             island: |_: Option<Content>| {},
         };
-        let raw = call(host, id, method, params, None).await?;
+        let raw = call(host, id, method, params).await?;
         Ok(serde_json::from_str(raw.get()).unwrap())
     }
 
@@ -238,6 +237,34 @@ mod tests {
             matches!(err, Error::PluginUnknownMethod(ref got) if got == "no.such.method"),
             "{err}"
         );
+    }
+
+    /// 插件要「主界面选的设备」时，用的是主窗口存进 ui_state 的那一台。
+    #[tokio::test]
+    async fn day_by_category_uses_the_device_saved_by_the_main_window() {
+        let pool = fresh_test_pool().await;
+        let permissions = ["stats.read", "stats.today", "devices.read"];
+        repo::save(&pool, plugin_with_permissions("focus", &permissions))
+            .await
+            .unwrap();
+        // 今天 Code 在本机用了 600 秒，在另一台电脑上用了 1200 秒
+        let today = chrono::Local::now().date_naive().to_string();
+        seed_solo_group(&pool, "Code", "code").await;
+        insert_activity(&pool, "this-mac", &today, "Code", 600).await;
+        insert_activity(&pool, "other-pc", &today, "Code", 1200).await;
+        ui_state::set(
+            &pool,
+            "hindsight.device.selected".into(),
+            Some("other-pc".into()),
+        )
+        .await
+        .unwrap();
+
+        let params = serde_json::json!({ "date": today, "devices": "selected" });
+        let got = call_simple(&pool, "focus", "stats.day_by_category", params)
+            .await
+            .unwrap();
+        assert_eq!(got[0]["seconds"], 1200);
     }
 
     /// 没有方法要的权限就报错，错误里是缺的那个权限。
