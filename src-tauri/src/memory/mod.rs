@@ -8,6 +8,7 @@
 
 pub mod digest;
 pub mod frames;
+pub mod migrations;
 pub mod resident;
 pub mod scheduled;
 pub mod search;
@@ -33,6 +34,40 @@ pub fn memory_db_path() -> Result<PathBuf> {
     };
     Ok(dir.join(name))
 }
+
+/// The statements that create `frames` and its index. New databases and the migration of old ones
+/// both use them. Each screenshot takes one row.
+///
+/// `id` is an explicit primary key: `VACUUM` can renumber the hidden row ids, and then
+/// `session_frames` would point to the wrong screenshots (ADR-0021). The index on
+/// `(ocr_state, ts)` lets OCR quickly find the screenshots that are not recognized yet.
+const FRAMES_TABLE: &str = "
+    CREATE TABLE IF NOT EXISTS frames (
+        id          INTEGER PRIMARY KEY,
+        path        TEXT UNIQUE,                 -- screenshot path
+        ts          TEXT NOT NULL,               -- time taken (RFC 3339, local time zone; the first 10 characters are the local date)
+        app_id      TEXT,
+        title       TEXT,
+        ocr_state   INTEGER NOT NULL DEFAULT 0,  -- 0 waiting, 1 done, 2 failed
+        attempts    INTEGER NOT NULL DEFAULT 0,  -- failed attempts
+        session_id  INTEGER                      -- the text session it belongs to
+    );
+    CREATE INDEX IF NOT EXISTS idx_frames_state ON frames(ocr_state, ts);";
+
+/// The statement that creates `session_frames`. New databases and the migration of old ones both
+/// use it. For each screenshot in a session, it keeps the line of the session text where the
+/// screenshot's text starts.
+///
+/// For example, "0 → A, 3 → B" means lines 0–2 come from screenshot A, and the lines from 3 on
+/// come from screenshot B. `WITHOUT ROWID` keeps the table in primary key order, so it needs no
+/// separate primary key index.
+const SESSION_FRAMES_TABLE: &str = "
+    CREATE TABLE IF NOT EXISTS session_frames (
+        session_id    INTEGER NOT NULL,
+        first_line_no INTEGER NOT NULL,  -- the line of the session text where this run starts
+        frame_id      INTEGER,           -- frames.id; NULL when the screenshot is gone
+        PRIMARY KEY (session_id, first_line_no)
+    ) WITHOUT ROWID;";
 
 impl MemoryDb {
     /// Opens or creates the memory database and makes sure its tables exist.
